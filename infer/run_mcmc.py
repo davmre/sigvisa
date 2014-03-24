@@ -12,13 +12,13 @@ from optparse import OptionParser
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, gaussian_MH_move_joint, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, swap_association_move
-from sigvisa.infer.arrival_time_moves import indep_peak_move, improve_offset_move, improve_atime_move
-from sigvisa.infer.autoregressive_mcmc import wiggle_param_step, latent_arrival_block_gibbs
+from sigvisa.infer.arrival_time_moves import indep_peak_move, improve_offset_move, improve_atime_move, coda_decay_joint_move
+from sigvisa.infer.autoregressive_mcmc import wiggle_param_step, latent_arrival_block_gibbs, gibbs_sweep
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -26,7 +26,7 @@ global_stds = {'coda_height': .7,
             'coda_decay': .5,
             'wiggle_amp': .1,
             'wiggle_phase': .1,
-            'peak_offset': 1.0,
+            'peak_offset': 0.2,
             'arrival_time': 9.0,
             'evloc': 0.15,
             'evloc_big': 0.4,
@@ -34,11 +34,14 @@ global_stds = {'coda_height': .7,
             'evmb': 0.2,
             'evdepth': 8.0}
 
-def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step):
+def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step, joint=False):
 
     latent_key, latent = tmnodes['latent_arrival']
 
     for param in tg.params():
+
+        if param == "peak_offset": continue
+
         k, n = tmnodes[param]
 
         # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
@@ -51,14 +54,33 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, mo
             relevant_nodes.append(n)
 
         if param == 'arrival_time':
+            raise Exception("why are we treating arrival time as a tg param? it should be a special-case move")
             relevant_nodes.append(wn)
 
         try:
-            run_move(move_name=param, fn=gaussian_MH_move,
-                     step=step, n_accepted=n_accepted,
-                     n_attempted=n_attempted, move_times=move_times,
-                     sg=sg, keys=(k,), node_list=(n,),
-                     relevant_nodes=relevant_nodes, std=stds[param])
+            if joint:
+                print "running joint move on", param
+                run_move(move_name=param + "_joint", fn=gaussian_MH_move_joint,
+                         step=step, n_accepted=n_accepted,
+                         n_attempted=n_attempted, move_times=move_times,
+                         sg=sg, key=k, node=n,
+                         latent = latent,
+                         relevant_nodes=relevant_nodes + [wn,], std=stds[param])
+                print 'after', param, 'joint', sg.current_log_p()
+            else:
+#                print 'before', param, n.get_value(), sg.current_log_p()
+                v1 = n.get_value()
+                p1 = sg.current_log_p()
+                old_latent = np.copy(latent.get_value())
+                run_move(move_name=param, fn=gaussian_MH_move,
+                         step=step, n_accepted=n_accepted,
+                         n_attempted=n_attempted, move_times=move_times,
+                         sg=sg, keys=(k,), node_list=(n,),
+                         relevant_nodes=relevant_nodes, std=stds[param])
+#                print 'after', param, n.get_value(), sg.current_log_p()
+#                if np.abs(v1  - n.get_value()) < 0.0000001 and np.abs(sg.current_log_p() - p1) > 1000:
+#                    raise Exception('wtftwtf')
+
         except KeyError:
             continue
 
@@ -191,6 +213,11 @@ def run_open_world_MH(sg, steps=10000,
                 for tmid in sg.uatemplate_ids[(sta, wn.chan, wn.band)]:
                     tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
+                    # also do basic wiggling-around of all template params
+                    if enable_template_moves:
+                        do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                                          n_attempted, n_accepted, move_times, step)
+
                     # special moves
                     for (move_name, fn) in template_moves_special.iteritems():
                         try:
@@ -204,10 +231,6 @@ def run_open_world_MH(sg, steps=10000,
                                      sg=sg, wave_node=wn, tmnodes=tmnodes)
 
 
-                    # also do basic wiggling-around of all template params
-                    if enable_template_moves:
-                        do_template_moves(sg, wn, tmnodes, tg, wg, stds,
-                                          n_attempted, n_accepted, move_times, step)
 
                 # also adjust every event arrival at this station
                 for (eid,evnodes) in sg.evnodes.iteritems():
@@ -223,6 +246,8 @@ def run_open_world_MH(sg, steps=10000,
                                      sg=sg, wave_node=wn, tmnodes=tmnodes)
 
                         if enable_template_moves:
+
+
                             do_template_moves(sg, wn, tmnodes, tg, wg, stds,
                                               n_attempted, n_accepted, move_times, step)
 
@@ -234,6 +259,7 @@ def run_open_world_MH(sg, steps=10000,
                      sg=sg, log_to_run_dir=run_dir)
 
 
+        print 'step', step,  [(p, n.get_value()) for (p, (k,n)) in tmnodes.items() if p != 'latent_arrival']
         logger.log(sg, step, n_accepted, n_attempted, move_times)
 
 

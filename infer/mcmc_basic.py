@@ -30,6 +30,7 @@ def gaussian_MH_move(sg, keys, node_list, relevant_nodes, scales=None, **kwargs)
     proposal = gaussian_propose(sg, keys, node_list, values=values, scales=scales, **kwargs)
     return MH_accept(sg, keys, values, proposal, node_list, relevant_nodes)
 
+
 def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes, log_qforward=0.0, log_qbackward=0.0):
     lp_old = sg.joint_logprob_keys(relevant_nodes) # assume oldvalues are still set
     lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
@@ -40,4 +41,33 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes, log_qfo
     else:
         for (key, val, n) in zip(keys, oldvalues, node_list):
             n.set_value(key=key, value=val)
+        return False
+
+
+def gaussian_MH_move_joint(sg, key, node, latent, relevant_nodes, scales=None, **kwargs):
+    """
+    propose a Gaussian tweak to a template parameter, while also proposing an update to the latent signal that holds the latent wiggle constant.
+    """
+
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
+
+    oldval  = node.get_value(key=key)
+    old_latent = np.copy(latent.get_value())
+    proposal = gaussian_propose(sg, (key,), (node,), values=np.array([oldval,]), scales=scales, **kwargs)[0]
+
+    wiggle, shape, rw = latent.get_signal_components()
+    wiggle = np.copy(wiggle)
+
+    node.set_value(key=key, value=proposal)
+
+    latent.set_nonrepeatable_wiggle(wiggle)
+
+    lp_new = sg.joint_logprob_keys(relevant_nodes=relevant_nodes)
+
+    u = np.random.rand()
+    if (lp_new ) - (lp_old) > np.log(u):
+        return True
+    else:
+        node.set_value(key=key, value=oldval)
+        latent.set_value(old_latent)
         return False

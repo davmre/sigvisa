@@ -20,7 +20,8 @@ def filter_AR_stationary(x,mask,model):
 
     tmp = np.zeros((n_p, n_p))
 
-    filtered_covs[0, :, :] = np.eye(n_p)
+    if n > 0:
+        filtered_covs[0, :, :] = np.eye(n_p)
 
     stationary_cov = False
     stationary_mean = False
@@ -74,7 +75,8 @@ def filter_AR_stupid(x, mask, model):
 
     tmp = np.zeros((n_p, n_p))
 
-    filtered_covs[0, :, :] = np.eye(n_p)
+    if n > 0:
+        filtered_covs[0, :, :] = np.eye(n_p)
 
 
     for t in range(0, n-1):

@@ -210,9 +210,9 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         else:
             sX, sy = X, y
         print "learning hyperparams on", len(sy), "examples"
-        nllgrad, x0, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basis=basisfn_str, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
+        nllgrad, x0, bounds, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basis=basisfn_str, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
-        bounds = [(1e-2,50.0,),(1e-2, 50.0)] + [(1e-2,1000.0),] * (len(x0) -2) if bounds is None else bounds
+        #bounds = [(1e-2,50.0,),(1e-2, 50.0)] + [(1e-2,1000.0),] * (len(x0) -2) if bounds is None else bounds
         params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
         noise_var, cov_main, cov_fic = covs_from_vector(params)

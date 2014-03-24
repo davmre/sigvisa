@@ -158,7 +158,7 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
                                      peak_time = current_atime + peak_offset)
     proposed_arrival_time = proposed_peak_time - peak_offset
 
-    print "current peak", current_atime+peak_offset, "proposed peak", proposed_peak_time, "atime", proposed_arrival_time
+    # print "current peak", current_atime+peak_offset, "proposed peak", proposed_peak_time, "atime", proposed_arrival_time
 
     old_latent, resample_lp, reverse_lp, lp_old, lp_new = repropose_full_latent_signal(sg, n_latent, arrival_node, current_atime, proposed_arrival_time, relevant_nodes)
 
@@ -168,6 +168,7 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
     # do MH acceptance
     u = np.random.rand()
     if (lp_new + reverse_lp) - (lp_old + resample_lp) > np.log(u):
+        print "accepted peak move: new atime", proposed_arrival_time, "peak time", proposed_peak_time
         return True
     else:
         keys = [arrival_key, k_latent]
@@ -399,4 +400,115 @@ def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
         oldvalues = [old_atime, old_latent]
         for (key, val, n) in zip(keys, oldvalues, node_list):
             n.set_value(key=key, value=val)
+        return False
+
+#######################################################################################
+
+def coda_height_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
+    # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
+    k_height, n_height = tmnodes['coda_height']
+    k_latent, n_latent = tmnodes['latent_arrival']
+
+    relevant_nodes = [wave_node,n_latent]
+    relevant_nodes += [n_height.parents[n_height.default_parent_key()],] if n_height.deterministic() else [n_height,]
+
+
+    # propose a new arrival time
+    old_height = n_height.get_value(k_height)
+    values = (old_height,)
+    height_proposal = float(gaussian_propose(sg, keys=(k_height,),
+                                             node_list=(n_height,),
+                                             values=(values), std=std,
+                                             **kwargs))
+
+    old_latent = np.copy(n_latent)
+    n_height.set_value(height_proposal)
+
+
+
+    # do MH acceptance
+    u = np.random.rand()
+    if (lp_new + reverse_lp) - (lp_old + resample_lp) > np.log(u):
+        return True
+    else:
+        keys = [k_atime, k_latent]
+        node_list = [n_atime, n_latent]
+        oldvalues = [old_atime, old_latent]
+        for (key, val, n) in zip(keys, oldvalues, node_list):
+            n.set_value(key=key, value=val)
+        return False
+
+#######################################################################################
+
+def coda_decay_joint_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
+    # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
+    k_decay, n_decay = tmnodes['coda_decay']
+    k_latent, n_latent = tmnodes['latent_arrival']
+
+    relevant_nodes = [wave_node,n_latent]
+    relevant_nodes +=  [n_decay,]
+
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
+
+    # propose a new coda decay
+    old_decay = n_decay.get_value(k_decay)
+    values = (old_decay,)
+    decay_proposal = float(gaussian_propose(sg, keys=(k_decay,),
+                                             node_list=(n_decay,),
+                                             values=(values), std=std,
+                                             **kwargs))
+
+    old_latent = np.copy(n_latent.get_value())
+    ew, shape, rw = n_latent.get_signal_components()
+    wiggle = np.copy(ew)
+    n_decay.set_value(decay_proposal)
+    n_latent.set_nonrepeatable_wiggle(wiggle)
+
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    # do MH acceptance
+    u = np.random.rand()
+    if (lp_new) - (lp_old) > np.log(u):
+        return True
+    else:
+        n_decay.set_value(key=k_decay, value=old_decay)
+        n_latent.set_value(key=k_latent, value=old_latent)
+        return False
+
+def coda_decay_joint_gibbs_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
+    # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
+    k_decay, n_decay = tmnodes['coda_decay']
+    k_latent, n_latent = tmnodes['latent_arrival']
+
+    relevant_nodes = [wave_node,n_latent]
+    relevant_nodes +=  [n_decay,]
+
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
+
+    # propose a new coda decay
+    old_decay = n_decay.get_value(k_decay)
+    values = (old_decay,)
+    decay_proposal = float(gaussian_propose(sg, keys=(k_decay,),
+                                             node_list=(n_decay,),
+                                             values=(values), std=std,
+                                             **kwargs))
+
+    old_latent = np.copy(n_latent.get_value())
+    lp_reverse = gibbs_sweep(n_latent, target_signal=old_latent)
+    n_decay.set_value(decay_proposal)
+    lp_resample = gibbs_sweep(n_latent)
+
+
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    # do MH acceptance
+    u = np.random.rand()
+    if (lp_new + lp_reverse) - (lp_old+lp_resample) > np.log(u):
+        return True
+    else:
+        n_decay.set_value(key=k_decay, value=old_decay)
+        n_latent.set_value(key=k_latent, value=old_latent)
+        print lp_new, lp_old, lp_reverse, lp_resample
+        print lp_new + lp_reverse, lp_old+lp_resample
+        print lp_new + lp_reverse - lp_old-lp_resample
         return False

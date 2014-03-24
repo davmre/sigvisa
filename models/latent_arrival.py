@@ -61,7 +61,7 @@ class LatentArrivalNode(Node):
         #self.parent_keys_changed.update(parent_tmpls_tmp, parent_wiggles_tmp)
 
         # TEMPORARY HACK until I actually figure out how to train the AR wiggle models
-        em = ErrorModel(mean=0.0, std=0.001)
+        em = ErrorModel(mean=0.0, std=0.01)
         self.arwm = ARModel(params=(.7,.2,), c=1.0, em = em, sf=self.srate)
 
     def parent_predict(self):
@@ -197,9 +197,6 @@ class LatentArrivalNode(Node):
 
             self._tmpl_shape_cache = np.exp(self._recompute_cached_logenv())
 
-
-            ew = self._empirical_wiggle_cache
-
             # keep the node value at the same length as the predicted shape
             v = self.get_value()
             v_len = len(v) if v is not None else 0
@@ -210,7 +207,7 @@ class LatentArrivalNode(Node):
                 new_v = np.zeros((new_tmpl_len,))
                 new_v[:v_len] = v
                 new_v[v_len:] = self._tmpl_shape_cache[v_len:]
-                self._dict[self.single_key] = new_v
+                self._dict[self.single_key] = new_v[:MAX_LATENT_SIGNAL_LEN]
         if wiggle_changed or len(self._repeatable_wiggle_cache) == 0:
             self._repeatable_wiggle_cache = self._recompute_cached_wiggle()
         if tmpl_changed or wiggle_changed or force_update_wiggle:
@@ -237,7 +234,7 @@ class LatentArrivalNode(Node):
         v  = self._tmpl_params
         offset = (v['arrival_time'] - int(np.floor(v['arrival_time']))) * self.srate
         offset = offset - int(np.floor(offset))
-        logenv = self.tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
+        logenv = self.tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)[:MAX_LATENT_SIGNAL_LEN]
         return logenv
 
     def get_template_params(self):
@@ -389,7 +386,15 @@ class LatentArrivalNode(Node):
         return ni
 
 
-    def set_nonrepeatable_wiggle(self, x, shape_env=None, repeatable_wiggle=None, start_idx=None, set_signal_length=False):
+    def set_nonrepeatable_wiggle(self, x, start_idx=None, set_signal_length=False):
+        """
+        If set_signal_length is True, the latent signal is modified to have length len(x).
+        Otherwise, the latent signal retains its current length:
+           - if len(x) < len(self.get_value()), then only the initial portion of the latent signal is modified.
+           - if len(x) > len(self.get_value()), then the trailing portion of x is ignored.
+
+        """
+
         self._parent_values()
 
         if start_idx is None:

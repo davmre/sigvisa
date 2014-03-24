@@ -58,7 +58,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     clipped_x_start_idx = max(padded_x_start_idx, 0)
     clipped_x_end_idx = min(padded_x_end_idx, len(shape))
 
-    i_start = gibbs_start_idx - clipped_x_start_idx + 1
+    i_start = gibbs_start_idx - clipped_x_start_idx
     i_end = gibbs_end_idx - clipped_x_start_idx
 
     if i_end > clipped_x_end_idx:
@@ -129,6 +129,11 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
     x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, target_signal=target_signal)
+
+    if len(y) == 0:
+        # don't bother resampling if there's no signal
+        print "WARNING: not resampling %s because no obs signal is available" % latent.label
+        return 0
 
     # seed the C RNG from the numpy RNG, so that we can reproduce results given only a Numpy seed
     seed = np.random.randint(0, sys.maxint)
@@ -204,6 +209,9 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     smoothed_mean_y = np.zeros((y_np))
     smoothed_cov_y = np.zeros((y_np, y_np))
 
+    if y_n <= 0:
+        raise Exception("ylen %d" % y_n)
+
     code = """
     srand(seed);
 
@@ -244,7 +252,6 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
           new_xi = target_wiggle(i-i_start);
           r = (new_xi - combined_posterior_mean) * sqrt(combined_posterior_precision);
         } else {
-          srand(i);
           r = randn();
           new_xi = r / sqrt(combined_posterior_precision) + combined_posterior_mean;
         }
@@ -654,7 +661,7 @@ void smooth_AR(blitz::Array<double, 1> x, blitz::Array<bool, 1> mask, blitz::Arr
 
     if not have_target:
         if start_idx is None and end_idx is None:
-            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=0, set_signal_length=True)
+            latent.set_nonrepeatable_wiggle(x, start_idx=0, set_signal_length=True)
         else:
-            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=clipped_x_start_idx)
+            latent.set_nonrepeatable_wiggle(x, start_idx=clipped_x_start_idx)
     return sample_lp

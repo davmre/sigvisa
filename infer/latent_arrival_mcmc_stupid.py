@@ -59,7 +59,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     clipped_x_start_idx = max(padded_x_start_idx, 0)
     clipped_x_end_idx = min(padded_x_end_idx, len(shape))
 
-    i_start = gibbs_start_idx - clipped_x_start_idx + 1
+    i_start = gibbs_start_idx - clipped_x_start_idx # + 1
     i_end = gibbs_end_idx - clipped_x_start_idx
 
     if i_end > clipped_x_end_idx:
@@ -122,14 +122,18 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     observed_nonrepeatable = shape * x
     observed_nonrepeatable[isect_start - clipped_x_start_idx : isect_end - clipped_x_start_idx] += y[isect_start - clipped_y_start_LNidx:isect_end - clipped_y_start_LNidx]
 
-
-
     return x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, model_x, model_y, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end
 
 def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None, debug=False, stationary=False):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
     x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, target_signal=target_signal)
+
+    if len(y) == 0:
+        # don't bother resampling if there's no signal
+        print "WARNING: not resampling %s because no obs signal is available" % latent.label
+        return 0
+
 
     # alignments:
     #
@@ -208,12 +212,14 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
             combined_posterior_precision = 1.0/smoothed_cov_x[0,0] + shape[i] * shape[i] / smoothed_cov_y[0,0]
             combined_posterior_mean = ( smoothed_mean_x[0] / smoothed_cov_x[0,0] - shape[i] * (smoothed_mean_y[0] - observed_nonrepeatable[i]) / smoothed_cov_y[0,0] ) / combined_posterior_precision
         else:
+            smoothed_cov_y = np.zeros((1,1))
+            smoothed_mean_y = np.zeros((1,))
             combined_posterior_precision = 1.0/smoothed_cov_x[0,0]
             combined_posterior_mean = smoothed_mean_x[0]
 
 
         if not have_target:
-            r  = c_randn(i)
+            r  = c_randn()
             new_xi = r / np.sqrt(combined_posterior_precision) + combined_posterior_mean
         else:
             new_xi = target_wiggle[i-i_start]
@@ -241,11 +247,15 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
             update_Lambda_squiggle(y_Lambda_hat, y_Lambda_squiggle, y_filtered_covs[i+yx_offset,:,:])
             update_lambda_squiggle(y_lambda_hat, y_lambda_squiggle, y_filtered_covs[i+yx_offset,:,:], new_yi - y_filtered_means[i+yx_offset,0])
         else:
+            new_yi = 0
             y_lambda_squiggle[:] = y_lambda_hat
             y_Lambda_squiggle[:,:] = y_Lambda_hat
 
         if debug:
-            print "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f sampled_x %f sampled_y %f" % (i, x_filtered_means[i,0], x_filtered_covs[i,0,0], y_filtered_means[i+yx_offset, 0], y_filtered_covs[i+yx_offset,0,0], smoothed_mean_x[0], smoothed_cov_x[0,0], smoothed_mean_y[0], smoothed_cov_y[0,0], combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi)
+            try:
+                print "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f sampled_x %f sampled_y %f" % (i, x_filtered_means[i,0], x_filtered_covs[i,0,0], y_filtered_means[i+yx_offset, 0], y_filtered_covs[i+yx_offset,0,0], smoothed_mean_x[0], smoothed_cov_x[0,0], smoothed_mean_y[0], smoothed_cov_y[0,0], combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi)
+            except:
+                print "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y OOR filtered_cov_y OOR mean_x %f cov_x %f mean_y OOR cov_y OOR mean_combined %f cov_combined %f sampled_x %f sampled_y %f y_idx %d yshape %s" % (i, x_filtered_means[i,0], x_filtered_covs[i,0,0], smoothed_mean_x[0], smoothed_cov_x[0,0], combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi, i+yx_offset, y_filtered_means.shape)
         if np.isnan(combined_posterior_mean) or smoothed_cov_x[0,0] < 0 or smoothed_cov_y[0,0] < 0 or 1.0/combined_posterior_precision < 0 or np.abs(new_xi) > 1e80 or np.abs(new_yi) > 1e80:
             raise Exception('something fucked up')
 
@@ -262,14 +272,14 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
 
     if not have_target:
         if start_idx is None and end_idx is None:
-            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=0, set_signal_length=True)
+            latent.set_nonrepeatable_wiggle(x, start_idx=0, set_signal_length=True)
         else:
-            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=clipped_x_start_idx)
+            latent.set_nonrepeatable_wiggle(x, start_idx=clipped_x_start_idx)
     return sample_lp
 
 
-def c_randn(seed):
-    code = "srand(seed); return_val = randn();"
+def c_randn():
+    code = "return_val = randn();"
 
     support = """
 #include <stdio.h>

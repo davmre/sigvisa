@@ -309,5 +309,5 @@ signal_diff(i) =value(i) - pred_signal(i);
         if plot_mode == "full":
             subplot_waveform(self.get_wave(), ax, plot_dets=False, c='black')
 
-            pred_wave = Waveform(data=self.assem_signal(), stime=self.st, sta=self.sta, srate=self.srate, chan=self.chan)
+            pred_wave = Waveform(data=self.assem_signal() + self.nm.c, stime=self.st, sta=self.sta, srate=self.srate, chan=self.chan)
             subplot_waveform(pred_wave, ax, plot_dets=False, c='red')
