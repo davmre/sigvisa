@@ -65,7 +65,7 @@ class ARModel(NoiseModel):
 
         tmp = np.zeros((n_p, n_p))
 
-        K = np.zeros((n_p, n_p))
+        K = np.eye(n_p) * 1.0e4
         u = np.zeros((n_p,))
 
         var = std**2
@@ -107,7 +107,7 @@ class ARModel(NoiseModel):
                   converged_to_stationary = 1;
                }
 
-//               printf ("c t = %d var = %f old_v %f diff %f converged=%d\\n", t, K(0,0), old_v, fabs(old_v - K(0,0)), converged_to_stationary);
+               // printf ("c t = %d var = %f old_v %f diff %f converged=%d\\n", t, K(0,0), old_v, fabs(old_v - K(0,0)), converged_to_stationary);
 
                continue;
           }
@@ -125,7 +125,7 @@ class ARModel(NoiseModel):
 
                 expected = u(0);
                 v = K(0,0);
-//                printf ("c t = %d var = %f\\n", t, K(0,0));
+                // printf ("c t = %d var = %f\\n", t, K(0,0));
                 t1 = 0.5 * log(2 * 3.141592653589793 * v);
             } else {
                 for (int i=0; i < n_p; ++i) {
@@ -140,7 +140,7 @@ class ARModel(NoiseModel):
             double ll = t1 + 0.5 * err*err/v;
             d_prob -= ll;
 
-        // printf("cm %d err = %.10f x = %.10f ll = %.10f d_prob=%.10f\\n", t, err, x, ll, d_prob);
+        // printf("cm %d err = %.10f d(t) = %.10f expected %f std %f ll = %.10f d_prob=%.10f\\n", t, err, d(t), expected, sqrt(v), ll, d_prob);
 
             if (t_since_mask <= n_p) {
                 u(0) = d(t);
@@ -552,6 +552,12 @@ class ARModel(NoiseModel):
 
     def order(self):
         return len(self.params)
+
+    def stationary(self):
+        coefs = np.concatenate((-self.params[::-1], (1,)))
+        roots = np.polynomial.polynomial.polyroots(coefs)
+        return np.all(np.abs(roots) < 1)
+
 
 
 # error model obeys normal distribution

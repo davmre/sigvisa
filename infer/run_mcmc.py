@@ -18,7 +18,7 @@ from sigvisa.infer.event_mcmc import ev_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, swap_association_move
 from sigvisa.infer.arrival_time_moves import indep_peak_move, improve_offset_move, improve_atime_move, coda_decay_joint_move
-from sigvisa.infer.autoregressive_mcmc import wiggle_param_step, latent_arrival_block_gibbs, gibbs_sweep
+from sigvisa.infer.autoregressive_mcmc import wiggle_param_step, latent_arrival_block_gibbs, latent_wiggle_param_gibbs
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -144,7 +144,8 @@ def run_open_world_MH(sg, steps=10000,
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move,
                               'arrival_time': improve_atime_move,
-                              'latent_arrival': latent_arrival_block_gibbs} if enable_template_moves else {}
+                              'latent_arrival': latent_arrival_block_gibbs,
+                              'latent_wiggle_params': latent_wiggle_param_gibbs} if enable_template_moves else {}
 
     optional_moves = {'ar_wiggle': (template_moves_special, wiggle_param_step)}
 
@@ -249,7 +250,7 @@ def run_open_world_MH(sg, steps=10000,
 
 
                             do_template_moves(sg, wn, tmnodes, tg, wg, stds,
-                                              n_attempted, n_accepted, move_times, step)
+                                              n_attempted, n_accepted, move_times, step, joint=True)
 
         for (move, fn) in global_moves.items():
 

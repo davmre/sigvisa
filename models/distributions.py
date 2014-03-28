@@ -64,6 +64,10 @@ class InvGamma(Distribution):
         if x == 0.0: return 1000.0
         return beta/(x**2) - (alpha+1)/x
 
+    def sample(self):
+        s = scipy.stats.invgamma.rvs(a=self.alpha, size=1)
+        return s * self.beta
+
 class LogNormal(Distribution):
     def __init__(self, mu, sigma):
         self.mu = mu
@@ -123,6 +127,35 @@ class Gaussian(Distribution):
 
     def sample(self, **kwargs):
         return self.mean + np.random.randn() * self.std
+
+class MultiGaussian(Distribution):
+    def __init__(self, mean, cov, pre_inv=False):
+        self.mean = mean
+        self.cov = cov
+        self.L = scipy.linalg.cholesky(cov, True)
+
+        if pre_inv:
+            self.invL = np.linalg.inv(L)
+        else:
+            self.invL = None
+
+    def log_p(self, x, **kwargs):
+        r = x-self.mean
+
+        if self.invL:
+            l = np.dot(self.invL, r)
+            rr = np.dot(l.T, l)
+        else:
+            tmp = scipy.linalg.chol_solve((self.L, True), r)
+            rr = np.dot(r.T, rr)
+
+        logdet2 = np.log(np.diag(self.L)).sum()
+        ll =  -.5 * (rr + len(self.mean) * np.log(2*np.pi)) - logdet2
+        return ll
+
+    def sample(self):
+        # why am I implementing this? use scipy.stats.multivariate_normal instead.
+        pass
 
 class Laplacian(Distribution):
     def __init__(self, center, scale):

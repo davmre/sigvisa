@@ -211,7 +211,7 @@ class Node(object):
                 # just take the value from that array
                 self.set_value(value=value[0])
                 assert (len(value) == 1)
-            except TypeError:
+            except (TypeError, IndexError) as e:
                 self.set_value(value=value)
         else:
             self.set_dict(value)

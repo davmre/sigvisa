@@ -56,39 +56,53 @@ class LatentArrivalNode(Node):
         self._repeatable_wiggle_cache = np.array(())
         self._empirical_wiggle_cache = np.array(())
 
+        self.npts = 0
+
         #parent_tmpls_tmp = [(k, graph.nodes_by_key[k]) for k in self._tmpl_keys.values()]
         #parent_wiggles_tmp = [(k, graph.nodes_by_key[k]) for k in self._wiggle_keys.values()]
         #self.parent_keys_changed.update(parent_tmpls_tmp, parent_wiggles_tmp)
 
         # TEMPORARY HACK until I actually figure out how to train the AR wiggle models
-        em = ErrorModel(mean=0.0, std=0.01)
+        em = ErrorModel(mean=0.0, std=1.0)
         self.arwm = ARModel(params=(.7,.2,), c=1.0, em = em, sf=self.srate)
 
     def parent_predict(self):
-        self.set_value(self._predict_value())
+        self.set_value(self._predict_value(), force_new_size=True)
         self._parent_values(force_update_wiggle=True)
 
     def _predict_value(self):
         self._parent_values()
         env = self._tmpl_shape_cache
         wiggle_repeatable = self._repeatable_wiggle_cache
-        wiggle = self.arwm.predict(n=len(env))
-        wiggle[:len(wiggle_repeatable)] += wiggle_repeatable[:len(env)]
-        wiggle *= env
-        return wiggle
+
+        #value = np.zeros((self.npts,))
+        #wiggle_len = np.min(len(env), self.npts)
+        value = np.zeros((len(env),))
+        wiggle_len = len(env)
+
+        value[:wiggle_len] = self.arwm.predict(n=wiggle_len)
+        value[:len(wiggle_repeatable)] += wiggle_repeatable[:wiggle_len]
+        value[:len(env)] *= env[:wiggle_len]
+        return value
 
     def parent_sample(self):
-        self.set_value(self._sample_value())
+        self.set_value(self._sample_value(), force_new_size=True)
         self._parent_values(force_update_wiggle=True)
 
     def _sample_value(self):
         self._parent_values()
         env = self._tmpl_shape_cache
         wiggle_repeatable = self._repeatable_wiggle_cache
-        wiggle = self.arwm.sample(n=len(env))
-        wiggle[:len(wiggle_repeatable)] += wiggle_repeatable[:len(env)]
-        wiggle *= env
-        return wiggle
+
+        #value = np.zeros((self.npts,))
+        #wiggle_len = np.min(len(env), self.npts)
+        value = np.zeros((len(env),))
+        wiggle_len = len(env)
+
+        value[:wiggle_len] = self.arwm.sample(n=wiggle_len)
+        value[:len(wiggle_repeatable)] += wiggle_repeatable[:wiggle_len]
+        value[:len(env)] *= env[:wiggle_len]
+        return value
 
     def compute_empirical_wiggle(self, env, tmpl_shape_env=None, repeatable_wiggle=None, start_idx=0):
         """
@@ -117,8 +131,8 @@ class LatentArrivalNode(Node):
         if repeatable_wiggle is None:
             repeatable_wiggle = self._repeatable_wiggle_cache
 
-        resolveable_latent_wiggle_len = min(len(env), len(tmpl_shape_env)-start_idx, MAX_LATENT_SIGNAL_LEN)
-        end_idx = start_idx + resolveable_latent_wiggle_len
+        end_idx = min(len(env), len(tmpl_shape_env), MAX_LATENT_SIGNAL_LEN)
+        resolveable_latent_wiggle_len  = end_idx - start_idx
 
         empirical_wiggle = env[:resolveable_latent_wiggle_len] / tmpl_shape_env[start_idx:end_idx]
         empirical_wiggle[:len(repeatable_wiggle) - start_idx] -= repeatable_wiggle[start_idx:end_idx]
@@ -140,13 +154,13 @@ class LatentArrivalNode(Node):
         # latent value.
         self._parent_values()
         empirical_wiggle = self._empirical_wiggle_cache
-        resolveable_latent_wiggle_len = len(empirical_wiggle)
+        #resolveable_latent_wiggle_len = len(empirical_wiggle)
 
         observed_wiggle_logp = self.arwm.log_p(empirical_wiggle)
-        entropy = self.arwm.em.entropy + 0.01 # HACK to discourage long latent signals
-        latent_wiggle_expected_logp =  entropy * (MAX_LATENT_SIGNAL_LEN - resolveable_latent_wiggle_len)
+        #entropy = self.arwm.em.entropy + 0.01 # HACK to discourage long latent signals
+        #latent_wiggle_expected_logp =  entropy * (MAX_LATENT_SIGNAL_LEN - resolveable_latent_wiggle_len)
         #print "computing logp over resolveable len %d. observed logp %f, latent %f, total %f" % (resolveable_latent_wiggle_len, observed_wiggle_logp, latent_wiggle_expected_logp, observed_wiggle_logp + latent_wiggle_expected_logp)
-        return observed_wiggle_logp + latent_wiggle_expected_logp
+        return observed_wiggle_logp #+ latent_wiggle_expected_logp
 
     def set_from_child_signal(self, start_idx=0):
         self._parent_values()
@@ -169,6 +183,7 @@ class LatentArrivalNode(Node):
         extract_end_offset = extract_end_idx - latent_start_idx
 
         self._dict[self.single_key][extract_start_offset:extract_end_offset] = observed_signal[extract_start_idx:extract_end_idx] - predicted_without_me[extract_start_idx:extract_end_idx]
+        assert(self.npts == len(self.get_value()))
         self._parent_values(force_update_wiggle=True)
 
     def _parent_values(self, force_update_wiggle=False):
@@ -194,30 +209,20 @@ class LatentArrivalNode(Node):
                 continue
 
         if tmpl_changed:
-
             self._tmpl_shape_cache = np.exp(self._recompute_cached_logenv())
-
-            # keep the node value at the same length as the predicted shape
-            v = self.get_value()
-            v_len = len(v) if v is not None else 0
-            new_tmpl_len = len(self._tmpl_shape_cache)
-            if v_len > new_tmpl_len:
-                self._dict[self.single_key] = v[:new_tmpl_len]
-            elif v_len < new_tmpl_len:
-                new_v = np.zeros((new_tmpl_len,))
-                new_v[:v_len] = v
-                new_v[v_len:] = self._tmpl_shape_cache[v_len:]
-                self._dict[self.single_key] = new_v[:MAX_LATENT_SIGNAL_LEN]
         if wiggle_changed or len(self._repeatable_wiggle_cache) == 0:
             self._repeatable_wiggle_cache = self._recompute_cached_wiggle()
         if tmpl_changed or wiggle_changed or force_update_wiggle:
             v = self.get_value()
             if v is None:
                 v = self._predict_value()
+                self.npts = len(v)
                 self._dict[self.single_key] = v
-            self._empirical_wiggle_cache = self.compute_empirical_wiggle(v, self._tmpl_shape_cache, self._repeatable_wiggle_cache)
+                self._empirical_wiggle_cache = np.zeros((len(v),))
+            new_wiggle = self.compute_empirical_wiggle(v, self._tmpl_shape_cache, self._repeatable_wiggle_cache)
+            self._empirical_wiggle_cache[:len(new_wiggle)] = new_wiggle
 
-
+        assert(len(self._empirical_wiggle_cache) == self.npts)
         del parent_keys_changed
         return pv
 
@@ -234,13 +239,19 @@ class LatentArrivalNode(Node):
         v  = self._tmpl_params
         offset = (v['arrival_time'] - int(np.floor(v['arrival_time']))) * self.srate
         offset = offset - int(np.floor(offset))
-        logenv = self.tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)[:MAX_LATENT_SIGNAL_LEN]
+        logenv = self.tg.abstract_logenv_raw(v, idx_offset=offset,
+                                             srate=self.srate)
         return logenv
 
     def get_template_params(self):
         self._parent_values()
         return self._tmpl_params
 
+
+    # derivatives are not super well-defined since changing the decay
+    # rate or amplitude will change the represented length of the
+    # latent signal, which is discrete.
+    """
     def deriv_log_p(self, parent_key=None, lp0=None, eps=1e-4):
         self._parent_values()
         lp0 = lp0 if lp0 else self.log_p()
@@ -259,11 +270,10 @@ class LatentArrivalNode(Node):
         else:
             self._wiggle_params[p] -= eps
         return deriv
-
+    """
 
     def get_wave(self):
         return Waveform(data=self.get_value(), stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='env;' + self.band)
-
 
     def debugging_plot(self, ax, plot_mode="full"):
         self._parent_values()
@@ -292,9 +302,20 @@ class LatentArrivalNode(Node):
     ####################################################
 # hack: redefining parent methods for efficiency
 
-    def set_value(self, value, key=None):
+    def set_value(self, value, key=None, force_new_size=False):
         key = key if key else self.single_key
         if self._mutable[key]:
+            if not force_new_size:
+                assert(len(value) == self.npts)
+            else:
+                self.npts = len(value)
+                if self.npts <= len(self._empirical_wiggle_cache):
+                    self._empirical_wiggle_cache = self._empirical_wiggle_cache[:self.npts]
+                else:
+                    new_cache = np.zeros((self.npts,))
+                    new_cache[:len(self._empirical_wiggle_cache)] = self._empirical_wiggle_cache
+                    self._empirical_wiggle_cache = new_cache
+
             self._dict[key] = value
             # we explicitly don't set parent_keys_changed and
             # recompute deterministic values for our children, because
@@ -304,11 +325,14 @@ class LatentArrivalNode(Node):
         self._parent_values(force_update_wiggle=True)
 
     def set_dict(self, value, override_fixed=False):
+        raise Exception("disabling set_dict for latent arrival nodes, because I don't understand how it'll be used and I don't want to write the code to make sure the node value doesn't change length. but that'd be easy to fix if we really need this. ")
+        """
         assert(set(value.iterkeys()) == set(self._mutable.iterkeys()))
         if override_fixed:
             self._dict = value
         else:
             self._dict = {k : value[k] if self._mutable[k] else self._dict[k] for k in value.iterkeys() }
+        """
 
 
 ##########################################################
@@ -350,9 +374,13 @@ class LatentArrivalNode(Node):
         predicted_shape = self._tmpl_shape_cache
         repeatable_wiggle = self._repeatable_wiggle_cache
 
-        mygrad = self.arwm.log_p_grad(empirical_wiggle) / predicted_shape
+        # note: not sure I have all the lengths correct
+        # below. indexing should be consistent (no off-by-one errors)
+        # but possible mygrad will be too long or short. fix this if
+        # it becomes a problem.
+        mygrad = self.arwm.log_p_grad(empirical_wiggle)[:len(predicted_shape)] / predicted_shape[:len(empirical_wiggle)]
 
-        latent_len = len(empirical_wiggle)
+        latent_len = self.npts
 
         child_wn = list(self.children)[0]
         latent_start_idx = child_wn.arrival_start_idx(self.eid, self.phase)
@@ -385,7 +413,6 @@ class LatentArrivalNode(Node):
         grad[i:i+ni] += mygrad
         return ni
 
-
     def set_nonrepeatable_wiggle(self, x, start_idx=None, set_signal_length=False):
         """
         If set_signal_length is True, the latent signal is modified to have length len(x).
@@ -405,12 +432,16 @@ class LatentArrivalNode(Node):
         shape_env = self._tmpl_shape_cache[start_idx:start_idx+N]
         repeatable_wiggle = self._repeatable_wiggle_cache[start_idx:start_idx+N]
 
-        x[:len(repeatable_wiggle)] += repeatable_wiggle
-        x[:len(shape_env)] *= shape_env
+        new_value = np.copy(x)
+        new_value[:len(repeatable_wiggle)] += repeatable_wiggle[:N]
+        new_value[:len(shape_env)] *= shape_env[:N]
 
         if start_idx==0 and set_signal_length:
             # replace the entire signal with our new signal
-            self._dict[self.single_key] = x[:MAX_LATENT_SIGNAL_LEN]
+            self._empirical_wiggle_cache = np.copy(x)
+            self._dict[self.single_key] = new_value
+            self.npts = len(new_value)
         else:
-            self._dict[self.single_key][start_idx:start_idx+N] = x[:len(self._dict[self.single_key])-start_idx]
-        self._parent_values(force_update_wiggle=True)
+            self._empirical_wiggle_cache = np.copy(x)[:len(self._empirical_wiggle_cache)]
+            self._dict[self.single_key][start_idx:start_idx+N] = new_value[:len(self._dict[self.single_key])-start_idx]
+        assert(self.npts == len(self._dict[self.single_key]))

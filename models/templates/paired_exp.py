@@ -71,6 +71,8 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                                                parents=[evnodes['loc'], evnodes['mb']],
                                                chan=chan, band=band, template=True, children=children, **kwargs)
 
+
+
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, fixedlen=None):
         arr_time, peak_offset, coda_height, coda_decay = \
@@ -90,6 +92,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                 # slightly bigger but with no effect since it's too small
                 # to create a nonzero-length envelope).
             l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+
         d = np.empty((l,))
         code = """
 double onset_slope;

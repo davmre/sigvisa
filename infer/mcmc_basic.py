@@ -1,5 +1,6 @@
 import numpy as np
 from functools32 import lru_cache
+from sigvisa.infer.autoregressive_mcmc import gibbs_sweep
 
 @lru_cache(maxsize=2048)
 def get_node_scales(node_list):
@@ -55,19 +56,18 @@ def gaussian_MH_move_joint(sg, key, node, latent, relevant_nodes, scales=None, *
     old_latent = np.copy(latent.get_value())
     proposal = gaussian_propose(sg, (key,), (node,), values=np.array([oldval,]), scales=scales, **kwargs)[0]
 
-    wiggle, shape, rw = latent.get_signal_components()
-    wiggle = np.copy(wiggle)
 
-    node.set_value(key=key, value=proposal)
+    old_latent = np.copy(latent.get_value())
+    lp_reverse = gibbs_sweep(latent, target_signal=old_latent)
+    node.set_value(proposal)
+    lp_resample = gibbs_sweep(latent, adjust_latent_length=True)
 
-    latent.set_nonrepeatable_wiggle(wiggle)
-
-    lp_new = sg.joint_logprob_keys(relevant_nodes=relevant_nodes)
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
 
     u = np.random.rand()
-    if (lp_new ) - (lp_old) > np.log(u):
+    if (lp_new + lp_reverse ) - (lp_old + lp_resample) > np.log(u):
         return True
     else:
         node.set_value(key=key, value=oldval)
-        latent.set_value(old_latent)
+        latent.set_value(old_latent, force_new_size=True)
         return False

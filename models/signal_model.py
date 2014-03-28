@@ -136,7 +136,7 @@ class ObservedSignalNode(Node):
         for (i, (eid, phase)) in enumerate(arrivals):
             sidxs[i] = self.arrival_start_idx(eid, phase, skip_pv_call=True)
             if sidxs[i] >= self.npts:
-                logenvs[i] = empty_array
+                latent_envs[i] = empty_array
                 continue
 
             latent_env = self.get_latent_arrival(eid, phase)
@@ -303,7 +303,7 @@ signal_diff(i) =value(i) - pred_signal(i);
     def debugging_plot(self, ax, plot_mode="noise"):
         if plot_mode == "noise":
             noise = self._station_noise()
-            noise_wave = Waveform(data=noise, stime=self.st, sta=self.sta, srate=self.srate, chan=self.chan, filter_str='')
+            noise_wave = Waveform(data=ma.masked_array(data=noise, mask=self.get_value().mask), stime=self.st, sta=self.sta, srate=self.srate, chan=self.chan, filter_str='')
             subplot_waveform(noise_wave, ax, plot_dets=False, c='black')
 
         if plot_mode == "full":

@@ -392,6 +392,8 @@ def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
 
     # do MH acceptance
     u = np.random.rand()
+    print "proposed atime", atime_proposal, "vs current", old_atime
+    print lp_new, lp_old, reverse_lp, resample_lp, (lp_new + reverse_lp) - (lp_old + resample_lp)
     if (lp_new + reverse_lp) - (lp_old + resample_lp) > np.log(u):
         return True
     else:
@@ -496,18 +498,66 @@ def coda_decay_joint_gibbs_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
     old_latent = np.copy(n_latent.get_value())
     lp_reverse = gibbs_sweep(n_latent, target_signal=old_latent)
     n_decay.set_value(decay_proposal)
-    lp_resample = gibbs_sweep(n_latent)
-
+    lp_resample = gibbs_sweep(n_latent, adjust_latent_length=True)
 
     lp_new = sg.joint_logprob_keys(relevant_nodes)
 
     # do MH acceptance
     u = np.random.rand()
     if (lp_new + lp_reverse) - (lp_old+lp_resample) > np.log(u):
+        print old_decay, decay_proposal
+        print lp_new, lp_old, lp_reverse, lp_resample
+        print lp_new + lp_reverse, lp_old+lp_resample
+        print lp_new + lp_reverse - lp_old-lp_resample
+
         return True
     else:
         n_decay.set_value(key=k_decay, value=old_decay)
-        n_latent.set_value(key=k_latent, value=old_latent)
+        n_latent.set_value(key=k_latent, value=old_latent, force_new_size=True)
+        print old_decay, decay_proposal
+        print lp_new, lp_old, lp_reverse, lp_resample
+        print lp_new + lp_reverse, lp_old+lp_resample
+        print lp_new + lp_reverse - lp_old-lp_resample
+        return False
+
+def coda_height_joint_gibbs_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
+    # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
+    k_height, n_height = tmnodes['coda_height']
+    k_latent, n_latent = tmnodes['latent_arrival']
+
+    relevant_nodes = [wave_node,n_latent]
+    relevant_nodes += [n_height.parents[n_height.default_parent_key()],] if n_height.deterministic() else [n_height,]
+
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
+
+    # propose a new coda height
+    old_height = n_height.get_value(k_height)
+    values = (old_height,)
+    height_proposal = float(gaussian_propose(sg, keys=(k_height,),
+                                             node_list=(n_height,),
+                                             values=(values), std=std,
+                                             **kwargs))
+
+    old_latent = np.copy(n_latent.get_value())
+    lp_reverse = gibbs_sweep(n_latent, target_signal=old_latent)
+    n_height.set_value(height_proposal)
+    lp_resample = gibbs_sweep(n_latent, adjust_latent_length=True)
+
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    # do MH acceptance
+    u = np.random.rand()
+    if (lp_new + lp_reverse) - (lp_old+lp_resample) > np.log(u):
+        print old_height, height_proposal
+        print lp_new, lp_old, lp_reverse, lp_resample
+        print lp_new + lp_reverse, lp_old+lp_resample
+        print lp_new + lp_reverse - lp_old-lp_resample
+
+        return True
+    else:
+        n_height.set_value(key=k_height, value=old_height)
+        n_latent.set_value(key=k_latent, value=old_latent, force_new_size=True)
+        print old_height, height_proposal
         print lp_new, lp_old, lp_reverse, lp_resample
         print lp_new + lp_reverse, lp_old+lp_resample
         print lp_new + lp_reverse - lp_old-lp_resample

@@ -67,7 +67,6 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     x = np.ones((clipped_x_end_idx - clipped_x_start_idx,))
     end_copy_idx = min(clipped_x_end_idx, len(empirical_wiggle))
     x[:end_copy_idx-clipped_x_start_idx] = empirical_wiggle[clipped_x_start_idx:end_copy_idx]
-    x[0] = 1.0
     shape = shape[clipped_x_start_idx:clipped_x_end_idx]
     repeatable = repeatable[clipped_x_start_idx:clipped_x_end_idx]
 
@@ -125,10 +124,14 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
 
     return x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, model_x, model_y, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end
 
-def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debug=False):
+def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debug=False, adjust_latent_length=False):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
     x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, target_signal=target_signal)
+
+    if not adjust_latent_length:
+        assert((i_end-i_start) == len(latent.get_value()))
+
 
     if len(y) == 0:
         # don't bother resampling if there's no signal
@@ -188,12 +191,12 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     x_n = len(x)
     x_filtered_means = np.zeros((x_n, x_np))
     x_filtered_covs = np.zeros((x_n, x_np, x_np))
-    x_filtered_covs[0,:,:] = np.eye(x_np)
+    x_filtered_covs[0,:,:] = np.eye(x_np) * 1e4
 
     y_n = len(y)
     y_filtered_means = np.zeros((y_n, y_np))
     y_filtered_covs = np.zeros((y_n, y_np, y_np))
-    y_filtered_covs[0,:,:] = np.eye(y_np)
+    y_filtered_covs[0,:,:] = np.eye(y_np) * 1e4
 
     x_Lambda_hat = np.zeros((x_np, x_np))
     x_Lambda_squiggle = np.zeros((x_np, x_np))
@@ -223,7 +226,8 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     smooth_AR(x, x_mask, x_params, x_filtered_means, x_filtered_covs, i_end, x_lambda_hat, x_Lambda_hat, x_lambda_squiggle, x_Lambda_squiggle, smoothed_cov_x);
     smooth_AR(y, y_mask, y_params, y_filtered_means, y_filtered_covs, i_end+yx_offset, y_lambda_hat, y_Lambda_hat, y_lambda_squiggle, y_Lambda_squiggle, smoothed_cov_y);
 
-    double sample_lp = 0.9189385332 * (i_end-i_start);
+    double lp_cum = 0;
+
     double combined_posterior_mean, combined_posterior_precision;
     // the index i is relative to padded_x_start_idx
     for (int i=i_end-1; i >= i_start; --i) {
@@ -256,7 +260,16 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
           new_xi = r / sqrt(combined_posterior_precision) + combined_posterior_mean;
         }
 
-        sample_lp -= (r*r)/2.0;
+        double lp = .5 * (-1.83787706641 + log(combined_posterior_precision) - r*r);
+
+        double obs_lp = 0;
+        if (observed_y) {
+           double obs_v = observed_nonrepeatable(i);
+           double obs_mu = shape(i) * smoothed_mean_x(0) + smoothed_mean_y(0);
+           double obs_var = shape(i) * shape(i) * smoothed_cov_x(0,0) + smoothed_cov_y(0,0);
+           obs_lp = -.5 * (1.83787706641 + log(obs_var) + pow(obs_v - obs_mu, 2) / obs_var);
+        }
+        lp_cum += lp + obs_lp;
 
         x(i) = new_xi;
 
@@ -285,7 +298,7 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
         update_Lambda_hat(y_Lambda_hat, y_Lambda_squiggle, y_params);
         update_lambda_hat(y_lambda_hat, y_lambda_squiggle, y_params); // hello world6
     }
-    return_val = sample_lp;
+    return_val = lp_cum;
     """
 
     support = """
@@ -661,7 +674,7 @@ void smooth_AR(blitz::Array<double, 1> x, blitz::Array<bool, 1> mask, blitz::Arr
 
     if not have_target:
         if start_idx is None and end_idx is None:
-            latent.set_nonrepeatable_wiggle(x, start_idx=0, set_signal_length=True)
+               latent.set_nonrepeatable_wiggle(x, start_idx=0, set_signal_length=adjust_latent_length)
         else:
             latent.set_nonrepeatable_wiggle(x, start_idx=clipped_x_start_idx)
     return sample_lp
