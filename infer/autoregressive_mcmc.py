@@ -163,8 +163,8 @@ def latent_wiggle_param_gibbs(sg, wave_node, tmnodes):
 
 
 def gibbs_update_wiggle_params(n_latent):
-    prior_alpha = 1.0
-    prior_beta = 1.0
+    prior_alpha = 1000.0
+    prior_beta = 1000.0
 
     wiggle, shape, rw = n_latent.get_signal_components()
 

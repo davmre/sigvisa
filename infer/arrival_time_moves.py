@@ -336,39 +336,47 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
     adjust the arrival time to compensate for the change in offset.
     """
 
-    arrival_key, arrival_node = tmnodes['arrival_time']
-    offset_key, offset_node = tmnodes['peak_offset']
-    relevant_nodes = [wave_node,]
-    relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
-    relevant_nodes += [offset_node.parents[offset_node.default_parent_key()],] if offset_node.deterministic() else [offset_node,]
+    k_atime, n_atime = tmnodes['arrival_time']
+    k_offset, n_offset = tmnodes['peak_offset']
+    k_latent, n_latent = tmnodes['latent_arrival']
 
-    print "WARNING: BROKEN relevant_nodes in improve_offset_move"
 
-    current_offset = offset_node.get_value(key=offset_key)
+    relevant_nodes = [wave_node,n_latent]
+    relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
+    relevant_nodes += [n_offset.parents[n_offset.default_parent_key()],] if n_offset.deterministic() else [n_offset,]
+
+    current_offset = n_offset.get_value(key=k_offset)
     exp_offset = np.exp(current_offset)
-    atime = arrival_node.get_value(key=arrival_key)
-    proposed_offset = gaussian_propose(sg, keys=(offset_key,),
-                                       node_list=(offset_node,),
+    atime = n_atime.get_value(key=k_atime)
+    proposed_offset = gaussian_propose(sg, keys=(k_offset,),
+                                       node_list=(n_offset,),
                                        values=(current_offset,),
                                        std=std, **kwargs)[0]
     exp_proposed = np.exp(proposed_offset)
     new_atime = atime + (exp_offset - exp_proposed)
 
-    rn_tmp, node_list, keys, oldvalues, newvalues = update_wiggle_submove(sg, wave_node, tmnodes,
-                                                                          arrival_key, arrival_node,
-                                                                          atime, new_atime)
-    relevant_nodes += rn_tmp
-    node_list.append(offset_node)
-    newvalues.append(proposed_offset)
-    oldvalues.append(current_offset)
-    keys.append(offset_key)
 
-    accepted = MH_accept(sg=sg, keys=keys,
-                         oldvalues=oldvalues,
-                         newvalues = newvalues,
-                         node_list = node_list,
-                         relevant_nodes=relevant_nodes)
-    return accepted
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
+    old_latent = np.copy(n_latent.get_value())
+    n = len(old_latent)
+
+    # first compute the reverse probability of resampling the old wiggle
+    reverse_lp = gibbs_sweep(n_latent, target_signal=old_latent)
+
+    n_atime.set_value(new_atime)
+    n_offset.set_value(proposed_offset)
+
+    resample_lp = gibbs_sweep(n_latent, adjust_latent_length=True)
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    u = np.random.rand()
+    if (lp_new + reverse_lp) - (lp_old + resample_lp) > np.log(u):
+        return True
+    else:
+        n_atime.set_value(key=k_atime, value=atime)
+        n_offset.set_value(key=k_offset, value=current_offset)
+        n_latent.set_value(key=k_latent, value=old_latent, force_new_size=True)
+        return False
 
 def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
     # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
@@ -393,7 +401,7 @@ def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
     # do MH acceptance
     u = np.random.rand()
     print "proposed atime", atime_proposal, "vs current", old_atime
-    print lp_new, lp_old, reverse_lp, resample_lp, (lp_new + reverse_lp) - (lp_old + resample_lp)
+    #print lp_new, lp_old, reverse_lp, resample_lp, (lp_new + reverse_lp) - (lp_old + resample_lp)
     if (lp_new + reverse_lp) - (lp_old + resample_lp) > np.log(u):
         return True
     else:
