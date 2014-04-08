@@ -116,9 +116,12 @@ class Heatmap(object):
 
     def load(self):
         fname = self.fname
+        data_file = open(fname, 'r')
+
+
         print "loading heat map values from %s" % fname
 
-        data_file = open(fname, 'r')
+
         meta_info = data_file.readline()
         left_lon, right_lon, bottom_lat, top_lat, n = [float(x) for x in meta_info.split()]
         self.n = int(n)
@@ -163,7 +166,7 @@ class Heatmap(object):
 
                     if checkpoint is not None:
                         self.save(checkpoint)
-                    print "computed (%.2f, %.2f) = %.6f" % (lon, lat, self.fvals[loni, lati])
+                    #print "computed (%.2f, %.2f) = %.6f" % (lon, lat, self.fvals[loni, lati])
 
     def coord_list(self):
         cl = []
@@ -495,7 +498,7 @@ class Heatmap(object):
         # finally construct the border_pt along with v, the direction of travel
         assert(interp >= 0)
         border_pt = last_pt + interp * v
-        print "center", self.center, "border", border_pt, "v", v
+        #print "center", self.center, "border", border_pt, "v", v
         return border_pt, v / np.linalg.norm(v, 2)
 
     def __mul__(self, other):

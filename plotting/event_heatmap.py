@@ -27,9 +27,9 @@ class EventHeatmap(Heatmap):
             labels = [None for loc in locations]
 
         self.event_locations.extend([(l[0], l[1]) for l in locations])
-        if yvals:
+        if yvals is not None:
             self.event_yvals.extend(yvals)
-        if labels:
+        if labels is not None:
             self.event_labels.extend(labels)
 
     def add_stations(self, names):
