@@ -1,3 +1,3 @@
-[submodule "sparsegp"]
-	path = sparsegp
-	url = git@github.com:davmre/sparsegp
+[submodule "treegp"]
+	path = treegp
+	url = git@github.com:davmre/treegp
