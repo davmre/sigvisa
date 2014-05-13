@@ -296,4 +296,5 @@ def smooth_cov_functional(filtered_cov, Lambda_squiggle):
     return a
 
 def smooth_mean_functional(filtered_mean, filtered_cov, lambda_squiggle):
-    return filtered_mean - np.dot(filtered_cov, lambda_squiggle)
+    a = filtered_mean - np.dot(filtered_cov, lambda_squiggle)
+    return a

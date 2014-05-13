@@ -12,6 +12,7 @@ from sigvisa.database.signal_data import *
 from sigvisa.database import db
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
+from sigvisa.infer.run_mcmc import run_open_world_MH, MCMCLogger
 
 import sigvisa.utils.geog
 import obspy.signal.util
@@ -53,12 +54,18 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
 
     st = time.time()
 
-    v1 = np.array([ 0., 3.41092045, 1., -0.03])
-    v2 = np.array([ 0., 0.0, 1.0, -0.1])
+    #v1 = np.array([ 0., 3.41092045, 1., -0.03])
+    v2 = np.array([ 0., 0.0, 1.0, -3])
 
-    sigvisa_graph.set_all(values=v1, node_list=sigvisa_graph.template_nodes)
+    sigvisa_graph.set_all(values=v2, node_list=sigvisa_graph.template_nodes)
 
-    run_open_world_MH(sg, steps=100, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False)
+    ks_latent = [k for k in sigvisa_graph.all_nodes.keys() if "latent" in k]
+    for k_latent in ks_latent:
+        n_latent = sigvisa_graph.all_nodes[k_latent]
+        n_latent.parent_sample()
+
+    logger = MCMCLogger(run_dir="test_learn_mcmc/", write_template_vals=True, dump_interval=1)
+    run_open_world_MH(sigvisa_graph, steps=500, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, logger=logger)
 
     et = time.time()
 
@@ -89,7 +96,7 @@ def main():
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default="dummy", type="str", help="")
     parser.add_option("--fit_wiggles", dest="fit_wiggles", default=False, action="store_true", help="")
-    parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", type="str", help="")
+    parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
     parser.add_option("--phases", dest="phases", default="leb", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")

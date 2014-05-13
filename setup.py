@@ -71,23 +71,10 @@ sigvisa_module = Extension('sigvisa_c',
                            extra_link_args = extra_link_args,
                            )
 
-ctree_root = 'utils/cover_tree_src/'
-ctree_sources = ['cover_tree_point.cc', 'cover_tree_pp_debug.cc', 'distances.cc', 'vector_mult_py.cc', 'quadratic_form_py.cc']
-from imp import find_module
-f, pathname, descr = find_module("pyublas")
-CTREE_INCLUDE_DIRS = [os.path.join(pathname, "include"),]
-covertree_module = ctree = Extension('utils.cover_tree',
-                                     sources=[os.path.join(ctree_root, s) for s in ctree_sources],
-                                     include_dirs=CTREE_INCLUDE_DIRS,
-                                     library_dirs=['/'],
-                                     libraries=['boost_python'],
-                                     extra_compile_args=extra_compile_args,
-                                     extra_link_args = extra_link_args,
-                                 )
 
 
 setup(name='sigvisa',
       version='1.0',
       description='Signal-Based Vertically Integrated Seismological Processing',
       include_dirs=[np.get_include()] + sys_includes,
-      ext_modules=[sigvisa_module, covertree_module])
+      ext_modules=[sigvisa_module, ])

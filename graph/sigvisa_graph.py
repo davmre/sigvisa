@@ -104,7 +104,8 @@ class SigvisaGraph(DirectedGraphModel):
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True,
                  arrays_joint=False, gpmodel_build_trees=False,
-                 absorb_n_phases=False, hack_param_constraint=False):
+                 absorb_n_phases=False, hack_param_constraint=False,
+                 fixed_arrival_npts=None):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -177,6 +178,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.evnodes = dict() # keys are eids, vals are attribute:node dicts
         self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
+
+        self.fixed_arrival_npts = fixed_arrival_npts
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -496,8 +499,9 @@ class SigvisaGraph(DirectedGraphModel):
                            chan=wave_node.chan, band=wave_node.band)
 
         latent_arrival = LatentArrivalNode(self, eid, "UA", sta,
-                                                     wave_node.chan, wave_node.band,
-                                                     wave_node.srate, children=(wave_node,))
+                                           wave_node.chan, wave_node.band,
+                                           wave_node.srate, children=(wave_node,),
+                                           fixed_npts=self.fixed_arrival_npts)
         self.add_node(latent_arrival, latent_arrival=True)
 
         tnodes['arrival_time'] = Node(label=at_label, model=DummyModel(atime),
@@ -584,7 +588,8 @@ class SigvisaGraph(DirectedGraphModel):
 
                 parents = [d[sta] for d in param_nodes]
                 node = LatentArrivalNode(eid, phase, sta, chan, band, parents=parents,
-                                         children=child_wave_nodes)
+                                         children=child_wave_nodes,
+                                         fixed_npts=self.fixed_arrival_npts)
                 nodes[sta] = node
         else:
             sta = site
@@ -595,7 +600,8 @@ class SigvisaGraph(DirectedGraphModel):
             # param_nodes is just a list of nodes
             node = LatentArrivalNode(eid, phase, sta, chan, band,
                                      parents=param_nodes,
-                                     children=child_wave_nodes)
+                                     children=child_wave_nodes,
+                                     fixed_npts=self.fixed_arrival_npts)
             return node
 
     def setup_site_param_node_joint(self, param, site, phase, parents, model_type,
@@ -733,7 +739,7 @@ class SigvisaGraph(DirectedGraphModel):
         child_latent_nodes = set()
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
-                latent_arrival = LatentArrivalNode(self, eid, phase, sta, wave_node.chan, wave_node.band, wave_node.srate, children=(wave_node,))
+                latent_arrival = LatentArrivalNode(self, eid, phase, sta, wave_node.chan, wave_node.band, wave_node.srate, children=(wave_node,), fixed_npts=self.fixed_arrival_npts)
                 self.add_node(latent_arrival, latent_arrival=True)
                 child_latent_lookup[wave_node.band][wave_node.chan] = latent_arrival
                 child_wave_nodes.add(wave_node)
@@ -1144,18 +1150,14 @@ class SigvisaGraph(DirectedGraphModel):
                 for (k, n) in fit_param_nodes.values():
                    n.fpid = fpid
 
-                # extract the empirical wiggle for this template fit
-                wiggle, wiggle_st, wiggle_et = extract_phase_wiggle(arrival=(eid, phase),
-                                                                    arrivals=arrivals,
-                                                                    wave_node=wave_node)
-                if len(wiggle) < wave['srate']:
-                    print "evid %d phase %s at %s (%s, %s) is not prominent enough to extract a wiggle..." % (event.evid, phase, sta, chan, band)
-                    wiggle_fname = "NONE"
-                    wiggle_st = -1
-                else:
-                    wiggle_wave = Waveform(data=wiggle, srate=wave['srate'], stime=wiggle_st, sta=sta, chan=chan, evid=event.evid)
-                    wiggle_fname = os.path.join("runid_" + str(self.runid), "%d.wave" % (fpid,))
-                    wiggle_wave.dump_to_file(os.path.join(wiggle_dir, wiggle_fname))
+
+                k_latent = create_key('latent_arrival', eid=eid, sta=wave_node.sta, phase=phase, chan=wave_node.chan, band=wave_node.band)
+                n_latent = self.all_nodes[k_latent]
+                wiggle_wave = n_latent.get_wave()
+                wiggle_st = wiggle_wave['stime']
+                wiggle_fname = os.path.join("runid_" + str(self.runid), "%d.wave" % (fpid,))
+                wiggle_wave.dump_to_file(os.path.join(wiggle_dir, wiggle_fname))
+
                 sql_query = "update sigvisa_coda_fit_phase set wiggle_fname='%s', wiggle_stime=%f where fpid=%d" % (wiggle_fname, wiggle_st, fpid,)
                 cursor.execute(sql_query)
 

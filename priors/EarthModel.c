@@ -1064,6 +1064,7 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
   }
 }
 
+
 static double ellipticity_corr (double delta, double esaz, double ecolat,
                                 double depth, int phaseid)
 {

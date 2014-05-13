@@ -21,7 +21,7 @@ MAX_LATENT_SIGNAL_LEN = 24000 # (10 minutes * 40hz)
 
 class LatentArrivalNode(Node):
 
-    def __init__(self, graph, eid, phase, sta, chan, band, srate, **kwargs):
+    def __init__(self, graph, eid, phase, sta, chan, band, srate, fixed_npts=None, **kwargs):
 
         self.eid, self.phase, self.sta, self.chan, self.band, self.srate = eid, phase, sta, chan, band, srate
 
@@ -52,10 +52,11 @@ class LatentArrivalNode(Node):
         self._tmpl_params = dict()
         self._wiggle_params = dict()
 
+        self.fixed_npts = fixed_npts
+
         self._tmpl_shape_cache = np.array(())
         self._repeatable_wiggle_cache = np.array(())
         self._empirical_wiggle_cache = np.array(())
-
         self.npts = 0
 
         #parent_tmpls_tmp = [(k, graph.nodes_by_key[k]) for k in self._tmpl_keys.values()]
@@ -67,8 +68,11 @@ class LatentArrivalNode(Node):
         self.arwm = ARModel(params=(.7,.2,), c=1.0, em = em, sf=self.srate)
 
     def parent_predict(self):
-        self.set_value(self._predict_value(), force_new_size=True)
-        self._parent_values(force_update_wiggle=True)
+        predicted_value, predicted_wiggle = self._predict_value()
+        self.set_value(predicted_value, force_new_size=True)
+        self._parent_values()
+        self._empirical_wiggle_cache = predicted_wiggle
+
 
     def _predict_value(self):
         self._parent_values()
@@ -80,14 +84,19 @@ class LatentArrivalNode(Node):
         value = np.zeros((len(env),))
         wiggle_len = len(env)
 
-        value[:wiggle_len] = self.arwm.predict(n=wiggle_len)
+        predicted_wiggle = self.arwm.predict(n=wiggle_len)
+
+        value[:wiggle_len] = predicted_wiggle
         value[:len(wiggle_repeatable)] += wiggle_repeatable[:wiggle_len]
         value[:len(env)] *= env[:wiggle_len]
-        return value
+        return value, predicted_wiggle
 
     def parent_sample(self):
-        self.set_value(self._sample_value(), force_new_size=True)
-        self._parent_values(force_update_wiggle=True)
+        sampled_value, sampled_wiggle = self._sample_value()
+        self.set_value(sampled_value, force_new_size=True)
+        self._parent_values()
+        self._empirical_wiggle_cache = sampled_wiggle
+
 
     def _sample_value(self):
         self._parent_values()
@@ -99,10 +108,12 @@ class LatentArrivalNode(Node):
         value = np.zeros((len(env),))
         wiggle_len = len(env)
 
-        value[:wiggle_len] = self.arwm.sample(n=wiggle_len)
+        sampled_wiggle = self.arwm.sample(n=wiggle_len)
+
+        value[:wiggle_len] = sampled_wiggle
         value[:len(wiggle_repeatable)] += wiggle_repeatable[:wiggle_len]
         value[:len(env)] *= env[:wiggle_len]
-        return value
+        return value, sampled_wiggle
 
     def compute_empirical_wiggle(self, env, tmpl_shape_env=None, repeatable_wiggle=None, start_idx=0):
         """
@@ -215,10 +226,10 @@ class LatentArrivalNode(Node):
         if tmpl_changed or wiggle_changed or force_update_wiggle:
             v = self.get_value()
             if v is None:
-                v = self._predict_value()
+                v, w = self._predict_value()
                 self.npts = len(v)
                 self._dict[self.single_key] = v
-                self._empirical_wiggle_cache = np.zeros((len(v),))
+                self._empirical_wiggle_cache = w
             new_wiggle = self.compute_empirical_wiggle(v, self._tmpl_shape_cache, self._repeatable_wiggle_cache)
             self._empirical_wiggle_cache[:len(new_wiggle)] = new_wiggle
 
@@ -240,7 +251,7 @@ class LatentArrivalNode(Node):
         offset = (v['arrival_time'] - int(np.floor(v['arrival_time']))) * self.srate
         offset = offset - int(np.floor(offset))
         logenv = self.tg.abstract_logenv_raw(v, idx_offset=offset,
-                                             srate=self.srate)
+                                             srate=self.srate, fixedlen=self.fixed_npts)
         return logenv
 
     def get_template_params(self):
@@ -291,10 +302,10 @@ class LatentArrivalNode(Node):
             subplot_waveform(shape_wave, ax, plot_dets=False, c='green')
 
         if plot_mode == "predict" or plot_mode=="full":
-            env_wave = Waveform(data=self._predict_value(), stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='env;' + self.band)
+            env_wave = Waveform(data=self._predict_value()[0], stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='env;' + self.band)
             subplot_waveform(env_wave, ax, plot_dets=False, c='red')
         if plot_mode == "sample" or plot_mode=="full":
-            env_wave = Waveform(data=self._sample_value(), stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='env;' + self.band)
+            env_wave = Waveform(data=self._sample_value()[0], stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='env;' + self.band)
             subplot_waveform(env_wave, ax, plot_dets=False, c='purple')
 
 
@@ -433,6 +444,7 @@ class LatentArrivalNode(Node):
         repeatable_wiggle = self._repeatable_wiggle_cache[start_idx:start_idx+N]
 
         new_value = np.copy(x)
+        new_value[np.isnan(new_value)] = 0
         new_value[:len(repeatable_wiggle)] += repeatable_wiggle[:N]
         new_value[:len(shape_env)] *= shape_env[:N]
 

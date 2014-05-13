@@ -129,9 +129,9 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr>
 	<td>{{ phase.phase }}</td>
 	<td>{{ phase.arrival_time }}</td>
-	<td>{{ phase.peak_offset }}</td>
-	<td>{{ phase.coda_height }}</td>
-	<td>{{ phase.coda_decay }}</td>
+	<td>{{ phase.peak_offset|exp }}</td>
+	<td>{{ phase.coda_height|exp }}</td>
+	<td>{{ phase.coda_decay|exp }}</td>
 	<td>{{ phase.amp_transfer }}</td>
 	<td>
 	{% if phase.wiggle_fname and phase.wiggle_fname != 'NONE' %}

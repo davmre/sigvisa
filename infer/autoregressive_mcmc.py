@@ -118,7 +118,7 @@ def ar_var_posterior(signal, arm, prior_alpha, prior_beta):
                      compiler='gcc')
 
     posterior_alpha = prior_alpha + (n-n_p)/2.0
-    posterior_beta = sum_sqerrs/2.0
+    posterior_beta = prior_beta + sum_sqerrs/2.0
     return posterior_alpha, posterior_beta
 
 def ar_mean_posterior(signal, arm, prior_mu, prior_sigma2):
@@ -168,7 +168,9 @@ def gibbs_update_wiggle_params(n_latent):
 
     wiggle, shape, rw = n_latent.get_signal_components()
 
-    posterior_alpha, posterior_beta = ar_var_posterior(wiggle, n_latent.arwm, prior_alpha, prior_beta)
+    wiggle_def = wiggle[np.isfinite(wiggle)]
+
+    posterior_alpha, posterior_beta = ar_var_posterior(wiggle_def, n_latent.arwm, prior_alpha, prior_beta)
     print posterior_alpha, posterior_beta
     new_var = InvGamma(posterior_alpha, posterior_beta).sample()
     print "resampled std", np.sqrt(new_var), ", previous", n_latent.arwm.em.std
@@ -187,8 +189,13 @@ def gibbs_update_wiggle_params(n_latent):
     tries = 0
     orig_params = np.copy(n_latent.arwm.params)
     while not stationary and tries < max_tries:
-        param_mean, param_cov = ar_param_posterior(wiggle, n_latent.arwm, prior_param_mean, prior_param_cov)
-        new_params = np.random.multivariate_normal(mean=param_mean, cov=param_cov, size=1).flatten()
+        param_mean, param_cov = ar_param_posterior(wiggle_def, n_latent.arwm, prior_param_mean, prior_param_cov)
+
+        try:
+            new_params = np.random.multivariate_normal(mean=param_mean, cov=param_cov, size=1).flatten()
+        except Exception as e:
+            print e
+            import pdb; pdb.set_trace()
         n_latent.arwm.params = new_params
         n_latent.arwm.p = len(new_params)
         stationary = n_latent.arwm.stationary()
@@ -198,3 +205,7 @@ def gibbs_update_wiggle_params(n_latent):
         n_latent.arwm.params = orig_params
     else:
         print "resample params", new_params, "previous", orig_params
+
+
+    if np.isnan(n_latent.log_p()):
+        import pdb; pdb.set_trace()

@@ -351,6 +351,12 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
     return NULL;
   }
 
+  if (trvtime == -1) {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: requesting travel time for impossible phase.");
+    return NULL;
+  }
+
+
   int ref_siteid = p_site->ref_siteid;
 
   trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,

@@ -57,7 +57,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     padded_x_end_idx = gibbs_end_idx + model_x.p
     #padded_x_len = padded_x_end_idx - padded_x_start_idx
     clipped_x_start_idx = max(padded_x_start_idx, 0)
-    clipped_x_end_idx = min(padded_x_end_idx, len(shape))
+    clipped_x_end_idx = max(min(padded_x_end_idx, len(shape)), 0)
 
     i_start = gibbs_start_idx - clipped_x_start_idx # + 1
     i_end = gibbs_end_idx - clipped_x_start_idx
@@ -78,7 +78,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     padded_y_start_idx = gibbs_start_idx - model_y.p
     padded_y_end_idx = gibbs_end_idx + model_y.p
     clipped_y_start_idx = max(0, latent_offset + padded_y_start_idx)
-    clipped_y_end_idx = min(child_wn.npts, latent_offset + padded_y_end_idx)
+    clipped_y_end_idx = max(min(child_wn.npts, latent_offset + padded_y_end_idx), 0)
     clipped_y_len = clipped_y_end_idx - clipped_y_start_idx
 
     # if we have an index into an clipped_x vector, this is the
@@ -122,6 +122,20 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     observed_nonrepeatable[isect_start - clipped_x_start_idx : isect_end - clipped_x_start_idx] += y[isect_start - clipped_y_start_LNidx:isect_end - clipped_y_start_LNidx]
 
     return x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, model_x, model_y, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end
+
+
+def get_lp_obs(x_means, x_covs, y_means, y_covs, ix_offset, shape, observed_nonrepeatable):
+    n = x_means.shape[0]
+
+    for i in range(n):
+        filtered_mean_obs = shape[i] * x_means[i, 0] + y_means[i+ix_offset, 0]
+        filtered_var_obs = shape[i]*shape[i]*x_covs[i, 0,0] + y_covs[i+yx_offset, 0, 0]
+
+        log_gaussian = lambda v, mu, var : -.5 * (np.log(2 * np.pi * var) + (v - mu)**2/var)
+        local_obs_lp = log_gaussian(observed_nonrepeatable[i], filtered_mean_obs, filtered_var_obs)
+        all_obs_lp += local_obs_lp
+        print "step %d local_lp %f all_lp %f " % (i, local_obs_lp, all_obs_lp)
+    return all_obs_lp
 
 def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None, debug=False, stationary=False, adjust_latent_length=False):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
@@ -172,6 +186,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
     x_mask = np.ones((len(x),), dtype=bool)
     x_mask[:i_start] = False
     x_mask[i_end:] = False
+    x_mask[np.isnan(x)] = True
 
     y_mask = np.copy(obs_mask)
 
@@ -207,7 +222,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
         smoothed_mean_x = smooth_mean_functional(x_filtered_means[i,:], x_filtered_covs[i,:,:], x_lambda_hat)
         smoothed_cov_x = smooth_cov_functional(x_filtered_covs[i,:,:], x_Lambda_hat)
 
-        observed_y = i+yx_offset < len(obs_mask) and i+yx_offset >= 0 and not obs_mask[i+yx_offset]
+        observed_y = i+yx_offset < len(obs_mask) and i+yx_offset >= 0 and not obs_mask[i+yx_offset] and shape[i] > 0
 
         if observed_y:
 
@@ -235,22 +250,28 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
             new_xi = target_wiggle[i-i_start]
             r = (new_xi - combined_posterior_mean) * np.sqrt(combined_posterior_precision)
 
-        #sample_lp += (np.log(combined_posterior_precision) - r*r) /2.0
-
-        lp = -.5 * (np.log(2 * np.pi * 1.0/combined_posterior_precision) + r * r)
-        cum_lp += lp
+        if np.isnan(new_xi):
+            new_xi = 0
+            entropy = -.5 * np.log(2*np.pi * np.e / combined_posterior_precision)
+            lp = entropy
+            cum_lp += entropy
+        else:
+            lp = -.5 * (np.log(2 * np.pi * 1.0/combined_posterior_precision) + r * r)
+            cum_lp += lp
 
 
         log_gaussian = lambda v, mu, var : -.5 * (np.log(2 * np.pi * var) + (v - mu)**2/var)
-        smooth_lp_x = log_gaussian(new_xi, smoothed_mean_x, smoothed_cov_x)
+        smooth_lp_x = log_gaussian(new_xi, smoothed_mean_x[0], smoothed_cov_x[0,0])
         if observed_y:
-            smooth_lp_y = log_gaussian(observed_nonrepeatable[i] - shape[i] * new_xi, smoothed_mean_y, smoothed_cov_y)
+            smooth_lp_y = log_gaussian(observed_nonrepeatable[i] - shape[i] * new_xi, smoothed_mean_y[0], smoothed_cov_y[0,0])
+            #if smooth_lp_y < -20:
+            #    import pdb; pdb.set_trace()
             smooth_lp_cum += smooth_lp_x + smooth_lp_y
-            obs_lp = log_gaussian(observed_nonrepeatable[i] - smoothed_mean_y, shape[i] * smoothed_mean_x, shape[i] * shape[i] * smoothed_cov_x + smoothed_cov_y)
+            obs_lp = log_gaussian(observed_nonrepeatable[i] - smoothed_mean_y[0], shape[i] * smoothed_mean_x[0], shape[i] * shape[i] * smoothed_cov_x[0,0] + smoothed_cov_y[0,0])
             obs_lp_cum += obs_lp
 
-        if debug:
-            print "lp %f cum_lp %f smooth_lp_x %f smooth_lp_y %f smooth_lp_cum %f obs_lp %f obs_lp_cum %f" % (lp, cum_lp, smooth_lp_x, smooth_lp_y, smooth_lp_cum, obs_lp, obs_lp_cum)
+            if debug:
+                print "lp %f cum_lp %f smooth_lp_x %f smooth_lp_y %f smooth_lp_cum %f obs_lp %f obs_lp_cum %f" % (lp, cum_lp, smooth_lp_x, smooth_lp_y, smooth_lp_cum, obs_lp, obs_lp_cum)
 
         # IF we had masked_unsampled, then our current predictive means and vars were using a filtered value for this timestep, and they had higher vars than necessary.
         # this means that to update the mean, we need the difference between the filtered value and the sampled value (NOT between the true value and sampled value)
@@ -407,6 +428,11 @@ def gibbs_sweep_forward(latent, start_idx=None, end_idx=None, target_signal=None
     filter_y_cum = 0
 
     obs_lp_cum = 0
+
+
+    all_obs_lp = 0
+
+
     # the index i is relative to padded_x_start_idx
     for i in range(i_start, i_end):
 

@@ -35,7 +35,7 @@ from sigvisa.infer.ar_smoothing_stupid import *
     # we do this for a full forward sweep over y, then a backward sweep.
 
 
-def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None):
+def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None, target_wiggle=None):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
     child_wn = list(latent.children)[0]
@@ -56,7 +56,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     padded_x_end_idx = gibbs_end_idx + model_x.p
     #padded_x_len = padded_x_end_idx - padded_x_start_idx
     clipped_x_start_idx = max(padded_x_start_idx, 0)
-    clipped_x_end_idx = min(padded_x_end_idx, len(shape))
+    clipped_x_end_idx = max(min(padded_x_end_idx, len(shape)), 0)
 
     i_start = gibbs_start_idx - clipped_x_start_idx
     i_end = gibbs_end_idx - clipped_x_start_idx
@@ -77,8 +77,11 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     padded_y_start_idx = gibbs_start_idx - model_y.p
     padded_y_end_idx = gibbs_end_idx + model_y.p
     clipped_y_start_idx = max(0, latent_offset + padded_y_start_idx)
-    clipped_y_end_idx = min(child_wn.npts, latent_offset + padded_y_end_idx)
+    clipped_y_end_idx = max(min(child_wn.npts, latent_offset + padded_y_end_idx), 0)
     clipped_y_len = clipped_y_end_idx - clipped_y_start_idx
+
+    assert (clipped_y_len >= 0)
+    assert (clipped_x_end_idx - clipped_x_start_idx >= 0)
 
     # if we have an index into an clipped_x vector, this is the
     # correction to get an index into a clipped_y vector
@@ -94,13 +97,17 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
     x -= model_x.c
     y -= model_y.c
 
-    have_target = int(target_signal is not None)
-    if have_target:
+    if target_wiggle is not None:
+        target_wiggle = target_wiggle - model_x.c
+        have_target = 1
+    elif target_signal is not None:
         assert(len(target_signal) == gibbs_end_idx - gibbs_start_idx)
         target_wiggle = latent.compute_empirical_wiggle(env=target_signal, start_idx=gibbs_start_idx)
         target_wiggle -= model_x.c
-    if not have_target:
+        have_target=1
+    else:
         target_wiggle = np.zeros((0,));
+        have_target = 0
 
     # the region of indices where x and y intersect, in latent_node-based indices
     clipped_y_start_LNidx = clipped_y_start_idx - latent_offset
@@ -124,10 +131,10 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
 
     return x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, model_x, model_y, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end
 
-def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debug=False, adjust_latent_length=False):
+def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debug=False, adjust_latent_length=False, target_wiggle=None):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
-    x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, target_signal=target_signal)
+    x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, target_signal=target_signal, target_wiggle=target_wiggle)
 
     if not adjust_latent_length:
         assert((i_end-i_start) == len(latent.get_value()))
@@ -182,6 +189,7 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     x_mask = np.ones((len(x),), dtype=bool)
     x_mask[:i_start] = False
     x_mask[i_end:] = False
+    x_mask[np.isnan(x)] = True
 
     y_mask = np.copy(obs_mask)
     y_mask_start = max(i_start+yx_offset, 0)
@@ -215,6 +223,7 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     if y_n <= 0:
         raise Exception("ylen %d" % y_n)
 
+
     code = """
     srand(seed);
 
@@ -228,6 +237,11 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
 
     double lp_cum = 0;
 
+    FILE *fp;
+    if (debug) {
+       fp = fopen("latent_debug.log", "w");
+    }
+
     double combined_posterior_mean, combined_posterior_precision;
     // the index i is relative to padded_x_start_idx
     for (int i=i_end-1; i >= i_start; --i) {
@@ -238,7 +252,7 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
         smooth_cov(x_filtered_covs, i, x_Lambda_hat, x_Lambda_squiggle, smoothed_cov_x);
 
 
-        bool observed_y = i+yx_offset < len_obs_mask && i+yx_offset >= 0 && !obs_mask(i+yx_offset);
+        bool observed_y = (i+yx_offset < len_obs_mask) && (i+yx_offset >= 0) && (!obs_mask(i+yx_offset)) && (shape(i) > 0);
         if (observed_y) {
 
             smooth_mean(y_filtered_means, y_filtered_covs, i+yx_offset, y_lambda_hat, smoothed_mean_y);
@@ -258,6 +272,13 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
         } else {
           r = randn();
           new_xi = r / sqrt(combined_posterior_precision) + combined_posterior_mean;
+        }
+
+        // test for NaN (occurs if shape(i) = 0 so the target wiggle is undefined).
+        // if found, just compute the entropy, i.e. the expected lp over all possible xi's.
+        if (new_xi != new_xi) {
+           new_xi = 0;
+           r = 1;
         }
 
         double lp = .5 * (-1.83787706641 + log(combined_posterior_precision) - r*r);
@@ -290,7 +311,13 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
         }
 
         if (debug) {
-            printf("time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f sampled_x %f sampled_y %f\\n", i, x_filtered_means(i,0), x_filtered_covs(i,0,0), y_filtered_means(i+yx_offset, 0), y_filtered_covs(i+yx_offset,0,0), smoothed_mean_x(0), smoothed_cov_x(0,0), smoothed_mean_y(0), smoothed_cov_y(0,0), combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi);
+            if (observed_y) {
+               fprintf(fp, "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f sampled_x %f sampled_y %f\\n", i, x_filtered_means(i,0), x_filtered_covs(i,0,0), y_filtered_means(i+yx_offset, 0), y_filtered_covs(i+yx_offset,0,0), smoothed_mean_x(0), smoothed_cov_x(0,0), smoothed_mean_y(0), smoothed_cov_y(0,0), combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi);
+            } else {
+              fprintf(fp, "%d unobserved\\n", i);
+              // fprintf(fp, "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f sampled_x %f sampled_y %f\\n", i, x_filtered_means(i,0), x_filtered_covs(i,0,0), y_filtered_means(i+yx_offset, 0), y_filtered_covs(i+yx_offset,0,0), smoothed_mean_x(0), smoothed_cov_x(0,0), smoothed_mean_y(0), smoothed_cov_y(0,0), combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi);
+            }
+            fflush(fp);
         }
 
         update_Lambda_hat(x_Lambda_hat, x_Lambda_squiggle, x_params);
@@ -298,6 +325,11 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
         update_Lambda_hat(y_Lambda_hat, y_Lambda_squiggle, y_params);
         update_lambda_hat(y_lambda_hat, y_lambda_squiggle, y_params); // hello world6
     }
+
+    if (debug) {
+       fclose(fp);
+    }
+
     return_val = lp_cum;
     """
 
@@ -671,6 +703,7 @@ void smooth_AR(blitz::Array<double, 1> x, blitz::Array<bool, 1> mask, blitz::Arr
     x += x_model.c
 
     final_x = np.copy(x)
+
 
     if not have_target:
         if start_idx is None and end_idx is None:

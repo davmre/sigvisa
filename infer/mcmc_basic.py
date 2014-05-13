@@ -60,7 +60,13 @@ def gaussian_MH_move_joint(sg, key, node, latent, relevant_nodes, scales=None, *
     old_latent = np.copy(latent.get_value())
     lp_reverse = gibbs_sweep(latent, target_signal=old_latent)
     node.set_value(proposal)
-    lp_resample = gibbs_sweep(latent, adjust_latent_length=True)
+
+    if "decay" in key:
+        from sigvisa.infer.latent_arrival_mcmc_stupid import gibbs_sweep_python
+        lp_resample = gibbs_sweep_python(latent)
+        import pdb; pdb.set_trace()
+    else:
+        lp_resample = gibbs_sweep(latent, adjust_latent_length=True)
 
     lp_new = sg.joint_logprob_keys(relevant_nodes)
 

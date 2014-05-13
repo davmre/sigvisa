@@ -91,7 +91,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                 # approx-gradient routine; it tries making the bump
                 # slightly bigger but with no effect since it's too small
                 # to create a nonzero-length envelope).
-            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate)) if fixedlen is None else int(fixedlen)
 
         d = np.empty((l,))
         code = """

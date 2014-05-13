@@ -103,7 +103,7 @@ def tt_predict(event, sta, phase=None, phaseid=None):
             phaseid = 1
 
     if event.time < 1:
-        import pdb; pdb.set_trace()
+        raise Exception("called tt_predict with time <1 (%f)" % event.time)
 
 
     meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1)

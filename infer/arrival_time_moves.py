@@ -136,6 +136,7 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
     return peak_time
 
 def indep_peak_move(sg, wave_node, tmnodes, std=None):
+
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
     k_latent, n_latent = tmnodes['latent_arrival']
@@ -159,6 +160,7 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
     proposed_arrival_time = proposed_peak_time - peak_offset
 
     # print "current peak", current_atime+peak_offset, "proposed peak", proposed_peak_time, "atime", proposed_arrival_time
+
 
     old_latent, resample_lp, reverse_lp, lp_old, lp_new = repropose_full_latent_signal(sg, n_latent, arrival_node, current_atime, proposed_arrival_time, relevant_nodes)
 
@@ -273,6 +275,10 @@ def shift_and_propose_latent_signal(sg, n_latent, n_atime, old_atime, atime_prop
 def repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposal, relevant_nodes):
 
     lp_old = sg.joint_logprob_keys(relevant_nodes)
+    if np.isnan(lp_old):
+        import pdb; pdb.set_trace()
+
+
     old_latent = np.copy(n_latent.get_value())
     n = len(old_latent)
 
@@ -281,11 +287,16 @@ def repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposa
 
 
     # first compute the reverse probability of resampling the old wiggle
+
     reverse_lp = gibbs_sweep(n_latent, target_signal=old_latent)
 
     n_atime.set_value(atime_proposal)
     resample_lp = gibbs_sweep(n_latent)
     lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    if np.isnan(lp_old) or np.isnan(lp_new):
+        import pdb; pdb.set_trace()
+
 
     return old_latent, resample_lp, reverse_lp, lp_old, lp_new
 
@@ -476,6 +487,8 @@ def coda_decay_joint_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
 
     lp_new = sg.joint_logprob_keys(relevant_nodes)
 
+    import pdb; pdb.set_trace()
+
     # do MH acceptance
     u = np.random.rand()
     if (lp_new) - (lp_old) > np.log(u):
@@ -509,6 +522,8 @@ def coda_decay_joint_gibbs_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
     lp_resample = gibbs_sweep(n_latent, adjust_latent_length=True)
 
     lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    import pdb; pdb.set_trace()
 
     # do MH acceptance
     u = np.random.rand()

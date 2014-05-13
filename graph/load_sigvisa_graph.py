@@ -6,6 +6,7 @@ from sigvisa import Sigvisa
 from sigvisa.database.dataset import read_timerange, read_events, EV_MB_COL, EV_EVID_COL
 from sigvisa.database.signal_data import read_fitting_run_iterations
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, get_param_model_id, ModelNotFoundError
+from sigvisa.graph.graph_utils import create_key
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import load_event_station_chan, load_segments
 
@@ -60,18 +61,25 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     wave_node = sg.add_wave(wave)
     sg.add_event(ev)
 
-
     for phase in phases:
         sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
                         chan=wave['chan'], phase=phase,
                         values = templates[phase])
 
+        print wave_node.parents
+        k_latent = create_key('latent_arrival', eid=ev.eid, sta=wave['sta'], phase=phase, chan=wave['chan'], band=wave['band'])
+        n_latent = sg.all_nodes[k_latent]
         if load_wiggles:
-            wg = sg.wiggle_generator(phase=phase, srate=wave['srate'])
-            param_array = wg.decode_params(wiggles[phase])
-            sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
-                            chan=wave['chan'], phase=phase,
-                            values = wg.array_to_param_dict(param_array))
+            n_latent.parent_sample()
+        else:
+            n_latent.parent_predict()
+
+        #
+        #    wg = sg.wiggle_generator(phase=phase, srate=wave['srate'])
+        #    param_array = wg.decode_params(wiggles[phase])
+        #    sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
+        #                    chan=wave['chan'], phase=phase,
+        #                    values = wg.array_to_param_dict(param_array))
 
 
     return sg

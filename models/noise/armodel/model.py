@@ -50,7 +50,7 @@ class ARModel(NoiseModel):
 
         else:
             d = d - c
-            mm = mask
+            mm = mask if mask is not None else np.isnan(d)
 
         try:
             mm[0]
