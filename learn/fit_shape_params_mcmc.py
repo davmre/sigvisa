@@ -26,7 +26,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False):
+                init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False, smoothing=0):
     sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, nm_type = nm_type,
@@ -36,6 +36,8 @@ def setup_graph(event, sta, chan, band,
     cursor = s.dbconn.cursor()
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
     cursor.close()
+    if smoothing > 0:
+        wave = wave.filter('smooth_%d' % smoothing)
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
     sg.add_wave(wave=wave)
@@ -54,8 +56,10 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
 
     st = time.time()
 
+    nphases = int(len(sigvisa_graph.template_nodes)/4) # HACK
+
     #v1 = np.array([ 0., 3.41092045, 1., -0.03])
-    v2 = np.array([ 0., 0.0, 1.0, -3])
+    v2 = np.array([ 0., 0.0, 1.0, -3] * nphases)
 
     sigvisa_graph.set_all(values=v2, node_list=sigvisa_graph.template_nodes)
 
@@ -64,7 +68,8 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
         n_latent = sigvisa_graph.all_nodes[k_latent]
         n_latent.parent_sample()
 
-    logger = MCMCLogger(run_dir="test_learn_mcmc/", write_template_vals=True, dump_interval=1)
+
+    logger = MCMCLogger(run_dir="scratch/test_learn_mcmc/", write_template_vals=True, dump_interval=20)
     run_open_world_MH(sigvisa_graph, steps=500, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, logger=logger)
 
     et = time.time()
@@ -94,13 +99,14 @@ def main():
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
                       help="template model type to fit parameters under (paired_exp)")
-    parser.add_option("--template_model", dest="template_model", default="dummy", type="str", help="")
+    parser.add_option("--template_model", dest="template_model", default="dummyPrior", type="str", help="")
     parser.add_option("--fit_wiggles", dest="fit_wiggles", default=False, action="store_true", help="")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
     parser.add_option("--phases", dest="phases", default="leb", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="auto", type="str", help="")
+    parser.add_option("--smooth", dest="smooth", default=0, type=int, help="perform the given level of smoothing")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
@@ -137,7 +143,7 @@ def main():
                                 phases=phases,
                                 fit_hz=options.hz, nm_type=options.nm_type,
                                 init_run_name = options.run_name, init_iteration = options.run_iteration-1,
-                                absorb_n_phases=options.absorb_n_phases)
+                                absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth)
 
     fitid = e_step(sigvisa_graph,  fit_hz = options.hz,
                    tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),

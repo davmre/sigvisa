@@ -194,15 +194,11 @@ def run_open_world_MH(sg, steps=10000,
 
                 # also wiggle every event arrival at this station
                 for (eid,evnodes) in sg.evnodes.iteritems():
-                    for phase in sg.phases:
+
+                    nodes_by_phase = sg.get_arrival_nodes_byphase(eid, sta, wn.band, wn.chan)
+                    for (phase, tmnodes) in nodes_by_phase.items():
                         tg = sg.template_generator(phase)
                         wg = sg.wiggle_generator(phase, wn.srate)
-
-                        try:
-                            tmnodes = sg.get_arrival_nodes(eid, sta, phase, wn.band, wn.chan)
-                        except KeyError:
-                            # if this event does not generate this phase at this station
-                            continue
 
                         for (move_name, fn) in template_moves_special.iteritems():
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,

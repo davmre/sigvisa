@@ -143,6 +143,8 @@ class SigvisaGraph(DirectedGraphModel):
         self.nm_type = nm_type
         self.phases = phases
 
+        self.phases_used = set()
+
         self.runid = runid
         if run_name is not None and iteration is not None:
             cursor = Sigvisa().dbconn.cursor()
@@ -154,6 +156,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.template_nodes = []
         self.wiggle_nodes = []
+
 
         self.station_waves = dict() # (sta) -> list of ObservedSignalNodes
         self.site_elements = dict() # site (str) -> set of elements (strs)
@@ -176,6 +179,9 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.evnodes = dict() # keys are eids, vals are attribute:node dicts
         self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
+
+    def ev_arriving_phases(self, eid, sta):
+        [v for n in self.extended_evnodes.values()]
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -221,6 +227,16 @@ class SigvisaGraph(DirectedGraphModel):
         nodes = self.get_template_nodes(eid, sta, phase, band, chan)
         vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
         return vals
+
+    def get_arrival_nodes_byphase(self, eid, sta, band, chan):
+        allnodes = dict()
+        for phase in self.phases_used:
+            try:
+                tmnodes = self.get_arrival_nodes(eid, sta, phase, band, chan)
+                allnodes[phase] = tmnodes
+            except KeyError:
+                continue
+        return allnodes
 
     def get_arrival_nodes(self, eid, sta, phase, band, chan):
         nodes = self.get_template_nodes(eid, sta, phase, band, chan)
@@ -433,6 +449,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         for (site, element_list) in self.site_elements.iteritems():
             for phase in predict_phases(ev=ev, sta=site, phases=self.phases):
+                self.phases_used.add(phase)
                 if self.absorb_n_phases:
                     if phase == "Pn":
                         phase = "P"
@@ -560,7 +577,7 @@ class SigvisaGraph(DirectedGraphModel):
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
 
-        if model_type != "dummy" and modelid is None:
+        if not model_type.startswith("dummy") and modelid is None:
             try:
                 modelid = get_param_model_id(runid=self.runid, sta=site,
                                              phase=phase, model_type=model_type,
@@ -575,8 +592,8 @@ class SigvisaGraph(DirectedGraphModel):
         label = create_key(param=param, sta="%s_arr" % site,
                            phase=phase, eid=parents[0].eid,
                            chan=chan, band=band)
-        if model_type=="dummy":
-            return self.setup_site_param_indep(param=param, site=site, phase=phase, parents=parents, chan=chan, band=band, basisid=basisid, model_type="dummy", children=children, low_bound=low_bound, high_bound=high_bound, initial_value=initial_value, **kwargs)
+        if model_type.startswith("dummy"):
+            return self.setup_site_param_indep(param=param, site=site, phase=phase, parents=parents, chan=chan, band=band, basisid=basisid, model_type=model_type, children=children, low_bound=low_bound, high_bound=high_bound, initial_value=initial_value, **kwargs)
         else:
             sorted_elements = sorted(self.site_elements[site])
             sk = [create_key(param=param, eid=parents[0].eid, sta=sta, phase=phase, chan=chan, band=band) for sta in sorted_elements]
@@ -601,7 +618,7 @@ class SigvisaGraph(DirectedGraphModel):
         # appropriate parameter model.
         nodes = dict()
         for sta in self.site_elements[site]:
-            if model_type != "dummy" and modelid is None:
+            if not model_type.startswith("dummy") and modelid is None:
                 try:
                     modelid = get_param_model_id(runid=self.runid, sta=sta,
                                                  phase=phase, model_type=model_type,
@@ -617,13 +634,22 @@ class SigvisaGraph(DirectedGraphModel):
                                phase=phase, eid=parents[0].eid,
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
-            if model_type=="dummy":
-                if "tt_residual" in label:
-                    model = Gaussian(mean=0.0, std=10.0)
-                if "amp" in label:
-                    model = Gaussian(mean=0.0, std=0.25)
+            if model_type.startswith("dummy"):
+                if model_type=="dummyPrior":
+                    if "tt_residual" in label:
+                        model = Gaussian(mean=0.0, std=0.01)
+                    elif "amp" in label:
+                        model = Gaussian(mean=0.0, std=2.0)
+                    else:
+                        model = DummyModel(default_value=initial_value)
                 else:
-                    model = DummyModel(default_value=initial_value)
+                    if "tt_residual" in label:
+                        model = Gaussian(mean=0.0, std=10.0)
+                    elif "amp" in label:
+                        model = Gaussian(mean=0.0, std=0.25)
+                    else:
+                        model = DummyModel(default_value=initial_value)
+
                 node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
             else:
                 node = self.load_node_from_modelid(modelid, label, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
