@@ -67,7 +67,8 @@ def nm_detail_view(request, nmid):
         'nm': nm,
         'ymin': ymin,
         'ymax': ymax,
-        'timestr': timestr
+        'timestr': timestr,
+        'filter_str': wave['filter_str'].replace(';', "%3B")
     }, context_instance=RequestContext(request))
 
 

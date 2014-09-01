@@ -98,12 +98,15 @@ def register_svgraph_cmdline(parser):
                       help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
     parser.add_option("--arrays_joint", dest="arrays_joint", default=False, action="store_true",
                       help="model array stations with joint nodes (False)")
+    parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true",
+                      help="model Pn arrivals as P (false)")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
 
 
 def register_svgraph_signal_cmdline(parser):
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
+    parser.add_option("--smooth", dest="smooth", default=None, type=int, help="perform the given level of smoothing")
     parser.add_option("--chans", dest="chans", default="auto", type="str",
                       help="comma-separated list of channel names to use for inference (auto)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
@@ -114,7 +117,7 @@ def register_svgraph_signal_cmdline(parser):
                       help="load signals beginning at this UNIX time (None)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float",
                       help="load signals end at this UNIX time (None)")
-    parser.add_option("--dataset", dest="dataset", default="test", type="str",
+    parser.add_option("--dataset", dest="dataset", default="training", type="str",
                       help="if start_time and end_time not specified, load signals from the time period of the specified dataset (training)")
     parser.add_option("--hour", dest="hour", default=0, type="float",
                       help="start at a particular hour of the given dataset (0)")
@@ -126,6 +129,7 @@ def register_svgraph_signal_cmdline(parser):
 def register_svgraph_event_based_signal_cmdline(parser):
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
+    parser.add_option("--smooth", dest="smooth", default=None, type=int, help="perform the given level of smoothing")
     parser.add_option("--chans", dest="chans", default="auto", type="str",
                       help="comma-separated list of channel names to use for inference (auto)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
@@ -168,7 +172,8 @@ def setup_svgraph_from_cmdline(options, args):
     sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
                       wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
                       dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
-                      runid=runid, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint)
+                      runid=runid, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint,
+                      absorb_n_phases=options.absorb_n_phases)
 
 
     return sg
@@ -210,8 +215,10 @@ def load_signals_from_cmdline(sg, options, args):
     for seg in segments:
         for band in bands:
             filtered_seg = seg.with_filter(band)
-            for chan in filtered_seg.get_chans():
+            if options.smooth is not None:
+                filtered_seg = filtered_seg.with_filter("smooth_%d" % options.smooth)
 
+            for chan in filtered_seg.get_chans():
                 try:
                     modelid = get_param_model_id(sg.runid, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta'], wiggle_param=False), 'amp_transfer', 'paired_exp', chan=chan, band=band)
                 except ModelNotFoundError as e:
@@ -281,6 +288,9 @@ def load_event_based_signals_from_cmdline(sg, options, args):
     for seg in segments:
         for band in bands:
             filtered_seg = seg.with_filter(band)
+            if options.smooth is not None:
+                filtered_seg = filtered_seg.with_filter("smooth_%d" % options.smooth)
+
             for chan in filtered_seg.get_chans():
                 wave = filtered_seg[chan]
                 sg.add_wave(wave)

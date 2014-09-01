@@ -51,10 +51,16 @@ class MCMCLogger(object):
                 for (sta,wns) in sg.station_waves.items():
                     for wn in wns:
                         for phase in sg.phases:
+                            try:
+                                tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
+                            except KeyError:
+                                # if this event does not generate this phase at this station
+                                continue
+
                             lbl = "%d_%s_%s" % (eid, wn.label, phase)
                             mkdir_p(os.path.join(self.run_dir, 'ev_%05d' % eid))
                             lbl_handle = open(os.path.join(self.run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
-                            tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
+
                             lbl_handle.write('%06d %f %f %f %f\n' % (step,
                                                                      tmvals['arrival_time'],
                                                                      tmvals['peak_offset'],

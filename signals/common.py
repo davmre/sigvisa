@@ -20,6 +20,14 @@ def load_waveform_from_file(fname):
     return wave
 
 
+def filter_str_extract_smoothing(filter_str):
+    smooth = 0
+    for f in filter_str.split(';'):
+        if f.startswith('smooth'):
+            smooth = int(f[7:])
+            break
+    return smooth
+
 def filter_str_extract_band(filter_str):
     band = "broadband"
     for f in filter_str.split(';'):
@@ -249,7 +257,7 @@ class Segment(object):
 
     STANDARD_STATS = ["sta", "stime", "etime"]
 
-    filter_order = ['center', 'freq', 'env', 'log', 'smooth', 'hz']
+    filter_order = ['center', 'freq', 'env', 'smooth', 'log', 'hz']
 
     def __init__(self, waveforms=[]):
         self.__chans = dict()

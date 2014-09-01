@@ -82,8 +82,11 @@ def precompute_travel_times(sta, phaseid=1, latbins=18):
         for j in range(latbins):
             lat = -90.0 + (j+.5) * latbin_deg
 
-            meantt = s.sigmodel.mean_travel_time(lon, lat, 0.0, 0.0, sta, phaseid - 1)
-            times[i,j] = meantt
+            try:
+                meantt = s.sigmodel.mean_travel_time(lon, lat, 0.0, 0.0, sta, phaseid - 1)
+                times[i,j] = meantt
+            except ValueError:
+                times[i,j] = -100000
 
     return times
 
@@ -127,6 +130,9 @@ def add_template_to_sta_hough(sta_hough_array, template_times, template_snr, sti
     for i in range(lonbins):
         for j in range(latbins):
             origin_time = template_times[i,j]
+            if np.isnan(origin_time):
+                continue
+
             time_offset = (origin_time-stime) % time_tick_s
             timebin = int(np.floor((origin_time-stime) / time_tick_s))
 

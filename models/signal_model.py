@@ -44,6 +44,7 @@ def update_arrivals(parent_values):
     arrivals = set()
     r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
     for k in parent_values.keys():
+        if k=="prefix": continue
         arrivals.add(extract_arrival_from_key(k, r))
     return arrivals
 
@@ -88,6 +89,11 @@ class ObservedSignalNode(Node):
         self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
 
         self.graph = graph
+
+
+    def __str__(self):
+        s = "Signal node w/ model wave %s" % (self.mw)
+        return s
 
     def set_value(self, value):
         assert(len(value) == len(self.get_value(self.single_key)))

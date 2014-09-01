@@ -74,7 +74,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0):
         arr_time, peak_offset, coda_height, coda_decay = \
-            vals['arrival_time'], np.exp(vals['peak_offset']), vals['coda_height'], -np.exp(vals['coda_decay'])
+            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
 
         if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
             return np.empty((0,))

@@ -11,7 +11,7 @@ import hashlib
 import types
 import marshal
 
-from sigvisa.sparsegp.gp import GP, GPCov
+from sigvisa.treegp.gp import GP, GPCov
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
 from sigvisa.models.distributions import InvGamma, LogNormal
 

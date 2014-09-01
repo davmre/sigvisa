@@ -1,0 +1,41 @@
+{% load pagination_tags %}
+{% autopaginate run_list 50 %}
+
+<html>
+<head>
+<title>mcmc runs - sigvisa</title>
+
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+<h1>mcmc runs</h1>
+
+{% if run_list %}
+
+    <table id="runs" border=1 cellpadding=3>
+      <tr>
+	<td><strong>dir</strong></td>
+        <td><strong>date</strong></td>
+        <td><strong>cmd</strong></td>
+        <td><strong>analyze</strong></td>
+      </tr>
+        {% for run in run_list %}
+            <tr>
+                <td><a href="{% url mcmcrun_detail dirname=run.dir path="" %}">{{ run.dir }}</a></td>
+                <td>{{ run.time }}</td>
+		<td>{{ run.cmd }}</td>
+		<td><a href="{% url mcmcrun_analyze dirname=run.dir%}?burnin=100;plot_templates=false">analyze with burnin=100</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+{% paginate %}
+{% else %}
+    <p>No mcmc runs found!!! :(</p>
+{% endif %}
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>

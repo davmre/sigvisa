@@ -3,6 +3,7 @@ from svweb.views import *
 from svweb.wiggle_views import *
 from svweb.model_views import *
 from svweb.gridsearch_views import *
+from svweb.mcmc_views import *
 from svweb.event_views import *
 from svweb.site_views import *
 from svweb.wave_views import *
@@ -49,6 +50,9 @@ urlpatterns = patterns('',
                        url(r'^models/(?P<modelid>\d+)/mb_plot.png$', model_mb_plot, name='model_mb_plot'),
                        url(r'^models/(?P<modelid>\d+)/heatmap.png$', model_heatmap, name='model_heatmap'),
                        url(r'^models/(?P<modelid>\d+)/heatmap_std.png$', model_heatmap_std, name='model_heatmap_std'),
+                       url(r'^mcmc/$', mcmc_list_view, name='mcmc_runs'),
+                       url(r'^mcmc/(?P<dirname>.*?)/analyze$', mcmcrun_analyze, name='mcmcrun_analyze'),
+                       url(r'^mcmc/(?P<dirname>.*?)/(?P<path>.*)$', mcmcrun_detail, name='mcmcrun_detail'),
                        url(r'^gridsearch/$', gridsearch_list_view, name='gridsearch_list'),
                        url(r'^gridsearch/(?P<gsid>\d+)/$', gridsearch_detail_view, name='gsrun_detail'),
                        url(r'^gridsearch/(?P<gsid>\d+)/heatmap.png$', gs_heatmap_view, name='gs_heatmap'),

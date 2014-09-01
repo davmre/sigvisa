@@ -101,7 +101,7 @@ class SigvisaGraph(DirectedGraphModel):
                  nm_type="ar",
                  run_name=None, iteration=None, runid = None,
                  phases="auto", base_srate=40.0,
-                 assume_envelopes=True,
+                 assume_envelopes=True, smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
                  absorb_n_phases=False, hack_param_constraint=False):
         """
@@ -131,6 +131,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_len_s = wiggle_len_s
         self.base_srate = base_srate
         self.assume_envelopes = assume_envelopes
+        self.smoothing = smoothing
         self.wgs = dict()
         if wiggle_basisids is not None:
             for (phase, basisid) in wiggle_basisids.items():
@@ -440,6 +441,7 @@ class SigvisaGraph(DirectedGraphModel):
                 tg = self.template_generator(phase)
                 wg = self.wiggle_generator(phase, self.base_srate)
                 self.add_event_site_phase(tg, wg, site, phase, evnodes, sample_templates=sample_templates)
+
 
         self._topo_sort()
         return evnodes
@@ -1042,6 +1044,12 @@ class SigvisaGraph(DirectedGraphModel):
             sta = wave['sta']
             chan = wave['chan']
             band = wave['band']
+
+            smooth = 0
+            for fstr in wave['filter_str'].split(';'):
+                if 'smooth' in fstr:
+                    smooth = int(fstr[7:])
+
             st = wave['stime']
             et = wave['etime']
             event = get_event(evid=wave['evid'])
@@ -1057,7 +1065,7 @@ class SigvisaGraph(DirectedGraphModel):
             wiggle_optim_param_str = wiggle_optim_param_str.replace("'", "''")
             optim_log = wiggle_optim_param_str.replace("\n", "\\\\n")
 
-            sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, tmpl_optim_param_str, wiggle_optim_param_str, self.optim_log, 1 if wave_node.nm_type != 'ar' else 0, st, et, hz, wave_node.log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
+            sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, self.optim_log, 1 if wave_node.nm_type != 'ar' else 0, st, et, hz, wave_node.log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
 
             fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 

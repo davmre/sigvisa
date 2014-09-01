@@ -332,7 +332,7 @@ def summarize_times(run_dir):
     f.write('average time per step %.4f\n' % (total_time/max_step))
     f.close()
 
-def analyze_run(run_dir, burnin, true_evs):
+def analyze_run(run_dir, burnin, true_evs, plot_template_posteriors=False):
 
     try:
         plot_lp_trend(run_dir)
@@ -358,7 +358,8 @@ def analyze_run(run_dir, burnin, true_evs):
             eids.append(eid)
     print eids
     for eid in eids:
-        #plot_ev_template_posteriors(run_dir, sg, eid, burnin)
+        if plot_template_posteriors:
+            plot_ev_template_posteriors(run_dir, sg, eid, burnin)
         analyze_event(run_dir, eid, burnin, true_evs)
     #combine_steps(run_dir)
 

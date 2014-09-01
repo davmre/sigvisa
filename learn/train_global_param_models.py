@@ -13,7 +13,7 @@ from optparse import OptionParser
 import scipy.optimize
 
 
-from sigvisa.sparsegp.gp import GPCov
+from sigvisa.treegp.gp import GPCov
 
 from sigvisa import Sigvisa
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, read_fitting_run

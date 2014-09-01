@@ -54,6 +54,8 @@ class Sigvisa(threading.local):
         except:
             pass
 
+        self.homedir = os.getenv("SIGVISA_HOME")
+
         st = 1237680000
         et = st + 24 * 3600
 
@@ -86,7 +88,7 @@ class Sigvisa(threading.local):
         _, _, self.siteid_minus1_to_name = db_sites.read_sites_by_name(cursor)
 
         # load or create the list of default vertical channels at each station
-        dfc_cache_file = os.path.join(os.getenv("SIGVISA_HOME"), "db_cache", "vertical_channels")
+        dfc_cache_file = os.path.join(self.homedir, "db_cache", "vertical_channels")
         try:
             with open(dfc_cache_file, 'r') as f:
                 self.default_vertical_channel = eval(f.read())
@@ -102,22 +104,18 @@ class Sigvisa(threading.local):
         self.phasenames, self.phasetimedef = db_sites.read_phases(cursor)
         self.phaseids = dict(
             zip(self.phasenames, range(1, len(self.phasenames) + 1)))
-        self.earthmodel = load_earth(os.path.join(os.getenv(
-            "SIGVISA_HOME"), "parameters"), sitenames, allsites,
-            self.phasenames, self.phasetimedef)
-        self.sigmodel = load_sigvisa(self.earthmodel, os.path.join(os.getenv(
-            "SIGVISA_HOME"), "parameters"),
-            site_up, sites,
-            self.phasenames, self.phasetimedef )
+        self.earthmodel = load_earth(os.path.join(self.homedir, "parameters"), sitenames, allsites, self.phasenames, self.phasetimedef)
+        self.sigmodel = load_sigvisa(self.earthmodel, os.path.join(self.homedir, "parameters"), site_up, sites, self.phasenames, self.phasetimedef )
+
 
 #        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
         self.bands = ("freq_2.0_3.0",)
 #        self.chans = ('BHZ', 'BHN', 'BHE')
         self.chans = ('BHZ', 'BHN', 'BHE')
-        self.phases = ('P', 'Pn', 'Pg', 'PcP', 'S', 'Sn', 'Lg')
+        self.phases = ('P', 'Pn', 'Pg', 'PcP', 'S', 'Sn', 'ScP', 'Lg')
 
         self.P_phases = ('P', 'Pn', 'PcP')
-        self.S_phases = ('S', 'Sn', 'Lg')
+        self.S_phases = ('S', 'Sn', 'Lg', 'ScP')
 
         self.events = dict()
 
@@ -131,8 +129,15 @@ class Sigvisa(threading.local):
         return [self.phasenames[pid] for pid in phase_id_minus1_list]
 
     def arriving_phases(self, event, sta):
-        phases = [p for p in self.phases if self.sigmodel.mean_travel_time(
-            event.lon, event.lat, event.depth, event.time, sta, self.phaseids[p] - 1) > 0]
+        phases = []
+        for p in self.phases:
+            try:
+                tt = self.sigmodel.mean_travel_time(
+                         event.lon, event.lat, event.depth, event.time, sta, self.phaseids[p] - 1)
+                if tt > 0:
+                    phases.append(p)
+            except ValueError:
+                continue
         return phases
 
     def equivalent_channels(self, chan):

@@ -198,7 +198,11 @@ def run_open_world_MH(sg, steps=10000,
                         tg = sg.template_generator(phase)
                         wg = sg.wiggle_generator(phase, wn.srate)
 
-                        tmnodes = sg.get_arrival_nodes(eid, sta, phase, wn.band, wn.chan)
+                        try:
+                            tmnodes = sg.get_arrival_nodes(eid, sta, phase, wn.band, wn.chan)
+                        except KeyError:
+                            # if this event does not generate this phase at this station
+                            continue
 
                         for (move_name, fn) in template_moves_special.iteritems():
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
@@ -256,6 +260,8 @@ def main():
     parser.add_option("--preset", dest="preset", default=None, type="str", help="options are 'localize' (default None)")
     parser.add_option("--disable_moves", dest="disable_moves", default='', type="str", help="comma-separated list of specific MCMC move names to disable")
 
+
+
     register_svgraph_cmdline(parser)
     register_svgraph_signal_cmdline(parser)
     (options, args) = parser.parse_args()
@@ -276,16 +282,17 @@ def main():
 
     resume_fname = None
     start_step = 0
-    if options.run_dir is None:
-        run_dir = setup_mcmc_logging()['dir']
-    else:
-        run_dir = options.run_dir
-        if os.path.exists(run_dir):
-            resume_fname, start_step = get_last_savepoint(run_dir)
+    if options.run_dir is not None:
+        if os.path.exists(options.run_dir):
+            resume_fname, start_step = get_last_savepoint(options.run_dir)
             if resume_fname is None:
-                raise Exception("specified run dir %s already exists, but I couldn't find any savepoints!" % run_dir)
-        else:
-            mkdir_p(run_dir)
+                raise Exception("specified run dir %s already exists, but I couldn't find any savepoints!" % options.run_dir)
+    logger = MCMCLogger(run_dir=options.run_dir, write_template_vals=True, dump_interval=options.skip)
+    run_dir=logger.run_dir
+    print "MCMC logging to %s" %(run_dir)
+
+    with open(os.path.join(run_dir, 'cmd.txt'), 'w') as f:
+        f.write(" ".join(sys.argv))
 
     if resume_fname is None:
         sg = setup_svgraph_from_cmdline(options, args)
@@ -302,10 +309,12 @@ def main():
         from sigvisa.source.event import get_event
         ev = get_event(evid=5393637)
         ev.natural_source=True
-        sg.add_event(ev)
-        init_evs = [ev,]
-        with open(os.path.join(run_dir, "events.pkl"), 'wb') as f:
-            pickle.dump(init_evs, f)
+
+        if options.preset == "location":
+            sg.add_event(ev)
+            init_evs = [ev,]
+            with open(os.path.join(run_dir, "events.pkl"), 'wb') as f:
+                pickle.dump(init_evs, f)
 
     set_hough_options({'bin_width_deg': 1.0, 'time_tick_s': 10, 'smoothbins': True})
 
@@ -313,7 +322,7 @@ def main():
     sys.setrecursionlimit(20000)
     np.random.seed(0)
 
-    logger = MCMCLogger(run_dir=run_dir, write_template_vals=True, dump_interval=options.skip)
+
     run_open_world_MH(sg, steps=options.steps,
                       enable_event_openworld= not options.no_event_openworld,
                       enable_event_moves=True,
