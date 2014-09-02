@@ -637,9 +637,13 @@ class SigvisaGraph(DirectedGraphModel):
             if model_type.startswith("dummy"):
                 if model_type=="dummyPrior":
                     if "tt_residual" in label:
-                        model = Gaussian(mean=0.0, std=0.01)
-                    elif "amp" in label:
+                        model = Gaussian(mean=0.0, std=1.0)
+                    elif "amp_transfer" in label:
                         model = Gaussian(mean=0.0, std=2.0)
+                    elif "peak_offset" in label:
+                        model = Gaussian(mean=-0.5, std=1.0)
+                    elif "decay" in label:
+                        model = Gaussian(mean=0.0, std=1.0)
                     else:
                         model = DummyModel(default_value=initial_value)
                 else:
@@ -1096,14 +1100,29 @@ class SigvisaGraph(DirectedGraphModel):
             fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 
             for (eid, phase) in arrivals:
+
                 fit_param_nodes = self.get_template_nodes(eid=eid, phase=phase, chan=wave_node.chan, band=wave_node.band, sta=wave_node.sta)
                 fit_params = dict([(p, n.get_value(k)) for (p,(k, n)) in fit_param_nodes.iteritems()])
 
-                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (
-                    fitid, phase, fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'])
+
+                tg = self.template_generator(phase)
+
+                peak_decay = fit_params['peak_decay'] if 'peak_decay' in fit_params else 0.0
+
+                if eid > 0:
+                    phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer, peak_decay) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f)" % (
+                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'], peak_decay)
+                else:
+                    phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, peak_decay) values (%d, '%s', '%s', %f, %f, %f, %f, %f)" % (
+                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], peak_decay)
+
                 fpid = execute_and_return_id(s.dbconn, phase_insert_query, "fpid")
                 for (k, n) in fit_param_nodes.values():
                    n.fpid = fpid
+
+                if eid < 0:
+                    # don't bother extracting wiggles for unass templates
+                    continue
 
                 # extract the empirical wiggle for this template fit
                 wiggle, wiggle_st, wiggle_et = extract_phase_wiggle(arrival=(eid, phase),

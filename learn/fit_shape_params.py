@@ -39,9 +39,10 @@ def setup_graph(event, sta, chan, band,
         wave = wave.filter('smooth_%d' % smoothing)
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
-    sg.add_wave(wave=wave)
+    wave_node=sg.add_wave(wave=wave)
     sg.add_event(ev=event)
     #sg.fix_arrival_times()
+
     return sg
 
 
@@ -55,24 +56,34 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
 
     st = time.time()
 
+    init_vs = []
 
-    nphases = int(len(sigvisa_graph.template_nodes)/4) # HACK
+    if sigvisa_graph.template_shape=="paired_exp":
+        nphases = int(len(sigvisa_graph.template_nodes)/4) # HACK
+        v1 = np.array([ 0., 2.0, -0.5, -3] * nphases)
+        v2 = np.array([ 2., -1, -0.5, -1.5] * nphases)
+        init_vs = [v1, v2]
+    elif sigvisa_graph.template_shape=="lin_polyexp":
+        nphases = int(len(sigvisa_graph.template_nodes)/5) # HACK
 
-    v1 = np.array([ 0., 3.41092045, 1., -0.03] * nphases)
-    v2 = np.array([ 0., 0.0, 1.0, -0.1] * nphases)
+        v1 = np.array([ 0., 2.0, -0.5, -4, -3] * nphases)
+        v2 = np.array([ 2., -1, -1.5, -4, -1.5] * nphases)
+        v3 = np.array([ 3., 2.0, -0.5, -4, -3] * nphases)
+        init_vs = [v1, v2, v3]
 
-    sigvisa_graph.set_all(values=v1, node_list=sigvisa_graph.template_nodes)
-    sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
-    v1_result = sigvisa_graph.get_all(sigvisa_graph.template_nodes)
-    v1_p = sigvisa_graph.current_log_p()
+    v_results = []
+    v_ps = []
+    for v in init_vs:
+        sigvisa_graph.set_all(values=v, node_list=sigvisa_graph.template_nodes)
+        sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
+        v_result = sigvisa_graph.get_all(sigvisa_graph.template_nodes)
+        v_p = sigvisa_graph.current_log_p()
+        v_results.append(v_result)
+        v_ps.append(v_p)
 
-    sigvisa_graph.set_all(values=v2, node_list=sigvisa_graph.template_nodes)
-    sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
-    v2_result = sigvisa_graph.get_all(sigvisa_graph.template_nodes)
-    v2_p = sigvisa_graph.current_log_p()
+    best_v = np.argmax(v_ps)
+    sigvisa_graph.set_all(values=v_results[best_v], node_list=sigvisa_graph.template_nodes)
 
-    if v1_p > v2_p:
-        sigvisa_graph.set_all(values=v1_result, node_list=sigvisa_graph.template_nodes)
 
     if fit_wiggles:
         sigvisa_graph.init_wiggles_from_template()
@@ -112,7 +123,7 @@ def main():
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
                       help="template model type to fit parameters under (paired_exp)")
-    parser.add_option("--template_model", dest="template_model", default="dummy", type="str", help="")
+    parser.add_option("--template_model", dest="template_model", default="dummyPrior", type="str", help="")
     parser.add_option("--fit_wiggles", dest="fit_wiggles", default=False, action="store_true", help="")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")

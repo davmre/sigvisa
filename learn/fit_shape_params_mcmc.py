@@ -43,10 +43,13 @@ def setup_graph(event, sta, chan, band,
     sg.add_wave(wave=wave)
     sg.add_event(ev=event)
     #sg.fix_arrival_times()
+
+    sg.uatemplate_rate = 1e-6
+
     return sg
 
 
-def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_wiggles, output_run_name, output_iteration):
+def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_wiggles, output_run_name, output_iteration, steps):
 
     s = Sigvisa()
 
@@ -69,8 +72,8 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
         n_latent.parent_sample()
 
 
-    logger = MCMCLogger(run_dir="scratch/test_learn_mcmc/", write_template_vals=True, dump_interval=20)
-    run_open_world_MH(sigvisa_graph, steps=500, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, logger=logger)
+    logger = MCMCLogger(run_dir="scratch/test_learn_mcmc/", write_template_vals=True, dump_interval=int(steps/10))
+    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, logger=logger)
 
     et = time.time()
 
@@ -97,8 +100,8 @@ def main():
                       help="run iteration (default is to use the next iteration)")
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
-    parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
-                      help="template model type to fit parameters under (paired_exp)")
+    parser.add_option("--template_shape", dest="template_shape", default="lin_polyexp", type="str",
+                      help="template model type to fit parameters under (lin_polyexp)")
     parser.add_option("--template_model", dest="template_model", default="dummyPrior", type="str", help="")
     parser.add_option("--fit_wiggles", dest="fit_wiggles", default=False, action="store_true", help="")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", type="str", help="")
@@ -107,6 +110,7 @@ def main():
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="auto", type="str", help="")
     parser.add_option("--smooth", dest="smooth", default=0, type=int, help="perform the given level of smoothing")
+    parser.add_option("--steps", dest="steps", default=500, type=int, help="number of MCMC steps to run (500)")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
@@ -149,7 +153,7 @@ def main():
                    tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
                    wiggle_optim_params=construct_optim_params(options.wiggle_optim_params),
                    fit_wiggles = options.fit_wiggles,
-                   output_run_name = options.run_name, output_iteration=options.run_iteration)
+                   output_run_name = options.run_name, output_iteration=options.run_iteration, steps=options.steps)
 
 
     print "fit id %d completed successfully." % fitid

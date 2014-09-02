@@ -112,9 +112,9 @@ class Sigvisa(threading.local):
         self.bands = ("freq_2.0_3.0",)
 #        self.chans = ('BHZ', 'BHN', 'BHE')
         self.chans = ('BHZ', 'BHN', 'BHE')
-        self.phases = ('P', 'Pn', 'Pg', 'PcP', 'S', 'Sn', 'ScP', 'Lg')
+        self.phases = ('P', 'Pn', 'Pg', 'PcP', 'pP', 'PKKPbc', 'S', 'Sn', 'ScP', 'Lg')
 
-        self.P_phases = ('P', 'Pn', 'PcP')
+        self.P_phases = ('P', 'Pn', 'PcP', 'pP', 'PKKPbc')
         self.S_phases = ('S', 'Sn', 'Lg', 'ScP')
 
         self.events = dict()

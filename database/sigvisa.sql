@@ -72,6 +72,7 @@ create table sigvisa_coda_fit_phase (
  arrival_time	  double precision,
  peak_offset double precision,
  coda_height double precision,
+ peak_decay double precision,
  coda_decay  double precision,
  amp_transfer double precision,
  wiggle_stime double precision,

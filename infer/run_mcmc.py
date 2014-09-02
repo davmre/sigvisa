@@ -22,6 +22,7 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in
 
 global_stds = {'coda_height': .7,
             'coda_decay': .5,
+            'peak_decay': 0.5,
             'wiggle_amp': .1,
             'wiggle_phase': .1,
             'peak_offset': 1.0,
@@ -33,6 +34,7 @@ global_stds = {'coda_height': .7,
             'evdepth': 8.0}
 
 def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step):
+
 
     for param in tg.params():
         k, n = tmnodes[param]

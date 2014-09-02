@@ -121,7 +121,8 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td><strong>atime</strong></td>
 	<td><strong>onset_seconds</strong></td>
 	<td><strong>coda_height</strong></td>
-	<td><strong>decay_rate</strong></td>
+	<td><strong>peak_decay</strong></td>
+	<td><strong>coda_decay</strong></td>
 	<td><strong>amp_transfer</strong></td>
 	<td><strong>trained wiggles</strong></td>
       </tr>
@@ -131,6 +132,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td>{{ phase.arrival_time }}</td>
 	<td>{{ phase.peak_offset }}</td>
 	<td>{{ phase.coda_height }}</td>
+	<td>{{ phase.peak_decay }}</td>
 	<td>{{ phase.coda_decay }}</td>
 	<td>{{ phase.amp_transfer }}</td>
 	<td>

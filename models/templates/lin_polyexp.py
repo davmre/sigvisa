@@ -15,15 +15,15 @@ import scipy.weave as weave
 from scipy.weave import converters
 
 
-ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4 + 1)
+ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(5 + 1)
 
-
-class PairedExpTemplateGenerator(TemplateGenerator):
+class LinPolyExpTemplateGenerator(TemplateGenerator):
 
     def __init__(self, *args, **kwargs):
-        super(PairedExpTemplateGenerator, self).__init__(*args, **kwargs)
+        super(LinPolyExpTemplateGenerator, self).__init__(*args, **kwargs)
 
         self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
+                         "peak_decay": Gaussian(0., 1.),
                          "coda_height": Gaussian(-.5, 1),
                          "coda_decay": Gaussian(-2.5, 1.5),}
 
@@ -31,19 +31,20 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
     @staticmethod
     def params():
-        return ("peak_offset", "coda_height", "coda_decay")
+        return ("peak_offset", "peak_decay", "coda_height", "coda_decay")
 
     @staticmethod
     def default_param_vals():
         d = dict()
         d['peak_offset'] = 0.0
+        d['peak_decay'] = 0.0
         d['coda_height'] = 1.0
         d['coda_decay'] = np.log(0.03)
         return d
 
     @staticmethod
     def model_name():
-        return "paired_exp"
+        return "lin_polyexp"
 
 
     def create_param_node(self, graph, site, phase, band, chan, param,
@@ -75,10 +76,10 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, fixedlen=None):
-        arr_time, peak_offset, coda_height, coda_decay = \
-            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
+        arr_time, peak_offset, peak_decay, coda_height, coda_decay = \
+            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
 
-        if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
+        if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or np.isnan(peak_decay):
             return np.empty((0,))
 
         if fixedlen:
@@ -91,7 +92,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                 # approx-gradient routine; it tries making the bump
                 # slightly bigger but with no effect since it's too small
                 # to create a nonzero-length envelope).
-            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate)) if fixedlen is None else int(fixedlen)
+            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
 
         d = np.empty((l,))
         code = """
@@ -113,13 +114,14 @@ for (int i=1; i < intro_len; ++i) {
 }
 double initial_decay = intro_len - idx_offset - peak_idx;
 for (int i=0; i < l-intro_len; ++i) {
-  d(i + intro_len) = (i + initial_decay) / srate * coda_decay + coda_height;
+  double t = (i + initial_decay) / srate;
+  d(i + intro_len) = t * coda_decay + peak_decay * log(t+1) + coda_height;
 }
 if (l > 0) {
   d(0) = min_logenv;
 }
 """
-        weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')
         return d
 
 
@@ -130,6 +132,7 @@ if (l > 0) {
         bounds['coda_height'] = -4
         bounds['peak_offset'] = -2
         bounds['coda_decay'] = -8
+        bounds['peak_decay'] = -8
 
         return bounds
 
@@ -138,8 +141,9 @@ if (l > 0) {
         bounds = { k: np.inf for k in self.params() }
 
         bounds['coda_height'] = 10
-        bounds['peak_offset'] = 4
+        bounds['peak_offset'] = 2
         bounds['coda_decay'] = 1
+        bounds['peak_decay'] = 1
 
         return bounds
 
