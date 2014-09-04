@@ -158,6 +158,7 @@ def plot_with_fit_shapes(fname, wn, title="",
                          tmpl_lw = None,
                          highlight_eid=None,
                          fig=None,
+                         plot_dets="leb",
                          **kwargs):
 
     if fig is None:
@@ -197,7 +198,7 @@ def plot_with_fit_shapes(fname, wn, title="",
         else:
             highlight_tmpl = wn.get_wave()
 
-    subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
+    subplot_waveform(wave, axes, color='black', linewidth=1.5, plot_dets=plot_dets, **kwargs)
     if model_lw is not None:
         subplot_waveform(pred, axes, color="purple",
                               linewidth=4, alpha = 1, linestyle='-',
@@ -236,7 +237,7 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
     try:
         arrivals = wave['event_arrivals']
     except:
-        arrivals = wave['arrivals_idcx']
+        arrivals = wave['arrivals']
     if all_arrivals:
         arrivals = wave['arrivals_idcx']
 
@@ -389,7 +390,8 @@ def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_de
     else:
         axes.fill_between(timevals, wave_data, y2=fill_y2, **kwargs)
     if plot_dets:
-        plot_det_times(wave, axes=axes, logscale=logscale, stime=stime, etime=etime)
+        all_arrivals = (plot_dets=="idcx")
+        plot_det_times(wave, axes=axes, logscale=logscale, stime=stime, etime=etime, all_arrivals=all_arrivals)
 
     if plot_predictions:
         plot_pred_atimes(predictions=plot_predictions, wave=wave,

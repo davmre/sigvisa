@@ -17,7 +17,7 @@
 <p>Observed signals:</p>
 <ul>
 {% for wn in wns %}
-<li><a href="{% url mcmc_wave_posterior dirname=dirname wn=wn %}">{{ wn }}</li>
+<li><a href="{% url mcmc_wave_posterior dirname=dirname wn_label=wn %}">{{ wn }}</li>
 {% endfor %}
 </ul>
 {% endif %}
