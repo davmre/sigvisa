@@ -272,6 +272,11 @@ def main():
         options.no_template_openworld=True
         disable_moves.append('indep_peak')
 
+    if options.preset == "localize_ua":
+        options.initialize_leb="yes"
+        options.no_event_openworld=True
+        options.no_template_openworld=False
+
     if options.dprk:
         options.initialize_leb="no"
         options.start_time = 1243212800

@@ -25,7 +25,7 @@ import obspy.signal.util
 (FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID,
  FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH,
  FIT_LOWBAND, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT,
- FIT_CODA_DECAY, FIT_AMP_TRANSFER, FIT_NUM_COLS) = range(15 + 1)
+ FIT_PEAK_DECAY, FIT_CODA_DECAY, FIT_AMP_TRANSFER, FIT_NUM_COLS) = range(16 + 1)
 WIGGLE_PARAM0 = FIT_ATIME
 
 class RunNotFoundException(Exception):
@@ -248,19 +248,20 @@ def load_shape_data(cursor, **kwargs):
 
     cond = sql_param_condition(**kwargs)
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.coda_decay, fp.amp_transfer from  leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.peak_decay, fp.coda_decay, fp.amp_transfer from  leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
 
     ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
     fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
     fname_sta = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s_sta.txt" % str(hashlib.md5(sql_query).hexdigest()))
     try:
-        shape_data = np.loadtxt(fname, dtype=float)
+        shape_data = np.loadtxt(fname, dtype=float).reshape((-1, FIT_NUM_COLS))
         sta_data = np.loadtxt(fname_sta, dtype=str)
+        print "loaded from", fname
     except:
         print sql_query
         cursor.execute(sql_query)
         print "sql done"
-        shape_data = np.array(cursor.fetchall(), dtype=object)
+        shape_data = np.array(cursor.fetchall(), dtype=object).reshape((-1, FIT_NUM_COLS))
         print shape_data.shape
 
         if shape_data.shape[0] > 0:

@@ -98,7 +98,7 @@ def register_svgraph_cmdline(parser):
     parser.add_option("--runid", dest="runid", default=None, type="int",
                       help="runid of training run specifying the set of models to use")
     parser.add_option(
-        "--template_shape", dest="template_shape", default="paired_exp", type="str", help="template model type (paired_exp)")
+        "--template_shape", dest="template_shape", default="lin_polyexp", type="str", help="template model type (lin_polyexp)")
     parser.add_option(
         "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
     parser.add_option(
@@ -114,7 +114,7 @@ def register_svgraph_cmdline(parser):
                       help="model Pn arrivals as P (false)")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
-
+    parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=1e-6, type=float, help="Poisson rate (per-second) for unassociated template prior (1e-6)")
 
 def register_svgraph_signal_cmdline(parser):
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
@@ -164,7 +164,7 @@ def setup_svgraph_from_cmdline(options, args):
 
     tm_type_str = options.tm_types
     if tm_type_str == "param":
-        tm_type_str = "tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb"
+        tm_type_str = "tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb,peak_decay:param_linear_distmb"
 
     tm_types = {}
     if ',' in tm_type_str:
@@ -185,7 +185,7 @@ def setup_svgraph_from_cmdline(options, args):
                       wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
                       dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
                       runid=runid, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint,
-                      absorb_n_phases=options.absorb_n_phases)
+                      absorb_n_phases=options.absorb_n_phases, uatemplate_rate=options.uatemplate_rate)
 
 
     return sg
@@ -232,7 +232,7 @@ def load_signals_from_cmdline(sg, options, args):
 
             for chan in filtered_seg.get_chans():
                 try:
-                    modelid = get_param_model_id(sg.runid, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta'], wiggle_param=False), 'amp_transfer', 'paired_exp', chan=chan, band=band)
+                    modelid = get_param_model_id(sg.runid, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta'], wiggle_param=False), 'amp_transfer', options.template_shape, chan=chan, band=band)
                 except ModelNotFoundError as e:
                     print "couldn't find amp_transfer model for %s,%s,%s, so not adding to graph." % (seg['sta'], chan, band), e
                     continue

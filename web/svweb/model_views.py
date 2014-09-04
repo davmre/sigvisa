@@ -58,6 +58,7 @@ def model_list_view(request):
                                }, context_instance=RequestContext(request))
 
 
+
 def plot_empirical_distance(request, xy_by_phase, axes):
 
     colors = ['r', 'g', 'b', 'y']
@@ -72,6 +73,7 @@ def plot_empirical_distance(request, xy_by_phase, axes):
         xmax = min(xmax, np.max(X[:, 3]))
     r = xmax - xmin
     axes.set_xlim([xmin - r / 20.0, xmax + r / 20.0])
+
 
 def plot_empirical_mb(request, xy_by_phase, axes):
 
@@ -95,13 +97,21 @@ def plot_linear_model_distance(request, model_record, axes):
     model = load_model(full_fname, model_record.model_type)
 
     distances = np.linspace(0, 20000, 200)
-    pred = np.array([model.predict(np.array(((0, 0, 0, d, 3.5),))) for d in distances]).flatten()
+    Xs = np.zeros((len(distances), 5))
+    Xs[:,3] = distances
+    Xs[:,4] = 3.5
+
+
+    pred = model.predict(Xs).flatten()
     axes.plot(distances, pred, 'k-')
 
+    std = np.sqrt(model.variance(Xs, include_obs=True))
+    var_x = np.concatenate((distances, distances[::-1]))
+    var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
+    axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.2)
+
+
     try:
-        Xs = np.zeros((len(distances), 5))
-        Xs[:,3] = distances
-        Xs[:,4] = 3.5
         for i in range(30):
             ys = model.sample(Xs)
             axes.plot(distances, ys, alpha=0.2)
@@ -114,13 +124,21 @@ def plot_linear_model_mb(request, model_record, axes):
     model = load_model(full_fname, model_record.model_type)
 
     mbs = np.linspace(2, 8, 200)
-    pred = np.array([model.predict(np.array(((0, 0, 0, 3500, m),))) for m in mbs]).flatten()
+    Xs = np.zeros((len(mbs), 5))
+    Xs[:,4] = mbs
+    Xs[:,3] = 3500
+
+
+    pred = model.predict(Xs).flatten()
     axes.plot(mbs, pred, 'k-')
 
+    std = np.sqrt(model.variance(Xs, include_obs=True))
+    var_x = np.concatenate((mbs, mbs[::-1]))
+    var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
+    axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.2)
+
+
     try:
-        Xs = np.zeros((len(mbs), 5))
-        Xs[:,4] = mbs
-        Xs[:,3] = 3500
         for i in range(30):
             ys = model.sample(Xs)
             axes.plot(mbs, ys, alpha=0.2)
@@ -376,7 +394,9 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     elif plot_type == "mb":
         axes.set_xlabel("mb", fontsize=8)
         axes.set_ylabel(param, fontsize=8)
-
+    else:
+        axes.set_xlabel(plot_type, fontsize=8)
+        axes.set_ylabel(param, fontsize=8)
 
     process_plot_args(request, axes)
 
@@ -424,6 +444,49 @@ def model_heatmap_std(request, modelid):
 def data_distance_plot(request, **kwargs):
     return plot_fit_param(request, plot_type="distance", **kwargs)
 
+def data_pairwise_plot(request, runid=None, **kwargs):
+    param1 = request.GET.get("param1", None)
+    param2 = request.GET.get("param2", None)
+
+    param = request.GET.get("plot_param", "coda_decay")
+    sta = request.GET.get("sta", None)
+    chan = request.GET.get("chan", None)
+    band = request.GET.get("band", None)
+    max_acost = float(request.GET.get("max_acost", "200"))
+    phases = request.GET.get("phases", "P").split(',')
+    min_amp = float(request.GET.get("min_amp", "-10"))
+    template_shape = request.GET.get("shape", "paired_exp")
+    require_human_approved = str(request.GET.get("human_approved", "0")) == "2"
+
+    X, y1, evids = get_shape_training_data(runid=runid,
+                                           site=sta, chan=chan, band=band, phases=phases,
+                                           target=param1,require_human_approved=require_human_approved,
+                                           max_acost=max_acost, min_amp=min_amp)
+
+    X, y2, evids = get_shape_training_data(runid=runid,
+                                           site=sta, chan=chan, band=band, phases=phases,
+                                           target=param2,require_human_approved=require_human_approved,
+                                           max_acost=max_acost, min_amp=min_amp)
+
+    alpha = float(request.GET.get('alpha', min(1, 4 / np.log(len(y1)))))
+
+
+    fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+
+    axes.scatter(y1, y2, alpha=alpha, s=10, marker='.', edgecolors="none")
+
+    axes.set_xlabel(param1)
+    axes.set_ylabel(param2)
+
+    process_plot_args(request, axes)
+
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
+    fig.tight_layout()
+    canvas.print_png(response)
+    return response
 
 def data_histogram_plot(request, **kwargs):
     return plot_fit_param(request, plot_type="histogram", **kwargs)

@@ -141,7 +141,7 @@ if (l > 0) {
         bounds = { k: np.inf for k in self.params() }
 
         bounds['coda_height'] = 10
-        bounds['peak_offset'] = 2
+        bounds['peak_offset'] = 4
         bounds['coda_decay'] = 1
         bounds['peak_decay'] = 1
 

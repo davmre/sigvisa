@@ -19,6 +19,7 @@ pytz
 nose
 pyublas
 pywavelets
+seaborn
 
 # not strictly necessary, but useful:
 

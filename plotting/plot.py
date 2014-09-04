@@ -254,7 +254,14 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
 
     if all_det_times is not None:
 
-        maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
+        start_idx = 0
+        end_idx = len(wave.data)
+        if stime:
+            start_idx = max(int(wave['srate']*(stime-wave['stime'])), start_idx)
+        if etime:
+            end_idx = min(int(wave['srate']*(etime-wave['stime'])), end_idx)
+
+        maxwave, minwave = float(np.max(wave.data[start_idx:end_idx])), float(np.min(wave.data[start_idx:end_idx]))
 
         if logscale:
             (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
@@ -278,12 +285,22 @@ def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, e
         predictions = dict([p for p in predictions.items() if stime <= p[1] <= etime])
 
     if len(predictions) < 1:
-        print "warning: atimes %s not within plot window (%f, %f)!" % (old_predictions, stime, stime)
+        print "warning: atimes %s not within plot window (%f, %f)!" % (old_predictions, stime, etime)
         return
 
     pred_labels, pred_times = zip(*predictions.items())
 
-    maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
+
+    start_idx = 0
+    end_idx = len(wave.data)
+    if stime:
+        start_idx = max(int(wave['srate']*(stime-wave['stime'])), start_idx)
+    if etime:
+        end_idx = min(int(wave['srate']*(etime-wave['stime'])), end_idx)
+
+    maxwave, minwave = float(np.max(wave.data[start_idx:end_idx])), float(np.min(wave.data[start_idx:end_idx]))
+
+
     if logscale:
         (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
 

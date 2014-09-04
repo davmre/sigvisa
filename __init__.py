@@ -134,6 +134,7 @@ class Sigvisa(threading.local):
             try:
                 tt = self.sigmodel.mean_travel_time(
                          event.lon, event.lat, event.depth, event.time, sta, self.phaseids[p] - 1)
+
                 if tt > 0:
                     phases.append(p)
             except ValueError:

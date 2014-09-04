@@ -179,6 +179,7 @@ def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=True, frameskip=
     savefig(os.path.join(ev_dir, 'posterior_depth.png'), f, bbox_inches="tight", dpi=300)
 
 
+
 def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alpha=None, tmpl_color='green', ax=None, plot_predictions=True, plot_dets=False):
 
     lbl = 'tmpl_%d_%s_%s' % (eid, wn_lbl, phase)
@@ -215,12 +216,11 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alph
     if plot_predictions:
         predictions = []
         for (eid, phase) in wn.arrivals():
+            if eid < 0: continue
             event = sg.get_event(eid)
-            predictions.append([phase, event.time+tt_predict(event, wn.sta, phase)])
-        print predictions
+            predictions.append([phase+"_%d" % eid, event.time+tt_predict(event, wn.sta, phase)])
         plot_pred_atimes(dict(predictions), real_wave, axes=ax, stime=plot_stime, etime=plot_etime, color="purple")
     if plot_dets:
-        print real_wave, real_wave['arrivals']
         plot_det_times(real_wave, axes=ax, stime=plot_stime, etime=plot_etime, color="red", all_arrivals=True)
 
     print plot_stime, plot_etime, wn.st, wn.et
@@ -375,12 +375,17 @@ if __name__ == "__main__":
         else:
             evs = []
 
+        plot_template_posteriors = False
+        if len(sys.argv) > 4:
+            plot_template_posteriors = sys.argv[4].lower().startswith("t")
+
+
         try:
             mcmc_run = int(sys.argv[1])
             run_dir = os.path.join("logs", "mcmc", "%05d" % mcmc_run)
         except ValueError:
             run_dir = sys.argv[1]
-        analyze_run(run_dir, burnin=burnin, true_evs=evs)
+        analyze_run(run_dir, burnin=burnin, true_evs=evs, plot_template_posteriors=plot_template_posteriors  )
     except KeyboardInterrupt:
         raise
     except Exception as e:

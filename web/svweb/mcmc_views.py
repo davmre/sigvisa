@@ -69,6 +69,132 @@ def mcmc_list_view(request):
                                }, context_instance=RequestContext(request))
 
 
+def graphs_by_step(ev_dir, start_step=0, end_step=9999999):
+    sgs = dict()
+    for d in os.listdir(ev_dir):
+        if not d.startswith("step_"): continue
+        n_step = int(d[5:])
+
+        if n_step < start_step or n_step > end_step:
+            continue
+
+        with open(os.path.join(ev_dir, d, 'pickle.sg'), 'rb') as f:
+            sgs[n_step] = pickle.load(f)
+    return sgs
+
+def final_mcmc_state(ev_dir):
+    max_step = np.max([int(d[5:]) for d in os.listdir(ev_dir) if d.startswith('step')])
+    with open(os.path.join(ev_dir, "step_%06d" % max_step, 'pickle.sg'), 'rb') as f:
+        sg = pickle.load(f)
+    return sg
+
+def mcmc_run_detail(request, dirname):
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    cmd = "not found"
+    try:
+        with open(os.path.join(mcmc_log_dir, dirname, 'cmd.txt'), 'r') as f:
+            cmd = f.read()
+    except IOError:
+        pass
+
+    relative_run_dir = os.path.join("logs", "mcmc", dirname)
+    analyze_cmd = "python infer/analyze_mcmc.py %s 10 %s/events.pkl t" % (relative_run_dir, relative_run_dir)
+
+
+    sg = final_mcmc_state(mcmc_run_dir)
+    wns = [n.label for n in np.concatenate(sg.station_waves.values())]
+
+    return render_to_response("svweb/mcmc_run_detail.html",
+                              {'wns': wns,
+                               'dirname': dirname,
+                               'full_dirname': mcmc_run_dir,
+                               'cmd': cmd,
+                               'analyze_cmd': analyze_cmd,
+                               }, context_instance=RequestContext(request))
+
+
+def mcmc_wave_posterior(request, dirname, wn_label):
+
+    plot_predictions = request.GET.get("plot_predictions")
+
+    sgs = graphs_by_step(ev_dir)
+
+    last_step = np.max(sgs.keys())
+    last_sg = sgs[last_step]
+
+    ev_alpha = 0.8 / len(sgs)
+    ua_alpha = 0.4/len(sgs)
+
+    nevents = last_sg.next_eid-1
+
+    import seaborn as sns
+    ev_colors = sns.color_palette("hls", nevents)
+
+    if ax is None:
+        f = Figure((10, 5))
+        ax = f.add_subplot(1,1,1)
+
+
+    wn = last_sg.all_nodes[wn_lbl]
+    real_wave = wn.get_wave()
+    real_wave.data = ma.masked_array(real_wave.data, copy=True)
+    subplot_waveform(real_wave, ax, plot_dets=False, color='black', linewidth=0.5)
+
+    if plot_predictions:
+        predictions = []
+        for (eid, phase) in wn.arrivals():
+            if eid < 0: continue
+            event = sg.get_event(eid)
+            predictions.append([phase+"_%d" % eid, event.time+tt_predict(event, wn.sta, phase)])
+        plot_pred_atimes(dict(predictions), real_wave, axes=ax, color="purple")
+    if plot_dets:
+        plot_det_times(real_wave, axes=ax, stime=plot_stime, etime=plot_etime, color="red", all_arrivals=True)
+
+    for sg in sgs:
+        wn = sg.all_nodes[wn_lbl]
+        wn.unfix_value()
+        for (eid, phase) in wn.arrivals():
+            tmnodes = sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
+
+            if eid < 0:
+                c = 'k'
+            else:
+                c = ev_colors[eid]
+
+
+    n = trace.shape[0]
+    max_idxs = 100
+    if n > max_idxs:
+        idxs = np.array(np.linspace(0, n-1, max_idxs), dtype=int)
+        n = max_idxs
+    else:
+        idxs = np.arange(n)
+
+    alpha = 0.4/np.sqrt(n+5) if alpha is None else alpha
+
+    for row in trace[idxs,:]:
+        v = {'arrival_time': row[0], 'peak_offset': row[1], 'coda_height': row[2], 'coda_decay': row[3]}
+        sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, v)
+        tmpl_stime = v['arrival_time']
+        tmpl_len = max(10.0, np.exp(v['peak_offset']) - (np.log(0.02 * wn.nm.c) - v['coda_height'])/np.exp(v['coda_decay']))
+        tmpl_etime = min(tmpl_stime + tmpl_len, plot_etime)
+
+        wn.parent_predict()
+        subplot_waveform(wn.get_wave(), ax, stime=tmpl_stime, etime=tmpl_etime, plot_dets=False, color=tmpl_color, linewidth=0.5, alpha=alpha, fill_y2=wn.nm.c)
+
+    if tmpl_img_file is not None:
+        canvas = FigureCanvasAgg(f)
+        canvas.draw()
+        f.savefig(tmpl_img_file, bbox_inches="tight", dpi=300)
+
+    wn.set_value(real_wave.data)
+    wn.fix_value()
+
+
+
 def mcmcrun_analyze(request, dirname):
 
     from sigvisa.infer.analyze_mcmc import analyze_run
@@ -91,7 +217,7 @@ def mcmcrun_analyze(request, dirname):
 
 import mimetypes
 
-def mcmcrun_detail(request, dirname, path):
+def mcmcrun_browsedir(request, dirname, path):
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")

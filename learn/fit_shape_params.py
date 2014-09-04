@@ -68,7 +68,7 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
 
         v1 = np.array([ 0., 2.0, -0.5, -4, -3] * nphases)
         v2 = np.array([ 2., -1, -1.5, -4, -1.5] * nphases)
-        v3 = np.array([ 3., 2.0, -0.5, -4, -3] * nphases)
+        v3 = np.array([ -3., 1.5, 0.5, -4, -3] * nphases)
         init_vs = [v1, v2, v3]
 
     v_results = []

@@ -24,7 +24,7 @@
       </tr>
         {% for run in run_list %}
             <tr>
-                <td><a href="{% url mcmcrun_detail dirname=run.dir path="" %}">{{ run.dir }}</a></td>
+                <td><a href="{% url mcmcrun_detail dirname=run.dir %}">{{ run.dir }}</a></td>
                 <td>{{ run.time }}</td>
 		<td>{{ run.cmd }}</td>
 		<td><a href="{% url mcmcrun_analyze dirname=run.dir%}?burnin=100;plot_templates=false">analyze with burnin=100</a></td>

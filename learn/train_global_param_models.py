@@ -167,10 +167,10 @@ def message_from_model(model, mean_prior, cov_prior, station_slack):
     mu_s = model.param_mean()
     sigma_s = model.param_covariance()
 
-    sigma_s_inv = np.linalg.inv(sigma_s)
-    cov_prior_inv = np.linalg.inv(cov_prior)
+    sigma_s_inv = np.linalg.pinv(sigma_s)
+    cov_prior_inv = np.linalg.pinv(cov_prior)
 
-    C = np.linalg.inv(sigma_s_inv - cov_prior_inv)
+    C = np.linalg.pinv(sigma_s_inv - cov_prior_inv)
     c = np.dot(C, np.dot(sigma_s_inv, mu_s) - np.dot(cov_prior_inv, mean_prior))
     return c, C + station_slack
 

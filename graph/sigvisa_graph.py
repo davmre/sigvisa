@@ -103,7 +103,7 @@ class SigvisaGraph(DirectedGraphModel):
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True, smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
-                 absorb_n_phases=False, hack_param_constraint=False):
+                 absorb_n_phases=False, hack_param_constraint=False, uatemplate_rate=1e-3):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -173,7 +173,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.next_eid = 1
 
         self.next_uatemplateid = 1
-        self.uatemplate_rate = .001
+        self.uatemplate_rate = uatemplate_rate
         self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
 
@@ -312,8 +312,16 @@ class SigvisaGraph(DirectedGraphModel):
         #atimes_lp = scipy.special.gammaln(n+1) -n * np.log(wn.valid_len)
         #lp = poisson_lp + atimes_lp
 
+
         # we can cancel out a lot of terms from Poisson(n) * n!/T^n
-        lp = -(self.uatemplate_rate * wn.valid_len)  + n * np.log(self.uatemplate_rate)
+        # let Y = R*T = self.uatemplate_rate * wn.valid_len
+        # Poisson(n) = Y^n/n! * e^-Y
+        # overall: Y^n/n! * e^-Y * n!/T^n
+        # log: n log Y - Y - n log T
+        #      = n log RT - RT - n log T
+        #      = n log R + (n log T - n log T) - RT
+        #      = n log R - RT
+        lp = n * np.log(self.uatemplate_rate) - (self.uatemplate_rate * wn.valid_len)
 
         return lp
 
@@ -449,6 +457,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         for (site, element_list) in self.site_elements.iteritems():
             for phase in predict_phases(ev=ev, sta=site, phases=self.phases):
+                print "adding phase", phase, "at site", site
                 self.phases_used.add(phase)
                 if self.absorb_n_phases:
                     if phase == "Pn":
