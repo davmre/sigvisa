@@ -8,6 +8,7 @@ import os
 
 from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
+from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value, parse_key
 from sigvisa.graph.sigvisa_graph import get_param_model_id
 from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
 from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal
@@ -354,7 +355,7 @@ def death_proposal_log_ratio(sg, eid):
         assert (len(list(sg.site_bands[site])) == 1)
         assert (len(list(sg.site_chans[site])) == 1)
         for sta in elements:
-            for phase in sg.phases:
+            for phase in sg.ev_arriving_phases(eid, sta):
                 for chan in sg.site_chans[site]:
                     for band in sg.site_bands[site]:
                         tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
@@ -440,7 +441,7 @@ def ev_death_move(sg, log_to_run_dir=None):
             assert (len(list(sg.site_chans[site])) == 1)
             chan = list(sg.site_chans[site])[0]
 
-            for phase in sg.phases:
+            for phase in sg.ev_arriving_phases(eid, sta):
                 deassociate, deassociate_logprob = sample_deassociation_proposal(sg, sta, eid, phase)
                 deassociations.append((sta, phase, deassociate, tmid_i))
                 if deassociate:
@@ -554,7 +555,7 @@ def ev_birth_move(sg, log_to_run_dir=None):
             assert (len(list(sg.site_chans[site])) == 1)
             chan = list(sg.site_chans[site])[0]
 
-            for phase in sg.phases:
+            for phase in predict_phases(ev=proposed_ev, sta=sta, phases=sg.phases):
                 tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase)
                 if tmid is not None:
                     forward_fns.append(lambda sta=sta,phase=phase,tmid=tmid: associate_template(sg, sta, tmid, eid, phase))

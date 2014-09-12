@@ -181,7 +181,7 @@ class Poisson(Distribution):
         return self.mu
 
     def sample(self, **kwargs):
-        return stats.poisson.rvs(self.mu, n=1)
+        return stats.poisson.rvs(self.mu)
 
 class Bernoulli(Distribution):
 

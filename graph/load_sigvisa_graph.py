@@ -137,6 +137,7 @@ def register_svgraph_signal_cmdline(parser):
                       help="load this many hours from the given dateset")
     parser.add_option("--initialize_leb", dest="initialize_leb", default="no", type="str",
                       help="use LEB events to set the intial state. options are 'no', 'yes', 'perturb' to initialize with locations randomly perturbed by ~5 degrees, or 'count' to initialize with a set of completely random events, having the same count as the LEB events ")
+    parser.add_option("--synth", dest="synth", default=False, action="store_true")
 
 def register_svgraph_event_based_signal_cmdline(parser):
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
@@ -238,20 +239,20 @@ def load_signals_from_cmdline(sg, options, args):
                     continue
 
                 wave = filtered_seg[chan]
-                sg.add_wave(wave)
+                wn = sg.add_wave(wave)
 
 
-    if options.initialize_leb != "no":
+    if options.initialize_leb != "no" or options.synth:
         st = sg.start_time
         et = sg.end_time - 400
         events, orid2num = read_events(cursor, st, et, 'leb')
         events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
 
-        if options.initialize_leb=="yes":
+        if options.initialize_leb=="yes" or options.synth:
             evs = []
             for evarr in events:
                 ev = get_event(evid=evarr[EV_EVID_COL])
-                sg.add_event(ev)
+                sg.add_event(ev, fixed=options.synth)
                 evs.append(ev)
         elif options.initialize_leb=="perturb":
             raise NotImplementedError("not implemented!")
@@ -261,6 +262,25 @@ def load_signals_from_cmdline(sg, options, args):
             raise Exception("unrecognized argument initialize_leb=%s" % options.initialize_leb)
     else:
         evs = None
+
+    if options.synth:
+        for (sta, wns) in sg.station_waves.items():
+            for wn in wns:
+                wn.unfix_value()
+
+        sg.parent_sample_all()
+
+        for (sta, wns) in sg.station_waves.items():
+            for wn in wns:
+                wn.fix_value()
+
+        eids = sg.evnodes.keys()
+        for eid in eids:
+            if options.initialize_leb=="no":
+                sg.remove_event(eid)
+            else:
+                for evnode in sg.evnodes[eid].values():
+                    evnode.unfix_value()
 
     cursor.close()
 

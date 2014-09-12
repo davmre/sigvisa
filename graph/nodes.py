@@ -270,7 +270,7 @@ class Node(object):
             elif 'coda_decay' in self.label and np.exp(v) < .008:
                 lp = -9999999
 
-        if not np.isfinite(lp):
+        if np.isnan(lp):
             raise Exception('invalid log prob %f at node %s' % (lp, self.label))
         return lp
 

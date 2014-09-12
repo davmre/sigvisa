@@ -6,7 +6,7 @@
 <body>
 {% include "svweb/header.html"  %}
 
-<h3>MCMC run {{ dirname }}</h3>
+<h3>MCMC run {{ dirname }} ({{ max_step }} steps)</h3>
 
 <p>Command: <tt>{{ cmd }}</tt></p>
 
@@ -17,9 +17,19 @@
 <p>Observed signals:</p>
 <ul>
 {% for wn in wns %}
-<li><a href="{% url mcmc_wave_posterior dirname=dirname wn_label=wn %}">{{ wn }}</li>
+<li><a href="{% url mcmc_wave_posterior dirname=dirname wn_label=wn %}?step={{ max_step }}">{{ wn }}</a></li>
 {% endfor %}
 </ul>
+{% endif %}
+
+{% if evs %}
+<p>Events: <a href="{% url mcmc_event_posterior dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=100">global posterior</a></p>
+<table>
+<tr><td><b>eid</b></td><td><b>info</b></td><td><b>azimuth gap</b></td><td><b>loc error (km)</b></td><td><b>(lon, lat) std</b></td><td><b>vis</b></td><td><b>inspect</b></td></tr>
+{% for ev in evs %}
+<tr><td>{{ ev.eid }}</td><td>{{ ev.evstr }}</td><td>{{ ev.azgap|floatformat }}</td><td>{{ ev.dist_mean|floatformat }}km</td><td>({{ ev.lon_std_km|floatformat }}, {{ ev.lat_std_km|floatformat }})</td><td><a href="{% url mcmc_event_posterior dirname=dirname %}?left_lon={{ ev.left_lon }};right_lon={{ ev.right_lon }};top_lat={{ ev.top_lat }};bottom_lat={{ ev.bottom_lat }};burnin=0">local</a></td><td><a href="{% url mcmc_param_posterior dirname=dirname node_label=ev.example_node %}">e.g.</a></td></tr>
+{% endfor %}
+</table>
 {% endif %}
 
 {% include "svweb/footer.html"  %}

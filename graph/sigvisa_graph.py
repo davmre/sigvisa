@@ -181,7 +181,9 @@ class SigvisaGraph(DirectedGraphModel):
         self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
 
     def ev_arriving_phases(self, eid, sta):
-        [v for n in self.extended_evnodes.values()]
+        sta_keys = [n.label for n in self.extended_evnodes[eid] if sta in n.label]
+        phases = set([parse_key(k)[1] for k in sta_keys])
+        return list(phases)
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:

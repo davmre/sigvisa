@@ -117,7 +117,8 @@ class DirectedGraphModel(DAG):
 
     def parent_sample_all(self):
         for node in self.topo_sorted_nodes():
-            node.parent_predict()
+            if not node._fixed:
+                node.parent_sample()
 
     def get_all(self, node_list):
         return np.concatenate([node.get_mutable_values() for node in node_list if not node.deterministic()])

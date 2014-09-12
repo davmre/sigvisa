@@ -202,5 +202,20 @@ def stations_by_distance(evlon, evlat, sites):
     sites = zip(range(len(sites)), sites)
     return sorted(sites, key=lambda site: site[1])
 
+def azimuth_gap(evlon, evlat, sites):
+    esazlist = [azimuth((evlon, evlat), (site[0], site[1])) for site in sites]
+    if len(esazlist) < 2:
+        return 360.
+
+    azlist = [x for x in esazlist]        # copy the list
+    azlist.sort()
+
+    gap = max((360 + degdiff(azlist[i], azlist[(i + 1) % len(azlist)])) % 360
+              for i in range(len(azlist)))
+
+    if gap == 0:
+        gap = 360
+    return gap
+
 if __name__ == "__main__":
     _test()

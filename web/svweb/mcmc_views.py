@@ -17,13 +17,17 @@ import time
 import cPickle as pickle
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
+from sigvisa.utils.geog import azimuth_gap
+from sigvisa.infer.analyze_mcmc import load_trace, trace_stats
 from sigvisa.models.ttime import tt_predict
-from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes
+from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
+from sigvisa.plotting.event_heatmap import EventHeatmap
+from sigvisa.plotting.heatmap import event_bounds
 from sigvisa import *
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-
+import matplotlib.patches as mpatches
 
 
 
@@ -77,7 +81,7 @@ def final_mcmc_state(ev_dir):
     max_step = np.max([int(d[5:]) for d in os.listdir(ev_dir) if d.startswith('step')])
     with open(os.path.join(ev_dir, "step_%06d" % max_step, 'pickle.sg'), 'rb') as f:
         sg = pickle.load(f)
-    return sg
+    return sg, max_step
 
 def mcmc_run_detail(request, dirname):
     s = Sigvisa()
@@ -94,9 +98,44 @@ def mcmc_run_detail(request, dirname):
     relative_run_dir = os.path.join("logs", "mcmc", dirname)
     analyze_cmd = "python infer/analyze_mcmc.py %s 10 %s/events.pkl t" % (relative_run_dir, relative_run_dir)
 
+    try:
+        with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as f:
+            true_evs = pickle.load(f)
+    except Exception as e:
+        print e
+        true_evs = []
 
-    sg = final_mcmc_state(mcmc_run_dir)
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
     wns = [n.label for n in np.concatenate(sg.station_waves.values())]
+
+    eids = sg.evnodes.keys()
+    evs = []
+    site_names = sg.site_elements.keys()
+    site_info = np.array([s.earthmodel.site_info(sta, 0) for sta in site_names])
+
+
+
+    for eid in eids:
+        ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
+        trace, _, _ = load_trace(ev_trace_file, burnin=100 if max_step > 150 else 10)
+
+        llon, rlon, blat, tlat = event_bounds(trace)
+
+        results, txt = trace_stats(trace, true_evs)
+        ev = sg.get_event(eid)
+        evdict = {'eid': eid,
+                  'evstr': str(ev),
+                  'azgap': azimuth_gap(ev.lon, ev.lat, site_info),
+                  'dist_mean': results['dist_mean'],
+                  'lon_std_km': results['lon_std_km'],
+                  'lat_std_km': results['lat_std_km'],
+                  'top_lat': tlat,
+                  'bottom_lat': blat,
+                  'left_lon': llon,
+                  'right_lon': rlon,
+                  'example_node': sg.extended_evnodes[eid][4].label,
+        }
+        evs.append(evdict)
 
     return render_to_response("svweb/mcmc_run_detail.html",
                               {'wns': wns,
@@ -104,14 +143,96 @@ def mcmc_run_detail(request, dirname):
                                'full_dirname': mcmc_run_dir,
                                'cmd': cmd,
                                'analyze_cmd': analyze_cmd,
+                               'max_step': max_step,
+                               'evs': evs,
                                }, context_instance=RequestContext(request))
 
+def rundir_eids(mcmc_run_dir):
+    eids = []
+    ev_re = re.compile(r'ev_(\d+).txt')
+    for fname in os.listdir(mcmc_run_dir):
+        m = ev_re.match(fname)
+        if m is not None:
+            eid = int(m.group(1))
+            eids.append(eid)
+    return eids
+
+def mcmc_event_posterior(request, dirname):
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    left_lon = float(request.GET.get('left_lon', '-180'))
+    right_lon = float(request.GET.get('right_lon', '180'))
+    top_lat = float(request.GET.get('top_lat', '90'))
+    bottom_lat = float(request.GET.get('bottom_lat', '-90'))
+    burnin = int(request.GET.get('burnin', '100'))
+
+    horiz_deg = right_lon-left_lon
+    vert_deg = top_lat-bottom_lat
+    aspect_ratio = horiz_deg / vert_deg
+
+    proj = "cyl"
+    if top_lat==90 and bottom_lat==-90 and left_lon==-180 and right_lon==180:
+        proj="robin"
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+    sites = sg.site_elements.keys()
+
+    f = Figure((8*aspect_ratio, 8))
+    f.patch.set_facecolor('white')
+    ax = f.add_subplot(111)
+
+    hm = EventHeatmap(f=None, calc=False, left_lon=left_lon, right_lon=right_lon, top_lat=top_lat, bottom_lat=bottom_lat)
+    hm.add_stations(sites)
+    hm.init_bmap(axes=ax, nofillcontinents=True, projection=proj, resolution="c")
+    hm.plot(axes=ax, nolines=True, smooth=True,
+            colorbar_format='%.3f')
+
+
+    eids = rundir_eids(mcmc_run_dir)
+    import seaborn as sns
+    shape_colors = sns.color_palette("hls", len(eids))
+    eid_patches = []
+    eid_labels = []
+    for eid in sorted(eids):
+        ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
+        trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
+        n = trace.shape[0]
+        scplot = hm.plot_locations(trace[:, 0:2], marker=".", ms=8, mfc=shape_colors[eid-1], mew=0, mec="none", alpha=1.0/np.log(n+1))
+
+        eid_patches.append(mpatches.Patch(color=shape_colors[eid-1]))
+        eid_labels.append('%d' % eid)
+
+    f.legend(handles=eid_patches, labels=eid_labels)
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
+
+def mcmc_param_posterior(request, dirname, node_label):
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sgs = graphs_by_step(mcmc_run_dir)
+
+    vals = [float(sg.all_nodes[node_label].get_value()) for sg in sgs.values()]
+
+
+
+    return HttpResponse("key: %s\nsamples: %d\n\nmean: %.3f\nstd: %.3f\nmin: %.3f\nmax: %.3f" % (node_label, len(vals),  np.mean(vals), np.std(vals), np.min(vals), np.max(vals)), content_type="text/plain")
 
 def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_dets = request.GET.get("plot_dets", 'leb')
+    step = request.GET.get("step", 'all')
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
@@ -127,31 +248,31 @@ def mcmc_wave_posterior(request, dirname, wn_label):
 
     nevents = last_sg.next_eid-1
 
-    import seaborn as sns
-    ev_colors = sns.color_palette("hls", nevents)
 
     wn = last_sg.all_nodes[wn_label]
-
     real_wave = wn.get_wave()
     real_wave.data = ma.masked_array(real_wave.data, copy=True)
-
-
     len_mins = (wn.et - wn.st) / 60.0
 
-
     f = Figure((len_mins * zoom, 5))
-    plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, fig=f, plot_dets=plot_dets)
+    f.patch.set_facecolor('white')
+    axes = f.add_subplot(111)
+    subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=None)
+    shape_colors = None
+    steps = sgs.keys() if step=="all" else [int(step),]
+    alpha = 1.0/len(steps)
+    for step in steps:
+        wn = sgs[step].all_nodes[wn_label]
+        shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha)
 
-    ax = f.gca()
-
-    if plot_predictions:
-        predictions = []
-        for (eid, phase) in wn.arrivals():
-            if eid < 0: continue
-            event = last_sg.get_event(eid)
-            predictions.append([phase+"_%d" % eid, event.time+tt_predict(event, wn.sta, phase)])
-        plot_pred_atimes(dict(predictions), real_wave, axes=ax, color="purple")
-
+        if plot_predictions:
+            predictions = []
+            for (eid, phase) in wn.arrivals():
+                if eid < 0: continue
+                event = sgs[step].get_event(eid)
+                predictions.append([phase+"_%d" % eid, event.time+tt_predict(event, wn.sta, phase)])
+            plot_pred_atimes(dict(predictions), wn.get_wave(), axes=axes, color="purple", alpha=alpha, draw_text=False)
+    plot_pred_atimes(dict(predictions), wn.get_wave(), axes=axes, color="purple", alpha=1.0, draw_bars=False)
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')

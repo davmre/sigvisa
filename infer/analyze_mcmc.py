@@ -21,6 +21,42 @@ from sigvisa.models.ttime import tt_predict
 
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
+def trace_stats(trace, true_evs):
+    mean_lon = np.mean(trace[:, 0])
+    mean_lat = np.mean(trace[:, 1])
+    lon_std =  np.std(trace[:, 0])
+    lat_std =  np.std(trace[:, 1])
+    lon_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon+lon_std, mean_lat))
+    lat_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon, mean_lat+lat_std))
+    txt = "mean: %.2f, %.2f\nstd: %.2f, %.2f\nstd_km: %.1f, %.1f" % (mean_lon, mean_lat, lon_std, lat_std, lon_std_km, lat_std_km)
+
+    results = dict()
+    results['mean_lon'] = mean_lon
+    results['mean_lat'] = mean_lat
+    results['lon_std'] = lon_std
+    results['lat_std'] = lat_std
+    results['lon_std_km'] = lon_std_km
+    results['lat_std_km'] = lat_std_km
+
+    true_ev = None
+    best_distance = np.float('inf')
+    for ev in true_evs:
+        dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
+        if dist < best_distance:
+            best_distance = dist
+            true_ev = ev
+
+    if true_ev is not None:
+        txt += '\ntrue: %.2f, %.2f\n' % (true_ev.lon, true_ev.lat)
+        dist_mean = geog.dist_km((mean_lon, mean_lat), (true_ev.lon, true_ev.lat))
+        dist_proposal = geog.dist_km((trace[0, 0], trace[0, 1]), (true_ev.lon, true_ev.lat))
+        txt += 'd(mean, true) = %.2f\n' % dist_mean
+        txt += 'd(proposal, true) = %.2f' % dist_proposal
+        results['dist_mean'] = dist_mean
+        results['dist_proposal'] = dist_proposal
+
+    return results, txt
+
 def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=True, ms=8):
 
     lonlats = trace[:, 0:2]
@@ -45,26 +81,8 @@ def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=Tr
     #hm.plot_locations(X, marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=0.2)
     scplot = hm.plot_locations(lonlats, marker=".", ms=ms, mfc="red", mew=0, mec="none", alpha=alpha)
 
-    mean_lon = np.mean(trace[:, 0])
-    mean_lat = np.mean(trace[:, 1])
-    lon_std =  np.std(trace[:, 0])
-    lat_std =  np.std(trace[:, 1])
-    lon_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon+lon_std, mean_lat))
-    lat_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon, mean_lat+lat_std))
-    txt = "mean: %.2f, %.2f\nstd: %.2f, %.2f\nstd_km: %.1f, %.1f" % (mean_lon, mean_lat, lon_std, lat_std, lon_std_km, lat_std_km)
 
-    true_ev = None
-    best_distance = np.float('inf')
-    for ev in true_evs:
-        dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
-        if dist < best_distance:
-            best_distance = dist
-            true_ev = ev
-
-    if true_ev is not None:
-        txt += '\ntrue: %.2f, %.2f\n' % (true_ev.lon, true_ev.lat)
-        txt += 'd(mean, true) = %.2f\n' % geog.dist_km((mean_lon, mean_lat), (true_ev.lon, true_ev.lat))
-        txt += 'd(proposal, true) = %.2f' % geog.dist_km((trace[0, 0], trace[0, 1]), (true_ev.lon, true_ev.lat))
+    results, txt = trace_stats(trace, true_evs)
 
     if text:
         ax.text(0, 1, txt, horizontalalignment='left', verticalalignment='top', transform=ax.transAxes, color='purple')
@@ -73,7 +91,7 @@ def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=Tr
     if true_ev is not None:
         hm.plot_locations(np.array(((true_ev.lon, true_ev.lat),)), marker="x", ms=5, mfc="blue", mec="blue", mew=3, alpha=1.0)
 
-    return true_ev, txt
+    return true_ev, txt, results
 
 def load_trace(logfile, burnin):
     try:
@@ -115,7 +133,7 @@ def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=True, frameskip=
         f = Figure((11,8))
         gs = gridspec.GridSpec(2, 4)
         lonlat_ax = f.add_subplot(gs[0:2, 0:2])
-        true_ev, txt = ev_lonlat_density(trace, lonlat_ax, true_evs=true_evs)
+        true_ev, txt, results = ev_lonlat_density(trace, lonlat_ax, true_evs=true_evs)
         print "plotted density"
         with open(ev_txt, 'w') as fi:
             fi.write(txt + '\n')
@@ -178,7 +196,7 @@ def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=True, frameskip=
     plot_histogram(trace[:, EVTRACE_DEPTH], ax, "depth", draw_stats=False, true_value=true_ev.depth, trueval_label="LEB")
     savefig(os.path.join(ev_dir, 'posterior_depth.png'), f, bbox_inches="tight", dpi=300)
 
-
+    return results
 
 def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alpha=None, tmpl_color='green', ax=None, plot_predictions=True, plot_dets=False):
 
@@ -357,13 +375,21 @@ def analyze_run(run_dir, burnin, true_evs, plot_template_posteriors=False):
             eid = int(m.group(1))
             eids.append(eid)
     print eids
+    eid_results = dict()
     for eid in eids:
         if plot_template_posteriors:
             plot_ev_template_posteriors(run_dir, sg, eid, burnin)
-        analyze_event(run_dir, eid, burnin, true_evs)
+        eid_results[eid] = analyze_event(run_dir, eid, burnin, true_evs)
     #combine_steps(run_dir)
 
+    save_eid_results(run_dir, eid_results)
 
+def save_eid_results(run_dir, eid_results):
+    eids = sorted(eid_results.keys())
+
+    with open(os.path.join(run_dir, "location_error.txt"), 'w') as f:
+        for eid in eids:
+            f.write('%d: %.2f (%.2f, %.2f)\n' % (eid, eid_results[eid]['dist_mean'], eid_results[eid]['lon_std_km'], eid_results[eid]['lat_std_km']))
 
 if __name__ == "__main__":
     try:

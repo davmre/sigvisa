@@ -22,7 +22,7 @@ BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "experiments", "event_localiz
 def hash(x, n=8):
     return hashlib.md5(repr(x)).hexdigest()[:n]
 
-def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb):
+def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000):
     mkdir_p(wave_dir)
 
     if wiggles:
@@ -35,23 +35,13 @@ def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatempla
 
     s = Sigvisa()
 
-    cursor = s.dbconn.cursor()
-    #site_perm = np.random.permutation(len(s.siteid_minus1_to_name))
-    #sites = np.array(s.siteid_minus1_to_name)[site_perm[:sites]]
-    #sites = ['ILAR','WRA','FINES','YKA','JNU','ASAR','NVAR','AKASG','STKA']
-    f = open('trained_stations.txt')
-    sites = f.readline().split(',')
-    f.close()
-
-
-
 
     wns = dict()
     for site in sites:
         try:
             sta = s.get_default_sta(site)
             chan = s.canonical_channel_name[s.default_vertical_channel[sta]]
-            wave = Waveform(data = np.zeros(10000), srate=5.0, stime=1239915900.0, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;hz_5.0")
+            wave = Waveform(data = np.zeros(10000), srate=5.0, stime=stime, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;smooth_15;hz_1.0")
             wns[sta] = sg.add_wave(wave)
         except Exception as e:
             print e
@@ -62,7 +52,7 @@ def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatempla
         s.sigmodel.srand(seed)
 
 
-    evs = sg.prior_sample_events(stime=1239915400.0, etime=1239916400.0, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
+    evs = sg.prior_sample_events(stime=stime, etime=stime+len_s, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
     print "sampled", len(evs), "evs"
 
     if sample_uatemplates:
@@ -188,6 +178,7 @@ def main():
     parser.add_option("--min_mb", dest="min_mb", default=4.5, type="float", help="sample event magnitudes from an exponential(10) distribution with the given origin. (4.5)")
     parser.add_option("--force_mb", dest="force_mb", default=None, type="float", help="force event magnitude to the given value.")
     parser.add_option("--phases", dest="phases", default='P', type="str")
+    parser.add_option("--sites", dest="sites", default=None, type="str")
     parser.add_option("--steps", dest="steps", default=20000, type="int",
                       help="MCMC steps to take (20000)")
 
@@ -199,9 +190,10 @@ def main():
               'coda_decay': 'param_dist5',}
 
     phases = options.phases.split(',')
+    sites = options.sites.split(',')
 
     init_events = options.init_openworld or (not options.openworld)
-    sg, evs, wave_dir = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, sample_single=options.sample_single, n_events=options.n_events, min_mb=options.min_mb, force_mb=options.force_mb)
+    sg, evs, wave_dir = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, sample_single=options.sample_single, n_events=options.n_events, min_mb=options.min_mb, force_mb=options.force_mb, sites=sites)
 
     print "got %d evs" % len(evs)
     for ev in evs:

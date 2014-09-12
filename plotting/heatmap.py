@@ -13,6 +13,38 @@ def multi_f(f_args):
     return f_args[0](*f_args[3:5])
 
 
+def event_bounds(X, quantile=0.98):
+
+    X = X[:, 0:2]
+
+    def find_center(X):
+        # Find the center of a set of points on the Earth's
+        # surface, by first finding their center of mass, then
+        # projecting onto the surface of the Earth.
+
+        rX = np.radians(X) + np.array((0, np.pi / 2.0))
+
+        pts_cartesian = [(np.sin(lat) * np.cos(lon), np.sin(lat) * np.sin(lon), np.cos(lat)) for (lon, lat) in rX]
+        center_cartesian = np.mean(pts_cartesian, axis=0)
+        (x, y, z) = center_cartesian
+        lat_center = np.degrees(np.arccos(z) - np.pi / 2.0)
+        lon_center = np.degrees(np.arctan2(y, x))
+
+        return (lon_center, lat_center)
+
+    center = find_center(X)
+    lon_distances = sorted(np.abs([geog.degdiff(pt[0], center[0]) for pt in X]))
+    lat_distances = sorted(np.abs([geog.degdiff(pt[1], center[1]) for pt in X]))
+    lon_width = lon_distances[int(np.floor(len(lon_distances) * float(quantile)))] * 2
+    lat_width = lat_distances[int(np.floor(len(lat_distances) * float(quantile)))] * 2
+
+    left_lon = center[0] - lon_width/2.0
+    right_lon = center[0] + lon_width/2.0
+    bottom_lat = center[1] - lat_width/2.0
+    top_lat = center[1] + lat_width/2.0
+
+    return left_lon, right_lon, bottom_lat, top_lat
+
 class Heatmap(object):
 
     def _init_coord_bounds(self, center=None, width_deg=None, height_deg=None, width=None, left_lon=None, right_lon=None, top_lat=None, bottom_lat=None):
@@ -88,7 +120,7 @@ class Heatmap(object):
             self.load()
         except:
             if autobounds is not None:
-                left_lon, right_lon, bottom_lat, top_lat = self.event_bounds(autobounds, quantile=autobounds_quantile)
+                left_lon, right_lon, bottom_lat, top_lat = event_bounds(autobounds, quantile=autobounds_quantile)
             self._init_coord_bounds(center=center, width_deg=width_deg, height_deg=height_deg,
                                     left_lon=left_lon, right_lon=right_lon,
                                     bottom_lat=bottom_lat, top_lat=top_lat)
@@ -187,10 +219,13 @@ class Heatmap(object):
                 i += 1
 
     def init_bmap(self, coastlines = True, nofillcontinents=True, resolution="l", projection="cyl", axes=None, **kwargs):
-        bmap = Basemap(resolution = resolution, projection = projection, ax=axes,
-                       llcrnrlon=self.left_lon, llcrnrlat=self.bottom_lat,
-                       urcrnrlon=self.right_lon, urcrnrlat=self.top_lat,
-                       **kwargs)
+        if projection=="robin":
+            bmap = Basemap(resolution = resolution, projection = projection, ax=axes, lon_0=0,
+                           **kwargs)
+        else:
+            bmap = Basemap(resolution = resolution, projection = projection, ax=axes,
+                           llcrnrlon=self.left_lon, llcrnrlat=self.bottom_lat,
+                           urcrnrlon=self.right_lon, urcrnrlat=self.top_lat,  **kwargs)
         if coastlines:
             bmap.drawcoastlines(zorder=10)
 
@@ -372,39 +407,6 @@ class Heatmap(object):
             lon -= 360
         assert ( -90 < lat < 90 )
         return (lon, lat)
-
-    def event_bounds(self, X, quantile=0.98):
-
-        X = X[:, 0:2]
-
-        def find_center(X):
-            # Find the center of a set of points on the Earth's
-            # surface, by first finding their center of mass, then
-            # projecting onto the surface of the Earth.
-
-            rX = np.radians(X) + np.array((0, np.pi / 2.0))
-
-            pts_cartesian = [(np.sin(lat) * np.cos(lon), np.sin(lat) * np.sin(lon), np.cos(lat)) for (lon, lat) in rX]
-            center_cartesian = np.mean(pts_cartesian, axis=0)
-            (x, y, z) = center_cartesian
-            lat_center = np.degrees(np.arccos(z) - np.pi / 2.0)
-            lon_center = np.degrees(np.arctan2(y, x))
-
-            return (lon_center, lat_center)
-
-        center = find_center(X)
-        lon_distances = sorted(np.abs([geog.degdiff(pt[0], center[0]) for pt in X]))
-        lat_distances = sorted(np.abs([geog.degdiff(pt[1], center[1]) for pt in X]))
-        lon_width = lon_distances[int(np.floor(len(lon_distances) * float(quantile)))] * 2
-        lat_width = lat_distances[int(np.floor(len(lat_distances) * float(quantile)))] * 2
-
-        left_lon = center[0] - lon_width/2.0
-        right_lon = center[0] + lon_width/2.0
-        bottom_lat = center[1] - lat_width/2.0
-        top_lat = center[1] + lat_width/2.0
-
-        return left_lon, right_lon, bottom_lat, top_lat
-
     def max(self):
         maxlon = 0
         maxlat = 0
