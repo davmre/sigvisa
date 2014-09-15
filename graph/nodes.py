@@ -168,23 +168,24 @@ class Node(object):
         key = key if key else self.single_key
         return self._dict[key]
 
-    def set_value(self, value, key=None):
+    def set_value(self, value, key=None, force_deterministic_consistency=True):
         key = key if key else self.single_key
         if self._mutable[key]:
             self._dict[key] = value
 
             for child in self.children:
                 child.parent_keys_changed.add((key, self))
-            for child in self.get_deterministic_children():
-                child.parent_predict()
+            if force_deterministic_consistency:
+                for child in self.get_deterministic_children():
+                    child.parent_predict()
         else:
             raise Exception('trying to set fixed value %s at node %s' % (key, self.label))
 
     def get_local_value(self, key):
         return self.get_value(self.key_prefix + key)
 
-    def set_local_value(self, value, key):
-        return self.set_value(key=self.key_prefix + key, value=value)
+    def set_local_value(self, value, key, **kwargs):
+        return self.set_value(key=self.key_prefix + key, value=value, **kwargs)
 
     def get_dict(self):
         return self._dict
@@ -253,13 +254,15 @@ class Node(object):
 
         return self._pv_cache
 
-    def log_p(self, parent_values=None):
+    def log_p(self, parent_values=None, v=None):
         #  log probability of the values at this node, conditioned on all parent values
 
         if parent_values is None:
             parent_values = self._parent_values()
-        v = self.get_dict()
-        v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
+
+        if v is None:
+            v = self.get_dict()
+            v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
         lp = self.model.log_p(x = v, cond=parent_values, key_prefix=self.key_prefix)
 
         if self.hack_param_constraint:
@@ -291,21 +294,30 @@ class Node(object):
         else:
             return self.model.deriv_log_p(x = v, cond=parent_values, idx=key, cond_key=parent_key, cond_idx=parent_idx, key_prefix=self.key_prefix, **kwargs)
 
-    def parent_sample(self, parent_values=None):
+
+    def parent_sample(self, parent_values=None, set_new_value=True):
         # sample a new value at this node conditioned on its parents
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        self._set_values_from_model(self.model.sample(cond=parent_values))
+        nv = self.model.sample(cond=parent_values)
+        if set_new_value:
+            self._set_values_from_model(nv)
+        else:
+            return nv
 
-    def parent_predict(self, parent_values=None):
+    def parent_predict(self, parent_values=None, set_new_value=True):
         # predict a new value at this node conditioned on its parents.
         # the meaning of "predict" varies with the model, but is
         # usually the mean or mode of the conditional distribution.
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        self._set_values_from_model(self.model.predict(cond=parent_values))
+        nv = self.model.predict(cond=parent_values)
+        if set_new_value:
+            self._set_values_from_model(nv)
+        else:
+            return nv
 
     def get_children(self):
         return self.children
@@ -366,6 +378,12 @@ class Node(object):
     def high_bounds(self):
         return [self._high_bounds[k] for k in self.keys() if self._mutable[k]]
 
+
+    def __str__(self):
+        return "<NODE %s>" % self.label
+
+    def __repr__(self):
+        return self.__str__()
 
 class DeterministicNode(Node):
 

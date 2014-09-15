@@ -12,10 +12,11 @@ from sigvisa.database.dataset import *
 import itertools
 
 from sigvisa.models.ttime import tt_predict
-from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
+from sigvisa.infer.event_birthdeath import sample_template_to_associate, template_association_logodds, associate_template, unassociate_template, sample_deassociation_proposal, template_association_distribution, phase_template_proposal_logp, deassociation_prob, propose_phase_template
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move
@@ -44,21 +45,19 @@ def ev_move_relevant_nodes(node_list, fixed_nodes):
     inlaws = [n.parents[n.default_parent_key()] for n in fixed_nodes]
     return set(node_list + direct_stochastic_children + inlaws)
 
-def ev_move(sg, ev_node, std, params):
-    # jointly propose a new event location along with new tt_residual values,
-    # such that the event arrival times remain constant.
+def set_ev(ev_node, v, fixed_vals, fixed_nodes, params):
+    for (key, val) in zip(params, v):
+        ev_node.set_local_value(key=key, value=val, force_deterministic_consistency=False)
 
-    d = len(params)
 
-    def set_ev(ev_node, v, fixed_vals, fixed_nodes):
-        for (key, val) in zip(params, v):
-            ev_node.set_local_value(key=key, value=val)
-        for (val, n) in zip(fixed_vals, fixed_nodes):
+    for (val, n) in zip(fixed_vals, fixed_nodes):
+        try:
             n.set_value(val)
+        except ValueError:
+            # ignore "illegal travel time" messages from phases that are about to disappear
+            pass
 
-    current_v = np.zeros((d,))
-    for i in range(d):
-        current_v[i] = ev_node.get_local_value(params[i])
+def get_fixed_nodes(ev_node):
 
     if ev_node not in fixed_node_cache:
         sorted_children = sorted(ev_node.children, key = lambda n: n.label)
@@ -66,6 +65,183 @@ def ev_move(sg, ev_node, std, params):
         fixed_node_cache[ev_node] = fixed_nodes
     else:
         fixed_nodes = fixed_node_cache[ev_node]
+
+    if len(fixed_nodes) > 0:
+        assert(fixed_nodes[0] in ev_node.children)
+    return fixed_nodes
+
+def clear_node_caches(sg, eid):
+    for ev_node in sg.evnodes[eid].values():
+        try:
+            del fixed_node_cache[ev_node]
+        except KeyError as e:
+            pass
+        try:
+            del relevant_node_cache[ev_node]
+        except KeyError:
+            pass
+
+def add_phase_template(sg, sta, eid, phase):
+    tg = sg.template_generator(phase)
+    wg = sg.wiggle_generator(phase, sg.base_srate)
+    if phase not in sg.ev_arriving_phases(eid, sta=sta):
+        s = Sigvisa()
+        site = s.get_array_site(sta)
+        sg.add_event_site_phase(tg, wg, site, phase, sg.evnodes[eid], sample_templates=True)
+
+    tmvals, lp = propose_phase_template(sg, sta, eid, phase)
+    return tmvals, lp
+
+def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fixed_nodes, birth_phases, death_phases):
+
+    def deterministic_phase_swap(sg, eid, birth_phases, death_phases, inverse_fns, phase1, phase2):
+        if phase1 in birth_phases and phase2 in death_phases:
+            rename_phase(sg, eid, phase1, phase2)
+            birth_phases.remove(phase1)
+            death_phases.remove(phase2)
+            inverse_fns.append( lambda : rename_phase(sg, eid, phase2, phase1  ) )
+        elif phase2 in birth_phases and phase1 in death_phases:
+            rename_phase(sg, eid, phase2, phase1)
+            birth_phases.remove(phase2)
+            death_phases.remove(phase1)
+            inverse_fns.append( lambda : rename_phase(sg, eid, phase1, phase2  ) )
+
+
+    """
+    it's complicated to keep track of which nodes are in the markov
+    blanket, so instead we'll be lazy and just use the whole graph, since
+    these moves should be pretty rare. might have to fix this if it's a
+    bottleneck, or if we end up doing parallel inference where we don't have the whole
+    graph.
+    """
+    lp_old = sg.current_log_p()
+    set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params)
+
+    new_site_phases = dict()
+    forward_fns = []
+    inverse_fns = [lambda : set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params),]
+    associations = []
+    deassociations = []
+    move_logprob = 0
+    reverse_logprob = 0
+    tmid_i = 0
+    tmids = []
+    s = Sigvisa()
+    for site in birth_phases.keys():
+
+        # TODO: implement multiple bands/chans
+        assert (len(list(sg.site_bands[site])) == 1)
+        band = list(sg.site_bands[site])[0]
+
+        assert (len(list(sg.site_chans[site])) == 1)
+        chan = list(sg.site_chans[site])[0]
+
+        deterministic_phase_swap(sg, eid, birth_phases[site], death_phases[site], inverse_fns, "P", "Pn")
+
+        # the set of phases generated by each event is
+        # deterministic. so whenever an event move generates a new
+        # phase at some station, our proposal must include that phase.
+        # as with an event birth move, we sample whether to associate
+        # an existing unass template, or create a new template from
+        # scratch.
+        for sta in sg.site_elements[site]:
+            #print "proposing phases at", sta, site
+            for phase in birth_phases[site]:
+                tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase)
+
+                if tmid is not None:
+                    # associate an unass. template
+                    forward_fns.append(lambda sta=sta,phase=phase,tmid=tmid: associate_template(sg, sta, tmid, eid, phase, create_phase_arrival=True))
+                    inverse_fns.append(lambda sta=sta,phase=phase: unassociate_template(sg, sta, eid, phase, remove_event_phase=True))
+                    associations.append((sta, phase, True))
+                    print "proposing to associate %d to %d %s at %s" % (tmid, eid, phase, sta),
+                else:
+                    # propose a new template from scratch
+                    forward_fns.append( lambda sta=sta,phase=phase,eid=eid: add_phase_template(sg, sta, eid, phase)[1] )
+                    inverse_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, sta, phase))
+                    associations.append((sta, phase, False))
+                    print "proposing new template for %d %s at %s" % (eid, phase, sta),
+
+                move_logprob += assoc_logprob
+
+            # similarly, for every phase that is no longer generated from
+            # the new location, we must either delete or de-associate the
+            # corresponding template.
+            for phase in death_phases[site]:
+                deassociate, deassociate_logprob = sample_deassociation_proposal(sg, sta, eid, phase)
+                deassociations.append((sta, phase, deassociate, tmid_i))
+                if deassociate:
+                    # deassociation will produce a new uatemplated
+                    # with incrementing tmid. We keep track of this
+                    # tmid (kind of a hack) to ensure that we
+                    # reassociate the same template if the move gets
+                    # rejected.
+                    forward_fns.append(lambda sta=sta,phase=phase: tmids.append(unassociate_template(sg, sta, eid, phase, remove_event_phase=True)))
+                    inverse_fns.append(lambda sta=sta,phase=phase,tmid_i=tmid_i: associate_template(sg, sta, tmids[tmid_i], eid, phase, create_phase_arrival=True))
+                    tmid_i += 1
+                    print "proposing to deassociate %s for %d at %s (lp %.1f)" % (phase, eid, sta, deassociate_logprob),
+                else:
+                    template_param_array = sg.get_arrival_vals(eid, sta, phase, band, chan)
+                    inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
+                    tmp = phase_template_proposal_logp(sg, sta, eid, phase, template_param_array)
+                    reverse_logprob += tmp
+                    print "proposing to delete %s for %d at %s (lp %f)"% (phase, eid, sta, deassociate_logprob),
+
+                move_logprob += deassociate_logprob
+
+    for fn in forward_fns:
+        x = fn()
+        if x is not None:
+            move_logprob += x
+    sg._topo_sort()
+    clear_node_caches(sg, eid)
+    fixed_nodes = get_fixed_nodes(ev_node)
+    lp_new = sg.current_log_p()
+
+    # revert the event to the old location, temporarily, so that we
+    # can compute probabilities for the reverse move
+    set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params)
+    for (sta, phase, associated) in associations:
+        reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase, deletion_prob=not associated))
+    for (sta, phase, deassociate, tmid_i) in deassociations:
+        c = template_association_distribution(sg, sta, eid, phase)
+        if deassociate:
+            tmid = tmids[tmid_i]
+            tmp = np.log(c[tmid])
+            reverse_logprob += tmp
+        else:
+            tmp = np.log(c[None])
+            reverse_logprob += tmp
+
+    u = np.random.rand()
+    move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
+
+    if move_accepted:
+        set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params)
+        print "move accepted"
+        return True
+    else:
+        print "move rejected",
+        for fn in inverse_fns:
+            fn()
+        sg._topo_sort()
+        clear_node_caches(sg, eid)
+        print "changes reverted"
+        return False
+
+
+def ev_move_full(sg, ev_node, std, params):
+    # jointly propose a new event location along with new tt_residual values,
+    # such that the event arrival times remain constant.
+
+    d = len(params)
+    # get the current values of the params we're updating
+    current_v = np.zeros((d,))
+    for i in range(d):
+        current_v[i] = ev_node.get_local_value(params[i])
+
+    # find the nodes whose values should be held fixed even as the event moves
+    fixed_nodes = get_fixed_nodes(ev_node)
     fixed_vals = [n.get_value() for n in fixed_nodes]
 
     if ev_node not in relevant_node_cache:
@@ -75,6 +251,7 @@ def ev_move(sg, ev_node, std, params):
     else:
         (node_list, relevant_nodes) = relevant_node_cache[ev_node]
 
+    # propose a new set of param values
     gsample = np.random.normal(0, std, d)
     move = gsample * std
     new_v = current_v + move
@@ -96,15 +273,41 @@ def ev_move(sg, ev_node, std, params):
             new_v[1] = 180 - new_v[1]
 
 
+    eid = int(ev_node.label.split(';')[0])
+    old_site_phases = dict()
+    for site, stas in sg.site_elements.items():
+        # TODO: can we get arriving phases for a site instead of sta?
+        old_site_phases[site] = set(sg.ev_arriving_phases(eid, site=site))
+
     lp_old = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
-    set_ev(ev_node, new_v, fixed_vals, fixed_nodes)
+
+    set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params)
+
+    # if the predicted phases in the new location are different from
+    # in the old location, we have to do a reversible jump move to
+    # birth the new phases / destroy the no-longer-feasible phases.
+    ev = sg.get_event(eid)
+    birth_phases = dict()
+    death_phases = dict()
+    phases_changed = False
+    for site in old_site_phases.keys():
+        new_site_phases = sg.predict_phases_site(ev=ev, site=site)
+        birth_phases[site] = new_site_phases - old_site_phases[site]
+        death_phases[site] = old_site_phases[site] - new_site_phases
+        if len(birth_phases[site]) > 0 or len(death_phases[site]) > 0:
+            phases_changed = True
+    if phases_changed:
+        set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params)
+        return ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fixed_nodes, birth_phases, death_phases)
+
     lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
 
     u = np.random.rand()
-    if lp_new - lp_old > np.log(u):
+    move_accepted = lp_new - lp_old  > np.log(u)
+    if move_accepted:
         return True
     else:
-        set_ev(ev_node, current_v, fixed_vals, fixed_nodes)
+        set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params)
         return False
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):
@@ -151,6 +354,9 @@ def ev_lonlat_density(frame=None, fname="ev_viz.png"):
 def ev_lonlat_frames():
     for i in range(40, 10000, 40):
         ev_lonlat_density(frame=i, fname='ev_viz_step%06d.png' % i)
+
+
+
 
 def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
 

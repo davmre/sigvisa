@@ -11,6 +11,7 @@ from optparse import OptionParser
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.infer.run_mcmc import run_open_world_MH
+from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import birth_move, death_move, split_move, merge_move
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
@@ -22,14 +23,14 @@ BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "experiments", "event_localiz
 def hash(x, n=8):
     return hashlib.md5(repr(x)).hexdigest()[:n]
 
-def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000):
+def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tmshape="lin_polyexp"):
     mkdir_p(wave_dir)
 
     if wiggles:
         wiggle_family = "fourier_0.8"
     else:
         wiggle_family = "dummy"
-    sg = SigvisaGraph(template_model_type=tmtype, template_shape="paired_exp",
+    sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type="dummy", wiggle_family=wiggle_family,
                       nm_type = "ar", phases=phases, runid=runid)
 
@@ -41,7 +42,7 @@ def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatempla
         try:
             sta = s.get_default_sta(site)
             chan = s.canonical_channel_name[s.default_vertical_channel[sta]]
-            wave = Waveform(data = np.zeros(10000), srate=5.0, stime=stime, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;smooth_15;hz_1.0")
+            wave = Waveform(data = np.zeros(2000), srate=1.0, stime=stime, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;smooth_15;hz_1.0")
             wns[sta] = sg.add_wave(wave)
         except Exception as e:
             print e
@@ -55,8 +56,8 @@ def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatempla
     evs = sg.prior_sample_events(stime=stime, etime=stime+len_s, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
     print "sampled", len(evs), "evs"
 
+    sg.uatemplate_rate = uatemplate_rate
     if sample_uatemplates:
-        sg.uatemplate_rate = uatemplate_rate
         for wn in wns.values():
             sg.prior_sample_uatemplates(wn)
 
@@ -136,11 +137,11 @@ def load_graph(sg, wave_dir, max_distance=None):
     return evs
 
 def wave_dirname(**kwargs):
-    return os.path.join(BASE_DIR, "sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ]))
+    return os.path.join(BASE_DIR, hash("sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ])))
 
-def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single, n_events, min_mb, force_mb, wiggles=False, sites=None):
+def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single, n_events, min_mb, force_mb, wiggles=False, sites=None, tmshape="lin_polyexp"):
 
-    sg = SigvisaGraph(template_model_type=tmtype, template_shape="paired_exp",
+    sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type="dummy", wiggle_family='dummy',
                       nm_type = "ar", phases=phases, runid=runid)
 
@@ -184,10 +185,11 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    tmtype = {'tt_residual': 'constant_gaussian',
-              'peak_offset': 'constant_gaussian',
-              'amp_transfer': 'param_dist5',
-              'coda_decay': 'param_dist5',}
+    tmtype = {'tt_residual': 'constant_laplacian',
+              'peak_offset': 'param_linear_mb',
+              'amp_transfer': 'param_sin1',
+              'coda_decay': 'param_linear_distmb',
+              'peak_decay': 'param_linear_distmb',}
 
     phases = options.phases.split(',')
     sites = options.sites.split(',')
@@ -202,20 +204,27 @@ def main():
 
     hash_options = hash(str(options))
     openworld_str = '_open' if options.openworld else ''
-    run_dir = os.path.join(BASE_DIR,
-                           'mcmcrun_seed%d_%s' % (options.seed, hash_options))
-    mkdir_p(run_dir)
-    with open(os.path.join(run_dir, 'gold'), 'w') as f:
-        f.write(wave_dir + '\n')
+    #run_dir = os.path.join(BASE_DIR,
+    #                       'mcmcrun_seed%d_%s' % (options.seed, hash_options))
+    #mkdir_p(run_dir)
+    #with open(os.path.join(run_dir, 'gold'), 'w') as f:
+    #    f.write(wave_dir + '\n')
 
+    logger = MCMCLogger(run_dir=None, write_template_vals=True, dump_interval=50)
+    run_dir = logger.run_dir
+    with open(os.path.join(run_dir, 'cmd.txt'), 'w') as f:
+        f.write(" ".join(sys.argv))
+
+
+    mkdir_p(run_dir)
+    os.symlink(os.path.join(wave_dir, 'events.pkl'), os.path.join(run_dir, 'events.pkl'))
     np.random.seed(1)
-    run_open_world_MH(sg, skip=500, steps=options.steps,
-                      run_dir = run_dir,
+    run_open_world_MH(sg, steps=options.steps,
+                      logger=logger,
                       enable_template_openworld=options.openworld,
                       enable_template_moves=True,
                       enable_event_moves=True,
-                      enable_event_openworld=options.openworld,
-                      dumpsteps=False)
+                      enable_event_openworld=options.openworld)
 
 if __name__ == "__main__":
     try:

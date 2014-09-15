@@ -14,9 +14,9 @@ from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
-from sigvisa.infer.event_mcmc import ev_move
+from sigvisa.infer.event_mcmc import ev_move_full
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, improve_atime_move, swap_association_move
+from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -113,7 +113,7 @@ def run_open_world_MH(sg, steps=10000,
                  'swap_association': swap_association_move} if enable_template_openworld else {}
 
     template_moves_special = {'indep_peak': indep_peak_move,
-                              'peak_offset': improve_offset_move,
+                              'peak_offset': improve_offset_move_gaussian,
                               'arrival_time': improve_atime_move} if enable_template_moves else {}
 
     # allow the caller to disable specific moves by name
@@ -126,7 +126,7 @@ def run_open_world_MH(sg, steps=10000,
 
 
     stds = global_stds
-    tmpl_openworld_move_probability = .10
+    tmpl_openworld_move_probability = 0.3
     ev_openworld_move_probability = .05
 
     n_accepted = defaultdict(int)
@@ -146,7 +146,8 @@ def run_open_world_MH(sg, steps=10000,
         for (eid, evnodes) in sg.evnodes.items():
 
             for (move_name, (node_name, params)) in event_moves_gaussian.items():
-                run_move(move_name=move_name, fn=ev_move, step=step, n_attempted=n_attempted,
+                run_move(move_name=move_name, fn=ev_move_full, step=step,
+                         n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
                          sg=sg, ev_node=evnodes[node_name], std=stds[move_name], params=params)
 
@@ -176,7 +177,7 @@ def run_open_world_MH(sg, steps=10000,
                 for tmid in sg.uatemplate_ids[(sta, wn.chan, wn.band)]:
                     tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
-                    # special moves
+                    # special template moves
                     for (move_name, fn) in template_moves_special.iteritems():
                         try:
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
@@ -257,8 +258,6 @@ def main():
                       help="directory to save results  (auto)")
     parser.add_option("--preset", dest="preset", default=None, type="str", help="options are 'localize' (default None)")
     parser.add_option("--disable_moves", dest="disable_moves", default='', type="str", help="comma-separated list of specific MCMC move names to disable")
-
-
 
     register_svgraph_cmdline(parser)
     register_svgraph_signal_cmdline(parser)

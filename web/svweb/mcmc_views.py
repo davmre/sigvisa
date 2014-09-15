@@ -22,7 +22,7 @@ from sigvisa.infer.analyze_mcmc import load_trace, trace_stats
 from sigvisa.models.ttime import tt_predict
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
 from sigvisa.plotting.event_heatmap import EventHeatmap
-from sigvisa.plotting.heatmap import event_bounds
+from sigvisa.plotting.heatmap import event_bounds, find_center
 from sigvisa import *
 
 from matplotlib.figure import Figure
@@ -126,9 +126,9 @@ def mcmc_run_detail(request, dirname):
         evdict = {'eid': eid,
                   'evstr': str(ev),
                   'azgap': azimuth_gap(ev.lon, ev.lat, site_info),
-                  'dist_mean': results['dist_mean'],
-                  'lon_std_km': results['lon_std_km'],
-                  'lat_std_km': results['lat_std_km'],
+                  'dist_mean': results['dist_mean'] if "dist_mean" in results else "",
+                  'lon_std_km': results['lon_std_km'] if "lon_std_km" in results else "",
+                  'lat_std_km': results['lat_std_km'] if "lat_std_km" in results else "",
                   'top_lat': tlat,
                   'bottom_lat': blat,
                   'left_lon': llon,
@@ -167,6 +167,8 @@ def mcmc_event_posterior(request, dirname):
     top_lat = float(request.GET.get('top_lat', '90'))
     bottom_lat = float(request.GET.get('bottom_lat', '-90'))
     burnin = int(request.GET.get('burnin', '100'))
+    plot_true = request.GET.get('plot_true', 't').lower().startswith('t')
+    plot_mean = request.GET.get('plot_mean', 't').lower().startswith('t')
 
     horiz_deg = right_lon-left_lon
     vert_deg = top_lat-bottom_lat
@@ -187,6 +189,7 @@ def mcmc_event_posterior(request, dirname):
     hm = EventHeatmap(f=None, calc=False, left_lon=left_lon, right_lon=right_lon, top_lat=top_lat, bottom_lat=bottom_lat)
     hm.add_stations(sites)
     hm.init_bmap(axes=ax, nofillcontinents=True, projection=proj, resolution="c")
+
     hm.plot(axes=ax, nolines=True, smooth=True,
             colorbar_format='%.3f')
 
@@ -196,16 +199,35 @@ def mcmc_event_posterior(request, dirname):
     shape_colors = sns.color_palette("hls", len(eids))
     eid_patches = []
     eid_labels = []
-    for eid in sorted(eids):
+    for eid_i, eid in enumerate(sorted(eids)):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
         n = trace.shape[0]
-        scplot = hm.plot_locations(trace[:, 0:2], marker=".", ms=8, mfc=shape_colors[eid-1], mew=0, mec="none", alpha=1.0/np.log(n+1))
-
-        eid_patches.append(mpatches.Patch(color=shape_colors[eid-1]))
+        print eid, trace.shape
+        scplot = hm.plot_locations(trace[:, 0:2], marker=".", ms=8, mfc=shape_colors[eid_i-1], mew=0, mec="none", alpha=1.0/np.log(n+1))
+        eid_patches.append(mpatches.Patch(color=shape_colors[eid_i-1]))
         eid_labels.append('%d' % eid)
 
+        if plot_mean:
+            clon, clat = find_center(trace[:, 0:2])
+            loc = np.array(((clon, clat), ))
+            hm.plot_locations(loc,  labels=None, marker="+", ms=16, mfc="none", mec=shape_colors[eid_i-1], mew=2, alpha=1)
+
     f.legend(handles=eid_patches, labels=eid_labels)
+
+    if plot_true:
+        try:
+            with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as evfile:
+                true_evs = pickle.load(evfile)
+        except Exception as e:
+            print e
+            true_evs = []
+        for ev in true_evs:
+            loc = np.array(((ev.lon, ev.lat), ))
+            hm.plot_locations(loc,  labels=None, marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
+
+
+
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')

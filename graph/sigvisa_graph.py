@@ -7,7 +7,6 @@ import re
 import cPickle as pickle
 from collections import defaultdict
 from functools32 import lru_cache
-
 from sigvisa import Sigvisa
 
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, RunNotFoundException
@@ -21,7 +20,7 @@ from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
-from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value, parse_key
+from sigvisa.graph.graph_utils import extract_sta_node, predict_phases_sta, create_key, get_parent_value, parse_key
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
@@ -64,6 +63,19 @@ def get_param_model_id(runid, sta, phase, model_type, param,
 
     return modelid
 
+
+def dummyPriorModel(param):
+    if "tt_residual" in param:
+        model = Gaussian(mean=0.0, std=1.0)
+    elif "amp_transfer" in param:
+        model = Gaussian(mean=0.0, std=2.0)
+    elif "peak_offset" in param:
+        model = Gaussian(mean=-0.5, std=1.0)
+    elif "decay" in param:
+        model = Gaussian(mean=0.0, std=1.0)
+    else:
+        model = DummyModel(default_value=initial_value)
+    return model
 
 class SigvisaGraph(DirectedGraphModel):
 
@@ -180,7 +192,9 @@ class SigvisaGraph(DirectedGraphModel):
         self.evnodes = dict() # keys are eids, vals are attribute:node dicts
         self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
 
-    def ev_arriving_phases(self, eid, sta):
+    def ev_arriving_phases(self, eid, sta=None, site=None):
+        if sta is None and site is not None:
+            sta = next(iter(self.site_elements[site]))
         sta_keys = [n.label for n in self.extended_evnodes[eid] if sta in n.label]
         phases = set([parse_key(k)[1] for k in sta_keys])
         return list(phases)
@@ -425,6 +439,23 @@ class SigvisaGraph(DirectedGraphModel):
     def get_event(self, eid):
         return event_from_evnodes(self.evnodes[eid])
 
+    def delete_event_phase(self, eid, sta, phase):
+        extended_evnodes = self.extended_evnodes[eid][:]
+        for node in extended_evnodes:
+            if sta not in node.label: continue
+            neid,nphase,nsta,nchan,nband,nparam = parse_key(node.label)
+            if nsta==sta and nphase==phase:
+                self.remove_node(node)
+                self.extended_evnodes[eid].remove(node)
+        self._topo_sort()
+
+    def predict_phases_site(self, ev, site):
+        phase_set = None
+        for sta in self.site_elements[site]:
+            phases = set(predict_phases_sta(ev, sta, self.phases))
+            phase_set = phases if phase_set is None else phase_set.intersection(phases)
+        return phase_set
+
     def remove_event(self, eid):
 
         del self.evnodes[eid]
@@ -458,7 +489,7 @@ class SigvisaGraph(DirectedGraphModel):
             self.add_node(n)
 
         for (site, element_list) in self.site_elements.iteritems():
-            for phase in predict_phases(ev=ev, sta=site, phases=self.phases):
+            for phase in self.predict_phases_site(ev=ev, site=site):
                 print "adding phase", phase, "at site", site
                 self.phases_used.add(phase)
                 if self.absorb_n_phases:
@@ -647,16 +678,7 @@ class SigvisaGraph(DirectedGraphModel):
             my_children = [wn for wn in children if wn.sta==sta]
             if model_type.startswith("dummy"):
                 if model_type=="dummyPrior":
-                    if "tt_residual" in label:
-                        model = Gaussian(mean=0.0, std=1.0)
-                    elif "amp_transfer" in label:
-                        model = Gaussian(mean=0.0, std=2.0)
-                    elif "peak_offset" in label:
-                        model = Gaussian(mean=-0.5, std=1.0)
-                    elif "decay" in label:
-                        model = Gaussian(mean=0.0, std=1.0)
-                    else:
-                        model = DummyModel(default_value=initial_value)
+                    model = dummyPriorModel(param)
                 else:
                     if "tt_residual" in label:
                         model = Gaussian(mean=0.0, std=10.0)

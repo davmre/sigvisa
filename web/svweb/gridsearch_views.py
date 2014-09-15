@@ -20,7 +20,7 @@ from sigvisa import *
 
 from sigvisa.source.event import Event
 from sigvisa.signals.io import fetch_waveform, Segment
-from sigvisa.graph.sigvisa_graph import predict_phases
+from sigvisa.graph.sigvisa_graph import predict_phases_sta
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -133,7 +133,7 @@ def gridsearch_detail_view(request, gsid):
     ll_diffs = dict([(key, true_wave_lls[key] - query_wave_lls[key]) for key in wave_dict.keys() ])
     true_ll = true_sg.current_log_p()
     query_ll = query_sg.current_log_p()
-    wave_phases = dict([(key, predict_phases(ev=list(true_sg.toplevel_nodes)[0].get_event(), sta=w.sta, phases=true_sg.phases)) for (key,w) in wave_dict.items()])
+    wave_phases = dict([(key, predict_phases_sta(ev=list(true_sg.toplevel_nodes)[0].get_event(), sta=w.sta, phases=true_sg.phases)) for (key,w) in wave_dict.items()])
 
     query_distances = dict([(key, geog.dist_km((query_ev.lon, query_ev.lat), tuple(s.earthmodel.site_info(wave_dict[key].sta, ev.time)[0:2]))) for key in wave_dict.keys()])
 

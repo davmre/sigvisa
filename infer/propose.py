@@ -7,7 +7,7 @@ import pickle
 import time
 
 from sigvisa.models.ttime import tt_predict
-from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments

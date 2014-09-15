@@ -8,8 +8,8 @@ import os
 
 from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
-from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value, parse_key
-from sigvisa.graph.sigvisa_graph import get_param_model_id
+from sigvisa.graph.graph_utils import extract_sta_node, create_key, get_parent_value, parse_key
+from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel
 from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
 from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal
 from sigvisa.learn.train_param_common import load_modelid
@@ -66,6 +66,9 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None
     model_type = sg._tm_type(param, site=site, wiggle_param=wiggle)
     if model_type == "dummy":
         return 0.0
+    if model_type == "dummyPrior":
+        model = dummyPriorModel(param)
+        return model.log_p(x=val)
 
     s = Sigvisa()
     if s.is_array_station(site) and sg.arrays_joint:
@@ -145,6 +148,12 @@ def template_association_logodds(sg, sta, tmid, eid, phase):
 
 
 def template_association_distribution(sg, sta, eid, phase):
+    """
+    Returns a counter with normalized probabilities for associating
+    any existing unassociated templates at station sta with a given
+    phase of event eid. Probability of no association is given by c[None].
+
+    """
     s = Sigvisa()
     site = s.get_array_site(sta)
 
@@ -189,7 +198,7 @@ def sample_template_to_associate(sg, sta, eid, phase):
 
     return tmid, assoc_logprob
 
-def associate_template(sg, sta, tmid, eid, phase):
+def associate_template(sg, sta, tmid, eid, phase, create_phase_arrival=False):
     """
 
     Transform the graph to associate the template tmid with the arrival of eid/phase at sta.
@@ -206,11 +215,18 @@ def associate_template(sg, sta, tmid, eid, phase):
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
     values = dict([(k, n.get_value()) for (k, n) in tmnodes.items()])
+    if create_phase_arrival:
+        if phase not in sg.ev_arriving_phases(eid, sta=sta):
+            tg = sg.template_generator(phase)
+            wg = sg.wiggle_generator(phase, sg.base_srate)
+            sg.add_event_site_phase(tg, wg, site, phase, sg.evnodes[eid])
+
+    # if a newly birthed event, it already has a phase arrival that just needs to be set
     sg.set_template(eid, sta, phase, band, chan, values)
     sg.destroy_unassociated_template(tmnodes, nosort=True)
     return
 
-def unassociate_template(sg, sta, eid, phase, tmid=None):
+def unassociate_template(sg, sta, eid, phase, tmid=None, remove_event_phase=False):
 
     s = Sigvisa()
     site = s.get_array_site(sta)
@@ -226,6 +242,11 @@ def unassociate_template(sg, sta, eid, phase, tmid=None):
     tmnodes = sg.create_unassociated_template(wave_node, atime, wiggles=True, nosort=True,
                                            tmid=tmid, initial_vals=ev_tmvals)
     tmid = tmnodes.values()[0].tmid
+
+    if remove_event_phase:
+        # if we're just unassociating this phase (not deleting the
+        # whole event), we need to delete the event phase arrival.
+        sg.delete_event_phase(eid, sta, phase)
 
     return tmid
 
@@ -272,19 +293,23 @@ def sample_deassociation_proposal(sg, sta, eid, phase):
     deassociate_lp = np.log(p) if deassociate else np.log(1-p)
     return deassociate, deassociate_lp
 
-def propose_phase_template(sg, sta, eid, phase):
+def propose_phase_template(sg, sta, eid, phase, tmvals=None):
     # sample a set of params for a phase template from an appropriate distribution (as described above).
     # return as an array.
 
     s = Sigvisa()
     site = s.get_array_site(sta)
 
-    # we assume that add_event already sampled all the params parent-conditionally
+
     assert (len(list(sg.site_bands[site])) == 1)
     band = list(sg.site_bands[site])[0]
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
-    tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
+
+    # we assume that add_event already sampled all the params parent-conditionally
+
+    if tmvals is None:
+        tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
@@ -545,7 +570,8 @@ def ev_birth_move(sg, log_to_run_dir=None):
     # creating a new template.
     # don't modify the graph, but generate a list of functions
     # to execute the forward and reverse moves
-    for elements in sg.site_elements.values():
+    for site,elements in sg.site_elements.items():
+        site_phases = sg.predict_phases_site(proposed_ev, site=site)
         for sta in elements:
 
             s = Sigvisa()
@@ -555,7 +581,7 @@ def ev_birth_move(sg, log_to_run_dir=None):
             assert (len(list(sg.site_chans[site])) == 1)
             chan = list(sg.site_chans[site])[0]
 
-            for phase in predict_phases(ev=proposed_ev, sta=sta, phases=sg.phases):
+            for phase in site_phases:
                 tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase)
                 if tmid is not None:
                     forward_fns.append(lambda sta=sta,phase=phase,tmid=tmid: associate_template(sg, sta, tmid, eid, phase))
@@ -616,9 +642,11 @@ def ev_birth_move(sg, log_to_run_dir=None):
     else:
         #print "move rejected"
 
-        if np.random.rand() < 0.05:
+        if np.random.rand() < 0.1:
             sites = sg.site_elements.keys()
+            print "saving hough array picture...",
             visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, 'last_hough.png'))
+            print "done"
 
         for fn in inverse_fns:
             fn()
@@ -643,7 +671,9 @@ def log_event_birth(sg, hough_array, run_dir, eid, associations):
 
     # save Hough transform
     sites = sg.site_elements.keys()
+    print "visualizing hough array...",
     visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'))
+    print "done"
 
 def main():
 

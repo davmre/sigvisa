@@ -13,24 +13,26 @@ def multi_f(f_args):
     return f_args[0](*f_args[3:5])
 
 
+def find_center(X):
+    # Find the center of a set of points on the Earth's
+    # surface, by first finding their center of mass, then
+    # projecting onto the surface of the Earth.
+
+    rX = np.radians(X) + np.array((0, np.pi / 2.0))
+
+    pts_cartesian = [(np.sin(lat) * np.cos(lon), np.sin(lat) * np.sin(lon), np.cos(lat)) for (lon, lat) in rX]
+    center_cartesian = np.mean(pts_cartesian, axis=0)
+    (x, y, z) = center_cartesian
+    lat_center = np.degrees(np.arccos(z) - np.pi / 2.0)
+    lon_center = np.degrees(np.arctan2(y, x))
+
+    return (lon_center, lat_center)
+
+
 def event_bounds(X, quantile=0.98):
 
     X = X[:, 0:2]
 
-    def find_center(X):
-        # Find the center of a set of points on the Earth's
-        # surface, by first finding their center of mass, then
-        # projecting onto the surface of the Earth.
-
-        rX = np.radians(X) + np.array((0, np.pi / 2.0))
-
-        pts_cartesian = [(np.sin(lat) * np.cos(lon), np.sin(lat) * np.sin(lon), np.cos(lat)) for (lon, lat) in rX]
-        center_cartesian = np.mean(pts_cartesian, axis=0)
-        (x, y, z) = center_cartesian
-        lat_center = np.degrees(np.arccos(z) - np.pi / 2.0)
-        lon_center = np.degrees(np.arctan2(y, x))
-
-        return (lon_center, lat_center)
 
     center = find_center(X)
     lon_distances = sorted(np.abs([geog.degdiff(pt[0], center[0]) for pt in X]))

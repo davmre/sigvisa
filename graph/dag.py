@@ -239,7 +239,7 @@ class DirectedGraphModel(DAG):
             if len(child.parents) == 0:
                 self.toplevel_nodes.add(child)
 
-        for parent in node.parents.values():
+        for parent in set(node.parents.values()):
             parent.removeChild(node)
             if len(parent.children) == 0:
                 self.leaf_nodes.add(parent)

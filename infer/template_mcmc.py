@@ -50,7 +50,7 @@ def get_signal_based_amplitude_distribution(sg, sta, tmvals=None, peak_time=None
     wn = sg.station_waves[sta][0]
 
     if peak_time is None:
-        peak_time = tmvals['arrival_time'] + tmvals['peak_offset']
+        peak_time = tmvals['arrival_time'] + np.exp(tmvals['peak_offset'])
     peak_idx = int((peak_time - wn.st) * wn.srate)
     peak_period_samples = int(peak_period_s * wn.srate)
     peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
@@ -212,7 +212,29 @@ def update_wiggle_submove(sg, wave_node, tmnodes, atime_key,
 
     return relevant_nodes, node_list, keys, oldvalues, newvalues
 
-def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
+def improve_offset_move_gaussian(sg, wave_node, tmnodes, std=0.5,  **kwargs):
+    arrival_key, arrival_node = tmnodes['arrival_time']
+    offset_key, offset_node = tmnodes['peak_offset']
+
+    current_offset = offset_node.get_value(key=offset_key)
+    proposed_offset = gaussian_propose(sg, keys=(offset_key,),
+                                       node_list=(offset_node,),
+                                       values=(current_offset,),
+                                       std=std, **kwargs)[0]
+    return improve_offset_move(sg, wave_node, tmnodes, proposed_offset)
+
+def improve_offset_move_indep(sg, wave_node, tmnodes,  **kwargs):
+    arrival_key, arrival_node = tmnodes['arrival_time']
+    offset_key, offset_node = tmnodes['peak_offset']
+
+    current_offset = offset_node.get_value(key=offset_key)
+    reverse_lp = offset_node.log_p(v=current_offset)
+    proposed_offset = offset_node.parent_sample(set_new_value=False)
+    move_lp = offset_node.log_p(v=proposed_offset)
+    return improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=move_lp, reverse_lp=reverse_lp)
+
+
+def improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=0, reverse_lp=0, **kwargs):
     """
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
@@ -226,11 +248,7 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
 
     current_offset = offset_node.get_value(key=offset_key)
     atime = arrival_node.get_value(key=arrival_key)
-    proposed_offset = gaussian_propose(sg, keys=(offset_key,),
-                                       node_list=(offset_node,),
-                                       values=(current_offset,),
-                                       std=std, **kwargs)[0]
-    new_atime = atime + (current_offset - np.exp(proposed_offset))
+    new_atime = atime + (np.exp(current_offset) - np.exp(proposed_offset))
 
     rn_tmp, node_list, keys, oldvalues, newvalues = update_wiggle_submove(sg, wave_node, tmnodes,
                                                                           arrival_key, arrival_node,
@@ -245,7 +263,9 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
                          oldvalues=oldvalues,
                          newvalues = newvalues,
                          node_list = node_list,
-                         relevant_nodes=relevant_nodes)
+                         relevant_nodes=relevant_nodes,
+                         log_qforward=move_lp,
+                         log_qbackward=reverse_lp)
     return accepted
 
 def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
@@ -681,6 +701,7 @@ def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
 
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
+    print "proposed template for %s at peak time %.1f" % (wave_node.sta, peak_time)
     if move_accepted or dummy:
         print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:

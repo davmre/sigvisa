@@ -12,7 +12,7 @@ def extract_sta_node(node_or_dict, sta):
         return node_or_dict
 
 
-def predict_phases(ev, sta, phases):
+def predict_phases_sta(ev, sta, phases):
     s = Sigvisa()
     if phases == "leb":
         cursor = s.dbconn.cursor()

@@ -12,6 +12,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib.gridspec as gridspec
 
+from sigvisa.plotting.heatmap import find_center
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.histogram import plot_density, plot_histogram
 from sigvisa.plotting.plot import basic_plot_to_file, subplot_waveform, savefig, plot_pred_atimes, plot_det_times
@@ -22,8 +23,7 @@ from sigvisa.models.ttime import tt_predict
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
 def trace_stats(trace, true_evs):
-    mean_lon = np.mean(trace[:, 0])
-    mean_lat = np.mean(trace[:, 1])
+    mean_lon, mean_lat = find_center(trace[:, 0:2])
     lon_std =  np.std(trace[:, 0])
     lat_std =  np.std(trace[:, 1])
     lon_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon+lon_std, mean_lat))
