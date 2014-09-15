@@ -23,7 +23,7 @@ BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "experiments", "event_localiz
 def hash(x, n=8):
     return hashlib.md5(repr(x)).hexdigest()[:n]
 
-def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tmshape="lin_polyexp"):
+def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tmshape="lin_polyexp", nm_type="ar"):
     mkdir_p(wave_dir)
 
     if wiggles:
@@ -32,7 +32,7 @@ def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatempla
         wiggle_family = "dummy"
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type="dummy", wiggle_family=wiggle_family,
-                      nm_type = "ar", phases=phases, runid=runid)
+                      nm_type = nm_type, phases=phases, runid=runid)
 
     s = Sigvisa()
 
@@ -139,20 +139,20 @@ def load_graph(sg, wave_dir, max_distance=None):
 def wave_dirname(**kwargs):
     return os.path.join(BASE_DIR, hash("sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ])))
 
-def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single, n_events, min_mb, force_mb, wiggles=False, sites=None, tmshape="lin_polyexp"):
+def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single, n_events, min_mb, force_mb, wiggles=False, sites=None, tmshape="lin_polyexp", nm_type="ar"):
 
     np.random.seed(seed)
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type="dummy", wiggle_family='dummy',
-                      nm_type = "ar", phases=phases, runid=runid)
+                      nm_type = nm_type, phases=phases, runid=runid)
 
     sg.uatemplate_rate = uatemplate_rate
 
-    wave_dir = wave_dirname(seed=seed, runid=runid, wiggles=wiggles, sites=sites, phases=phases, tmtype=hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
+    wave_dir = wave_dirname(seed=seed, runid=runid, wiggles=wiggles, sites=sites, phases=phases, tmtype=hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb, nm_type=nm_type)
     try:
         evs = load_graph(sg, wave_dir, max_distance=max_distance)
     except (IOError, OSError) as e:
-        sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb)
+        sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, nm_type=nm_type)
         evs = load_graph(sg, wave_dir, max_distance=max_distance)
 
     if init_events:
@@ -184,6 +184,9 @@ def main():
     parser.add_option("--sites", dest="sites", default=None, type="str")
     parser.add_option("--steps", dest="steps", default=20000, type="int",
                       help="MCMC steps to take (20000)")
+    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
+                      help="type of noise model to use (ar)")
+
 
     (options, args) = parser.parse_args()
 
@@ -197,7 +200,7 @@ def main():
     sites = options.sites.split(',')
 
     init_events = options.init_openworld or (not options.openworld)
-    sg, evs, wave_dir = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, sample_single=options.sample_single, n_events=options.n_events, min_mb=options.min_mb, force_mb=options.force_mb, sites=sites)
+    sg, evs, wave_dir = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, sample_single=options.sample_single, n_events=options.n_events, min_mb=options.min_mb, force_mb=options.force_mb, sites=sites, nm_type=options.nm_type)
 
     print "got %d evs" % len(evs)
     for ev in evs:
