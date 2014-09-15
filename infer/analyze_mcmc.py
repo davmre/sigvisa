@@ -24,6 +24,18 @@ EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURC
 
 def trace_stats(trace, true_evs):
     mean_lon, mean_lat = find_center(trace[:, 0:2])
+
+    # hack: if location is near international date line, rotate
+    # coordinates so we get a reasonable stddev calculation.  (note
+    # this doesn't affect the mean calculation above since that's
+    # already smart about spherical coordinates)
+    if mean_lon > 170:
+        wrapped = trace[:, 0] < 0
+        trace[wrapped, 0] += 360
+    elif mean_lon < -170:
+        wrapped = trace[:, 0] > 0
+        trace[wrapped, 0] -= 360
+
     lon_std =  np.std(trace[:, 0])
     lat_std =  np.std(trace[:, 1])
     lon_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon+lon_std, mean_lat))
