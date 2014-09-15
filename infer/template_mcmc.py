@@ -701,7 +701,10 @@ def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
 
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
-    print "proposed template for %s at peak time %.1f" % (wave_node.sta, peak_time)
+
+    #print "proposed template for %s at peak time %.1f, tmpl %s" % (wave_node.sta, peak_time, [(k, n.get_value()) for (k,n) in tmpl.items()])
+
+
     if move_accepted or dummy:
         print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:
