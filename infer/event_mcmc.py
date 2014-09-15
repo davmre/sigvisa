@@ -186,7 +186,6 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
                     tmp = phase_template_proposal_logp(sg, sta, eid, phase, template_param_array)
                     reverse_logprob += tmp
                     print "proposing to delete %s for %d at %s (lp %f)"% (phase, eid, sta, deassociate_logprob),
-
                 move_logprob += deassociate_logprob
 
     for fn in forward_fns:
@@ -266,7 +265,7 @@ def ev_move_full(sg, ev_node, std, params):
         if new_v[0] < -180:
             new_v[0] += 360
         if new_v[0] > 180:
-            new_v[0] -= 180
+            new_v[0] -= 360
         if new_v[1] < -90:
             new_v[1] = -180 - new_v[1]
         if new_v[1] > 90:
