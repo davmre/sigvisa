@@ -45,17 +45,21 @@ def ev_move_relevant_nodes(node_list, fixed_nodes):
     inlaws = [n.parents[n.default_parent_key()] for n in fixed_nodes]
     return set(node_list + direct_stochastic_children + inlaws)
 
-def set_ev(ev_node, v, fixed_vals, fixed_nodes, params):
+def set_ev(ev_node, v, fixed_vals, fixed_nodes, params, ignore_illegal=True):
     for (key, val) in zip(params, v):
         ev_node.set_local_value(key=key, value=val, force_deterministic_consistency=False)
 
 
+    assert(len(fixed_nodes)==len(fixed_vals))
     for (val, n) in zip(fixed_vals, fixed_nodes):
         try:
             n.set_value(val)
-        except ValueError:
+        except ValueError as e:
             # ignore "illegal travel time" messages from phases that are about to disappear
-            pass
+            if ignore_illegal:
+                pass
+            else:
+                raise e
 
 def get_fixed_nodes(ev_node):
 
@@ -81,7 +85,7 @@ def clear_node_caches(sg, eid):
         except KeyError:
             pass
 
-def add_phase_template(sg, sta, eid, phase):
+def add_phase_template(sg, sta, eid, phase, vals=None):
     tg = sg.template_generator(phase)
     wg = sg.wiggle_generator(phase, sg.base_srate)
     if phase not in sg.ev_arriving_phases(eid, sta=sta):
@@ -115,6 +119,10 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
     graph.
     """
     lp_old = sg.current_log_p()
+
+    #if np.abs(lp_old-76262.5748) < 1e-3:
+    #    import pdb; pdb.set_trace()
+
     set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params)
 
     new_site_phases = dict()
@@ -182,10 +190,14 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
                     print "proposing to deassociate %s for %d at %s (lp %.1f)" % (phase, eid, sta, deassociate_logprob),
                 else:
                     template_param_array = sg.get_arrival_vals(eid, sta, phase, band, chan)
+
+                    forward_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, sta, phase))
+                    inverse_fns.append( lambda sta=sta,phase=phase,eid=eid: add_phase_template(sg, sta, eid, phase) )
                     inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
                     tmp = phase_template_proposal_logp(sg, sta, eid, phase, template_param_array)
                     reverse_logprob += tmp
                     print "proposing to delete %s for %d at %s (lp %f)"% (phase, eid, sta, deassociate_logprob),
+
                 move_logprob += deassociate_logprob
 
     for fn in forward_fns:
@@ -194,7 +206,6 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
             move_logprob += x
     sg._topo_sort()
     clear_node_caches(sg, eid)
-    fixed_nodes = get_fixed_nodes(ev_node)
     lp_new = sg.current_log_p()
 
     # revert the event to the old location, temporarily, so that we
@@ -217,6 +228,7 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
 
     if move_accepted:
         set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params)
+        assert(np.abs(float(lp_new - sg.current_log_p())) < 1e-8)
         print "move accepted"
         return True
     else:
@@ -225,6 +237,7 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
             fn()
         sg._topo_sort()
         clear_node_caches(sg, eid)
+        assert(np.abs(float(lp_old - sg.current_log_p())) < 1e-8)
         print "changes reverted"
         return False
 

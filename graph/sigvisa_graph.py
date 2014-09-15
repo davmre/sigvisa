@@ -349,12 +349,14 @@ class SigvisaGraph(DirectedGraphModel):
         ua_peak_offset_lp = 0.0
         ua_coda_height_lp = 0.0
         ua_coda_decay_lp = 0.0
+        ua_peak_decay_lp = 0.0
         ua_wiggle_lp = 0.0
         for ((sta, band, chan), tmid_set) in self.uatemplate_ids.items():
             for tmid in tmid_set:
                 uanodes = self.uatemplates[tmid]
                 ua_peak_offset_lp += uanodes['peak_offset'].log_p()
                 ua_coda_height_lp += uanodes['coda_height'].log_p()
+                ua_peak_decay_lp += uanodes['peak_decay'].log_p()
                 ua_coda_decay_lp += uanodes['coda_decay'].log_p()
                 for key in uanodes.keys():
                     if (key != "amp_transfer" and "amp_" in key) or "phase_" in key:
@@ -365,6 +367,7 @@ class SigvisaGraph(DirectedGraphModel):
         ev_amp_transfer_lp = 0.0
         ev_peak_offset_lp = 0.0
         ev_coda_decay_lp = 0.0
+        ev_peak_decay_lp = 0.0
         ev_wiggle_lp = 0.0
         for (eid, evdict) in self.evnodes.items():
             evnode_set = set(evdict.values())
@@ -382,6 +385,8 @@ class SigvisaGraph(DirectedGraphModel):
                     ev_amp_transfer_lp += node.log_p()
                 elif  "coda_decay" in node.label:
                     ev_coda_decay_lp += node.log_p()
+                elif  "peak_decay" in node.label:
+                    ev_peak_decay_lp += node.log_p()
                 elif  "peak_offset" in node.label:
                     ev_peak_offset_lp += node.log_p()
                 elif "amp_" in node.label or "phase_" in node.label:
@@ -401,11 +406,12 @@ class SigvisaGraph(DirectedGraphModel):
         print "tt_residual: ev %.1f" % (ev_tt_lp)
         print "ev global cost (n + priors + tt): %.1f" % (ev_prior_lp + ev_tt_lp + ne_lp,)
         print "coda_decay: ev %.1f ua %.1f total %.1f" % (ev_coda_decay_lp, ua_coda_decay_lp, ev_coda_decay_lp+ua_coda_decay_lp)
+        print "peak_decay: ev %.1f ua %.1f total %.1f" % (ev_peak_decay_lp, ua_peak_decay_lp, ev_peak_decay_lp+ua_peak_decay_lp)
         print "peak_offset: ev %.1f ua %.1f total %.1f" % (ev_peak_offset_lp, ua_peak_offset_lp, ev_peak_offset_lp+ua_peak_offset_lp)
         print "coda_height: ev %.1f ua %.1f total %.1f" % (ev_amp_transfer_lp, ua_coda_height_lp, ev_amp_transfer_lp+ua_coda_height_lp)
         print "wiggles: ev %.1f ua %.1f total %.1f" % (ev_wiggle_lp, ua_wiggle_lp, ev_wiggle_lp+ua_wiggle_lp)
-        ev_total = ev_coda_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp + ev_wiggle_lp
-        ua_total = ua_coda_decay_lp + ua_peak_offset_lp + ua_coda_height_lp + ua_wiggle_lp
+        ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp + ev_wiggle_lp
+        ua_total = ua_coda_decay_lp + ua_peak_decay_lp + ua_peak_offset_lp + ua_coda_height_lp + ua_wiggle_lp
         print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
         ev_total += ev_prior_lp + ev_tt_lp + ne_lp
         ua_total += nt_lp

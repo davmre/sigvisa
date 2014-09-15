@@ -141,6 +141,7 @@ def wave_dirname(**kwargs):
 
 def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single, n_events, min_mb, force_mb, wiggles=False, sites=None, tmshape="lin_polyexp"):
 
+    np.random.seed(seed)
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type="dummy", wiggle_family='dummy',
                       nm_type = "ar", phases=phases, runid=runid)
@@ -172,6 +173,7 @@ def main():
     parser.add_option("--sample_single", dest="sample_single", default=False, action="store_true")
     parser.add_option("--perturb_amt", dest="perturb_amt", default=0.0, type="float")
     parser.add_option("--openworld", dest="openworld", default=False, action="store_true")
+    parser.add_option("--template_openworld", dest="template_openworld", default=False, action="store_true")
     parser.add_option("--init_openworld", dest="init_openworld", default=False, action="store_true")
     parser.add_option("--sample_uatemplates", dest="sample_uatemplates", default=False, action="store_true", help="include unassociated templates in the synthetic world (default is to only sample templates from events)")
     parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=0.001, type="float")
@@ -221,7 +223,7 @@ def main():
     np.random.seed(1)
     run_open_world_MH(sg, steps=options.steps,
                       logger=logger,
-                      enable_template_openworld=options.openworld,
+                      enable_template_openworld=options.template_openworld,
                       enable_template_moves=True,
                       enable_event_moves=True,
                       enable_event_openworld=options.openworld)
