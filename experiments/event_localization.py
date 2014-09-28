@@ -217,9 +217,6 @@ def main():
 
     logger = MCMCLogger(run_dir=None, write_template_vals=True, dump_interval=50)
     run_dir = logger.run_dir
-    with open(os.path.join(run_dir, 'cmd.txt'), 'w') as f:
-        f.write(" ".join(sys.argv))
-
 
     mkdir_p(run_dir)
     os.symlink(os.path.join(wave_dir, 'events.pkl'), os.path.join(run_dir, 'events.pkl'))

@@ -7,6 +7,7 @@ def get_node_scales(node_list):
     high_bounds = np.concatenate([node.high_bounds() for node in node_list])
     scales = (high_bounds - low_bounds)/2.0
     scaled = np.isfinite(scales)
+    scaled *= ["arrival_time" not in n.label for n in node_list]
     scales[~scaled] = 1.0
     return scales
 

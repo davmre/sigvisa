@@ -17,7 +17,7 @@
 <p>Observed signals:</p>
 <ul>
 {% for wn in wns %}
-<li><a href="{% url mcmc_wave_posterior dirname=dirname wn_label=wn %}?step={{ max_step }}">{{ wn }}</a></li>
+<li><a href="{% url mcmc_wave_posterior dirname=dirname wn_label=wn %}?step={{ max_step }}">{{ wn }}</a> (<a href="{% url mcmc_arrivals dirname=dirname wn_label=wn step=max_step %}">templates</a>)</li>
 {% endfor %}
 </ul>
 {% endif %}

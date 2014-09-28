@@ -990,9 +990,12 @@ class SigvisaGraph(DirectedGraphModel):
             evs.append(ev)
         return evs
 
-    def prior_sample_uatemplates(self, wn, **kwargs):
-        n_template_dist = Poisson(self.uatemplate_rate * (wn.et-wn.st))
-        n_templates = n_template_dist.sample()
+    def prior_sample_uatemplates(self, wn, n_templates=None, **kwargs):
+
+        if not n_templates:
+            n_template_dist = Poisson(self.uatemplate_rate * (wn.et-wn.st))
+            n_templates = n_template_dist.sample()
+
         template_time_dist = Uniform(wn.st, wn.et)
         templates = []
         for i in range(n_templates):

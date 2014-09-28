@@ -21,19 +21,22 @@ from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
 global_stds = {'coda_height': .7,
-            'coda_decay': .5,
-            'peak_decay': 0.5,
-            'wiggle_amp': .1,
-            'wiggle_phase': .1,
-            'peak_offset': 1.0,
-            'arrival_time': 9.0,
-            'evloc': 0.15,
-            'evloc_big': 0.4,
-            'evtime': 1.0,
-            'evmb': 0.2,
-            'evdepth': 8.0}
+               'coda_height_small': .1,
+               'coda_decay': .5,
+               'peak_decay': 0.5,
+               'wiggle_amp': .1,
+               'wiggle_phase': .1,
+               'peak_offset': 1.0,
+               'improve_offset_move_gaussian': 0.5,
+               'arrival_time_big': 9.0,
+               'arrival_time': 0.5,
+               'evloc': 0.15,
+               'evloc_big': 0.4,
+               'evtime': 1.0,
+               'evmb': 0.2,
+               'evdepth': 8.0}
 
-def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step):
+def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted=None, n_accepted=None, move_times=None, step=None):
 
 
     for param in tg.params():
@@ -73,22 +76,64 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, mo
                  sg=sg, keys=(k,), node_list=(n,), relevant_nodes=(n, wn),
                  std=stds[move], phase_wraparound=phase_wraparound)
 
-def run_move(move_name, fn, step, n_accepted, n_attempted, move_times, move_prob=None, **kwargs):
+def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, **kwargs):
 
     if move_prob is not None:
         u = np.random.rand()
         if u > move_prob:
             return
 
-    n_attempted[move_name] += 1
+    if n_attempted is not None:
+        n_attempted[move_name] += 1
+
     t0  = time.time()
-    n_accepted[move_name] += fn(**kwargs)
+    accepted = fn(**kwargs)
     t1 = time.time()
-    move_times[move_name].append((step, t1-t0))
+
+    if n_accepted is not None:
+        n_accepted[move_name] += accepted
+    if move_times is not None:
+        move_times[move_name].append((step, t1-t0))
 
 
 
 ############################################################################
+
+def single_template_MH(sg, wn, tmnodes, phase, steps=1000):
+    #tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
+
+    template_moves_special = {'peak_offset': improve_offset_move_gaussian,
+                              'arrival_time_big': improve_atime_move,
+                              'arrival_time': improve_atime_move}
+    stds = global_stds
+
+    n_accepted = defaultdict(int)
+    n_attempted = defaultdict(int)
+
+    vals = []
+    sorted_params = sorted(tmnodes.keys())
+    for step in range(steps):
+        # special template moves
+        for (move_name, fn) in template_moves_special.iteritems():
+            run_move(move_name=move_name, fn=fn,
+                     sg=sg, wave_node=wn, tmnodes=tmnodes,
+                     n_attempted=n_attempted, n_accepted=n_accepted,
+                     std=stds[move_name] if move_name in stds else None)
+
+        # also do basic wiggling-around of all template params
+        tg = sg.template_generator(phase)
+        wg = sg.wiggle_generator(phase, wn.srate)
+
+        do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted=n_attempted, n_accepted=n_accepted)
+
+
+        v = np.array([tmnodes[p][1].get_value(tmnodes[p][0]) for p in sorted_params])
+        vals.append(v)
+
+        if step % 50 == 0:
+            print "step %d: %s" % (step, v)
+
+    return sorted_params, np.array(vals)
 
 def run_open_world_MH(sg, steps=10000,
                       enable_event_openworld=True,

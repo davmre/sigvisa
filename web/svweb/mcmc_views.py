@@ -77,10 +77,14 @@ def graphs_by_step(ev_dir, start_step=0, end_step=9999999):
             sgs[n_step] = pickle.load(f)
     return sgs
 
+def graph_for_step(ev_dir, step):
+    with open(os.path.join(ev_dir, "step_%06d" % step, 'pickle.sg'), 'rb') as f:
+        sg = pickle.load(f)
+    return sg
+
 def final_mcmc_state(ev_dir):
     max_step = np.max([int(d[5:]) for d in os.listdir(ev_dir) if d.startswith('step')])
-    with open(os.path.join(ev_dir, "step_%06d" % max_step, 'pickle.sg'), 'rb') as f:
-        sg = pickle.load(f)
+    sg = graph_for_step(ev_dir, max_step)
     return sg, max_step
 
 def mcmc_run_detail(request, dirname):
@@ -249,18 +253,46 @@ def mcmc_param_posterior(request, dirname, node_label):
 
     return HttpResponse("key: %s\nsamples: %d\n\nmean: %.3f\nstd: %.3f\nmin: %.3f\nmax: %.3f" % (node_label, len(vals),  np.mean(vals), np.std(vals), np.min(vals), np.max(vals)), content_type="text/plain")
 
+
+def mcmc_arrivals(request, dirname, wn_label, step):
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sg = graph_for_step(mcmc_run_dir, int(step))
+
+    wn = sg.all_nodes[wn_label]
+
+    response = ""
+
+    for (eid, phase) in sorted(wn.arrivals()):
+        v, tg = wn.get_template_params_for_arrival(eid=eid, phase=phase)
+        response += "eid %d, phase %s:\n" % (eid, phase)
+        for (key, val) in v.items():
+            response += " %s: %s\n" % (key, val)
+        response += "\n"
+
+    return HttpResponse(response, content_type="text/plain")
+
+
 def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
+    vzoom = float(request.GET.get("vzoom", '1'))
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_dets = request.GET.get("plot_dets", 'leb')
+    plot_template_arrivals = request.GET.get("plot_templates", 'true').lower().startswith('t')
     step = request.GET.get("step", 'all')
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    sgs = graphs_by_step(mcmc_run_dir)
+    if step=="all":
+        sgs = graphs_by_step(mcmc_run_dir)
+    else:
+        sgs = {int(step): graph_for_step(mcmc_run_dir, int(step))}
 
     last_step = np.max(sgs.keys())
     last_sg = sgs[last_step]
@@ -276,12 +308,12 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     real_wave.data = ma.masked_array(real_wave.data, copy=True)
     len_mins = (wn.et - wn.st) / 60.0
 
-    f = Figure((len_mins * zoom, 5))
+    f = Figure((len_mins * zoom, 5*vzoom))
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
     subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=None)
     shape_colors = None
-    steps = sgs.keys() if step=="all" else [int(step),]
+    steps = sgs.keys()
     alpha = 1.0/len(steps)
     for step in steps:
         wn = sgs[step].all_nodes[wn_label]
@@ -294,7 +326,14 @@ def mcmc_wave_posterior(request, dirname, wn_label):
                 event = sgs[step].get_event(eid)
                 predictions.append([phase+"_%d" % eid, event.time+tt_predict(event, wn.sta, phase)])
             plot_pred_atimes(dict(predictions), wn.get_wave(), axes=axes, color="purple", alpha=alpha, draw_text=False)
-    plot_pred_atimes(dict(predictions), wn.get_wave(), axes=axes, color="purple", alpha=1.0, draw_bars=False)
+
+    if plot_predictions:
+        plot_pred_atimes(dict(predictions), wn.get_wave(), axes=axes, color="purple", alpha=1.0, draw_bars=False)
+
+    if plot_template_arrivals:
+        atimes = dict([("%d_%s" % (eid, phase), wn.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in wn.arrivals()])
+        colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in wn.arrivals()])
+        plot_pred_atimes(dict(atimes), wn.get_wave(), axes=axes, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')

@@ -16,6 +16,10 @@ class MCMCLogger(object):
         mkdir_p(run_dir)
         self.run_dir = run_dir
 
+        with open(os.path.join(run_dir, 'cmd.txt'), 'w') as f:
+            f.write(" ".join(sys.argv))
+
+
         self.log_handles = dict()
 
         self.dumpsteps = dumpsteps

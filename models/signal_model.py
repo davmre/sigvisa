@@ -112,6 +112,13 @@ class ObservedSignalNode(Node):
             self.nm_type = self.nm.noise_model_type()
 
     def assem_signal(self, include_wiggles=True, arrivals=None):
+        """
+
+        WARNING: returns a pointer to self.pred_signal, which will be
+        overwritten on future calls. So if you want the returned value
+        to persist, you need to make a copy. (np.copy())
+
+        """
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in

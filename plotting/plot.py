@@ -286,7 +286,7 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
 
 # does not save for you - you need to call savefig() yourself!
 
-def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None, color="green", draw_bars=True, draw_text=True, alpha=0.5, **kwargs):
+def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None, color="green", draw_bars=True, draw_text=True, alpha=0.5, bottom=None, top=None, top_rel=1.0, bottom_rel=0.0, **kwargs):
     if predictions is None or wave is None:
         return
 
@@ -309,6 +309,10 @@ def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, e
 
     pred_labels, pred_times = zip(*predictions.items())
 
+    if isinstance(color, dict):
+        colors = [color[l] for l in pred_labels]
+    else:
+        colors = [color for l in pred_labels]
 
     start_idx = 0
     end_idx = len(wave.data)
@@ -317,19 +321,25 @@ def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, e
     if etime:
         end_idx = min(int(wave['srate']*(etime-wave['stime'])), end_idx)
 
-    maxwave, minwave = float(np.max(wave.data[start_idx:end_idx])), float(np.min(wave.data[start_idx:end_idx]))
+    if top is None:
+        top= float(np.max(wave.data[start_idx:end_idx]))
+    if bottom is None:
+        bottom = float(np.min(wave.data[start_idx:end_idx]))
 
+    bottom_final = bottom + bottom_rel*(top-bottom)
+    top_final = bottom + top_rel*(top-bottom)
+    bottom, top = bottom_final, top_final
 
     if logscale:
-        (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
+        (top,bottom) = (np.log(top), np.log(bottom))
 
     if draw_bars:
-        axes.bar(left=pred_times, height=[maxwave - minwave for _ in pred_times],
-                 width=.25, bottom=minwave, edgecolor=color, color=color, linewidth=1, alpha=alpha, **kwargs)
+        axes.bar(left=pred_times, height=[top-bottom for _ in pred_times],
+                 width=.25, bottom=bottom, edgecolor=colors, color=colors, linewidth=1, alpha=alpha, **kwargs)
 
     if draw_text:
-        for (lbl, t) in predictions.items():
-            axes.text(t + .5, maxwave - (maxwave - minwave) * 0.1, lbl, color=color, fontsize=10)
+        for (lbl, t, c) in zip(pred_labels, pred_times, colors):
+            axes.text(t + .5, top - (top-bottom) * 0.1, lbl, color=c, fontsize=10)
 
 # does not save for you - you need to call savefig() yourself!
 

@@ -64,11 +64,7 @@ def get_signal_based_amplitude_distribution(sg, sta, tmvals=None, peak_time=None
 
     env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
 
-
-
     return Gaussian(mean=np.log(env_height), std = 0.1)
-
-
 
 #######################################################################
 
@@ -169,6 +165,7 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
                                      peak_time = current_atime + peak_offset)
 
     proposed_arrival_time = proposed_peak_time - peak_offset
+
     return MH_accept(sg, keys=(arrival_key,),
                      oldvalues = (current_atime,),
                      newvalues = (proposed_arrival_time,),
@@ -259,6 +256,7 @@ def improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=0, reve
     oldvalues.append(current_offset)
     keys.append(offset_key)
 
+
     accepted = MH_accept(sg=sg, keys=keys,
                          oldvalues=oldvalues,
                          newvalues = newvalues,
@@ -329,6 +327,8 @@ def get_sorted_arrivals(wave_node):
     return sorted_arrs
 
 def atime_window(wave_node, sorted_arrs, k):
+    # when splitting an arrival k, the new arrival can be created anytime between arrivals k-1 and k+1
+
     n = len(sorted_arrs)
     atime_diff = np.float('inf')
     atime_window_start = wave_node.st
@@ -395,7 +395,7 @@ def split_move(sg, wave_node, return_probs=False, force_accept=False):
 
     lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + relevant_parent + new_tmpl.values())
 
-    new_tmpl_priorsampled = [n for (p, n) in new_tmpl.items() if p not in ['coda_height', 'arrival_time']]
+    new_tmpl_priorsampled = [n for (p, n) in new_tmpl.items() if p not in ['coda_height', 'tt_residual', 'arrival_time']]
     log_qforward = sg.joint_logprob_keys(new_tmpl_priorsampled) - np.log(atime_window_len) - np.log(n_arrs)
     jacobian_determinant = 1.0/ (u * (1-u))
 
@@ -441,6 +441,14 @@ def split_move(sg, wave_node, return_probs=False, force_accept=False):
             return False
 
 def arrivals_merge_distribution(sg, sta, sorted_arrs=None):
+    """
+
+    We consider merging any two adjacent arrivals, as long as at least
+    one of them is unassociated.  The proposal probability for merging
+    any particular pair of arrivals is inversely proportional to the
+    difference in arrival times.
+
+    """
     assert(len(sg.station_waves[sta]) == 1)
     wave_node = list(sg.station_waves[sta])[0]
 
@@ -457,6 +465,7 @@ def arrivals_merge_distribution(sg, sta, sorted_arrs=None):
             continue
         c[k] = 1.0 / (sorted_arrs[k+1][0]['arrival_time'] - sorted_arrs[k][0]['arrival_time'] + 1.0/wave_node.srate)
     c.normalize()
+
     return c, sorted_arrs
 
 def sample_arrivals_to_merge(sg, sta, **kwargs):
@@ -523,6 +532,7 @@ def merge_move(sg, wave_node, return_probs=False):
         keep_vals = copy.copy(vals2)
         lost_vals = copy.copy(vals1)
 
+
     k,n = keep_nodes['coda_height']
     n.set_value(key=k, value=merged_logamp)
 
@@ -534,7 +544,10 @@ def merge_move(sg, wave_node, return_probs=False):
     lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + relevant_nodes(keep_nodes), n=ntemplates-1)
 
     log_qforward += np.log(merge_choice_prob)
+
     u = amp1/(amp1+amp2)
+    # note (1-u) = amp2/(amp1+amp2), so despite appearances this
+    # determinant is actually symmetric in amp1, amp2.
     jacobian_determinant = 1.0/(u * (1-u))
 
     # compute arrival time window for reverse (split) move
@@ -546,7 +559,7 @@ def merge_move(sg, wave_node, return_probs=False):
 
     # we can ignore keys and just take the node log_p because we know
     # the lost node is always going to be a single uatemplate (not an event, etc)
-    new_tmpl_priorsampled = [n for (p, (k,n)) in lost_nodes.items() if p not in ['coda_height', 'arrival_time']]
+    new_tmpl_priorsampled = [n for (p, (k,n)) in lost_nodes.items() if p not in ['coda_height', 'arrival_time', 'tt_residual']]
     log_qbackward = sg.joint_logprob_keys(new_tmpl_priorsampled) - np.log(atime_window_len) - np.log(n_arrs-1)
 
     u = np.random.rand()
@@ -559,6 +572,7 @@ def merge_move(sg, wave_node, return_probs=False):
 
 
         if return_probs:
+            print "proposed", arr1, arr2, keep1
             return True, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
         else:
             return True
@@ -583,6 +597,7 @@ def merge_move(sg, wave_node, return_probs=False):
         #assert(np.abs(lp - lp_old) < 1e-10)
 
         if return_probs:
+            print "proposed", arr1, arr2, keep1
             return False, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
         else:
             return False
