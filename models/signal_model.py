@@ -48,6 +48,14 @@ def update_arrivals(parent_values):
         arrivals.add(extract_arrival_from_key(k, r))
     return arrivals
 
+def unify_windows(w1, w2):
+    start_idx1, end_idx1 = w1
+    start_idx2, end_idx2 = w2
+
+    start_idx = min(start_idx1, start_idx2)
+    end_idx = max(end_idx1, end_idx2)
+    return (start_idx, end_idx)
+
 class ObservedSignalNode(Node):
     """
 
@@ -111,7 +119,7 @@ class ObservedSignalNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
-    def assem_signal(self, include_wiggles=True, arrivals=None):
+    def assem_signal(self, include_wiggles=True, arrivals=None, window_start_idx=0, npts=None):
         """
 
         WARNING: returns a pointer to self.pred_signal, which will be
@@ -153,12 +161,12 @@ class ObservedSignalNode(Node):
             else:
                 wiggles[i] = empty_array
 
-        npts = self.npts
+        npts = self.npts-window_start_idx if not npts else int(npts)
         n = len(arrivals)
         envelope = int(self.env or (not include_wiggles))
         signal = self.pred_signal
         code = """
-      for(int i=0; i < npts; ++i) signal(i) = 0;
+      for(int i=window_start_idx; i < window_start_idx+npts; ++i) signal(i) = 0;
     for (int i = 0; i < n; ++i) {
         int start_idx = sidxs(i);
 
@@ -201,7 +209,7 @@ class ObservedSignalNode(Node):
     }
 
 """
-        weave.inline(code,['n', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal', 'envelope'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['n', 'window_start_idx', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal', 'envelope'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
@@ -306,6 +314,7 @@ signal_diff(i) =value(i) - pred_signal(i);
 #        np.savetxt(fname, diff)
 #        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
 
+
         return lp
 
     def deriv_log_p(self, parent_key=None, lp0=None, eps=1e-4):
@@ -321,7 +330,7 @@ signal_diff(i) =value(i) - pred_signal(i);
             self._tmpl_params[(eid, phase)][p] += eps
         else:
             self._wiggle_params[(eid, phase)][p] += eps
-        deriv = ( self.log_p(parent_values=parent_values) - lp0 ) / eps
+        deriv = ( self.log_p() - lp0 ) / eps
         parent_values[parent_key] -= eps
         if is_tmpl:
             self._tmpl_params[(eid, phase)][p] -= eps
@@ -344,3 +353,89 @@ signal_diff(i) =value(i) - pred_signal(i);
         parent_values = parent_values if parent_values else self._parent_values()
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg
+
+    def cache_latent_signal_for_template_optimization(self, eid, phase, force_bounds=True):
+
+        def window_logp(w):
+            start_idx, end_idx = w
+
+            if self._cache_latent_signal_arrival != (eid, phase):
+                raise ValueError("inconsistent state in signal cache at node %s: trying to compute logp for template %s, but cache is for different template %s!" % (self.label, (eid, phase), self._cache_latent_signal_arrival))
+
+
+            self._parent_values()
+
+            # check to make sure the template is actually contained within the specified window
+            if force_bounds:
+                t_start, t_end = self.template_idx_window(eid, phase, pre_arrival_slack_s=0, post_fade_slack_s=0)
+                if t_start < start_idx or t_end > end_idx:
+                    print "WARNING: template indices %s are out of bounds for cached indices %s" % ((t_start, t_end), w)
+                    return np.float('-inf')
+
+            v = self._cached_latent_signal
+            value = v.data
+            mask = v.mask
+            pred_signal = self.assem_signal(arrivals=((eid, phase),), window_start_idx = start_idx, npts=end_idx-start_idx)
+            signal_diff = self.signal_diff
+            code = """
+    for(int i=start_idx; i < end_idx; ++i) {
+    signal_diff(i) =value(i) - pred_signal(i);
+    }
+    """
+            weave.inline(code,['signal_diff', 'value', 'pred_signal', 'start_idx', 'end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+
+            lp = self.nm.log_p(signal_diff[start_idx:end_idx], mask=mask[start_idx:end_idx] if mask else mask)
+
+            return lp
+
+        def window_logp_deriv(w, parent_key, lp0=None, eps=1e-4):
+            parent_values = self._parent_values()
+            lp0 = lp0 if lp0 else window_logp(w)
+            parent_values[parent_key] += eps
+            try:
+                is_tmpl, eid, phase, p = self._keymap[parent_key]
+            except KeyError:
+                # if this key doesn't affect signals at this node
+                return 0.0
+            if is_tmpl:
+                self._tmpl_params[(eid, phase)][p] += eps
+            else:
+                self._wiggle_params[(eid, phase)][p] += eps
+            deriv = ( window_logp(w) - lp0 ) / eps
+            parent_values[parent_key] -= eps
+            if is_tmpl:
+                self._tmpl_params[(eid, phase)][p] -= eps
+            else:
+                self._wiggle_params[(eid, phase)][p] -= eps
+            return deriv
+
+        arrivals = self.arrivals()
+        other_arrivals = [a for a in arrivals if a != (eid, phase)]
+        self._cached_latent_signal = self.get_value() - self.assem_signal(arrivals=other_arrivals)
+        self._cache_latent_signal_arrival = (eid, phase)
+        return window_logp, window_logp_deriv
+
+    def template_idx_window(self, eid=None, phase=None, vals=None, pre_arrival_slack_s = 10.0, post_fade_slack_s = 10.0):
+        if vals is not None:
+            v = vals
+            tg = self.graph.template_generator(phase)
+        else:
+            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
+        start_idx = int((v['arrival_time']  - self.st) * self.srate)
+        window_start_idx = max(0, int(start_idx - pre_arrival_slack_s*self.srate))
+
+        logenv_len = tg.abstract_logenv_length(v, srate=self.srate)
+        window_end_idx = min(self.npts, int(start_idx + logenv_len + post_fade_slack_s*self.srate))
+
+        return (window_start_idx, window_end_idx)
+
+    def cache_latent_signal_for_fixed_window(self, eid, phase, force_bounds=True, **kwargs):
+        w = self.template_idx_window(eid, phase, **kwargs)
+        lp, deriv_lp = self.cache_latent_signal_for_template_optimization(eid, phase, force_bounds=force_bounds)
+
+        lpw = lambda : lp(w)
+
+        def deriv_lp_w(*args, **kwargs):
+            return deriv_lp(w, *args, **kwargs)
+
+        return {self.label: (lpw, deriv_lp_w)}

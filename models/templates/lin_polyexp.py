@@ -24,7 +24,7 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
 
         self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
                          "peak_decay": Gaussian(-2.5, 1.),
-                         "coda_height": Gaussian(-.5, 1),
+                         "coda_height": Gaussian(-.5, 3),
                          "coda_decay": Gaussian(-2.5, 1.5),}
 
         self.hack_force_mean = None
@@ -73,6 +73,23 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
                                                chan=chan, band=band, template=True, children=children, **kwargs)
 
 
+    @staticmethod
+    def abstract_logenv_length(vals, min_logenv=-7.0, srate=40.0):
+        arr_time, peak_offset, peak_decay, coda_height, coda_decay = \
+            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
+
+        if coda_decay > -0.001:
+            l = int(1200 * srate)
+        else:
+                # minimum length is 2, so that even very small arrivals
+                # can create a small bump (not doing this confuses the
+                # approx-gradient routine; it tries making the bump
+                # slightly bigger but with no effect since it's too small
+                # to create a nonzero-length envelope).
+
+            # also, these lengths are pessimistic since they don't account for peak_decay
+            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+        return l
 
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, fixedlen=None):
@@ -85,13 +102,12 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
         if fixedlen:
             l = int(fixedlen)
         elif coda_decay > -0.001:
+            # warning: next two cases duplicate the code in
+            # abstract_logenv_length above, but we don't call that
+            # directly to avoid the overhead of unpacking the 'vals'
+            # dict a second time.
             l = int(1200 * srate)
         else:
-                # minimum length is 2, so that even very small arrivals
-                # can create a small bump (not doing this confuses the
-                # approx-gradient routine; it tries making the bump
-                # slightly bigger but with no effect since it's too small
-                # to create a nonzero-length envelope).
             l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
 
         d = np.empty((l,))

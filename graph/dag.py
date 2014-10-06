@@ -64,7 +64,7 @@ class DAG(object):
             node.clear_mark()
             q.extendleft(node.children)
 
-def get_relevant_nodes(node_list):
+def get_relevant_nodes(node_list, exclude_nodes=None):
     # note, it's important that the nodes have a consistent order, since
     # we represent their joint values as a vector.
 
@@ -74,6 +74,10 @@ def get_relevant_nodes(node_list):
     nlset = set(node_list + parents_of_deterministic)
     all_stochastic_children = [child for node in nlset for (child, intermediates) in node.get_stochastic_children()]
     relevant_nodes = set(node_list + all_stochastic_children + parents_of_deterministic)
+    if exclude_nodes:
+        for n in exclude_nodes:
+            relevant_nodes.remove(n)
+
     return node_list, relevant_nodes
 
 class DirectedGraphModel(DAG):
@@ -134,7 +138,7 @@ class DirectedGraphModel(DAG):
             for dn in node.get_deterministic_children():
                 dn.parent_predict()
 
-    def joint_logprob(self, values, node_list, relevant_nodes, c=1):
+    def joint_logprob(self, values, node_list, relevant_nodes, proxy_lps=None, c=1):
         # node_list: list of nodes whose values we are interested in
 
         # relevant_nodes: all nodes whose log_p() depends on a value
@@ -143,11 +147,17 @@ class DirectedGraphModel(DAG):
         #v = self.get_all(node_list = node_list)
         if values is not None:
             self.set_all(values=values, node_list=node_list)
-        ll = np.sum([node.log_p() for node in relevant_nodes])
+
+        if proxy_lps is not None:
+            ll = np.sum([f() for (f, df) in proxy_lps.values()])
+            ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
+        else:
+            ll = np.sum([node.log_p() for node in relevant_nodes])
+
         #self.set_all(values=v, node_list=node_list)
         return c * ll
 
-    def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, c=1):
+    def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, proxy_lps=None, c=1):
         # same as joint_logprob, but we specify values only for a
         # specific set of keys.
         # here, node_list contains one entry for each key (so will
@@ -155,11 +165,18 @@ class DirectedGraphModel(DAG):
         if keys is not None:
             for (key, val, n) in zip(keys, values, node_list):
                 n.set_value(key=key, value=val)
-        ll = np.sum([node.log_p() for node in relevant_nodes])
+
+
+        if proxy_lps is not None:
+            ll = np.sum([f() for (f, df) in proxy_lps.values()])
+            ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
+        else:
+            ll = np.sum([node.log_p() for node in relevant_nodes])
+
         return c * ll
 
 
-    def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1.0):
+    def log_p_grad(self, values, node_list, relevant_nodes, proxy_lps=None, eps=1e-4, c=1.0):
         try:
             eps0 = eps[0]
         except:
@@ -167,13 +184,16 @@ class DirectedGraphModel(DAG):
 
         v = self.get_all(node_list = node_list)
         self.set_all(values=values, node_list=node_list)
-        initial_lp = dict([(node.label, node.log_p()) for node in relevant_nodes])
+        initial_lp = dict([(node.label, node.log_p() if node.label not in proxy_lps else proxy_lps[node.label][0]()) for node in relevant_nodes])
         grad = np.zeros((len(values),))
         i = 0
         for node in node_list:
             keys = node.mutable_keys()
             for (ni, key) in enumerate(keys):
-                deriv = node.deriv_log_p(key=key, eps=eps[i + ni], lp0=initial_lp[node.label])
+                if node.label in proxy_lps:
+                    deriv = proxy_lps[node.label][1](key=key, eps=eps[i + ni], lp0=initial_lp[node.label])
+                else:
+                    deriv = node.deriv_log_p(key=key, eps=eps[i + ni], lp0=initial_lp[node.label])
 
                 # sum the derivatives of all child nodes wrt to this value, including
                 # any deterministic nodes along the way
@@ -184,7 +204,13 @@ class DirectedGraphModel(DAG):
                     for inode in intermediate_nodes:
                         d *= inode.deriv_value_wrt_parent(parent_key = current_key)
                         current_key = inode.label
-                    d *= child.deriv_log_p(parent_key = current_key,
+
+                    if child.label in proxy_lps:
+                        d *= proxy_lps[child.label][1](parent_key = current_key,
+                                           eps=eps[i + ni],
+                                           lp0=initial_lp[child.label])
+                    else:
+                        d *= child.deriv_log_p(parent_key = current_key,
                                            eps=eps[i + ni],
                                            lp0=initial_lp[child.label])
                     deriv += d
@@ -194,7 +220,7 @@ class DirectedGraphModel(DAG):
         self.set_all(values=v, node_list=node_list)
         return grad * c
 
-    def joint_optimize_nodes(self, node_list, optim_params, use_grad=True):
+    def joint_optimize_nodes(self, node_list, optim_params, proxy_lps=None, use_grad=True):
         """
         Assume that the value at each node is a 1D array.
         """
@@ -205,19 +231,19 @@ class DirectedGraphModel(DAG):
         high_bounds = np.concatenate([node.high_bounds() for node in node_list])
         bounds = zip(low_bounds, high_bounds)
 
-        jp = lambda v: self.joint_logprob(values=v, relevant_nodes=relevant_nodes, node_list=node_list, c=-1)
+        jp = lambda v: self.joint_logprob(values=v, relevant_nodes=relevant_nodes, node_list=node_list, proxy_lps=proxy_lps, c=-1)
 
         # this is included for profiling / debugging -- not real code
         def time_joint_logprob():
             import time
             st = time.time()
             for i in range(500):
-                joint_logprob(start_values, relevant_nodes=relevant_nodes)
+                joint_logprob(start_values, relevant_nodes=relevant_nodes, proxy_lps=proxy_lps, c=-1)
             et = time.time()
             print "joint prob took %.3fs on average" % ((et-st)/500.0)
 
         if use_grad:
-            g = lambda v, eps=1e-4: self.log_p_grad(values=v, node_list=node_list, relevant_nodes=relevant_nodes, c=-1, eps=eps)
+            g = lambda v, eps=1e-4: self.log_p_grad(values=v, node_list=node_list, relevant_nodes=relevant_nodes, proxy_lps=proxy_lps, c=-1, eps=eps)
         else:
             g = None
 

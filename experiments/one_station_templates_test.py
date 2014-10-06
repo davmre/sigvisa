@@ -10,7 +10,7 @@ from sigvisa import Sigvisa
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.infer.run_mcmc import run_open_world_MH
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import birth_move, death_move, split_move, merge_move
+from sigvisa.infer.template_mcmc import birth_move, death_move #, split_move, merge_move
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
 from sigvisa.utils.fileutils import clear_directory, mkdir_p

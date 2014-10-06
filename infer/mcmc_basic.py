@@ -23,17 +23,20 @@ def gaussian_propose(sg, keys, node_list, values=None, scales=None, std=0.01, ph
     else:
         return values + move
 
-def gaussian_MH_move(sg, keys, node_list, relevant_nodes, scales=None, **kwargs):
+def gaussian_MH_move(sg, keys, node_list, relevant_nodes, scales=None, proxy_lps=None, **kwargs):
     #node_list = [sg.nodes_by_key(k) for k in keys]
     #_, relevant_nodes = get_relevant_nodes(node_list)
 
     values = np.array([n.get_value(k) for (n,k) in zip(node_list, keys)])
     proposal = gaussian_propose(sg, keys, node_list, values=values, scales=scales, **kwargs)
-    return MH_accept(sg, keys, values, proposal, node_list, relevant_nodes)
+    return MH_accept(sg, keys, values, proposal, node_list, relevant_nodes, proxy_lps=proxy_lps)
 
-def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes, log_qforward=0.0, log_qbackward=0.0):
-    lp_old = sg.joint_logprob_keys(relevant_nodes) # assume oldvalues are still set
-    lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
+def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
+              log_qforward=0.0, log_qbackward=0.0, proxy_lps=None):
+    lp_old = sg.joint_logprob_keys(relevant_nodes, proxy_lps=proxy_lps) # assume oldvalues are still set
+    lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list,
+                                   relevant_nodes=relevant_nodes, proxy_lps=proxy_lps)
+
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):

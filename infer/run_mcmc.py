@@ -16,7 +16,7 @@ from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move
+from sigvisa.infer.template_mcmc import split_overall, merge_overall, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -36,7 +36,9 @@ global_stds = {'coda_height': .7,
                'evmb': 0.2,
                'evdepth': 8.0}
 
-def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted=None, n_accepted=None, move_times=None, step=None):
+def do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                      n_attempted=None, n_accepted=None,
+                      move_times=None, step=None, proxy_lps=None):
 
 
     for param in tg.params():
@@ -56,7 +58,7 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted=None, n_accepte
                      step=step, n_accepted=n_accepted,
                      n_attempted=n_attempted, move_times=move_times,
                      sg=sg, keys=(k,), node_list=(n,),
-                     relevant_nodes=relevant_nodes, std=stds[param])
+                     relevant_nodes=relevant_nodes, std=stds[param], proxy_lps=proxy_lps)
         except KeyError:
             continue
 
@@ -74,14 +76,19 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted=None, n_accepte
                  n_accepted=n_accepted, n_attempted=n_attempted,
                  move_times=move_times,
                  sg=sg, keys=(k,), node_list=(n,), relevant_nodes=(n, wn),
-                 std=stds[move], phase_wraparound=phase_wraparound)
+                 std=stds[move], phase_wraparound=phase_wraparound, proxy_lps=proxy_lps)
 
-def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, **kwargs):
+def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, cyclic=False, **kwargs):
 
     if move_prob is not None:
-        u = np.random.rand()
-        if u > move_prob:
-            return
+        if cyclic:
+            interval = int(1.0/move_prob)
+            if step % interval != 0:
+                return
+        else:
+            u = np.random.rand()
+            if u > move_prob:
+                return
 
     if n_attempted is not None:
         n_attempted[move_name] += 1
@@ -99,7 +106,7 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
 
 ############################################################################
 
-def single_template_MH(sg, wn, tmnodes, phase, steps=1000):
+def single_template_MH(sg, wn, tmnodes, phase, steps=1000, proxy_lps=None):
     #tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
     template_moves_special = {'peak_offset': improve_offset_move_gaussian,
@@ -112,26 +119,32 @@ def single_template_MH(sg, wn, tmnodes, phase, steps=1000):
 
     vals = []
     sorted_params = sorted(tmnodes.keys())
+
+
+
     for step in range(steps):
         # special template moves
         for (move_name, fn) in template_moves_special.iteritems():
             run_move(move_name=move_name, fn=fn,
                      sg=sg, wave_node=wn, tmnodes=tmnodes,
                      n_attempted=n_attempted, n_accepted=n_accepted,
-                     std=stds[move_name] if move_name in stds else None)
+                     std=stds[move_name] if move_name in stds else None,
+                     proxy_lps=proxy_lps)
 
         # also do basic wiggling-around of all template params
         tg = sg.template_generator(phase)
         wg = sg.wiggle_generator(phase, wn.srate)
 
-        do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted=n_attempted, n_accepted=n_accepted)
+        do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                          n_attempted=n_attempted, n_accepted=n_accepted,
+                          proxy_lps=proxy_lps)
 
 
         v = np.array([tmnodes[p][1].get_value(tmnodes[p][0]) for p in sorted_params])
         vals.append(v)
 
-        if step % 50 == 0:
-            print "step %d: %s" % (step, v)
+        #if step % 50 == 0:
+        #    print "step %d: lp %f, %s" % (step, sg.current_log_p(), v)
 
     return sorted_params, np.array(vals)
 
@@ -142,7 +155,8 @@ def run_open_world_MH(sg, steps=10000,
                       enable_template_moves=True,
                       logger=None,
                       disable_moves=[],
-                      start_step=0):
+                      start_step=0,
+                      cyclic_template_moves=False):
     global_moves = {'event_birth': ev_birth_move,
                     'event_death': ev_death_move} if enable_event_openworld else {}
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
@@ -153,8 +167,8 @@ def run_open_world_MH(sg, steps=10000,
     event_moves_special = {}
     sta_moves = {'tmpl_birth': birth_move,
                  'tmpl_death': death_move,
-                 'tmpl_split': split_move,
-                 'tmpl_merge': merge_move,
+                 'tmpl_split': split_overall, #split_move,
+                 'tmpl_merge': merge_overall, #merge_move,
                  'swap_association': swap_association_move} if enable_template_openworld else {}
 
     template_moves_special = {'indep_peak': indep_peak_move,
@@ -171,7 +185,7 @@ def run_open_world_MH(sg, steps=10000,
 
 
     stds = global_stds
-    tmpl_openworld_move_probability = 0.3
+    tmpl_openworld_move_probability = 0.01
     ev_openworld_move_probability = .05
 
     n_accepted = defaultdict(int)
@@ -213,7 +227,7 @@ def run_open_world_MH(sg, steps=10000,
                 for (move_name, fn) in sta_moves.items():
                     run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                              n_accepted=n_accepted, move_times=move_times,
-                             move_prob=tmpl_openworld_move_probability,
+                             move_prob=tmpl_openworld_move_probability, cyclic=cyclic_template_moves,
                              sg=sg, wave_node=wn)
 
                 # moves to adjust existing unass. templates

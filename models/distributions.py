@@ -141,8 +141,8 @@ class Laplacian(Distribution):
         return self.center
 
     def sample(self, **kwargs):
-        u = np.random.rand()
-        return self.center - self.scale * np.sign(u) * np.log(1-2*u)
+        u = np.random.rand() - .5
+        return self.center - self.scale * np.sign(u) * np.log(1-2*np.abs(u))
 
 
 

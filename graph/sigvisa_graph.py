@@ -358,6 +358,7 @@ class SigvisaGraph(DirectedGraphModel):
                 ua_coda_height_lp += uanodes['coda_height'].log_p()
                 ua_peak_decay_lp += uanodes['peak_decay'].log_p()
                 ua_coda_decay_lp += uanodes['coda_decay'].log_p()
+
                 for key in uanodes.keys():
                     if (key != "amp_transfer" and "amp_" in key) or "phase_" in key:
                         ua_wiggle_lp += uanodes[key].log_p()
@@ -874,6 +875,7 @@ class SigvisaGraph(DirectedGraphModel):
     def get_wave_node(self, wave):
         return self.all_nodes[self._get_wave_label(wave=wave)]
 
+
     def get_wave_node_log_p(self, wave_node):
         log_p = 0
         parents = wave_node.parents.values()
@@ -885,6 +887,7 @@ class SigvisaGraph(DirectedGraphModel):
                 log_p += p.log_p()
         log_p += wave_node.log_p()
         return log_p
+
 
     """
     def get_partner_node(self, n):
