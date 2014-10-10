@@ -45,3 +45,47 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
         for (key, val, n) in zip(keys, oldvalues, node_list):
             n.set_value(key=key, value=val)
         return False
+
+def hmc_step(x, logpdf, logpdf_grad, L, eps):
+
+    x = x.flatten()
+    n = len(x)
+
+    p = np.random.randn(n) # momentum
+    current_x = x
+    current_p = p
+
+    # half step for momentum
+    p = p + eps * logpdf_grad(x)/2
+
+    print "hmc", L, eps
+
+    # alternate full steps for position and momentum
+    for i in range(L+1):
+
+        if np.isnan(p).any():
+            raise ValueError("HMC move failed: momentum is NaN")
+
+        # full step for position
+        x = x + eps * p
+
+        # full step for momentum except on the last iteration
+        if i != L:
+            p = p + eps * logpdf_grad(x)
+
+    p = p + eps * logpdf_grad(x) / 2
+
+    current_U = -logpdf(current_x)
+    current_K = np.sum(current_p**2)/2
+
+    proposed_U = -logpdf(x)
+    proposed_K = np.sum(p**2)/2
+
+    print "hmc step: init U,K=(%.1f, %.1f), proposed U,K=(%.1f, %.1f), accept prob %.3f" % (current_U, current_K, proposed_U, proposed_K, np.exp(current_U-proposed_U+current_K-proposed_K))
+    print " initial x", current_x
+    print " proposed x", x
+
+    if np.log(np.random.rand()) < current_U-proposed_U+current_K-proposed_K:
+        return x, True
+    else:
+        return current_x, False

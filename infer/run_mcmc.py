@@ -16,7 +16,7 @@ from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_overall, merge_overall, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move
+from sigvisa.infer.template_mcmc import split_overall, merge_overall, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move, hamiltonian_template_move
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -167,13 +167,14 @@ def run_open_world_MH(sg, steps=10000,
     event_moves_special = {}
     sta_moves = {'tmpl_birth': birth_move,
                  'tmpl_death': death_move,
-                 'tmpl_split': split_overall, #split_move,
-                 'tmpl_merge': merge_overall, #merge_move,
+                 #'tmpl_split': split_overall, #split_move,
+                 #'tmpl_merge': merge_overall, #merge_move,
                  'swap_association': swap_association_move} if enable_template_openworld else {}
 
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move_gaussian,
-                              'arrival_time': improve_atime_move} if enable_template_moves else {}
+                              'arrival_time': improve_atime_move,
+                              'hamiltonian': hamiltonian_template_move} if enable_template_moves else {}
 
     # allow the caller to disable specific moves by name
     for move in disable_moves:

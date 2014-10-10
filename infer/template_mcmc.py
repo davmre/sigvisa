@@ -15,7 +15,7 @@ from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.distributions import Gaussian
 from sigvisa.models.signal_model import extract_arrival_from_key
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle_for_proposal
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
@@ -954,10 +954,12 @@ def sample_arrivals_to_merge_twostep(sg, wn, width=2.0):
 def merge_overall(sg, wave_node, split_atime_width=2.0):
     arr1, arr2, merge_choice_prob, sorted_arrs = sample_arrivals_to_merge_twostep(sg, wave_node, width=split_atime_width)
 
+    print "merge called"
+
     if arr1 is None:
         return False
 
-    lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move = merge_helper(sg, wave_node, arr1, arr2, merge_choice_prob)
+    lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move = merge_helper(sg, wave_node, arr1, arr2, merge_choice_prob, split_atime_width=split_atime_width)
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept_move, revert_move=revert_move)
 
 def remove_old_template(sg, wn, arr2, tmnodes2):
@@ -970,7 +972,7 @@ def remove_old_template(sg, wn, arr2, tmnodes2):
     return tmnodes2
 
 def get_merge_distribution(sg, wn, keep_arr, keep_nodes, sorted_params,
-                           mh_burnin_steps=200, mh_samples=200):
+                           mh_burnin_steps=500, mh_samples=500):
     v, eid, phase = keep_arr
 
     tmnode_list = [n for (k,n) in keep_nodes.values()]
@@ -1074,6 +1076,7 @@ def merge_helper(sg, wn, arr1, arr2, merge_choice_prob, split_atime_width):
         sg._topo_sorted_list = orig_topo_sorted
         sg._gc_topo_sorted_nodes()
 
+    import pdb; pdb.set_trace()
     return lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move
 
 def split_overall(sg, wave_node, atime_width=2.0):
@@ -1169,6 +1172,8 @@ def split_helper(sg, wn, arr, k, sorted_arrs, atime_width, t1_values=None, t2_va
         sg._gc_topo_sorted_nodes()
         sg.next_uatemplateid -= 1
 
+
+
     return lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move
 
 
@@ -1245,3 +1250,27 @@ def swap_association_move(sg, wave_node):
     else:
         atime1, atime2 = swap_params(t1nodes, t2nodes)
         return False
+
+def hamiltonian_template_move(sg, wave_node, tmnodes, proxy_lps=None, **kwargs):
+
+    node_list = [n for (k, n) in tmnodes.values()]
+    relevant_nodes = node_list + [wave_node,]
+
+    vals = np.array([n.get_value() for n in node_list])
+
+    def logpdf(x):
+        return sg.joint_logprob(x, node_list, relevant_nodes, proxy_lps)
+
+    def logpdf_grad(x):
+        return sg.log_p_grad(x, node_list, relevant_nodes, proxy_lps)
+
+
+    eps = np.random.rand() * 0.001
+
+    L = int(np.random.rand() * 50) + 5
+
+    new_vals, accepted = hmc_step(vals, logpdf, logpdf_grad, L, eps)
+
+    sg.set_all(values=new_vals, node_list=node_list)
+
+    return accepted

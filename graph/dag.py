@@ -182,6 +182,8 @@ class DirectedGraphModel(DAG):
         except:
             eps = (eps,) * len(values)
 
+        proxy_lps = proxy_lps if proxy_lps is not None else {}
+
         v = self.get_all(node_list = node_list)
         self.set_all(values=values, node_list=node_list)
         initial_lp = dict([(node.label, node.log_p() if node.label not in proxy_lps else proxy_lps[node.label][0]()) for node in relevant_nodes])

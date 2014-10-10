@@ -384,7 +384,7 @@ signal_diff(i) =value(i) - pred_signal(i);
     """
             weave.inline(code,['signal_diff', 'value', 'pred_signal', 'start_idx', 'end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-            lp = self.nm.log_p(signal_diff[start_idx:end_idx], mask=mask[start_idx:end_idx] if mask else mask)
+            lp = self.nm.log_p(signal_diff[start_idx:end_idx], mask=mask if isinstance(mask,bool) else mask[start_idx:end_idx])
 
             return lp
 
