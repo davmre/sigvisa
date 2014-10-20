@@ -16,7 +16,7 @@ from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_overall, merge_overall, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move, hamiltonian_template_move
+from sigvisa.infer.template_mcmc import split_overall, merge_overall, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move, hamiltonian_template_move, hamiltonian_move_reparameterized
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -35,6 +35,24 @@ global_stds = {'coda_height': .7,
                'evtime': 1.0,
                'evmb': 0.2,
                'evdepth': 8.0}
+
+
+extra_move_args = {'hamiltonian_reversing': {'log_eps_mean': 6.5,
+                                             'log_eps_std': 1.5,
+                                             'epsL': 0.15,
+                                             'reverse_block_size': 5,
+                                             'reverse_block_min_std': 0.5,
+                                             'reverse_block_max_std': 1000,}}
+
+"""
+extra_move_args = {'hamiltonian_reversing': {'log_eps_mean': 5,
+                                             'log_eps_std': 0.1,
+                                             'L_min': 5,
+                                             'L_max': 100,
+                                             'reverse_block_size': 1,
+                                             'reverse_block_min_std': 0.5,
+                                             'reverse_block_max_std': 1000,}}
+"""
 
 def do_template_moves(sg, wn, tmnodes, tg, wg, stds,
                       n_attempted=None, n_accepted=None,
@@ -92,6 +110,9 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
 
     if n_attempted is not None:
         n_attempted[move_name] += 1
+
+    if move_name in extra_move_args:
+        kwargs.update(extra_move_args[move_name])
 
     t0  = time.time()
     accepted = fn(**kwargs)
@@ -153,10 +174,14 @@ def run_open_world_MH(sg, steps=10000,
                       enable_event_moves=True,
                       enable_template_openworld=True,
                       enable_template_moves=True,
+                      template_move_type="hamiltonian", # can be "hamiltonian", "rw" (i.e. random-walk MH), or "both"
                       logger=None,
                       disable_moves=[],
                       start_step=0,
-                      cyclic_template_moves=False):
+                      cyclic_template_moves=False,
+                      use_proxy_lp=False):
+
+
     global_moves = {'event_birth': ev_birth_move,
                     'event_death': ev_death_move} if enable_event_openworld else {}
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
@@ -173,8 +198,10 @@ def run_open_world_MH(sg, steps=10000,
 
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move_gaussian,
-                              'arrival_time': improve_atime_move,
-                              'hamiltonian': hamiltonian_template_move} if enable_template_moves else {}
+                              'arrival_time': improve_atime_move,} if enable_template_moves else {}
+    if template_move_type in ("hamiltonian", "both"):
+        template_moves_special['hamiltonian_reversing'] = hamiltonian_template_move
+
 
     # allow the caller to disable specific moves by name
     for move in disable_moves:
@@ -199,6 +226,7 @@ def run_open_world_MH(sg, steps=10000,
         logger = MCMCLogger()
     run_dir = logger.run_dir
 
+    logger.start()
 
     for step in range(start_step, steps):
 
@@ -237,23 +265,29 @@ def run_open_world_MH(sg, steps=10000,
                 for tmid in sg.uatemplate_ids[(sta, wn.chan, wn.band)]:
                     tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
+                    window_lps = None
+                    if use_proxy_lp:
+                        window_lps = wn.cache_latent_signal_for_template_optimization(-tmid, "UA", force_bounds=False)
+
                     # special template moves
                     for (move_name, fn) in template_moves_special.iteritems():
-                        try:
-                            run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
-                                     n_accepted=n_accepted, move_times=move_times,
-                                     sg=sg, wave_node=wn, tmnodes=tmnodes, std=stds[move_name])
-                        except KeyError as e:
-                            # some moves don't have a std param
-                            run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
-                                     n_accepted=n_accepted, move_times=move_times,
-                                     sg=sg, wave_node=wn, tmnodes=tmnodes)
+                        run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
+                                 n_accepted=n_accepted, move_times=move_times,
+                                 sg=sg, wave_node=wn, tmnodes=tmnodes,
+                                 std=stds[move_name] if move_name in stds else None,
+                                 window_lps = window_lps)
 
 
                     # also do basic wiggling-around of all template params
-                    if enable_template_moves:
+                    if enable_template_moves and template_move_type in ("rw", "both"):
+
+                        proxy_lps = None
+                        if use_proxy_lp:
+                            proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
+
                         do_template_moves(sg, wn, tmnodes, tg, wg, stds,
-                                          n_attempted, n_accepted, move_times, step)
+                                          n_attempted, n_accepted, move_times, step,
+                                          proxy_lps=proxy_lps)
 
                 # also wiggle every event arrival at this station
                 for (eid,evnodes) in sg.evnodes.iteritems():
@@ -268,7 +302,7 @@ def run_open_world_MH(sg, steps=10000,
                                      n_accepted=n_accepted, move_times=move_times,
                                      sg=sg, wave_node=wn, tmnodes=tmnodes)
 
-                        if enable_template_moves:
+                        if enable_template_moves and template_move_type in ("rw", "both"):
                             do_template_moves(sg, wn, tmnodes, tg, wg, stds,
                                               n_attempted, n_accepted, move_times, step)
 

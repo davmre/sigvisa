@@ -13,9 +13,9 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_event_station_chan
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.distributions import Gaussian
-from sigvisa.models.signal_model import extract_arrival_from_key
+from sigvisa.models.signal_model import extract_arrival_from_key, unify_windows
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle_for_proposal
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
@@ -25,7 +25,7 @@ from matplotlib.figure import Figure
 import scipy.weave as weave
 from scipy.weave import converters
 
-
+import numdifftools as nd
 
 def node_get_value(nodes, param):
     try:
@@ -144,7 +144,7 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time
 
-def indep_peak_move(sg, wave_node, tmnodes, std=None):
+def indep_peak_move(sg, wave_node, tmnodes, window_lps=None, std=None):
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
     relevant_nodes = [wave_node,]
@@ -152,6 +152,7 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
 
     arr = extract_arrival_from_key(arrival_key, wave_node.r)
     other_arrs = wave_node.arrivals() - set(arr)
+
 
     current_atime = arrival_node.get_value(key=arrival_key)
     peak_offset = np.exp(offset_node.get_value(key=offset_key))
@@ -166,13 +167,25 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
 
     proposed_arrival_time = proposed_peak_time - peak_offset
 
+    proxy_lps = None
+    if window_lps is not None:
+        eid, phase = arr
+        w_start, w_end = wave_node.template_idx_window(eid, phase)
+
+        proposed_idx_offset = int((proposed_arrival_time - current_atime) * wave_node.srate)
+        proposed_start = max(0, w_start + proposed_idx_offset)
+        proposed_end = min(wave_node.npts, w_end + proposed_idx_offset)
+        w = unify_windows((w_start, w_end), (proposed_start, proposed_end))
+        proxy_lps = wave_node.window_lps_to_proxy_lps(window_lps, w)
+
     return MH_accept(sg, keys=(arrival_key,),
                      oldvalues = (current_atime,),
                      newvalues = (proposed_arrival_time,),
                      log_qforward = proposal_lp,
                      log_qbackward = backward_propose_lp,
                      node_list = (arrival_node,),
-                     relevant_nodes = relevant_nodes)
+                     relevant_nodes = relevant_nodes,
+                     proxy_lps=proxy_lps)
 
 ######################################################################
 
@@ -209,7 +222,7 @@ def update_wiggle_submove(sg, wave_node, tmnodes, atime_key,
 
     return relevant_nodes, node_list, keys, oldvalues, newvalues
 
-def improve_offset_move_gaussian(sg, wave_node, tmnodes, std=0.5, proxy_lps=None, **kwargs):
+def improve_offset_move_gaussian(sg, wave_node, tmnodes, std=0.5, window_lps=None, **kwargs):
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
 
@@ -218,7 +231,7 @@ def improve_offset_move_gaussian(sg, wave_node, tmnodes, std=0.5, proxy_lps=None
                                        node_list=(offset_node,),
                                        values=(current_offset,),
                                        std=std, **kwargs)[0]
-    return improve_offset_move(sg, wave_node, tmnodes, proposed_offset, proxy_lps=proxy_lps)
+    return improve_offset_move(sg, wave_node, tmnodes, proposed_offset, window_lps=window_lps)
 
 def improve_offset_move_indep(sg, wave_node, tmnodes,  **kwargs):
     arrival_key, arrival_node = tmnodes['arrival_time']
@@ -228,14 +241,16 @@ def improve_offset_move_indep(sg, wave_node, tmnodes,  **kwargs):
     reverse_lp = offset_node.log_p(v=current_offset)
     proposed_offset = offset_node.parent_sample(set_new_value=False)
     move_lp = offset_node.log_p(v=proposed_offset)
-    return improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=move_lp, reverse_lp=reverse_lp)
+    return improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=move_lp, reverse_lp=reverse_lp, **kwargs)
 
 
-def improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=0, reverse_lp=0, proxy_lps=None, **kwargs):
+def improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=0, reverse_lp=0, window_lps=None,  **kwargs):
     """
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
     """
+
+    proxy_lps = wave_node.window_lps_to_proxy_lps(window_lps)
 
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
@@ -267,7 +282,7 @@ def improve_offset_move(sg, wave_node, tmnodes, proposed_offset, move_lp=0, reve
                          proxy_lps=proxy_lps)
     return accepted
 
-def improve_atime_move(sg, wave_node, tmnodes, std=1.0, proxy_lps=None, **kwargs):
+def improve_atime_move(sg, wave_node, tmnodes, std=1.0, window_lps=None, **kwargs):
     # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
     k_atime, n_atime = tmnodes['arrival_time']
     eid, phase, sta, chan, band, param = parse_key(k_atime)
@@ -288,6 +303,7 @@ def improve_atime_move(sg, wave_node, tmnodes, std=1.0, proxy_lps=None, **kwargs
                                                                           old_atime, atime_proposal)
     relevant_nodes += rn_tmp
 
+    proxy_lps = wave_node.window_lps_to_proxy_lps(window_lps)
     accepted = MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes, proxy_lps=proxy_lps)
     return accepted
 
@@ -1251,25 +1267,161 @@ def swap_association_move(sg, wave_node):
         atime1, atime2 = swap_params(t1nodes, t2nodes)
         return False
 
-def hamiltonian_template_move(sg, wave_node, tmnodes, proxy_lps=None, **kwargs):
+
+def hamiltonian_template_move(sg, wave_node, tmnodes, window_lps=None,
+                              log_eps_mean=3, log_eps_std=5,
+                              epsL=0.2,
+                              reverse_block_size=5,
+                              reverse_block_min_std=1,
+                              reverse_block_max_std=1000,
+                              **kwargs):
 
     node_list = [n for (k, n) in tmnodes.values()]
     relevant_nodes = node_list + [wave_node,]
 
     vals = np.array([n.get_value() for n in node_list])
 
+    proxy_lps = wave_node.window_lps_to_proxy_lps(window_lps)
+
+    class call_counter:
+        pdf_calls = 0
+        grad_calls = 0
+
     def logpdf(x):
+        call_counter.pdf_calls += 1
         return sg.joint_logprob(x, node_list, relevant_nodes, proxy_lps)
 
     def logpdf_grad(x):
-        return sg.log_p_grad(x, node_list, relevant_nodes, proxy_lps)
+        call_counter.grad_calls += 1
+        dx =  sg.log_p_grad(x, node_list, relevant_nodes, proxy_lps)
+        return dx
 
+    eps = np.exp(- (np.random.randn()*log_eps_std + log_eps_mean)  )
+    L = epsL/eps
+    L_blocks = int(np.ceil(L/reverse_block_size))
+    #L = int(np.random.rand() * (L_max-L_min)) + L_min
+
+
+    try:
+        if reverse_block_size > 1:
+            new_vals, new_p, old_p, accept_lp = hmc_step_reversing(vals, logpdf, logpdf_grad, L_blocks, eps, block_size=reverse_block_size, min_block_std=reverse_block_min_std, max_block_std=reverse_block_max_std)
+        else:
+            new_vals, new_p, old_p, accept_lp = hmc_step(vals, logpdf, logpdf_grad, int(np.ceil(L)), eps)
+    except:
+       accept_lp = float("-inf")
+
+    if np.log(np.random.rand()) < accept_lp:
+        accepted = True
+        sg.set_all(values=new_vals, node_list=node_list)
+        #print "hmc move eps %f L %f pdfs %d grad %d lp %f accepted? %s" % (eps, L,  call_counter.pdf_calls, call_counter.grad_calls, accept_lp, accepted)
+    else:
+        accepted = False
+        sg.set_all(values=vals, node_list=node_list)
+
+    #print "hmc move eps %f L %f pdfs %d grad %d lp %f accepted? %s" % (eps, L,  call_counter.pdf_calls, call_counter.grad_calls, accept_lp, accepted)
+
+
+
+    """
+    hacky code for adaptive setting of eps, as in the NUTS paper.
+
+    mu = np.log(0.01)
+    gamma = 0.05
+    t0 = 10
+    kappa = 0.75
+    t = step
+    H = 0.65 - np.exp(accept_lp)
+    total_H += H
+
+    if t==0:
+        return accepted
+
+    nu_t = t**(-kappa)
+    x_old = np.log(eps)
+
+    x_new = mu - t * np.sqrt(t) / (gamma * (t + t0)) * total_H
+    xbar = x_new * nu_t + x_old * (1-nu_t)
+    eps = np.exp(xbar)
+
+    s.eps = eps
+    s.total_H = total_H
+#    print "adapting at %d: eps %f H %f nu %f x_old %f x_new %f xbar %f" % (t, eps, H, nu_t, x_old, x_new, xbar)
+    """
+
+    return accepted
+
+def hamiltonian_move_reparameterized(sg, wave_node, tmnodes, window_lps=None, **kwargs):
+
+    params = ['arrival_time', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay']
+
+    rparams = ['arrival_time', 'peak_time', 'coda_height', 'peak_decay', 'coda_auc']
+
+    node_list = [tmnodes[p][1] for p in params]
+    relevant_nodes = node_list + [wave_node,]
+
+    vals = np.array([n.get_value() for n in node_list])
+
+    proxy_lps = wave_node.window_lps_to_proxy_lps(window_lps)
+
+    def reparametrize(x):
+        arrival_time, peak_offset, coda_height, peak_decay, coda_decay = x
+
+        peak_time = arrival_time + np.exp(peak_offset)
+        coda_auc = coda_height - coda_decay
+
+        return np.array((arrival_time, peak_time, coda_height, peak_decay, coda_auc))
+
+    def reparametrize_inv(rx):
+        arrival_time, peak_time, coda_height, peak_decay, coda_auc = rx
+
+        d = peak_time - arrival_time
+        if d < 0:
+            print "WARNING BAD peak_time"
+            d = 0.1
+
+        peak_offset = np.log(d)
+        coda_decay =  coda_height - coda_auc
+
+        return np.array((arrival_time, peak_offset, coda_height, peak_decay, coda_decay))
+
+    def logpdf(rx):
+        x = reparametrize_inv(rx)
+        return sg.joint_logprob(x, node_list, relevant_nodes, proxy_lps)
+
+    def logpdf_grad(rx, eps=1e-4):
+        # note: we compute a numerical gradient in the reparameterized
+        # space, rather than transforming the gradient from the
+        # original space. I *think* this should give better results
+        # (the numerical gradient can take advantage of the nicer
+        # shape of the reparameterized space) but haven't actually
+        # done the comparison.
+
+
+        #J = nd.Jacobian(logpdf)
+        l0 = logpdf(rx)
+
+        n = len(rx)
+        g = np.zeros((n,))
+        for i in range(n):
+            rx[i] += eps
+            g[i] = (logpdf(rx) - l0)/eps
+            rx[i] -= eps
+
+        return g
+
+    rvals = reparametrize(vals)
 
     eps = np.random.rand() * 0.001
 
     L = int(np.random.rand() * 50) + 5
 
-    new_vals, accepted = hmc_step(vals, logpdf, logpdf_grad, L, eps)
+    # encode constraints that peak_time > arr_time, and coda_auc > 0
+    ninf = float("-inf")
+    lbounds = np.array([ninf, rvals[0], ninf, ninf, 0])
+
+    new_rvals, accepted = hmc_step(rvals, logpdf, logpdf_grad, L, eps, lbounds=lbounds)
+
+    new_vals = reparametrize_inv(new_rvals)
 
     sg.set_all(values=new_vals, node_list=node_list)
 

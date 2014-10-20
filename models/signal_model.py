@@ -8,6 +8,7 @@ import numpy as np
 import numpy.ma as ma
 import scipy
 import re
+import collections
 
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
@@ -194,7 +195,7 @@ class ObservedSignalNode(Node):
             continue;
         }
         int early = std::max(0, - start_idx);
-        int overshoot = std::max(0, end_idx - npts);
+        int overshoot = std::max(0, end_idx - (window_start_idx+npts));
 
         int j = early;
         int total_wiggle_len = std::min(wiggle_len - early, len_logenv - overshoot - early);
@@ -384,7 +385,7 @@ signal_diff(i) =value(i) - pred_signal(i);
     """
             weave.inline(code,['signal_diff', 'value', 'pred_signal', 'start_idx', 'end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-            lp = self.nm.log_p(signal_diff[start_idx:end_idx], mask=mask if isinstance(mask,bool) else mask[start_idx:end_idx])
+            lp = self.nm.log_p(signal_diff[start_idx:end_idx], mask=mask[start_idx:end_idx] if isinstance(mask,collections.Sequence) else mask)
 
             return lp
 
@@ -430,12 +431,23 @@ signal_diff(i) =value(i) - pred_signal(i);
         return (window_start_idx, window_end_idx)
 
     def cache_latent_signal_for_fixed_window(self, eid, phase, force_bounds=True, **kwargs):
-        w = self.template_idx_window(eid, phase, **kwargs)
-        lp, deriv_lp = self.cache_latent_signal_for_template_optimization(eid, phase, force_bounds=force_bounds)
+        window_lps = self.cache_latent_signal_for_template_optimization(eid, phase, force_bounds=force_bounds)
+        return self.window_lps_to_proxy_lps(window_lps)
 
+    def window_lps_to_proxy_lps(self, window_lps, w=None):
+
+        if window_lps is None:
+            return None
+
+        if w is None:
+            eid, phase = self._cache_latent_signal_arrival
+            w = self.template_idx_window(eid, phase)
+
+        lp, deriv_lp = window_lps
         lpw = lambda : lp(w)
-
         def deriv_lp_w(*args, **kwargs):
-            return deriv_lp(w, *args, **kwargs)
-
-        return {self.label: (lpw, deriv_lp_w)}
+            dlpw =  deriv_lp(w, *args, **kwargs)
+            #print "dlpw", w, dlpw, args, kwargs
+            return dlpw
+        proxy_lps = {self.label: (lpw, deriv_lp_w)}
+        return proxy_lps

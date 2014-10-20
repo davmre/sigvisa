@@ -17,7 +17,7 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p
 
 BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "tests", "mcmc", "one_station_templates")
 
-def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, sta="FIA3", chan="SHZ", hardcoded=False, len_s=1000, n_templates=None):
+def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, sta="FIA3", chan="SHZ", hardcoded=False, len_s=1000, n_templates=None, return_graph=False):
     mkdir_p(BASE_DIR)
 
     sg = SigvisaGraph(template_model_type="dummy", template_shape="lin_polyexp",
@@ -32,7 +32,7 @@ def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, s
         np.random.seed(seed)
 
     tg = sg.template_generator('UA')
-    tg.hack_force_mean = np.log(wn.nm.c * 5)
+    tg.hack_force_mean = np.log(wn.nm.c * 10)
 
     if hardcoded:
         templates = add_hardcoded_templates(sg, wn)
@@ -48,7 +48,10 @@ def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, s
     #f.close()
     #np.savetxt(os.path.join(BASE_DIR, 'sampled_wave_seed%d' % seed))
 
-    return wave, templates
+    if return_graph:
+        return wave, templates, sg, wn
+    else:
+        return wave, templates
 
 
 def add_hardcoded_templates(sg, wn):

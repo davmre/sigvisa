@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 import os
-
+import time
 
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -27,12 +27,26 @@ class MCMCLogger(object):
         self.dump_interval = dump_interval
         self.print_interval = print_interval
 
+        self.start_time = None
+
+    def start(self):
+        self.start_time = time.time()
+
     def log(self, sg, step, n_accepted, n_attempted, move_times):
 
         if 'lp' not in self.log_handles:
             self.log_handles['lp'] = open(os.path.join(self.run_dir, 'lp.txt'), 'a')
         lp = sg.current_log_p()
         self.log_handles['lp'].write('%f\n' % lp)
+
+
+        if 'times' not in self.log_handles:
+            self.log_handles['times'] = open(os.path.join(self.run_dir, 'times.txt'), 'a')
+        if self.start_time is None:
+            raise Exception("must call logger.start() before calling logger.log()")
+        elapsed = time.time() - self.start_time
+        self.log_handles['times'].write('%f\n' % elapsed)
+
 
         if (step % self.dump_interval == self.dump_interval-1):
             sg.debug_dump(dump_path = os.path.join(self.run_dir, 'step_%06d' % step), pickle_only=True)

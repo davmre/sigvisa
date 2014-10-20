@@ -24,7 +24,7 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
 
         self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
                          "peak_decay": Gaussian(-2.5, 1.),
-                         "coda_height": Gaussian(-.5, 3),
+                         "coda_height": Gaussian(0.5, 3),
                          "coda_decay": Gaussian(-2.5, 1.5),}
 
         self.hack_force_mean = None
