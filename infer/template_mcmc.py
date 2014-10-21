@@ -46,7 +46,7 @@ def node_set_value(nodes, param, value):
 
 ######################################################################
 
-def get_signal_based_amplitude_distribution(sg, sta, tmvals=None, peak_time=None, peak_period_s = 1.0):
+def get_signal_based_amplitude_distribution(sg, sta, tmvals=None, peak_time=None, peak_period_s = 2.0):
     wn = sg.station_waves[sta][0]
 
     if peak_time is None:
@@ -64,7 +64,9 @@ def get_signal_based_amplitude_distribution(sg, sta, tmvals=None, peak_time=None
 
     env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
 
-    return Gaussian(mean=np.log(env_height), std = 0.1)
+    peak_log_std = np.log(peak_data).std()
+
+    return Gaussian(mean=np.log(env_height), std = max(peak_log_std, 0.1))
 
 #######################################################################
 
@@ -693,7 +695,11 @@ def wiggle_proposal_lprob_from_signal(eid, phase, wave_node, wg, wnodes=None, wv
     lp += -.5 * np.log(2*np.pi*phase_std**2) - .5 * np.sum((phase_residuals)**2) / phase_std**2
     return lp
 
-def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
+def birth_move(sg, wave_node,  **kwargs):
+    lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move = birth_helper(sg, wave_node, **kwargs)
+    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept_move, revert_move=revert_move)
+
+def birth_helper(sg, wave_node,  **kwargs):
     #lp_old1 = sg.current_log_p()
     lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,])
 
@@ -735,24 +741,12 @@ def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
     # reverse (death) probability is just the probability of killing a
     # random template
     ntemplates = len([1 for (eid, phase) in wave_node.arrivals() if eid < 0])
-    log_qbackward = 0 #np.log(1.0/ntemplates)
+    log_qbackward = np.log(1.0/ntemplates) # 0
 
-    u = np.random.rand()
-    move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
+    def accept_move():
+        pass
 
-    #print "proposed template for %s at peak time %.1f, tmpl %s" % (wave_node.sta, peak_time, [(k, n.get_value()) for (k,n) in tmpl.items()])
-
-
-    if move_accepted or dummy:
-        print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
-    if move_accepted and not dummy:
-
-        if return_probs:
-            return True, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
-        else:
-            return True
-
-    else:
+    def revert_move():
         sg.destroy_unassociated_template(tmpl, nosort=True)
         # WARNING: this assumes the list hasn't been re-sorted by any
         # of our intermediate calls.
@@ -762,13 +756,9 @@ def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
         #lp = sg.current_log_p()
         #assert(np.abs(lp - lp_old) < 1e-10)
 
-        if return_probs:
-            return False, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
-        else:
-            return False
+    return lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move
 
-
-def death_move(sg, wave_node, dummy=False, return_probs=False):
+def death_move(sg, wave_node):
     templates = [(eid, phase) for (eid, phase) in wave_node.arrivals() if eid < 0]
     if len(templates) < 1:
         return False
@@ -779,13 +769,30 @@ def death_move(sg, wave_node, dummy=False, return_probs=False):
             tmpl_to_destroy = templates[i]
             break
 
+    lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move = death_helper(sg, wave_node, tmpl_to_destroy)
+    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept_move, revert_move=revert_move)
+
+
+def death_helper(sg, wave_node, tmpl_to_destroy):
+
     tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
     wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
 
     ntemplates = len(sg.uatemplate_ids[(wave_node.sta, wave_node.chan, wave_node.band)])
     lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + [n for (k, n) in tnodes.values() + wnodes.values()], n=ntemplates)
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
-    log_qforward = 0
+
+    # it's debatable whether this should be log(1) or
+    # log(1/N). argument for the former is that templates have
+    # identities, and the birth move creates a template of a
+    # particular identity so the matching death move should just kill
+    # that identity, no choice required. (the choice is the choice of
+    # a matching birth/death move pair, but that cancels out.) BUT I
+    # don't believe this because we're actually treating the templates
+    # as exchangeable, i.e. their identities don't matter in the
+    # probability model. So I'm going for 1/N without actually
+    # formally having worked this out.
+    log_qforward = np.log(1.0/ntemplates)
 
     current_peak = tnodes['arrival_time'][1].get_value() + np.exp(tnodes['peak_offset'][1].get_value())
     eid = -tnodes["arrival_time"][1].tmid
@@ -812,41 +819,29 @@ def death_move(sg, wave_node, dummy=False, return_probs=False):
 
     arrs = wave_node.arrivals()
     cdf = get_current_conditional_cdf(wave_node, arrival_set=arrs)
-    log_qbackward += peak_log_p(cdf, wave_node.st,
-                                wave_node.srate,
-                                peak_time = current_peak)
+    peak_lp = peak_log_p(cdf, wave_node.st,
+                         wave_node.srate,
+                         peak_time = current_peak)
+    log_qbackward += peak_lp
 
     lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,], n=ntemplates-1)
 
-
-    u = np.random.rand()
-    move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
-    if move_accepted or dummy:
-        print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
-    if move_accepted and not dummy:
-
+    def accept_move():
         uaid = -tmpl_to_destroy[0]
         del sg.uatemplates[uaid]
         sg.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].remove(uaid)
 
-        if return_probs:
-            return True, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
-        else:
-            return True
-    else:
+    def revert_move():
+
         for (param, (label, node)) in tnodes.items() + wnodes.items():
             sg.add_node(node)
             node.addChild(wave_node)
         wave_node.arrivals()
         sg._topo_sorted_list = orig_topo_sorted
         sg._gc_topo_sorted_nodes()
-        #lp = sg.current_log_p()
-        #assert(np.abs(lp - lp_old) < 1e-10)
 
-        if return_probs:
-            return False, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
-        else:
-            return False
+    return lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move
+
 
 
 #####################################################################
