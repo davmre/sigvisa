@@ -39,7 +39,7 @@ def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, s
     else:
         templates = sg.prior_sample_uatemplates(wn, n_templates=n_templates, wiggles=True)
 
-    print "sampled", len(templates), 'templates'
+    #print "sampled", len(templates), 'templates'
     wave = wn.get_wave()
 
     #sg.debug_dump(dump_path=os.path.join(BASE_DIR, 'sampled_seed%d' % seed))

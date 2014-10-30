@@ -186,6 +186,7 @@ def main():
                       help="MCMC steps to take (20000)")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
+    parser.add_option("--template_move_type", dest="template_move_type", default="hamiltonian", type="str", help="options are 'hamiltonian' (default), 'rw', or 'both'")
 
 
     (options, args) = parser.parse_args()
@@ -226,7 +227,8 @@ def main():
                       enable_template_openworld=options.template_openworld,
                       enable_template_moves=True,
                       enable_event_moves=True,
-                      enable_event_openworld=options.openworld)
+                      enable_event_openworld=options.openworld,
+                      template_move_type=options.template_move_type)
 
 if __name__ == "__main__":
     try:

@@ -2,6 +2,7 @@ import numpy as np
 import scipy
 import scipy.stats as stats
 from scipy.misc import factorial
+from scipy.special import erf
 from sigvisa.models import Distribution
 
 class Gamma(Distribution):
@@ -123,6 +124,43 @@ class Gaussian(Distribution):
 
     def sample(self, **kwargs):
         return self.mean + np.random.randn() * self.std
+
+    def __str__(self):
+        return "Gaussian(mean=%f, std=%f)" % (self.mean, self.std)
+
+class TruncatedGaussian(Distribution):
+    def __init__(self, mean, std, a=-np.inf, b=np.inf):
+        self.mean = mean
+        self.std = std
+        self.a=a
+        self.b=b
+
+        self.Z = .5 * (erf((self.b-mean)/(std*np.sqrt(2))) -  erf((self.a-mean)/(std*np.sqrt(2))))
+        self.logZ = np.log(self.Z)
+
+    def log_p(self, x,  **kwargs):
+        if x < self.a or x > self.b:
+            return -np.inf
+
+        mu = self.mean
+        sigma = self.std
+        lp = -.5 * np.log(2*np.pi*sigma*sigma) - .5 * (x - mu)**2 / sigma**2 - self.logZ
+        if np.isnan(lp):
+            lp = np.float("-inf")
+        return lp
+
+    def predict(self, **kwargs):
+        return self.mean
+
+    def sample(self, **kwargs):
+
+        # just do rejection sampling since in practice I only plan to
+        # cut off very unlikely values.
+        sample = self.a
+        while sample <= self.a or sample >= self.b:
+            sample = self.mean + np.random.randn() * self.std
+        return sample
+
 
 class Laplacian(Distribution):
     def __init__(self, center, scale):

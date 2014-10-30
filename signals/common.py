@@ -421,8 +421,11 @@ def smooth(x, window_len=121, window='hanning'):
     else:
         w = eval('np.' + window + '(window_len)')
 
-    y = np.convolve(w / w.sum(), x.data, mode='same')
-    return ma.masked_array(y, x.mask)
+    if isinstance(x, ma.MaskedArray):
+        y = np.convolve(w / w.sum(), x.data, mode='same')
+        return ma.masked_array(y, x.mask)
+    else:
+        return np.convolve(w / w.sum(), x, mode='same')
 
 
 def bandpass_missing(masked_array, low, high, srate):

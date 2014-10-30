@@ -41,7 +41,11 @@ class NoiseModel(TimeSeriesDist):
         models = cursor.fetchall()
         cursor.close()
 
-        assert(len(models) <= 1) # otherwise we're confused which model to load
+        if len(models) > 1:  # we're confused which model to load
+            print "multiple noise models", models
+            print "from query", sql_query
+            raise AssertionError("len(models) <= 1")
+
         if len(models) == 0:
             model = None
             nm = None

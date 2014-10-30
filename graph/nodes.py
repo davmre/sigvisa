@@ -36,6 +36,9 @@ class Node(object):
         self._fixed = not any(self._mutable.itervalues())
         self._update_mutable_cache()
 
+        if isinstance(initial_value, float) and np.isnan(initial_value):
+            raise ValueError("creating node %s with NaN value!" % label)
+
         if len(keys) > 1:
             if initial_value:
                 assert (set(keys) == set(initial_value.iterkeys()) )
@@ -169,6 +172,13 @@ class Node(object):
         return self._dict[key]
 
     def set_value(self, value, key=None, force_deterministic_consistency=True):
+
+        if isinstance(value, float) and np.isnan(value):
+            raise ValueError("trying to set NaN at node %s" % self.label)
+
+        if isinstance(value, np.ndarray) and value.size == 1:
+            raise ValueError("%s: setting scalar value as %s np array %s " % (self.label, value.shape, value))
+
         key = key if key else self.single_key
         if self._mutable[key]:
             self._dict[key] = value
@@ -196,6 +206,8 @@ class Node(object):
             self._dict = value
         else:
             self._dict = {k : value[k] if self._mutable[k] else self._dict[k] for k in value.iterkeys() }
+
+
         for child in self.children:
             child.parent_keys_changed.update((k, self) for k in self._mutable_keys)
 
@@ -207,7 +219,11 @@ class Node(object):
         # with respect to whatever the model actually returns.
 
         if self.single_key:
-            self.set_value(value=value)
+            if isinstance(value, np.ndarray):
+                assert(value.size == 1) # just probing to see if this is a reasonable assumption
+                self.set_value(value=value[0])
+            else:
+                self.set_value(value=value)
         else:
             self.set_dict(value)
 
@@ -275,6 +291,7 @@ class Node(object):
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f at node %s' % (lp, self.label))
+
         return lp
 
     def _transform_values_for_model(self, vals):
@@ -406,7 +423,7 @@ class DeterministicNode(Node):
         raise NotImplementedError("default_parent_key method not implemented at this node!")
 
     def log_p(self, value=None, parent_values=None):
-        raise AttributeError("cannot compute log_p for a deterministic node!")
+        raise AttributeError("cannot compute log_p for a deterministic node! %s" % (self.label))
 
     def deriv_log_p(**kwargs):
         raise AttributeError("cannot compute deriv_log_p for a deterministic node!")

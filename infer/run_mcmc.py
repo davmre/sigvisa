@@ -16,7 +16,7 @@ from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_overall, merge_overall, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move, hamiltonian_template_move, hamiltonian_move_reparameterized
+from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move, hamiltonian_template_move, hamiltonian_move_reparameterized
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -96,6 +96,7 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds,
                  sg=sg, keys=(k,), node_list=(n,), relevant_nodes=(n, wn),
                  std=stds[move], phase_wraparound=phase_wraparound, proxy_lps=proxy_lps)
 
+
 def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, cyclic=False, **kwargs):
 
     if move_prob is not None:
@@ -127,21 +128,23 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
 
 ############################################################################
 
-def single_template_MH(sg, wn, tmnodes, phase, steps=1000, proxy_lps=None):
+def single_template_MH(sg, wn, tmnodes, phase, steps=1000, rw=True, hamiltonian=False, window_lps=None, sorted_params=None):
     #tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
     template_moves_special = {'peak_offset': improve_offset_move_gaussian,
                               'arrival_time_big': improve_atime_move,
                               'arrival_time': improve_atime_move}
+    if hamiltonian:
+        template_moves_special['hamiltonian_reversing'] = hamiltonian_template_move
+
     stds = global_stds
 
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
 
     vals = []
-    sorted_params = sorted(tmnodes.keys())
-
-
+    if sorted_params is None:
+        sorted_params = sorted([p for (p, (k, n)) in tmnodes.items() if not n.deterministic()])
 
     for step in range(steps):
         # special template moves
@@ -150,15 +153,18 @@ def single_template_MH(sg, wn, tmnodes, phase, steps=1000, proxy_lps=None):
                      sg=sg, wave_node=wn, tmnodes=tmnodes,
                      n_attempted=n_attempted, n_accepted=n_accepted,
                      std=stds[move_name] if move_name in stds else None,
-                     proxy_lps=proxy_lps)
+                     window_lps=window_lps)
 
-        # also do basic wiggling-around of all template params
-        tg = sg.template_generator(phase)
-        wg = sg.wiggle_generator(phase, wn.srate)
+        if rw:
+            # also do basic wiggling-around of all template params
+            tg = sg.template_generator(phase)
+            wg = sg.wiggle_generator(phase, wn.srate)
 
-        do_template_moves(sg, wn, tmnodes, tg, wg, stds,
-                          n_attempted=n_attempted, n_accepted=n_accepted,
-                          proxy_lps=proxy_lps)
+            proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
+
+            do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                              n_attempted=n_attempted, n_accepted=n_accepted,
+                              proxy_lps=proxy_lps)
 
 
         v = np.array([tmnodes[p][1].get_value(tmnodes[p][0]) for p in sorted_params])
@@ -192,8 +198,8 @@ def run_open_world_MH(sg, steps=10000,
     event_moves_special = {}
     sta_moves = {'tmpl_birth': birth_move,
                  'tmpl_death': death_move,
-                 #'tmpl_split': split_overall, #split_move,
-                 #'tmpl_merge': merge_overall, #merge_move,
+                 'tmpl_split': split_move,
+                 'tmpl_merge': merge_move,
                  'swap_association': swap_association_move} if enable_template_openworld else {}
 
     template_moves_special = {'indep_peak': indep_peak_move,
@@ -213,7 +219,7 @@ def run_open_world_MH(sg, steps=10000,
 
 
     stds = global_stds
-    tmpl_openworld_move_probability = 0.01
+    tmpl_openworld_move_probability = 0.05
     ev_openworld_move_probability = .05
 
     n_accepted = defaultdict(int)
@@ -351,6 +357,7 @@ def main():
     parser.add_option("--run_dir", dest="run_dir", default=None, type="str",
                       help="directory to save results  (auto)")
     parser.add_option("--preset", dest="preset", default=None, type="str", help="options are 'localize' (default None)")
+    parser.add_option("--template_move_type", dest="template_move_type", default="hamiltonian", type="str", help="options are 'hamiltonian' (default), 'rw', or 'both'")
     parser.add_option("--disable_moves", dest="disable_moves", default='', type="str", help="comma-separated list of specific MCMC move names to disable")
 
     register_svgraph_cmdline(parser)
@@ -426,7 +433,8 @@ def main():
                       enable_template_moves=True,
                       disable_moves=disable_moves,
                       logger=logger,
-                      start_step = start_step)
+                      start_step = start_step,
+                      template_move_type = options.template_move_type)
 
 if __name__ == "__main__":
     try:

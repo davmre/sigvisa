@@ -810,14 +810,14 @@ class SigvisaGraph(DirectedGraphModel):
                     # hacks to deal with Gaussians occasionally being negative
                     if "peak_offset" in n.label:
                         v = n.get_value()
-                        if type(v) == float:
+                        if isinstance(v, float):
                             v = 0.5 if v <= 0 else v
                         else:
                             invalid_offsets = (v <= 0)
                             v[invalid_offsets] = 0.5
                     if "coda_decay" in n.label:
                         v = n.get_value()
-                        if type(v) == float:
+                        if isinstance(v, float):
                             v = 0.01 if v >= 0 else v
                         else:
                             invalid_offsets = (v >= 0)

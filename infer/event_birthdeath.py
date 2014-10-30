@@ -250,7 +250,7 @@ def unassociate_template(sg, sta, eid, phase, tmid=None, remove_event_phase=Fals
 
     return tmid
 
-def deassociation_prob(sg, sta, eid, phase, deletion_prob=False):
+def deassociation_logprob(sg, sta, eid, phase, deletion_prob=False):
 
     # return prob of deassociating (or of deleting, if deletion_prob=True).
 
@@ -282,15 +282,15 @@ def deassociation_prob(sg, sta, eid, phase, deletion_prob=False):
     log_normalizer = np.logaddexp(deassociation_ratio_log, deletion_ratio_log)
 
     if deletion_prob:
-        return np.exp(deletion_ratio_log - log_normalizer)
+        return deletion_ratio_log - log_normalizer
     else:
-        return np.exp(deassociation_ratio_log - log_normalizer)
+        return deassociation_ratio_log - log_normalizer
 
 def sample_deassociation_proposal(sg, sta, eid, phase):
-    p = deassociation_prob(sg, sta, eid, phase)
+    lp = deassociation_logprob(sg, sta, eid, phase)
     u = np.random.rand()
-    deassociate = u < p
-    deassociate_lp = np.log(p) if deassociate else np.log(1-p)
+    deassociate = u < np.exp(lp)
+    deassociate_lp = lp if deassociate else np.log(1-np.exp(lp))
     return deassociate, deassociate_lp
 
 def propose_phase_template(sg, sta, eid, phase, tmvals=None):
@@ -313,6 +313,8 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None):
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
+
+
     amp_dist = get_signal_based_amplitude_distribution(sg, sta, tmvals)
     if amp_dist is not None:
 
@@ -324,9 +326,12 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None):
         lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
         tmvals['coda_height'] = amplitude
         lp += amp_dist.log_p(amplitude)
-
     else:
         lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
+
+
+    if np.isnan(np.array(tmvals.values(), dtype=float)).any():
+        raise ValueError()
 
     # wiggles!
     wave_node = sg.station_waves[sta][0]
@@ -591,6 +596,9 @@ def ev_birth_move(sg, log_to_run_dir=None):
                     tmpl_lp  = 0.0
                 else:
                     template_param_array, tmpl_lp = propose_phase_template(sg, sta, eid, phase)
+
+                    if np.isnan(np.array(template_param_array.values(), dtype=float)).any():
+                        raise ValueError()
                     forward_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
                     #inverse_fns.append(lambda : delete_template(sg, sta, eid, phase))
                     associations.append((sta, phase, False))
@@ -611,7 +619,7 @@ def ev_birth_move(sg, log_to_run_dir=None):
     # we can execute all the forward moves first.
     reverse_logprob = death_proposal_logprob(sg, eid)
     for (sta, phase, associated) in associations:
-        reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase, deletion_prob=not associated))
+        reverse_logprob += deassociation_logprob(sg, sta, eid, phase, deletion_prob=not associated)
 
     lp_new = sg.current_log_p()
 
@@ -637,7 +645,6 @@ def ev_birth_move(sg, log_to_run_dir=None):
             log_event_birth(sg, hough_array, log_to_run_dir, eid, associations)
         else:
             raise Exception("why are we not logging?")
-
         return True
     else:
         #print "move rejected"

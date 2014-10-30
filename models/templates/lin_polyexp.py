@@ -9,7 +9,7 @@ from sigvisa.models.templates.template_model import TemplateGenerator
 from sigvisa.models.templates.coda_height import CodaHeightNode
 from sigvisa.graph.graph_utils import create_key, extract_sta_node
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Gamma, Negate, Gaussian
+from sigvisa.models.distributions import Gamma, Negate, Gaussian, TruncatedGaussian
 
 import scipy.weave as weave
 from scipy.weave import converters
@@ -17,12 +17,14 @@ from scipy.weave import converters
 
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(5 + 1)
 
+MAX_PEAK_OFFSET_S = 20.0
+
 class LinPolyExpTemplateGenerator(TemplateGenerator):
 
     def __init__(self, *args, **kwargs):
         super(LinPolyExpTemplateGenerator, self).__init__(*args, **kwargs)
 
-        self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
+        self.uamodels = {"peak_offset": TruncatedGaussian(.3, 1.1, b=np.log(MAX_PEAK_OFFSET_S)),
                          "peak_decay": Gaussian(-2.5, 1.),
                          "coda_height": Gaussian(0.5, 3),
                          "coda_decay": Gaussian(-2.5, 1.5),}
@@ -140,10 +142,10 @@ if (l > 0) {
         weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')
         return d
 
+    @staticmethod
+    def low_bounds():
 
-    def low_bounds(self):
-
-        bounds = { k: -np.inf for k in self.params() }
+        bounds = { k: -np.inf for k in LinPolyExpTemplateGenerator.params() }
 
         bounds['coda_height'] = -4
         bounds['peak_offset'] = -2
@@ -152,9 +154,10 @@ if (l > 0) {
 
         return bounds
 
-    def high_bounds(self):
+    @staticmethod
+    def high_bounds():
 
-        bounds = { k: np.inf for k in self.params() }
+        bounds = { k: np.inf for k in LinPolyExpTemplateGenerator.params() }
 
         bounds['coda_height'] = 10
         bounds['peak_offset'] = 4
