@@ -149,8 +149,8 @@ if (l > 0) {
 
         bounds['coda_height'] = -4
         bounds['peak_offset'] = -2
-        bounds['coda_decay'] = -8
-        bounds['peak_decay'] = -8
+        bounds['coda_decay'] = -6
+        bounds['peak_decay'] = -6
 
         return bounds
 

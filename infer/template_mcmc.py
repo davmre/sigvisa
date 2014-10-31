@@ -703,6 +703,28 @@ def birth_move(sg, wave_node,  **kwargs):
     lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move = birth_helper(sg, wave_node, **kwargs)
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept_move, revert_move=revert_move)
 
+def birth_proposal(sg, wave_node, fix_result):
+    """ compute the likelihood of proposing a certain fixed result under the dumb birth proposal. not used in inference, but helpful for evaluating the dumb vs optimizing proposals """
+
+    peak_time = fix_result['arrival_time'] + np.exp(fix_result['peak_offset'])
+
+    cdf = get_current_conditional_cdf(wave_node, arrival_set=wave_node.arrivals())
+    lp = peak_log_p(cdf, wave_node.st,
+                     wave_node.srate,
+                     peak_time = peak_time)
+
+    tg = sg.template_generator(phase="UA")
+    logamplitude_proposal_dist = get_signal_based_amplitude_distribution(sg, wave_node.sta, peak_time=peak_time)
+    if logamplitude_proposal_dist is None:
+        logamplitude_proposal_dist = tg.unassociated_model('coda_height')
+    lp += logamplitude_proposal_dist.log_p(fix_result['coda_height'])
+
+    for param in ['peak_decay', 'coda_decay', 'peak_offset']:
+        dist = tg.unassociated_model(param)
+        lp += dist.log_p(fix_result[param])
+
+    return fix_result, lp
+
 def birth_helper(sg, wave_node,  **kwargs):
     #lp_old1 = sg.current_log_p()
     lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,])
@@ -1514,8 +1536,11 @@ def sta_lta_cdf2(signal_diff_pos, short_idx=2, long_idx=30, smooth_idx=7,
     else:
         smoothed = signal_diff_pos
 
+    extended = np.zeros(long_idx + len(smoothed))
+    extended[long_idx:] = smoothed
+    extended[:long_idx] = np.mean(smoothed)
 
-    sta_lta = classicSTALTA(smoothed, short_idx, long_idx)
+    sta_lta = classicSTALTA(extended, short_idx, long_idx)[long_idx:]
     sta_lta = sta_lta ** sta_lta_power
     d = np.where(sta_lta > 1, sta_lta - 0.999, 0.001)
     result = np.zeros(d.shape)
@@ -1547,28 +1572,43 @@ def peak_time_proposal_dist(wn, signal_diff_pos, atime):
 
     return peak_cdf
 
-def get_fit_window(wn, peak_time, signal_diff_pos, incr_s=5.0, max_s=60.0):
+def get_fit_window(wn, peak_time, signal_diff_pos, incr_s=5.0, max_s=60.0, smoothing_s=15.0, min_phase_gap_s=15.0):
     # amplitude and decay parameters, conditioned on peak time
     sidx = int((peak_time-wn.st)*wn.srate)
     jump_idx = int(incr_s * wn.srate)
     eidx = sidx + jump_idx
-    current_mean = np.mean(signal_diff_pos[sidx:eidx])
-    next_mean = np.mean(signal_diff_pos[eidx:eidx+jump_idx])
-    while (eidx < sidx + max_s * wn.srate) and next_mean < current_mean * 0.95:
+
+    if smoothing_s is not None:
+        s = smooth(signal_diff_pos, int(smoothing_s*wn.srate))
+    else:
+        s = signal_diff_pos
+
+    min_phase_gap_idx = int(min_phase_gap_s * wn.srate)
+
+    current_mean = np.mean(s[sidx:eidx])
+    next_mean = np.mean(s[eidx:eidx+jump_idx])
+    while (eidx < sidx + max_s * wn.srate):
+        # cut the window early if we are near the noise floor
+        if next_mean < wn.nm.c * 1.1:
+            break
+        # OR if we are past a minimum length, and the signal seems to be increasing
+        if eidx > sidx + min_phase_gap_idx and next_mean > current_mean * 1.1:
+            break
+
         eidx += jump_idx
         current_mean = next_mean
-        next_mean = np.mean(signal_diff_pos[eidx:eidx+jump_idx])
+        next_mean = np.mean(s[eidx:eidx+jump_idx])
     fitting_window = signal_diff_pos[sidx:eidx].copy()
     return fitting_window
 
 from sigvisa.models.templates.lin_polyexp import LinPolyExpTemplateGenerator
-lbounds = LinPolyExpTemplateGenerator.low_bounds()
-hbounds = LinPolyExpTemplateGenerator.high_bounds()
-bounds = [(lbounds['coda_height'], hbounds['coda_height']), \
-          (lbounds['peak_decay'], hbounds['peak_decay']), \
-          (lbounds['coda_decay'], hbounds['coda_decay'])]
+lbounds_dict = LinPolyExpTemplateGenerator.low_bounds()
+hbounds_dict = LinPolyExpTemplateGenerator.high_bounds()
+lbounds = np.array((lbounds_dict['coda_height'], lbounds_dict['peak_decay'], lbounds_dict['coda_decay']))
+hbounds = np.array((hbounds_dict['coda_height'], hbounds_dict['peak_decay'], hbounds_dict['coda_decay']))
+bounds = zip(lbounds, hbounds)
 
-def amp_decay_proposal(signal, true_srate, downsample_by=1, fix_result=None):
+def amp_decay_proposal(signal, true_srate, downsample_by=1, fix_result=None, return_debug=False):
 
     if downsample_by != 1:
         downsampled = signal[::downsample_by]
@@ -1624,7 +1664,7 @@ def amp_decay_proposal(signal, true_srate, downsample_by=1, fix_result=None):
             mean_deviation = np.mean(np.abs(residuals[:int(len(residuals)/2)]))
             robust_std = mean_deviation * 1.25 # formally, sqrt(pi/2) is the ratio of STD to MAD for a Gaussian
             robust_var = robust_std**2
-            print "estimated var", robust_var
+            #print "estimated var", robust_var
             H /= robust_var
 
             return ll, grad, H
@@ -1667,19 +1707,32 @@ def amp_decay_proposal(signal, true_srate, downsample_by=1, fix_result=None):
 
     if fix_result is not None:
         sample = fix_result
-        z = np.dot(cholprec, (sample-x))
+        z = np.dot(cholprec.T, (sample-x))
     else:
         z = np.random.randn(3)
-        sample = x + np.dot(np.linalg.inv(cholprec), z).flatten()
+        sample = x + np.dot(np.linalg.inv(cholprec.T), z).flatten()
+
+
 
     half_logdet = -np.sum(np.log(np.diag(cholprec)))
     logp = -.5 * np.sum(z**2) - half_logdet - 3/2.0 * np.log(2*np.pi)
 
-    print x
-    print np.linalg.inv(prec)
-    print sample
 
-    return sample, logp
+    # truncate the proposals at reasonable bounds.  technically this
+    # is invalid since I'm not accounting for the truncation in the
+    # returned probability, but it shouldn't make a big difference
+    # since the bounds are quite wide.
+
+    lbounds_violation = sample < lbounds
+    sample[lbounds_violation] = lbounds[lbounds_violation]
+
+    hbounds_violation = sample > hbounds
+    sample[hbounds_violation] = hbounds[hbounds_violation]
+
+    if return_debug:
+        return sample, logp, x, prec, lik_grad
+    else:
+        return sample, logp
 
 
 def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False):
@@ -1702,7 +1755,7 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False):
     else:
         peak_time, peak_time_proposal_lp =  sample_peak_time_from_signal(peak_cdf, atime, wn.srate, return_lp=True)
         peak_offset = np.log(peak_time - atime) if peak_time-atime > 0 else np.log(1.0/wn.srate)
-        print "sampled times", peak_time, atime, peak_offset
+        # print "sampled times", peak_time, atime, peak_offset
     # jacobian transformation for change of variables:
     # let y = log t
     # p_t(t) dt = p_t(e^y) dt/dy dy
@@ -1715,7 +1768,11 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False):
         x = np.array([fix_result['coda_height'], fix_result['peak_decay'], fix_result['coda_decay']])
     else:
         x = None
-    (coda_height, peak_decay, coda_decay), proposal_lp = amp_decay_proposal(fitting_window, wn.srate, fix_result=x)
+
+    if return_debug:
+        (coda_height, peak_decay, coda_decay), proposal_lp, proposal_mean, proposal_prec, lik_grad = amp_decay_proposal(fitting_window, wn.srate, fix_result=x, return_debug=True)
+    else:
+        (coda_height, peak_decay, coda_decay), proposal_lp = amp_decay_proposal(fitting_window, wn.srate, fix_result=x)
 
     initial_vals = {'arrival_time': atime, 'peak_offset': peak_offset, 'coda_height': coda_height,
                     'coda_decay': coda_decay, 'peak_decay': peak_decay }
@@ -1723,7 +1780,19 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False):
     log_qforward = atime_proposal_lp + peak_time_proposal_lp + proposal_lp
 
     if return_debug:
-        return initial_vals, log_qforward, signal_diff_pos, cdf2, peak_cdf, fitting_window, atime_proposal_lp, peak_time_proposal_lp, proposal_lp
+        debug_info={'signal_diff_pos': signal_diff_pos,
+                    'cdf2': cdf2,
+                    'peak_cdf': peak_cdf,
+                    'fitting_window': fitting_window,
+                    'atime_proposal_lp': atime_proposal_lp,
+                    'peak_time_proposal_lp': peak_time_proposal_lp,
+                    'proposal_lp': proposal_lp,
+                    'proposal_mean': proposal_mean,
+                    'proposal_prec': proposal_prec,
+                    'x': x,
+                    'lik_grad': lik_grad}
+
+        return initial_vals, log_qforward, debug_info
     else:
         return initial_vals, log_qforward
 
