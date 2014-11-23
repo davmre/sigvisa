@@ -94,9 +94,12 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
         return l
 
     @staticmethod
-    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, fixedlen=None):
+    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, return_jac_exp=False, fixedlen=None):
+        min_logenv=-np.inf
         arr_time, peak_offset, peak_decay, coda_height, coda_decay = \
             float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
+        return_jac_exp = int(return_jac_exp)
+        idx_offset = float(idx_offset)
 
         if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or np.isnan(peak_decay):
             return np.empty((0,))
@@ -111,6 +114,11 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
             l = int(1200 * srate)
         else:
             l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+
+        if return_jac_exp:
+            jacobian = np.empty((l, 5))
+        else:
+            jacobian = np.empty((0,0))
 
         d = np.empty((l,))
         code = """
@@ -128,19 +136,54 @@ double min_env = exp(min_logenv);
 npy_intp dims[1] = {l};
 
 for (int i=1; i < intro_len; ++i) {
-  d(i) = log((i - idx_offset) * onset_slope + min_env);
+  double si = (i - idx_offset) * onset_slope + min_env;
+  d(i) = log(si);
+
+  if (return_jac_exp) {
+      jacobian(i, 0) = -onset_slope*srate;
+      jacobian(i, 1) = -si+min_env;
+      jacobian(i, 2) = si - min_env;
+      jacobian(i, 3) = 0;
+      jacobian(i, 4) = 0;
+  }
 }
+
 double initial_decay = intro_len - idx_offset - peak_idx;
+
+
+
 for (int i=0; i < l-intro_len; ++i) {
   double t = (i + initial_decay) / srate;
   d(i + intro_len) = t * coda_decay + peak_decay * log(t+1) + coda_height;
+
+  if (return_jac_exp) {
+      double si = exp(d(i+intro_len));
+      double dsi_dt = -(si * coda_decay + si * peak_decay/(t+1));
+      jacobian(i+intro_len, 0) = dsi_dt;
+      jacobian(i+intro_len, 1) = dsi_dt * peak_offset;
+      jacobian(i+intro_len, 2) = si;
+      jacobian(i+intro_len, 3) = log(t+1) * peak_decay * si;
+      jacobian(i+intro_len, 4) = t * coda_decay * si;
+  }
 }
 if (l > 0) {
   d(0) = min_logenv;
+  if (return_jac_exp) {
+     for (int d=0; d < 5; ++d) {
+        jacobian(0, d) = 0;
+     }
+  }
 }
 """
-        weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')
-        return d
+        weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'min_logenv', 'idx_offset', 'srate', 'return_jac_exp', 'jacobian'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+
+        if (~np.isfinite(d[1:])).any():
+            import pdb; pdb.set_trace()
+
+        if return_jac_exp:
+            return d, jacobian
+        else:
+            return d
 
     @staticmethod
     def low_bounds():

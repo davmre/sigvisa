@@ -11,10 +11,10 @@ from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.graph_utils import extract_sta_node, create_key, get_parent_value, parse_key
 from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel
 from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
-from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal
+from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ev_prior import event_from_evnodes
-from sigvisa.models.ttime import tt_residual
+from sigvisa.models.ttime import tt_residual, tt_predict
 from sigvisa.models.templates.coda_height import amp_transfer
 from sigvisa.utils.counter import Counter
 from sigvisa.utils.fileutils import mkdir_p
@@ -106,7 +106,7 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict):
     wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
     wiggle_params = set(wg.params())
 
-    if 'tt_residual' not in template_dict:
+    if 'tt_residual' not in template_dict and 'arrival_time' in template_dict:
         template_dict['tt_residual'] = tt_residual(ev, sta, template_dict['arrival_time'], phase=phase)
 
     # TODO: implement multiple bands/chans
@@ -250,7 +250,7 @@ def unassociate_template(sg, sta, eid, phase, tmid=None, remove_event_phase=Fals
 
     return tmid
 
-def deassociation_logprob(sg, sta, eid, phase, deletion_prob=False):
+def deassociation_logprob(sg, sta, eid, phase, deletion_prob=False, min_logprob=-6):
 
     # return prob of deassociating (or of deleting, if deletion_prob=True).
 
@@ -281,6 +281,14 @@ def deassociation_logprob(sg, sta, eid, phase, deletion_prob=False):
 
     log_normalizer = np.logaddexp(deassociation_ratio_log, deletion_ratio_log)
 
+    # smooth the probabilities so we always give at least some
+    # probability to each option (needed in order for reverse proposal
+    # probabilities to be reasonable)
+    adj = min_logprob + log_normalizer
+    deassociation_ratio_log = np.logaddexp(deassociation_ratio_log, adj)
+    deletion_ratio_log = np.logaddexp(deletion_ratio_log, adj)
+    log_normalizer = np.logaddexp(log_normalizer, np.log(2) + adj)
+
     if deletion_prob:
         return deletion_ratio_log - log_normalizer
     else:
@@ -293,7 +301,7 @@ def sample_deassociation_proposal(sg, sta, eid, phase):
     deassociate_lp = lp if deassociate else np.log(1-np.exp(lp))
     return deassociate, deassociate_lp
 
-def propose_phase_template(sg, sta, eid, phase, tmvals=None):
+def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=True):
     # sample a set of params for a phase template from an appropriate distribution (as described above).
     # return as an array.
 
@@ -307,28 +315,67 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None):
     chan = list(sg.site_chans[site])[0]
 
     # we assume that add_event already sampled all the params parent-conditionally
-
     if tmvals is None:
         tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
+    ev = sg.get_event(eid)
+    pred_atime = ev.time + tt_predict(ev, sta, phase)
+    wn = sg.get_wave_node_by_atime(sta, band, chan, pred_atime)
+    lp = 0
+    if smart_peak_time:
+        # instead of sampling arrival time from the prior, sample
+        # from the product of the prior with unexplained signal mass
+        ptime = np.exp(tmvals['peak_offset'])
 
 
-    amp_dist = get_signal_based_amplitude_distribution(sg, sta, tmvals)
+        pred_peak_time = pred_atime + np.exp(tmvals['peak_offset'])
+
+        arrivals = wn.arrivals()
+        other_arrivals = [a for a in arrivals if a != (eid, phase)]
+        signal_diff_pos = get_signal_diff_positive_part(wn, other_arrivals)
+        t = np.linspace(wn.st, wn.et, wn.npts)
+
+        # deliberately use a highly vague travel-time prior to
+        # acknowldege the possibility that the event is not currently
+        # in the correct location
+        peak_prior = np.exp(-np.abs(t - pred_atime)/80.0)
+        peak_cdf = merge_distribution(signal_diff_pos, peak_prior)
+        peak_time, peak_lp = sample_peak_time_from_signal(peak_cdf, wn.st, wn.srate, return_lp=True)
+        proposed_atime = peak_time - np.exp(tmvals['peak_offset'])
+        proposed_tt_residual = proposed_atime - pred_atime
+        tmvals["tt_residual"] = proposed_tt_residual
+        tmvals["arrival_time"] = proposed_atime
+
+        lp += peak_lp
+
+    amp_dist = get_signal_based_amplitude_distribution(sg, wn, tmvals)
     if amp_dist is not None:
 
         amplitude = amp_dist.sample()
 
         del tmvals['coda_height']
+        if smart_peak_time:
+            del tmvals["tt_residual"]
+            del tmvals["arrival_time"]
 
         # compute log-prob of non-amplitude parameters
-        lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
+        lp += ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
         tmvals['coda_height'] = amplitude
         lp += amp_dist.log_p(amplitude)
-    else:
-        lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
 
+        if smart_peak_time:
+            tmvals["tt_residual"] = proposed_tt_residual
+            tmvals["arrival_time"] = proposed_atime
+
+
+    else:
+        lp += ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
+
+    if smart_peak_time:
+        tmvals["tt_residual"] = proposed_tt_residual
+        tmvals["arrival_time"] = proposed_atime
 
     if np.isnan(np.array(tmvals.values(), dtype=float)).any():
         raise ValueError()

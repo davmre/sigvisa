@@ -132,6 +132,9 @@ dtype=np.float)
             X, y, self.fit_intercept, self.normalize, self.copy_X)
         n_samples, n_features = X.shape
 
+        self.X_ = X
+        self.y_ = y
+
         ### Initialization of the values of the parameters
         alpha_ = 1. / np.var(y)
         lambda_ = 1.
@@ -155,21 +158,12 @@ dtype=np.float)
             ### Compute mu and sigma
             # sigma_ = lambda_ / alpha_ * np.eye(n_features) + np.dot(X.T, X)
             # coef_ = sigma_^-1 * XT * y
-            if n_samples > n_features:
-                sigma_ = np.dot(Vh.T,
-                               Vh / (eigen_vals_ + lambda_ / alpha_)[:, None])
-                coef_ = np.dot(sigma_, XT_y)
-                if self.compute_score:
-                    logdet_sigma_ = - np.sum(
-                        np.log(lambda_ + alpha_ * eigen_vals_))
-            else:
-                prec_ = np.dot(X.T, np.dot(
-                    U / (eigen_vals_ + lambda_ / alpha_)[None, :], U.T))
-                coef_ = np.dot(coef_, y)
-                if self.compute_score:
-                    logdet_sigma_ = lambda_ * np.ones(n_features)
-                    logdet_sigma_[:n_samples] += alpha_ * eigen_vals_
-                    logdet_sigma_ = - np.sum(np.log(logdet_sigma_))
+            sigma_ = np.dot(Vh.T,
+                           Vh / (eigen_vals_ + lambda_ / alpha_)[:, None])
+            coef_ = np.dot(sigma_, XT_y)
+            if self.compute_score:
+                logdet_sigma_ = - np.sum(
+                    np.log(lambda_ + alpha_ * eigen_vals_))
 
             ### Update alpha and lambda
             rmse_ = np.sum((y - np.dot(X, coef_)) ** 2)
@@ -182,14 +176,14 @@ dtype=np.float)
 
             ### Compute the objective function
             if self.compute_score:
-                s = lambda_1 * math.log(lambda_) - lambda_2 * lambda_
-                s += alpha_1 * math.log(alpha_) - alpha_2 * alpha_
-                s += 0.5 * (n_features * math.log(lambda_)
-                            + n_samples * math.log(alpha_)
+                s = lambda_1 * np.log(lambda_) - lambda_2 * lambda_
+                s += alpha_1 * np.log(alpha_) - alpha_2 * alpha_
+                s += 0.5 * (n_features * np.log(lambda_)
+                            + n_samples * np.log(alpha_)
                             - alpha_ * rmse_
                             - (lambda_ * np.sum(coef_ ** 2))
                             - logdet_sigma_
-                            - n_samples * math.log(2 * np.pi))
+                            - n_samples * np.log(2 * np.pi))
                 self.scores_.append(s)
 
             ### Check for convergence
@@ -202,7 +196,6 @@ dtype=np.float)
         self.alpha_ = alpha_
         self.lambda_ = lambda_
         self.coef_ = coef_
-
 
         # posterior covariance is
         # (\lambda I + \alpha XX')^{-1}

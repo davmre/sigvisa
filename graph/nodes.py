@@ -290,7 +290,7 @@ class Node(object):
                 lp = -9999999
 
         if np.isnan(lp):
-            raise Exception('invalid log prob %f at node %s' % (lp, self.label))
+            raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))
 
         return lp
 
@@ -431,6 +431,9 @@ class DeterministicNode(Node):
     def set_value(self, value, key=None, parent_key=None):
         if not parent_key:
             parent_key = self.default_parent_key()
+
+        if "coda_height" in self.label and value > 30:
+            import pdb; pdb.set_trace()
 
         parent_val = self.invert(value=value, parent_key=parent_key)
         self.parents[parent_key].set_value(value=parent_val, key=parent_key)

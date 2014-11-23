@@ -5,6 +5,7 @@ import traceback
 import pickle
 import copy
 
+import numdifftools as nd
 from collections import defaultdict
 from optparse import OptionParser
 from sigvisa.database.signal_data import *
@@ -19,16 +20,23 @@ from sigvisa.signals.io import load_segments
 from sigvisa.infer.event_birthdeath import sample_template_to_associate, template_association_logodds, associate_template, unassociate_template, sample_deassociation_proposal, template_association_distribution, phase_template_proposal_logp, deassociation_logprob, propose_phase_template
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move
+from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move, get_sorted_arrivals, relevant_nodes_hack
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure
+
+from sigvisa.graph.graph_utils import get_parent_value
+from sigvisa.source.event import Event
+from sigvisa.models.ttime import tt_predict
+
+from scipy.optimize import leastsq
 
 
 from sigvisa.infer.propose import propose_event_from_hough
 
 fixed_node_cache = dict()
 relevant_node_cache = dict()
+
 
 def ev_move_relevant_nodes(node_list, fixed_nodes):
 
@@ -45,21 +53,81 @@ def ev_move_relevant_nodes(node_list, fixed_nodes):
     inlaws = [n.parents[n.default_parent_key()] for n in fixed_nodes]
     return set(node_list + direct_stochastic_children + inlaws)
 
-def set_ev(ev_node, v, fixed_vals, fixed_nodes, params, ignore_illegal=True):
+def set_ev(ev_node, v, fixed_vals, fixed_nodes, params, fixed_atimes=None, ignore_illegal=True):
     for (key, val) in zip(params, v):
         ev_node.set_local_value(key=key, value=val, force_deterministic_consistency=False)
-
 
     assert(len(fixed_nodes)==len(fixed_vals))
     for (val, n) in zip(fixed_vals, fixed_nodes):
         try:
-            n.set_value(val)
+            if fixed_atimes is not None \
+               and n.label in fixed_atimes \
+               and (not fixed_atimes[n.label]) \
+               and n.deterministic():
+                n.parent_predict()
+            else:
+                n.set_value(val)
         except ValueError as e:
             # ignore "illegal travel time" messages from phases that are about to disappear
             if ignore_illegal:
                 pass
             else:
                 raise e
+
+def atime_block_update_dist(sg, eid, old_ev, new_ev):
+
+    fix_atime_probs = {}
+
+    for site in sg.site_elements.keys():
+        # TODO: implement multiple bands/chans
+        assert (len(list(sg.site_bands[site])) == 1)
+        band = list(sg.site_bands[site])[0]
+
+        assert (len(list(sg.site_chans[site])) == 1)
+        chan = list(sg.site_chans[site])[0]
+
+        for phase in sg.ev_arriving_phases(eid, site=site):
+            for sta in sg.site_elements[site]:
+                tmnodes = sg.get_template_nodes(eid, sta, phase, band, chan)
+                atime_key, atime_node = tmnodes['arrival_time']
+                ttr_key, ttr_node = tmnodes['tt_residual']
+                current_atime = atime_node.get_value(key=atime_key)
+                current_tt_residual = ttr_node.get_value(key=ttr_key)
+                current_pred_atime = current_atime - current_tt_residual
+
+                try:
+                    new_pred_atime = new_ev.time + tt_predict(new_ev, sta, phase=phase)
+                except ValueError:
+                    # if this phase is impossible at the new location,
+                    # then we'll be deleting it anyway, so it doesn't
+                    # matter what we do with arrival time
+                    continue
+
+                atime_diff = new_pred_atime-current_pred_atime
+                new_tt_residual = current_tt_residual - atime_diff
+
+                try:
+                    wn = sg.get_wave_node_by_atime(sta, band, chan, current_pred_atime)
+                    wave_lp1 = wn.log_p()
+                    atime_node.set_value(new_pred_atime)
+                    wave_lp2 = wn.log_p()
+                    atime_node.set_value(current_atime)
+                except KeyError:
+                    wave_lp1 = 0.0
+                    wave_lp2 = 0.0
+
+                ttr_lp1 = ttr_node.model.log_p(new_tt_residual)
+                ttr_lp2 = ttr_node.log_p(current_tt_residual)
+
+                lp1 = wave_lp1 + ttr_lp1 # world 1: fix atime, shift tt_residual
+                lp2 = wave_lp2 + ttr_lp2 # world 2: shift atime, fix tt_residual
+                # we'll propose these worlds proportional to their relative probability
+                fix_atime_probs[atime_node.label] = 1.0/(1+np.exp(lp2-lp1))
+
+                #print "%s: current atime %.1f, pred %.1f, wave1 %.1f wave2 %.1f, tt1 %.1f tt2 %.1f, lp1 %.1f lp2 %.1f diff %.1f prob %f" \
+                #% (sta, current_pred_atime, new_pred_atime, wave_lp1, wave_lp2, ttr_lp1, ttr_lp2, lp1, lp2, lp1-lp2, fix_atime_probs[(sta, phase)])
+
+    return fix_atime_probs
 
 def get_fixed_nodes(ev_node):
 
@@ -94,6 +162,18 @@ def add_phase_template(sg, sta, eid, phase, vals=None):
         sg.add_event_site_phase(tg, wg, site, phase, sg.evnodes[eid], sample_templates=True)
 
     tmvals, lp = propose_phase_template(sg, sta, eid, phase)
+
+    s = Sigvisa()
+    site = s.get_array_site(sta)
+    assert (len(list(sg.site_bands[site])) == 1)
+    band = list(sg.site_bands[site])[0]
+    assert (len(list(sg.site_chans[site])) == 1)
+    chan = list(sg.site_chans[site])[0]
+    tmnodes = sg.get_template_nodes(eid, sta, phase, band, chan)
+    for p, (k, n) in tmnodes.items():
+        if p in tmvals:
+            n.set_value(value=tmvals[p], key=k)
+
     return tmvals, lp
 
 def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fixed_nodes, birth_phases, death_phases):
@@ -215,19 +295,27 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
     # can compute probabilities for the reverse move
     set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params)
     for (sta, phase, associated) in associations:
-        reverse_logprob += deassociation_logprob(sg, sta, eid, phase, deletion_prob=not associated)
+        dl = deassociation_logprob(sg, sta, eid, phase, deletion_prob=not associated)
+        reverse_logprob += dl
+        print "rl +=", dl, "to associate", sta, phase
+
+
     for (sta, phase, deassociate, tmid_i) in deassociations:
         c = template_association_distribution(sg, sta, eid, phase)
         if deassociate:
             tmid = tmids[tmid_i]
             tmp = np.log(c[tmid])
             reverse_logprob += tmp
+            print "rl +=", tmp, "to deassociate", sta, phase, tmid
         else:
             tmp = np.log(c[None])
+            print "rl +=", tmp, "to delete", sta, phase
             reverse_logprob += tmp
 
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
+    print lp_new, reverse_logprob, lp_old, move_logprob
+
 
     if move_accepted:
         set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params)
@@ -245,9 +333,39 @@ def ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fi
         return False
 
 
-def ev_move_full(sg, ev_node, std, params):
+def ev_move_full(sg, ev_node, std, params, adaptive_block=False):
     # jointly propose a new event location along with new tt_residual values,
     # such that the event arrival times remain constant.
+
+    def update_ev(old_ev, params, new_v):
+        new_ev = copy.copy(old_ev)
+        try:
+            i = params.index("lon")
+            new_ev.lon = new_v[i]
+        except ValueError:
+            pass
+        try:
+            i = params.index("lat")
+            new_ev.lat = new_v[i]
+        except ValueError:
+            pass
+        try:
+            i = params.index("depth")
+            new_ev.depth = new_v[i]
+        except ValueError:
+            pass
+        try:
+            i = params.index("time")
+            new_ev.time = new_v[i]
+        except ValueError:
+            pass
+        try:
+            i = params.index("mb")
+            new_ev.mb = new_v[i]
+        except ValueError:
+            pass
+        return new_ev
+
 
     d = len(params)
     # get the current values of the params we're updating
@@ -294,9 +412,23 @@ def ev_move_full(sg, ev_node, std, params):
         # TODO: can we get arriving phases for a site instead of sta?
         old_site_phases[site] = set(sg.ev_arriving_phases(eid, site=site))
 
-    lp_old = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    #lp_old = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    lp_old = sg.current_log_p()
 
-    set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params)
+    old_ev = sg.get_event(eid)
+    new_ev = update_ev(old_ev, params, new_v)
+
+    if adaptive_block:
+        atime_fix_probs = atime_block_update_dist(sg, eid, old_ev, new_ev)
+        fixed_atime_block = dict([(k, np.random.rand() < p) for (k, p) in atime_fix_probs.items()])
+        fixed_atime_block_lp = np.sum([np.log(atime_fix_probs[k] if fix else 1-atime_fix_probs[k]) for (k, fix) in fixed_atime_block.items()])
+        if not np.isfinite(fixed_atime_block_lp):
+            import pdb; pdb.set_trace()
+    else:
+        fixed_atime_block = None
+        fixed_atime_block_lp = 0.0
+
+    set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params, fixed_atimes=fixed_atime_block)
 
     # if the predicted phases in the new location are different from
     # in the old location, we have to do a reversible jump move to
@@ -312,17 +444,37 @@ def ev_move_full(sg, ev_node, std, params):
         if len(birth_phases[site]) > 0 or len(death_phases[site]) > 0:
             phases_changed = True
     if phases_changed:
-        set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params)
+        set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params, fixed_atimes=fixed_atime_block)
+        print "WARNING: moving event %d requires changing phases, adaptive blocking is NOT implemented" % (eid)
         return ev_phasejump_move(sg, eid, ev_node, current_v, new_v, params, fixed_vals, fixed_nodes, birth_phases, death_phases)
 
-    lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    #lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    lp_new = sg.current_log_p()
+
+    set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params, fixed_atimes=fixed_atime_block)
+    set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params, fixed_atimes=None)
+    lp_new_noblock = sg.current_log_p()
+    set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params, fixed_atimes=None)
+    set_ev(ev_node, new_v, fixed_vals, fixed_nodes, params, fixed_atimes=fixed_atime_block)
+
+    if adaptive_block:
+        atime_fix_probs_reverse = atime_block_update_dist(sg, eid, new_ev, old_ev)
+        fixed_atime_block_reverse_lp = np.sum([np.log(atime_fix_probs_reverse[k] if fix else 1-atime_fix_probs_reverse[k]) for (k, fix) in fixed_atime_block.items()])
+    else:
+        fixed_atime_block_reverse_lp = 0.0
 
     u = np.random.rand()
-    move_accepted = lp_new - lp_old  > np.log(u)
+    move_accepted = (lp_new + fixed_atime_block_reverse_lp) - (lp_old+fixed_atime_block_lp)  > np.log(u)
+
+    #print "proposed", new_ev
+    #print "with adaptive blocks", fixed_atime_block
+    #print "and lprobs", lp_new, lp_new_noblock, lp_old, fixed_atime_block_lp, fixed_atime_block_reverse_lp
+    #print "acceptance", (lp_new + fixed_atime_block_reverse_lp) - (lp_old+fixed_atime_block_lp), move_accepted
+    #print "nonblocking acceptance", lp_new_noblock - lp_old
     if move_accepted:
         return True
     else:
-        set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params)
+        set_ev(ev_node, current_v, fixed_vals, fixed_nodes, params, fixed_atimes=fixed_atime_block)
         return False
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):
@@ -371,6 +523,233 @@ def ev_lonlat_frames():
         ev_lonlat_density(frame=i, fname='ev_viz_step%06d.png' % i)
 
 
+def ev_lstsqr_dist(sg, eid, stas):
+    """
+    we start with a bunch of arrival times. take these as gospel.
+    we can do this for *all* phases if we like. or just choose a phase, or a subset of stations, or whatever.
+    now we want to find the location that minimizes travel-time residuals.
+    to do this, we can
+    """
+
+    def get_atime(eid, sta, phase):
+        n = get_parent_value(eid=eid, sta=sta, phase=phase, param_name='arrival_time', chan=None, band=None,
+                             parent_values=sg.nodes_by_key, return_key=False)
+        return n.get_value()
+
+    targets = []
+    for sta in sorted(stas):
+        phases = sg.ev_arriving_phases(eid, sta)
+        for phase in phases:
+            targets.append((sta, phase))
+
+    atimes = [get_atime(eid, sta, phase) for (sta, phase) in targets]
+    print atimes
+
+    init_ev = sg.get_event(eid)
+    #init_ev.depth = 650
+    base_time = init_ev.time
+
+    # so that the optimization is well conditioned, we
+    # rescale lon/lat/depth so that incrementing those
+    # variables has approximately the same effect as a
+    # 1s increment in origin time
+    # 1 degree ~= 100 km ~= 20s of traveltime
+    # 1km of depth ~= 0.2s of traveltime
+    scaling = np.array((20.0, 20.0, 0.2, 1.0))
+    p0 = np.array((init_ev.lon, init_ev.lat, init_ev.depth, init_ev.time))
+
+    # assume a tt residual stddev of 2.0
+    # TODO: use the actual values learned from data
+    sigma = np.ones((len(targets)+1,)) * 4.0
+
+
+    def tt_residuals(x):
+        lon, lat, depth, origin_time = x / scaling + p0
+        ev = Event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=4.0, evid=None)
+
+        #with open('evals.txt', 'a') as f:
+        #    f.write(str(x)+"\n")
+
+        if (~np.isfinite(x)).any():
+            print x
+            return np.ones(x.shape) * np.nan
+
+        pred_tts = np.zeros(len(targets))
+        for i, (sta, phase) in enumerate(targets):
+            try:
+                tt = tt_predict(ev, sta, phase=phase)
+                pred_tts[i] = tt
+            except ValueError:
+                pred_tts[i] = 1e10
+
+        residuals = atimes-(origin_time + pred_tts)
+
+        # give a smooth warning to the optimizer that we're
+        # about to exceed the depth limit
+        if depth < 700:
+            depth_penalty = np.exp(1.0/(700-depth)) - 1
+        else:
+            depth_penalty = 1e40
+        rr = np.concatenate([residuals, (   depth_penalty,  )])
+        return rr / sigma
+
+
+    def sqerror(x):
+        return np.sum(tt_residuals(x)**2)
+
+    def unscaled_sqerror(x):
+        xs = (x - p0)*scaling
+        return sqerror(xs)
+
+    def jac(x):
+        return approx_gradient(sqerror, x0, 1e-4)
+
+
+    x0 = np.zeros((4,))
+    x1, cov_x, info_dict, mesg, ier = scipy.optimize.leastsq(tt_residuals, x0, full_output=True, epsfcn=1e-4)
+
+
+    z = x1 /scaling + p0
+
+    scaling = np.outer(scaling, scaling)
+
+    if cov_x is None:
+        H = nd.Hessian(sqerror).hessian(x1)
+        cov_x = np.linalg.inv(H)
+    cov_x *= scaling
+
+    return z, cov_x
+
+
+def propose_event_lsqr(sg, eid, stas=None):
+    if stas is None:
+        stas = sg.station_waves.keys()
+
+    z, C = ev_lstsqr_dist(sg, eid, stas=stas)
+    rv = scipy.stats.multivariate_normal(z, C)
+    proposed_vals = rv.rvs(1)
+    lon, lat, depth, time = proposed_vals
+    proposal_lp = rv.logpdf(proposed_vals)
+
+    old_ev = sg.get_event(eid)
+    old_vals = np.array([old_ev.lon, old_ev.lat, old_ev.depth, old_ev.time])
+    old_lp = rv.logpdf(old_vals)
+
+    new_ev = copy.copy(old_ev)
+    new_ev.lon = lon
+    new_ev.lat = lat
+    new_ev.depth=depth
+    new_ev.time=time
+
+    def set_proposed_ev():
+        sg.set_event(eid, new_ev, preserve_templates=True)
+
+    def set_old_ev():
+        sg.set_event(eid, old_ev, preserve_templates=True)
+
+    return proposal_lp, old_lp, set_proposed_ev, set_old_ev
+
+
+def sample_uniform_pair_to_swap(sg, wn, adjacency_decay=0.8):
+    sorted_arrs = get_sorted_arrivals(wn)
+    n = len(sorted_arrs)
+
+    # if we sample adjacency=1, swap an adjacent pair
+    # adjacency=2 => swap a pair separated by another template
+    # etc.
+    adjacency = np.random.geometric(adjacency_decay)
+    adjacency_prob = adjacency_decay * (1-adjacency_decay)**(adjacency-1)
+    if adjacency > n-1:
+        return None, None, 1.0
+
+    # then just propose a pair to swap uniformly at random
+    first_idx = np.random.choice(np.arange(n-adjacency))
+    second_idx = first_idx + adjacency
+    choice_prob = 1.0/(n-adjacency)
+    return sorted_arrs[first_idx], sorted_arrs[second_idx], adjacency_prob*choice_prob
+
+def swap_association_move(sg, wave_node, repropose_events=False):
+
+    def swap_params(t1nodes, t2nodes):
+        for (p, (k1, n1)) in t1nodes.items():
+            if p=="amp_transfer" or p=="tt_residual":
+                continue
+            k2, n2 = t2nodes[p]
+            v1 = n1.get_value(key=k1)
+            v2 = n2.get_value(key=k2)
+            n1.set_value(key=k1, value=v2)
+            n2.set_value(key=k2, value=v1)
+
+            if p == "arrival_time":
+                atime1, atime2 = v1, v2
+        return atime1, atime2
+
+    # sample from all pairs of adjacent templates in which not both are uatemplates
+    arr1, arr2, pair_prob = sample_uniform_pair_to_swap(sg, wave_node)
+    if arr1 is None:
+        return False
+
+    # get all relevant nodes for the arrivals we sampled
+    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    rn = list(set(relevant_nodes_hack(t1nodes) + relevant_nodes_hack(t2nodes)))
+    if repropose_events:
+        if arr1[1] > 0:
+            evnodes = sg.evnodes[arr1[1]].values()
+            rn.extend(evnodes)
+        if arr2[1] > 0:
+            evnodes = sg.evnodes[arr2[1]].values()
+            rn.extend(evnodes)
+
+    lp_old = sg.joint_logprob_keys(rn)
+
+    # swap proposal is symmetric, but we still need to track
+    # probabilities of the event proposals.
+    log_qforward = 0
+    log_qbackward = 0
+
+    if repropose_events:
+        if arr1[1] > 0:
+            proposal_lp, old_lp, set_proposed_ev, set_old_ev = propose_event_lsqr(sg, eid=arr1[1])
+            log_qbackward += old_lp
+        if arr2[1] > 0:
+            proposal_lp, old_lp, set_proposed_ev, set_old_ev = propose_event_lsqr(sg, eid=arr2[1])
+            log_qbackward += old_lp
+
+    # switch their parameters
+    atime1, atime2 = swap_params(t1nodes, t2nodes)
+
+
+    revert_fns = []
+    if repropose_events:
+        if arr1[1] > 0:
+            proposal_lp, old_lp, set_proposed_ev, set_old_ev = propose_event_lsqr(sg, eid=arr1[1])
+            log_qforward += proposal_lp
+            set_proposed_ev()
+            revert_fns.append(set_old_ev)
+        if arr2[1] > 0:
+            proposal_lp, old_lp, set_proposed_ev, set_old_ev = propose_event_lsqr(sg, eid=arr2[1])
+            log_qforward += proposal_lp
+            set_proposed_ev()
+            revert_fns.append(set_old_ev)
+
+    lp_new = sg.joint_logprob_keys(rn)
+
+    u = np.random.rand()
+
+    def revert_all():
+        for fn in revert_fns:
+            fn()
+        atime1, atime2 = swap_params(t1nodes, t2nodes)
+
+    return lp_new, lp_old, log_qbackward, log_qforward, arr1, arr2, revert_all
+
+
+    if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
+        return True
+    else:
+        revert_all()
+        return False
 
 
 def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):

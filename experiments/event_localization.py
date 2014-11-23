@@ -139,7 +139,7 @@ def load_graph(sg, wave_dir, max_distance=None):
 def wave_dirname(**kwargs):
     return os.path.join(BASE_DIR, hash("sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ])))
 
-def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single, n_events, min_mb, force_mb, wiggles=False, sites=None, tmshape="lin_polyexp", nm_type="ar"):
+def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, wiggles=False, sites=None, tmshape="lin_polyexp", nm_type="ar"):
 
     np.random.seed(seed)
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
@@ -170,7 +170,6 @@ def main():
                       help="random seed for sampling world (1000)")
     parser.add_option("--runid", dest="runid", default=19, type="int")
     parser.add_option("--max_distance", dest="max_distance", default=None, type="float")
-    parser.add_option("--sample_single", dest="sample_single", default=False, action="store_true")
     parser.add_option("--perturb_amt", dest="perturb_amt", default=0.0, type="float")
     parser.add_option("--openworld", dest="openworld", default=False, action="store_true")
     parser.add_option("--template_openworld", dest="template_openworld", default=False, action="store_true")
@@ -180,6 +179,7 @@ def main():
     parser.add_option("--n_events", dest="n_events", default=None, type="int", help="force the specified number of events (default is to sample from the prior)")
     parser.add_option("--min_mb", dest="min_mb", default=4.5, type="float", help="sample event magnitudes from an exponential(10) distribution with the given origin. (4.5)")
     parser.add_option("--force_mb", dest="force_mb", default=None, type="float", help="force event magnitude to the given value.")
+    parser.add_option("--load_saved_state", dest="load_saved_state", default=None, type="str", help="initialize inference at the state stored in a pickled SigvisaGraph file")
     parser.add_option("--phases", dest="phases", default='P', type="str")
     parser.add_option("--sites", dest="sites", default=None, type="str")
     parser.add_option("--steps", dest="steps", default=20000, type="int",
@@ -187,6 +187,7 @@ def main():
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
     parser.add_option("--template_move_type", dest="template_move_type", default="hamiltonian", type="str", help="options are 'hamiltonian' (default), 'rw', or 'both'")
+    parser.add_option("--run_label", dest="run_label", default="", type="str", help="any label to describe additional properties of this run")
 
 
     (options, args) = parser.parse_args()
@@ -200,27 +201,37 @@ def main():
     phases = options.phases.split(',')
     sites = options.sites.split(',')
 
-    init_events = options.init_openworld or (not options.openworld)
-    sg, evs, wave_dir = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, sample_single=options.sample_single, n_events=options.n_events, min_mb=options.min_mb, force_mb=options.force_mb, sites=sites, nm_type=options.nm_type)
-
-    print "got %d evs" % len(evs)
-    for ev in evs:
-        print ev
-    print "now running inference"
-
-    hash_options = hash(str(options))
-    openworld_str = '_open' if options.openworld else ''
-    #run_dir = os.path.join(BASE_DIR,
-    #                       'mcmcrun_seed%d_%s' % (options.seed, hash_options))
-    #mkdir_p(run_dir)
-    #with open(os.path.join(run_dir, 'gold'), 'w') as f:
-    #    f.write(wave_dir + '\n')
-
     logger = MCMCLogger(run_dir=None, write_template_vals=True, dump_interval=50)
     run_dir = logger.run_dir
-
     mkdir_p(run_dir)
-    os.symlink(os.path.join(wave_dir, 'events.pkl'), os.path.join(run_dir, 'events.pkl'))
+
+    if options.load_saved_state is not None:
+        import cPickle as pickle
+        with open(options.load_saved_state, 'rb') as f:
+            sg = pickle.load(f)
+        if options.perturb_amt > 0:
+            for eid in sg.evnodes.keys():
+                ev = sg.get_event(eid)
+                pev = copy.copy(ev)
+                perturb_ev(pev, options.perturb_amt)
+                print "perturbed", ev, "\nto", pev
+                sg.set_event(eid, pev)
+        eventpkl = os.path.abspath(os.path.realpath(os.path.join(os.path.dirname(os.path.dirname(options.load_saved_state)), "events.pkl")))
+        print "wave dir", eventpkl
+        os.symlink(eventpkl, os.path.join(run_dir, 'events.pkl'))
+
+    else:
+        init_events = options.init_openworld or (not options.openworld)
+        sg, evs, wave_dir = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, n_events=options.n_events, min_mb=options.min_mb, force_mb=options.force_mb, sites=sites, nm_type=options.nm_type)
+
+        print "got %d evs" % len(evs)
+        for ev in evs:
+            print ev
+
+        os.symlink(os.path.join(wave_dir, 'events.pkl'), os.path.join(run_dir, 'events.pkl'))
+
+    print "now running inference"
+
     np.random.seed(1)
     run_open_world_MH(sg, steps=options.steps,
                       logger=logger,

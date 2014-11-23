@@ -14,9 +14,9 @@ from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
-from sigvisa.infer.event_mcmc import ev_move_full
+from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, swap_association_move, hamiltonian_template_move, hamiltonian_move_reparameterized
+from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -124,6 +124,7 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
     if move_times is not None:
         move_times[move_name].append((step, t1-t0))
 
+###########################################################################
 
 
 ############################################################################
@@ -185,7 +186,8 @@ def run_open_world_MH(sg, steps=10000,
                       disable_moves=[],
                       start_step=0,
                       cyclic_template_moves=False,
-                      use_proxy_lp=False):
+                      use_proxy_lp=False,
+                      template_openworld_custom=None):
 
 
     global_moves = {'event_birth': ev_birth_move,
@@ -196,11 +198,18 @@ def run_open_world_MH(sg, steps=10000,
                             'evmb': ('mb', ('mb',)),
                             'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
     event_moves_special = {}
-    sta_moves = {'tmpl_birth': birth_move,
-                 'tmpl_death': death_move,
-                 'tmpl_split': split_move,
-                 'tmpl_merge': merge_move,
-                 'swap_association': swap_association_move} if enable_template_openworld else {}
+
+    if template_openworld_custom is not None:
+        sta_moves = template_openworld_custom
+    else:
+        if enable_template_openworld:
+            sta_moves = {'tmpl_birth': birth_move,
+                         'tmpl_death': death_move,
+                         'tmpl_split': split_move,
+                         'tmpl_merge': merge_move,
+                         'swap_association': swap_association_move}
+        else:
+            sta_moves = {'swap_association': swap_association_move}
 
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move_gaussian,
@@ -222,6 +231,9 @@ def run_open_world_MH(sg, steps=10000,
     tmpl_openworld_move_probability = 0.05
     ev_openworld_move_probability = .05
 
+    move_probs = defaultdict(lambda : 0.05)
+    move_probs["swap_association"] = 0.2
+
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
     move_times = defaultdict(list)
@@ -230,9 +242,12 @@ def run_open_world_MH(sg, steps=10000,
 
     if logger is None:
         logger = MCMCLogger()
-    run_dir = logger.run_dir
 
-    logger.start()
+    if logger != False:
+        run_dir = logger.run_dir
+        logger.start()
+    else:
+        run_dir = "/dev/null"
 
     for step in range(start_step, steps):
 
@@ -260,9 +275,10 @@ def run_open_world_MH(sg, steps=10000,
 
                 # moves to birth/death/split/merge new unassociated templates
                 for (move_name, fn) in sta_moves.items():
+                    move_prob = move_probs[move_name]
                     run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                              n_accepted=n_accepted, move_times=move_times,
-                             move_prob=tmpl_openworld_move_probability, cyclic=cyclic_template_moves,
+                             move_prob=move_probs, cyclic=cyclic_template_moves,
                              sg=sg, wave_node=wn)
 
                 # moves to adjust existing unass. templates
@@ -319,8 +335,8 @@ def run_open_world_MH(sg, steps=10000,
                      move_prob=ev_openworld_move_probability,
                      sg=sg, log_to_run_dir=run_dir)
 
-
-        logger.log(sg, step, n_accepted, n_attempted, move_times)
+        if logger != False:
+            logger.log(sg, step, n_accepted, n_attempted, move_times)
 
 
 

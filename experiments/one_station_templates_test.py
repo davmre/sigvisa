@@ -17,7 +17,7 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p
 
 BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "tests", "mcmc", "one_station_templates")
 
-def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, sta="FIA3", chan="SHZ", hardcoded=False, len_s=1000, n_templates=None, return_graph=False):
+def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, sta="FIA3", chan="SHZ", hardcoded=False, len_s=1000, n_templates=None, return_graph=False, rate=1e-3):
     mkdir_p(BASE_DIR)
 
     sg = SigvisaGraph(template_model_type="dummy", template_shape="lin_polyexp",
@@ -26,7 +26,7 @@ def sample_template(seed=None, wiggle_family="dummy", nm_type="ar", srate=1.0, s
 
     wave = Waveform(data = np.zeros(int(1000*srate)), srate=srate, stime=1239915900.0, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;hz_%.1f" % srate)
     wn = sg.add_wave(wave)
-    sg.uatemplate_rate = 1e-3
+    sg.uatemplate_rate = rate
 
     if seed is not None:
         np.random.seed(seed)

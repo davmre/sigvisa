@@ -110,14 +110,19 @@ class Gaussian(Distribution):
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
+        self.var = std**2
 
     def log_p(self, x,  **kwargs):
         mu = self.mean
-        sigma = self.std
-        lp = -.5 * np.log(2*np.pi*sigma*sigma) - .5 * (x - mu)**2 / sigma**2
-        if np.isnan(lp):
+        self.var = self.std**2 # todo: remove once I no longer need for backwards compatibility
+        sigma2 = self.var
+        lp = -.5 * np.log(2*np.pi*sigma2) - .5 * (x - mu)**2 / sigma2
+        if sigma2==0:
             lp = np.float("-inf")
         return lp
+
+    def deriv_log_p(self, x, **kwargs):
+        return -(x - self.mean)/self.var
 
     def predict(self, **kwargs):
         return self.mean

@@ -278,6 +278,14 @@ class SigvisaGraph(DirectedGraphModel):
                                           band=b, chan=c),
                            value=value)
 
+    def get_wave_node_by_atime(self, sta, band, chan, atime):
+        wns = self.station_waves[sta]
+        for wn in wns:
+            if band in wn.label and chan in wn.label:
+                if wn.st <= atime and wn.et >= atime:
+                    return wn
+        raise KeyError("no wave node exists for station %s chan %s band %s at time %.1f" % (sta, chan, band, atime))
+
 
     def nevents_log_p(self, n=None):
         if n is None:
@@ -446,6 +454,63 @@ class SigvisaGraph(DirectedGraphModel):
     def get_event(self, eid):
         return event_from_evnodes(self.evnodes[eid])
 
+    def set_event(self, eid, ev, preserve_templates=True, illegal_phase_action="raise"):
+        evdict = ev.to_dict()
+        evnodes = self.evnodes[eid]
+
+        atimes = dict()
+        amps = dict()
+
+        try:
+            'a' in preserve_templates
+            preserve_set = preserve_templates
+            preserve_templates=True
+        except TypeError:
+            preserve_set = None
+
+        if preserve_templates:
+            for n in self.extended_evnodes[eid]:
+                if preserve_set is not None and n.label not in preserve_set:
+                    continue
+                if "arrival_time" in n.label:
+                    atimes[n.label] = n.get_value()
+                elif "coda_height" in n.label:
+                    amps[n.label] = n.get_value()
+
+
+        for k in ('lon', 'lat', 'depth', 'time', 'mb', 'natural_source'):
+            evnodes[k].set_local_value(evdict[k], key=k, force_deterministic_consistency=False)
+
+        if not preserve_templates:
+            for n in self.extended_evnodes[eid]:
+                if n.deterministic():
+                    n.parent_predict()
+        else:
+            impossible_phases = []
+            for n in self.extended_evnodes[eid]:
+                if preserve_set is not None and n.label not in preserve_set:
+                    if n.deterministic():
+                        n.parent_predict()
+                    continue
+
+                if "arrival_time" in n.label:
+                    try:
+                        n.set_value(atimes[n.label])
+                    except ValueError as e: # requesting travel time for impossible phase
+                        if illegal_phase_action == "raise":
+                            raise e
+                        _,nphase,nsta,nchan,nband,nparam = parse_key(n.label)
+                        impossible_phases.append((nsta, nphase))
+                        continue
+                elif "coda_height" in n.label:
+                    n.set_value(amps[n.label])
+
+            if illegal_phase_action=="delete":
+                print "deleting impossible phases", impossible_phases
+                for (sta, phase) in impossible_phases:
+                    print "removing impossible %s at %s" % (sta, phase)
+                    self.delete_event_phase(eid, sta, phase)
+
     def delete_event_phase(self, eid, sta, phase):
         extended_evnodes = self.extended_evnodes[eid][:]
         for node in extended_evnodes:
@@ -512,11 +577,14 @@ class SigvisaGraph(DirectedGraphModel):
         self._topo_sort()
         return evnodes
 
-    def destroy_unassociated_template(self, nodes, nosort=False):
+    def destroy_unassociated_template(self, nodes=None, tmid=None, nosort=False):
+        if tmid is not None:
+            nodes = self.uatemplates[tmid]
         eid, phase, sta, chan, band, param = parse_key(nodes.values()[0].label)
-        uaid = -eid
-        del self.uatemplates[uaid]
-        self.uatemplate_ids[(sta,chan,band)].remove(uaid)
+        if tmid is None:
+            tmid = -eid
+        del self.uatemplates[tmid]
+        self.uatemplate_ids[(sta,chan,band)].remove(tmid)
 
         for (param, node) in nodes.items():
             self.remove_node(node)
