@@ -10,6 +10,7 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,PyObject *args);
+static PyObject * py_mean_travel_time_grad(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,PyObject *args);
@@ -22,6 +23,9 @@ static PyMethodDef SigModel_methods[] = {
   {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
    "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1)"
    " -> travel time in seconds"},
+  {"mean_travel_time_grad", (PyCFunction)py_mean_travel_time_grad, METH_VARARGS,
+   "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1)"
+   " -> travel time in seconds, d_atime_lon, d_atime_lat, d_atime_depth"},
   {"mean_travel_time_coord", (PyCFunction)py_mean_travel_time_coord, METH_VARARGS,
    "mean_travel_time(evlon, evlat, evdepth, sitelon, sitelat, sitedepth, phaseid-1)"
    " -> travel time in seconds"},
@@ -326,6 +330,41 @@ static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,
 }
 
 
+static PyObject * py_mean_travel_time_grad(SigModel_t * p_sigmodel,
+					   PyObject * args)
+{
+  double evlon, evlat, evdepth, evtime;
+  int phaseid;
+  double trvtime;
+  const char *sitename;
+
+  double d_atime_lon, d_atime_lat, d_atime_depth;
+
+  EarthModel_t * p_earth;
+
+  if (!PyArg_ParseTuple(args, "ddddsi", &evlon, &evlat, &evdepth, &evtime,
+                        &sitename, &phaseid))
+    return NULL;
+
+  p_earth = p_sigmodel->p_earth;
+
+  trvtime = EarthModel_ArrivalTime_Deriv(p_earth, evlon, evlat, evdepth, 0, phaseid,
+					 sitename, &d_atime_lon, &d_atime_lat, &d_atime_depth);
+  Site_t * p_site = get_site(p_sigmodel->p_earth, sitename, evtime);
+
+  if (trvtime == -2 || p_site == NULL) {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid site name, or site does not exist at specified time.");
+    return NULL;
+  }
+
+  int ref_siteid = p_site->ref_siteid;
+
+  trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,
+                                           ref_siteid-1, phaseid);
+
+  return Py_BuildValue("dddd", trvtime, d_atime_lon, d_atime_lat, d_atime_depth);
+}
+
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
                                       PyObject * args)
 {
@@ -358,6 +397,7 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
 
   return Py_BuildValue("d", trvtime);
 }
+
 
 static PyObject * py_srand(SigModel_t * p_sigmodel,
 			   PyObject * args)

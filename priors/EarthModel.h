@@ -166,10 +166,21 @@ PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args);
 
 
 
+double EarthModel_ArrivalTime_Deriv(EarthModel_t * p_earth, double lon,
+				    double lat, double depth, double evtime,
+				    int phaseid, const char *sitename,
+				    double *d_atime_lon, double *d_atime_lat,
+				    double *d_atime_depth);
 double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
                               double depth, double evtime,
                               int phaseid, const char *sitename);
 
+double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
+					  double lat, double depth, double evtime,
+					  int phaseid, double sitelon,
+					  double sitelat, double siteelev,
+					  double *d_atime_lon, double *d_atime_lat,
+					  double *d_atime_depth);
 PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
                                            PyObject * args);
 
