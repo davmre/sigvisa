@@ -1001,6 +1001,15 @@ int iangle_to_slowness(double iangle, int phase, double * slowness) {
   return success;
 }
 
+double bilinear_interpolate(double val11, double val12, double val21, double val22, double x, double y) {
+  return val11 * (1-x) * (1-y) + val12 * x * (1-y) + val21 * (1-x) * y + val22 * x * y;
+}
+
+void bilinear_interpolate_grad(double val11, double val12, double val21, double val22, double x, double y, double * dfdx, double * dfdy) {
+  *dfdx =  - val11 * (1-y) + val12 * (1-y) - val21 * y + val22 * y;
+  *dfdy =  - val11 * (1-x) - val12 * x  + val21 * (1-x) + val22 * x;
+}
+
 static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, double depth, double
                         distance, double * p_trvtime, double * p_slow,
 			double * p_iangle)
@@ -1092,58 +1101,13 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
   d_depth = p_phase->p_depths[depthi2] - p_phase->p_depths[depthi];
   d_dist = p_phase->p_dists[disti2] - p_phase->p_dists[disti];
 
-  /* compute the scaled manhattan distance to the four corners */
-  mdist11 = (depth - p_phase->p_depths[depthi]) / d_depth
-    + (distance - p_phase->p_dists[disti]) / d_dist;
+  double x = (distance - p_phase->p_dists[disti]) / d_dist;
+  double y = (depth - p_phase->p_depths[depthi]) / d_depth;
+  double d_x_distance = 1.0/d_dist;
+  double d_y_distance = 1.0/d_depth;
 
-  mdist12 = (depth - p_phase->p_depths[depthi]) / d_depth
-    + (p_phase->p_dists[disti2] - distance) / d_dist;
-
-  mdist21 = (p_phase->p_depths[depthi2] - depth) / d_depth
-    + (distance - p_phase->p_dists[disti]) / d_dist;
-
-  mdist22 = (p_phase->p_depths[depthi2] - depth) / d_depth
-    + (p_phase->p_dists[disti2] - distance) / d_dist;
-
-  /* compute the travel time and incident angle */
-  if (!mdist11) {
-    *p_trvtime = val11;
-    *p_iangle = iaval11;
-  }
-  else if (!mdist12) {
-    *p_trvtime = val12;
-    *p_iangle = iaval12;
-  }
-  else if (!mdist21) {
-    *p_trvtime = val21;
-    *p_iangle = iaval21;
-  }
-  else if (!mdist22) {
-    *p_trvtime = val22;
-    *p_iangle = iaval22;
-  }
-  else
-  {
-    assert((mdist11 > 0) && (mdist12 > 0) && (mdist21 > 0) && (mdist22 > 0));
-
-    /* for debugging*
-    if (fabs(distance - 137.1301) < 1e-3)
-    {
-      printf("depth %lf distance %lf\n", depth, distance);
-      printf("val11 %lf val12 %lf\nval21 %lf val22 %lf\n", val11, val12, val21,
-             val22);
-      printf("mdist11 %lf mdist12 %lf mdist21 %lf mdist22 %lf\n",
-             mdist11, mdist12, mdist21, mdist22);
-    }
-    **/
-
-    *p_trvtime = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21
-                  + val22 / mdist22)
-      / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
-    *p_iangle = (iaval11 / mdist11 + iaval12 / mdist12 + iaval21 / mdist21
-                  + iaval22 / mdist22)
-      / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
-  }
+  *p_trvtime = bilinear_interpolate(val11, val12, val21, val22, x, y);
+  *p_iangle = bilinear_interpolate(iaval11, iaval12, iaval21, iaval22, x, y);
 
   slo_val1 = (val12 - val11) / d_dist;
   slo_val2 = (val22 - val21) / d_dist;
@@ -1180,7 +1144,6 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
 }
 
 
-double bilinear_interpolate(double val11, double val12, double val21, double val22, double )
 
 static void travel_time_jac(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, double depth, double
                         distance, double * p_trvtime, double * p_slow,
@@ -1273,114 +1236,18 @@ static void travel_time_jac(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, 
   d_depth = p_phase->p_depths[depthi2] - p_phase->p_depths[depthi];
   d_dist = p_phase->p_dists[disti2] - p_phase->p_dists[disti];
 
-  /* compute the scaled manhattan distance to the four corners */
-  mdist11 = (depth - p_phase->p_depths[depthi]) / d_depth
-    + (distance - p_phase->p_dists[disti]) / d_dist;
+  double x = (distance - p_phase->p_dists[disti]) / d_dist;
+  double y = (depth - p_phase->p_depths[depthi]) / d_depth;
+  double d_x_distance = 1.0/d_dist;
+  double d_y_depth = 1.0/d_depth;
 
-  mdist12 = (depth - p_phase->p_depths[depthi]) / d_depth
-    + (p_phase->p_dists[disti2] - distance) / d_dist;
+  *p_trvtime = bilinear_interpolate(val11, val12, val21, val22, x, y);
+  *p_iangle = bilinear_interpolate(iaval11, iaval12, iaval21, iaval22, x, y);
 
-  mdist21 = (p_phase->p_depths[depthi2] - depth) / d_depth
-    + (distance - p_phase->p_dists[disti]) / d_dist;
-
-  mdist22 = (p_phase->p_depths[depthi2] - depth) / d_depth
-    + (p_phase->p_dists[disti2] - distance) / d_dist;
-
-
-  printf("disti %d disti2 %d d_dist %f val11 %f val12 %f val21 %f val22 %f mdist11 %f mdist12 %f mdist21 %f mdist22 %f\n", disti, disti2, d_dist, val11, val12, val21, val22, mdist11, mdist12, mdist21, mdist22);
-
-  double d_mdist11_distance = 1.0/d_dist;
-  double d_mdist12_distance = -1.0/d_dist;
-  double d_mdist21_distance = 1.0/d_dist;
-  double d_mdist22_distance = -1.0/d_dist;
-  double d_mdist11_depth = 1.0/d_depth;
-  double d_mdist12_depth = 1.0/d_depth;
-  double d_mdist21_depth = -1.0/d_depth;
-  double d_mdist22_depth = -1.0/d_depth;
-
-  double d_trvtime_mdist11 = 0, d_trvtime_mdist12 = 0, d_trvtime_mdist21=0, d_trvtime_mdist22 = 0;
-  double num=0, denom=0;
-  /* compute the travel time and incident angle */
-  if (!mdist11) {
-    *p_trvtime = val11;
-    *p_iangle = iaval11;
-
-    d_trvtime_mdist11 = (val12/mdist12 + val21/mdist21 + val22/mdist22 - val11/mdist12 - val11/mdist21 - val11/mdist22);
-    d_trvtime_mdist12 = 0;
-    d_trvtime_mdist21 = 0;
-    d_trvtime_mdist22 = 0;
-
-  }
-  else if (!mdist12) {
-    *p_trvtime = val12;
-    *p_iangle = iaval12;
-
-    d_trvtime_mdist12 = (val11/mdist11 + val21/mdist21 + val22/mdist22 - val12/mdist11 - val12/mdist21 - val12/mdist22);
-    d_trvtime_mdist11 = 0;
-    d_trvtime_mdist21 = 0;
-    d_trvtime_mdist22 = 0;
-
-  }
-  else if (!mdist21) {
-    *p_trvtime = val21;
-    *p_iangle = iaval21;
-
-    d_trvtime_mdist21 = (val11/mdist11 + val12/mdist12 + val22/mdist22 - val21/mdist11 - val21/mdist12 - val21/mdist22);
-    d_trvtime_mdist11 = 0;
-    d_trvtime_mdist12 = 0;
-    d_trvtime_mdist22 = 0;
-
-  }
-  else if (!mdist22) {
-    *p_trvtime = val22;
-    *p_iangle = iaval22;
-
-    d_trvtime_mdist22 = (val11/mdist11 + val12/mdist12 + val21/mdist21 - val22/mdist11 - val22/mdist12 - val22/mdist21);
-    d_trvtime_mdist11 = 0;
-    d_trvtime_mdist12 = 0;
-    d_trvtime_mdist21 = 0;
-  }
-  else
-  {
-    assert((mdist11 > 0) && (mdist12 > 0) && (mdist21 > 0) && (mdist22 > 0));
-
-    /* for debugging*
-    if (fabs(distance - 137.1301) < 1e-3)
-    {
-      printf("depth %lf distance %lf\n", depth, distance);
-      printf("val11 %lf val12 %lf\nval21 %lf val22 %lf\n", val11, val12, val21,
-             val22);
-      printf("mdist11 %lf mdist12 %lf mdist21 %lf mdist22 %lf\n",
-             mdist11, mdist12, mdist21, mdist22);
-    }
-    **/
-
-    num = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21
-                  + val22 / mdist22);
-    denom = (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
-
-    *p_trvtime =  num / denom;
-
-    d_trvtime_mdist11 = num / (mdist11*mdist11*denom*denom) - val11 / (mdist11*mdist11 * denom);
-    d_trvtime_mdist12 = num / (mdist12*mdist12*denom*denom) - val12 / (mdist12*mdist12 * denom);
-    d_trvtime_mdist21 = num / (mdist21*mdist21*denom*denom) - val21 / (mdist21*mdist21 * denom);
-    d_trvtime_mdist22 = num / (mdist22*mdist22*denom*denom) - val22 / (mdist22*mdist22 * denom);
-
-    *p_iangle = (iaval11 / mdist11 + iaval12 / mdist12 + iaval21 / mdist21
-                  + iaval22 / mdist22)
-      / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
-  }
-
-
-  *d_trvtime_distance = d_trvtime_mdist11 * d_mdist11_distance +
-    d_trvtime_mdist12 * d_mdist12_distance +
-    d_trvtime_mdist21 * d_mdist21_distance +
-    d_trvtime_mdist22 * d_mdist22_distance;
-  *d_trvtime_depth = d_trvtime_mdist11 * d_mdist11_depth +
-    d_trvtime_mdist12 * d_mdist12_depth +
-    d_trvtime_mdist21 * d_mdist21_depth +
-    d_trvtime_mdist22 * d_mdist22_depth;
-
+  double d_trvtime_x, d_trvtime_y;
+  bilinear_interpolate_grad(val11, val12, val21, val22, x, y, &d_trvtime_x, &d_trvtime_y);
+  *d_trvtime_distance = d_trvtime_x * d_x_distance;
+  *d_trvtime_depth = d_trvtime_y * d_y_depth;
 
   slo_val1 = (val12 - val11) / d_dist;
   slo_val2 = (val22 - val21) / d_dist;
@@ -1966,7 +1833,7 @@ double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
 				  &d_ec_ecolat, &d_ec_depth);
 
 
-  printf("lon %f lat %f delta %f esaz %f seaz %f trvtime %f ec %f\n", lon, lat, delta, esaz, seaz, trvtime, ec);
+  // printf("lon %f lat %f delta %f esaz %f seaz %f trvtime %f ec %f\n", lon, lat, delta, esaz, seaz, trvtime, ec);
 
   trvtime += ec;
   double d_ec_lat = d_ec_ecolat*GEOCENTRIC_COLAT_DERIV((90-lat) * DEG2RAD) * -DEG2RAD;
