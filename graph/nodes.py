@@ -254,7 +254,11 @@ class Node(object):
     def _parent_values(self):
         # return a dict of all keys provided by parent nodes, and their values
         for key in self.parent_keys_removed:
-            del self._pv_cache[key]
+            try:
+                del self._pv_cache[key]
+            except KeyError:
+                pass
+
         del self.parent_keys_removed
         self.parent_keys_removed = set()
         for (key, node) in self.parent_keys_changed:
@@ -401,6 +405,14 @@ class Node(object):
 
     def __repr__(self):
         return self.__str__()
+
+    #def __hash__(self):
+    #    try:
+    #        h =  hash(self.label)
+    #    except AttributeError:
+    #        h = 0
+    #    return h
+
 
 class DeterministicNode(Node):
 
