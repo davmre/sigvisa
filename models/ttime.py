@@ -108,6 +108,22 @@ def tt_predict(event, sta, phase=None, phaseid=None):
     meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1)
     return meantt
 
+def tt_predict_grad(lon, lat, depth, origin_time, sta, phase=None, phaseid=None):
+    s = Sigvisa()
+
+    if phaseid is None:
+        try:
+            phaseid = s.phaseids[phase]
+        except KeyError:
+            print "WARNING: unrecognized phase %s, treating as P phase" % phase
+            phaseid = 1
+
+    assert(origin_time >= 1)
+
+    meantt, dlon, dlat, ddepth = s.sigmodel.mean_travel_time_grad(lon, lat, depth, origin_time, sta, phaseid - 1)
+    return meantt, np.array((dlon, dlat, ddepth, 1.0))
+
+
 def tt_log_p(x, event, sta, phase):
     s = Sigvisa()
     phaseid = s.phaseids[phase]

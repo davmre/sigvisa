@@ -16,7 +16,7 @@ from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.distributions import Gaussian
 from sigvisa.models.signal_model import extract_arrival_from_key, unify_windows
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle_for_proposal
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing, mh_accept_util
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
@@ -58,9 +58,11 @@ def get_signal_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None,
     if peak_time is None:
         peak_time = tmvals['arrival_time'] + np.exp(tmvals['peak_offset'])
 
+    unexplained = wn.get_value().data - wn.assem_signal()
+
     peak_idx = int((peak_time - wn.st) * wn.srate)
     peak_period_samples = int(peak_period_s * wn.srate)
-    peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
+    peak_data=unexplained[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
 
     # if we land outside of the signal window, or during an unobserved (masked) portion,
     # we'll just sample from the event-conditional prior instead
@@ -69,14 +71,29 @@ def get_signal_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None,
 
     peak_height = peak_data.mean()
 
-    env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
+    env_height = max(peak_height - wn.nm.c, wn.nm.c/1000.0)
 
     peak_log_std = float(safe_log_vec(peak_data, default=np.nan).std())
 
     if np.isnan(peak_log_std):
         peak_log_std = 0.5
+    std = max(peak_log_std, 0.1)
 
-    return Gaussian(mean=np.log(env_height), std = max(peak_log_std, 0.1))
+    # the log-amplitude model isn't very good near the noise floor,
+    # since noise is additive and any amplitude up to the noise floor
+    # is plausible. so we make sure our proposal distribution gives
+    # the noise floor a z-score of at most 2.
+
+    # if we're less than the noise floor, pretend we're at halfway between the noise floor and -7
+    if env_height < wn.nm.c:
+        env_height_floor=-7
+    else:
+        env_height_floor = np.log(env_height - wn.nm.c)
+    env_height = np.exp((np.log(env_height) + env_height_floor)/2.0)
+
+    std = max(std, (np.log(wn.nm.c) - np.log(env_height))/2.0)
+
+    return Gaussian(mean=np.log(env_height), std=std)
 
 #######################################################################
 
@@ -893,17 +910,6 @@ from sigvisa.models.distributions import Uniform, Laplacian, Gaussian
 
 import scipy.stats
 
-def mh_accept_util(lp_old, lp_new, log_qforward=0, log_qbackward=0, jacobian_determinant=0, accept_move=None, revert_move=None):
-    # print lp_new, lp_old, log_qbackward, log_qforward, jacobian_determinant, "FINAL", (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant
-    u = np.random.rand()
-    if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
-        if accept_move:
-            accept_move()
-        return True
-    else:
-        if revert_move:
-            revert_move()
-        return False
 
 def sort_node_list(node_list, sorted_params):
     sorted_node_list = []

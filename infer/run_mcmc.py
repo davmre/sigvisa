@@ -13,6 +13,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
+from sigvisa.infer.event_swap import swap_events_move
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
@@ -190,8 +191,13 @@ def run_open_world_MH(sg, steps=10000,
                       template_openworld_custom=None):
 
 
-    global_moves = {'event_birth': ev_birth_move,
-                    'event_death': ev_death_move} if enable_event_openworld else {}
+    if enable_event_openworld:
+        global_moves = {'event_swap': swap_events_move,
+                        'event_birth': ev_birth_move,
+                        'event_death': ev_death_move}
+    else:
+        global_moves = {'event_swap': swap_events_move}
+
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
                             'evloc_big': ('loc', ('lon', 'lat')),
                             'evtime': ('time', ('time',)),
@@ -338,8 +344,14 @@ def run_open_world_MH(sg, steps=10000,
         if logger != False:
             logger.log(sg, step, n_accepted, n_attempted, move_times)
 
-
-
+        """"
+        atnodes = [n for n in sg.extended_evnodes[1] if "arrival_time" in n.label]
+        for n in atnodes:
+            at1 = n.get_value()
+            n.parent_predict()
+            at2 = n.get_value()
+            assert(np.abs(at1-at2) < 1e-8)
+        """
 
 
 def get_last_savepoint(run_dir):

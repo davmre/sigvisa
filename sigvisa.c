@@ -356,6 +356,10 @@ static PyObject * py_mean_travel_time_grad(SigModel_t * p_sigmodel,
     PyErr_SetString(PyExc_ValueError, "EarthModel: invalid site name, or site does not exist at specified time.");
     return NULL;
   }
+  if (trvtime == -1) {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: cannot compute travel time for this phase; depth and distance are out of bounds.");
+    return NULL;
+  }
 
   int ref_siteid = p_site->ref_siteid;
 
@@ -387,6 +391,11 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
 
   if (trvtime == -2 || p_site == NULL) {
     PyErr_SetString(PyExc_ValueError, "EarthModel: invalid site name, or site does not exist at specified time.");
+    return NULL;
+  }
+
+  if (trvtime == -1) {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: cannot compute travel time for this phase; depth and distance are out of bounds.");
     return NULL;
   }
 

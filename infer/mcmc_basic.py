@@ -46,6 +46,19 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
             n.set_value(key=key, value=val)
         return False
 
+def mh_accept_util(lp_old, lp_new, log_qforward=0, log_qbackward=0, jacobian_determinant=0, accept_move=None, revert_move=None):
+    # print lp_new, lp_old, log_qbackward, log_qforward, jacobian_determinant, "FINAL", (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant
+    u = np.random.rand()
+    if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
+        if accept_move:
+            accept_move()
+        return True
+    else:
+        if revert_move:
+            revert_move()
+        return False
+
+
 def hmc_step_reversing(q, logpdf, logpdf_grad, L_blocks, eps,
                        block_size=5, min_block_std=1,
                        max_block_std=1000, force_p=None):

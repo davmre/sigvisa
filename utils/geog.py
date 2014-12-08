@@ -217,5 +217,17 @@ def azimuth_gap(evlon, evlat, sites):
         gap = 360
     return gap
 
+def wrap_lonlat(lon, lat):
+    lon = (lon + 180) % 360 - 180
+
+    # from http://research.microsoft.com/en-us/projects/wraplatitudelongitude/
+    # I'm sure there's a fast non-trig way to do this, but I'm too lazy to figure it out.
+    if lat < -90 or lat > 90:
+        rlat = lat/180.0 *np.pi
+        rlat = np.arctan(np.sin(rlat)/np.abs(np.cos(rlat)))
+        lat = rlat /np.pi * 180
+
+    return lon, lat
+
 if __name__ == "__main__":
     _test()

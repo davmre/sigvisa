@@ -110,8 +110,20 @@ class Counter(dict):
         """
         total = float(self.totalCount())
         if total == 0: return
+
         for key in self.keys():
             self[key] = self[key] / total
+
+
+        if total==np.inf:
+            keys, vals = zip(*self.items())
+            f = np.isfinite(vals)
+            if np.sum(f) != len(vals)-1:
+                raise ValueError("trying to normalize a counter with multiple non-finite elements!")
+            nf_idx = np.arange(len(vals))[~f][0]
+            nf_key = keys[nf_idx]
+            self[nf_key] = 1.0
+
 
     def sample(self):
         choice = np.random.rand()

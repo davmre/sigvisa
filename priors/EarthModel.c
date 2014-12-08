@@ -1822,6 +1822,7 @@ double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
 
   travel_time_jac(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle, &d_trvtime1_depth, &d_trvtime1_delta);
 
+
   if (trvtime < 0)
     return -1;
 
@@ -1833,7 +1834,7 @@ double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
 				  &d_ec_ecolat, &d_ec_depth);
 
 
-  // printf("lon %f lat %f delta %f esaz %f seaz %f trvtime %f ec %f\n", lon, lat, delta, esaz, seaz, trvtime, ec);
+  //printf("lon %f lat %f delta %f esaz %f seaz %f trvtime %f ec %f\n", lon, lat, delta, esaz, seaz, trvtime, ec);
 
   trvtime += ec;
   double d_ec_lat = d_ec_ecolat*GEOCENTRIC_COLAT_DERIV((90-lat) * DEG2RAD) * -DEG2RAD;

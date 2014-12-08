@@ -102,7 +102,10 @@ class ObservedSignalNode(Node):
 
 
     def __str__(self):
-        s = "Signal node w/ model wave %s" % (self.mw)
+        try:
+            s = "Signal node w/ model wave %s" % (self.mw)
+        except AttributeError:
+            s = "Uninitialized signal node"
         return s
 
     def set_value(self, value):
