@@ -29,13 +29,13 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.patches as mpatches
 
+from stat import S_ISREG, ST_CTIME, ST_MODE
 
 
 
 
 
-
-def mcmc_list_view(request):
+def mcmc_list_view(request, sort_by_time=False):
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
@@ -43,10 +43,11 @@ def mcmc_list_view(request):
     mcmc_run_dirs = os.listdir(mcmc_log_dir)
 
     mcmc_runs = []
-    for rundir in sorted(mcmc_run_dirs):
+    for rundir in mcmc_run_dirs:
         mcmcrun = dict()
         mcmcrun['dir'] = rundir
-        mcmcrun['time'] = str(time.ctime(os.path.getmtime(os.path.join(mcmc_log_dir, rundir))))
+        mcmcrun['machine_time'] = os.path.getctime(os.path.join(mcmc_log_dir, rundir))
+        mcmcrun['time'] = str(time.ctime(mcmcrun['machine_time']))
 
         cmd = ""
         try:
@@ -56,6 +57,11 @@ def mcmc_list_view(request):
             pass
         mcmcrun['cmd'] = cmd
         mcmc_runs.append(mcmcrun)
+
+    if sort_by_time:
+        mcmc_runs = sorted(mcmc_runs, key = lambda  r : r['machine_time'], reverse=True)
+    else:
+        mcmc_runs = sorted(mcmc_runs, key = lambda  r : r['dir'], reverse=True)
 
     print "loaded %d mcmc runs" % (len(mcmc_run_dirs),)
 
