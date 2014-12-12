@@ -42,7 +42,7 @@ def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatempla
         try:
             sta = s.get_default_sta(site)
             chan = s.canonical_channel_name[s.default_vertical_channel[sta]]
-            wave = Waveform(data = np.zeros(2000), srate=1.0, stime=stime, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;smooth_15;hz_1.0")
+            wave = Waveform(data = np.zeros(2000), srate=1.0, stime=stime, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;hz_1.0")
             wns[sta] = sg.add_wave(wave)
         except Exception as e:
             print e
@@ -221,6 +221,8 @@ def main():
         eventpkl = os.path.abspath(os.path.realpath(os.path.join(os.path.dirname(os.path.dirname(options.load_saved_state)), "events.pkl")))
         print "wave dir", eventpkl
         os.symlink(eventpkl, os.path.join(run_dir, 'events.pkl'))
+
+        sg.uatemplate_rate = options.uatemplate_rate
 
     else:
         init_events = options.init_openworld or (not options.openworld)
