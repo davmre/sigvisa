@@ -369,7 +369,7 @@ def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, n_
 
     # refine the highest-scoring proposals using all five stations
     refined_proposals = []
-    for residual, z, stations, tmids in sorted(scored_proposals)[:n_refine]:
+    for residual, z, stations, tmids in sorted(scored_proposals, key = lambda s : s[0])[:n_refine]:
         print "refining", z, "with residual", residual
         z, C, sqerror, abserror = eval_associations(sg, stations, tmids, init_z=z)
         print "refined to", z, "with abserror", abserror
