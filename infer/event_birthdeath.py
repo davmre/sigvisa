@@ -486,23 +486,28 @@ def death_proposal_distribution(sg):
     for eid in sg.evnodes.keys():
         c[eid] = death_proposal_log_ratio(sg, eid)
 
-    c_log = copy.copy(c)
     c.normalize_from_logs()
 
-    return c, c_log
+    # with probability ~.1, just sample an event uniformly.
+    # this way all events have some possibility to die.
+    for k in c.keys():
+        c[k] += .1/len(c)
+    c.normalize()
+
+    return c
 
 def sample_death_proposal(sg):
-    c, c_log = death_proposal_distribution(sg)
+    c = death_proposal_distribution(sg)
     if len(c) == 0:
         return None, 1.0
     eid = c.sample()
-    return eid, c_log[eid]
+    return eid, np.log(c[eid])
 
 def death_proposal_logprob(sg, eid):
-    c, c_log = death_proposal_distribution(sg)
+    c = death_proposal_distribution(sg)
     if len(c) == 0:
         return 1.0
-    return c_log[eid]
+    return np.log(c[eid])
 
 
 def ev_death_helper(sg, eid, associate_using_mb=True):
@@ -728,7 +733,7 @@ def ev_birth_helper_full(sg, location_proposal, eid=None):
 def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_action=None):
 
     n_current_events = len(sg.evnodes)
-    log_qforward = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
+    birth_position_lp = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
 
     lp_old = sg.current_log_p()
     log_qforward, log_qbackward, revert_move, proposal_extra = ev_birth_helper_full(sg, location_proposal)
@@ -736,16 +741,17 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
     (extra, eid, associations) = proposal_extra
 
+    log_qforward += birth_position_lp
     log_qbackward += death_proposal_logprob(sg, eid)
 
     def revert():
         if revert_action is not None:
-            revert_action(proposal_extra)
+            revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
         revert_move()
 
     def accept():
         if accept_action is not None:
-            accept_action(proposal_extra)
+            accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
 
     print "birth move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
 
@@ -753,7 +759,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
 def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
 
-    def revert_action(proposal_extra):
+    def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, associations = proposal_extra
         if np.random.rand() < 0.1:
             sites = sg.site_elements.keys()
@@ -761,7 +767,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
             visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, 'last_hough.png'))
             print "done"
 
-    def accept_action(proposal_extra):
+    def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, associations = proposal_extra
         if log_to_run_dir is not None:
             log_event_birth(sg, hough_array, log_to_run_dir, eid, associations)
@@ -770,8 +776,23 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
 
     return ev_birth_move_abstract(sg, location_proposal=hough_location_proposal, revert_action=revert_action, accept_action=accept_action, **kwargs)
 
-def ev_birth_move_lstsqr(sg, **kwargs):
-    return ev_birth_move_abstract(sg, location_proposal=overpropose_new_locations, **kwargs)
+def ev_birth_move_lstsqr(sg, log_to_run_dir=None, **kwargs):
+
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        refined_proposals, eid, associations = proposal_extra
+        log_file = os.path.join(log_to_run_dir, "lsqr_proposals.txt")
+
+        # proposed event should be the most recently created
+        proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
+
+        with open(log_file, 'a') as f:
+            f.write("proposed ev: %s\n" % proposed_ev)
+            f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            for abserror, z, C in refined_proposals:
+                f.write("  %.2f lon %.2f lat %.2f depth %.2f time %.2f\n" % (abserror, z[0], z[1], z[2], z[3]))
+            f.write("\n")
+
+    return ev_birth_move_abstract(sg, location_proposal=overpropose_new_locations, accept_action=log_action, revert_action=log_action, **kwargs)
 
 ##############################################################
 
