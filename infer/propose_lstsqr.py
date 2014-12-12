@@ -379,7 +379,8 @@ def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, n_
         best_abs, z, C = sorted(refined_proposals)[0]
     else:
         z = np.zeros((4,))
-        C = np.eye(4)
+        z[3] = sg.event_start_time
+        C = np.eye(4) * 100
 
     t4 = time.time()
 
