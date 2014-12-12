@@ -677,7 +677,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         for (site, element_list) in self.site_elements.iteritems():
             for phase in self.predict_phases_site(ev=ev, site=site):
-                print "adding phase", phase, "at site", site
+                #print "adding phase", phase, "at site", site
                 self.phases_used.add(phase)
                 if self.absorb_n_phases:
                     if phase == "Pn":

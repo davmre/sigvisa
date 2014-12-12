@@ -210,12 +210,15 @@ if (l > 0) {
         return bounds
 
     def unassociated_model(self, param, nm=None):
+
         if nm is not None and param=="coda_height":
-            mu = np.log(nm.c * .3)
+            return self.uamodels[param]
+            """mu = np.log(nm.c * .3)
             if self.hack_force_mean is not None:
                 mu = self.hack_force_mean
             std = 0.5
 
             return Gaussian(mu, std)
+            """
         else:
             return self.uamodels[param]

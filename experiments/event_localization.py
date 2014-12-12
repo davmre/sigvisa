@@ -188,6 +188,8 @@ def main():
                       help="type of noise model to use (ar)")
     parser.add_option("--template_move_type", dest="template_move_type", default="hamiltonian", type="str", help="options are 'hamiltonian' (default), 'rw', or 'both'")
     parser.add_option("--run_label", dest="run_label", default="", type="str", help="any label to describe additional properties of this run")
+    parser.add_option("--skip", dest="skip", default=50, type="int",
+                      help="how often to print/save MCMC state, in steps (50)")
 
 
     (options, args) = parser.parse_args()
@@ -201,7 +203,7 @@ def main():
     phases = options.phases.split(',')
     sites = options.sites.split(',')
 
-    logger = MCMCLogger(run_dir=None, write_template_vals=True, dump_interval=50)
+    logger = MCMCLogger(run_dir=None, write_template_vals=True, dump_interval=options.skip)
     run_dir = logger.run_dir
     mkdir_p(run_dir)
 

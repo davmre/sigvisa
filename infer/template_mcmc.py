@@ -53,12 +53,20 @@ def node_set_value(nodes, param, value):
 
 ######################################################################
 
-def get_signal_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None, peak_period_s = 2.0):
+def get_signal_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None, peak_period_s = 2.0, exclude_arr=None):
 
     if peak_time is None:
         peak_time = tmvals['arrival_time'] + np.exp(tmvals['peak_offset'])
 
-    unexplained = wn.get_value().data - wn.assem_signal()
+    if exclude_arr is None:
+        pred_signal = wn.assem_signal()
+        unexplained = wn.get_value().data - wn.assem_signal()
+    else:
+        eid, phase = exclude_arr
+        unexplained = wn.unexplained_signal(eid, phase)
+
+
+
 
     peak_idx = int((peak_time - wn.st) * wn.srate)
     peak_period_samples = int(peak_period_s * wn.srate)
@@ -730,8 +738,8 @@ def wiggle_proposal_lprob_from_signal(eid, phase, wave_node, wg, wnodes=None, wv
 def birth_move(sg, wave_node,  **kwargs):
     lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move = birth_helper(sg, wave_node, **kwargs)
     result = mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept_move, revert_move=revert_move)
-    if result:
-        print "accepted birth move"
+    #if result:
+        #print "accepted birth move"
     return result
 
 def birth_proposal(sg, wave_node, fix_result):
@@ -928,6 +936,11 @@ def set_template_values(tmnodes, vals, sorted_params):
         key, node = tmnodes[param]
         node.set_value(key=key, value=v)
 
+def set_template_values_from_dict(tmnodes, d):
+    for param,v in d.items():
+        key, node = tmnodes[param]
+        node.set_value(key=key, value=v)
+
 def template_logprob(nodes, vals, sorted_params, no_atime=False):
     v = get_template_values(nodes, sorted_params)
     set_template_values(nodes, vals, sorted_params)
@@ -1064,13 +1077,11 @@ def sample_arrivals_to_merge_twostep(sg, wn, width=MERGE_PROPOSAL_WIDTH_S):
 def merge_move(sg, wave_node, split_atime_width=MERGE_PROPOSAL_WIDTH_S, split_noop_prob=0.9):
     arr1, arr2, merge_choice_prob, sorted_arrs = sample_arrivals_to_merge_twostep(sg, wave_node, width=split_atime_width)
 
-    print "merge called"
-
     if arr1 is None:
         return False
 
     lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move = merge_helper(sg, wave_node, arr1, arr2, merge_choice_prob, split_atime_width=split_atime_width, split_noop_prob=split_noop_prob)
-    print "merge acceptance", (lp_new + log_qbackward) - (lp_old + log_qforward), "lp diff", lp_new-lp_old, "proposal lratio", log_qbackward - log_qforward
+    #print "merge acceptance", (lp_new + log_qbackward) - (lp_old + log_qforward), "lp diff", lp_new-lp_old, "proposal lratio", log_qbackward - log_qforward
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept_move, revert_move=revert_move)
 
 def remove_old_template(sg, wn, arr2, tmnodes2):
@@ -1364,7 +1375,7 @@ def merge_proposal_distribution(sg, wn, eid, phase, fix_result=None, use_ar_nois
 
     # optimize the decay params
     w_end_idx = min(wn.npts, max(w_end_idx, peak_idx_int + int(25.0*wn.srate)))
-    print "fitting to window of len", w_end_idx - w_start_idx
+    #print "fitting to window of len", w_end_idx - w_start_idx
     if use_ar_noise:
         decay_signal_idx = peak_idx_int
         (coda_height, peak_decay, coda_decay), decay_lp = amp_decay_proposal_laplace_ar(wn, tg, unexplained_signal[w_start_idx:w_end_idx],
@@ -1543,13 +1554,14 @@ def merge_helper(sg, wn, arr1, arr2, merge_choice_prob, split_atime_width, split
     remove_old_template(sg, wn, arr2, n2)
     if new_style:
         pv, lp = merge_proposal_distribution(sg, wn, eid1, phase1, fix_result=None, use_ar_noise=True)
-        proposed_vals = np.array([pv[sp] for sp in sp1])
+        #proposed_vals = np.array([pv[sp] for sp in sp1])
+        set_template_values_from_dict(n1, pv)
         log_qforward += lp
     else:
         proposal = get_merge_distribution(sg, wn, arr1, n1, sp1, **merge_dist_options)
         proposed_vals = proposal.rvs()
         log_qforward += proposal.logpdf(proposed_vals)
-    set_template_values(n1, proposed_vals, sp1)
+        set_template_values(n1, proposed_vals, sp1)
 
     lp_new = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_nodes_hack(n1), n=n_arrs-1)
     #lp_new_full = sg.current_log_p() - sg.ntemplates_sta_log_p(sta, n=n_arrs) + sg.ntemplates_sta_log_p(sta, n=n_arrs-1)
@@ -1674,7 +1686,6 @@ def split_helper(sg, wn, arr, k, sorted_arrs, atime_width, t1_values=None, t2_va
     log_qbackward += safe_log(c1[c1_idx]) + safe_log(c2[c2_idx])
 
     def accept_move():
-        assert(np.abs(sg.current_log_p() - lp_new) < 1e-10)
         pass
 
     def revert_move():

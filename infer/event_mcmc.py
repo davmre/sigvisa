@@ -18,7 +18,7 @@ from sigvisa.learn.train_param_common import load_modelid
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
-from sigvisa.infer.event_birthdeath import sample_template_to_associate, template_association_logodds, associate_template, unassociate_template, sample_deassociation_proposal, template_association_distribution, phase_template_proposal_logp, deassociation_logprob, propose_phase_template
+from sigvisa.infer.event_birthdeath import sample_template_to_associate, template_association_logodds, associate_template, unassociate_template, sample_deassociation_proposal, template_association_distribution, propose_phase_template, deassociation_logprob
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move, get_sorted_arrivals, relevant_nodes_hack
@@ -34,7 +34,8 @@ import sigvisa.source.brune_source as brune
 from scipy.optimize import leastsq
 
 
-from sigvisa.infer.propose import propose_event_from_hough
+from sigvisa.infer.propose_hough import propose_event_from_hough
+from sigvisa.infer.propose_lstsqr import ev_lstsqr_dist
 
 fixed_node_cache = dict()
 relevant_node_cache = dict()
@@ -265,7 +266,7 @@ class UpdatedNodeLPs(object):
 
     def register_new_uatemplate(self, sg, tmid, wn_invariant=True):
         assert(wn_invariant)
-        tmnodes = sg.uatemplates[tmid].values()
+        tmnodes = sg.uatemplates[tmid]
         for n in tmnodes.values():
             self.nodes_added.add(n)
         eid, phase, sta, chan, band, param = parse_key(tmnodes.values()[0].label)
@@ -547,7 +548,7 @@ def ev_phasejump(sg, eid, new_ev, params_changed, adaptive_blocking=False, birth
                     forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_post(sg, site, phase, eid))
                     inverse_fns.append( lambda sta=sta,phase=phase,eid=eid: add_phase_template(sg, sta, eid, phase) )
                     inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
-                    tmp = phase_template_proposal_logp(sg, sta, eid, phase, template_param_array)
+                    tmp = propose_phase_template(sg, sta, eid, phase, template_param_array, fix_result=True, ev=old_ev)
                     reverse_logprob += tmp
                     print "proposing to delete %s for %d at %s (lp %f)"% (phase, eid, sta, deassociate_logprob),
 
@@ -744,171 +745,6 @@ def ev_lonlat_frames():
     for i in range(40, 10000, 40):
         ev_lonlat_density(frame=i, fname='ev_viz_step%06d.png' % i)
 
-
-
-
-def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targets=None, return_full=False):
-    """
-    we start with a bunch of arrival times. take these as gospel.
-    we can do this for *all* phases if we like. or just choose a phase, or a subset of stations, or whatever.
-    now we want to find the location that minimizes travel-time residuals.
-    to do this, we can
-    """
-
-    def get_atime(eid, sta, phase):
-        n = get_parent_value(eid=eid, sta=sta, phase=phase, param_name='arrival_time', chan=None, band=None,
-                             parent_values=sg.nodes_by_key, return_key=False)
-        return n.get_value()
-
-    if stas is None:
-        stas = sg.station_waves.keys()
-
-    if targets is None:
-        assert(eid is not None)
-        targets = []
-        for sta in sorted(stas):
-            phases = sg.ev_arriving_phases(eid, sta)
-            for phase in phases:
-                targets.append((sta, phase))
-
-    if atimes is None:
-        assert(eid is not None)
-        atimes = np.array([get_atime(eid, sta, phase) for (sta, phase) in targets])
-
-    # assume any station with a tt residual greater than 30s is a bad association,
-    # which we don't want to use.
-
-    # so that the optimization is well conditioned, we
-    # rescale lon/lat/depth so that incrementing those
-    # variables has approximately the same effect as a
-    # 1s increment in origin time
-    # 1 degree ~= 100 km ~= 20s of traveltime
-    # 1km of depth ~= 0.2s of traveltime
-    scaling = np.array((20.0, 20.0, 0.2, 1.0))
-    p0 = np.array((0.0, 0.0, 0.0, np.min(atimes)-500))
-
-    # assume a tt residual stddev of 5.0
-    # TODO: use the actual values learned from data
-    sigma = np.ones((len(targets)+1,)) * residual_var
-
-    def tt_residuals_jac(x):
-        lon, lat, depth, origin_time = x / scaling + p0
-
-        #with open('evals.txt', 'a') as f:
-        #    f.write(str(x)+"\n")
-        pred_tts = np.zeros(len(targets))
-        jac = np.zeros((4, len(targets)+1))
-
-        if (~np.isfinite(x)).any():
-            return np.ones(x.shape) * np.nan, np.ones(jac.shape) * np.nan
-
-
-        for i, (sta, phase) in enumerate(targets):
-            try:
-                tt, grad = tt_predict_grad(lon, lat, depth, origin_time, sta, phase=phase)
-                pred_tts[i] = tt
-                jac[:, i] = -grad / scaling
-            except ValueError as e:
-                pred_tts[i] = 1e10
-        residuals = atimes-(origin_time + pred_tts)
-
-        # give a smooth warning to the optimizer that we're
-        # about to exceed the depth limit
-        if depth < 700:
-            depth_penalty = np.exp(1.0/(700-depth)) - 1
-            jac[2, len(targets)] = ( (depth_penalty + 1) / (depth-700)**2 ) / scaling[2]
-        else:
-            depth_penalty = 1e40
-        rr = np.concatenate([residuals, (   depth_penalty,  )])
-        return rr / sigma, jac/sigma
-
-    class TTResidualCache(object):
-        def __init__(self):
-            self.x = np.ones((4,))
-
-        def ttr(self, x):
-            if not (x == self.x).all():
-                self.x[:] = x
-                self.cached_ttr, self.cached_jac = tt_residuals_jac(x)
-            return self.cached_ttr
-
-        def jac(self, x):
-            if not (x == self.x).all():
-                self.x[:] = x
-                self.cached_ttr, self.cached_jac = tt_residuals_jac(x)
-            return self.cached_jac
-
-    ttrcache = TTResidualCache()
-
-    def sqerror(x):
-        return .5 * np.sum(ttrcache.ttr(x)**2)
-
-    def sqerror_grad(x):
-        ttr, jac = tt_residuals_jac(x)
-        return np.sum(ttr * jac, axis=1)
-
-    def unscaled_sqerror(x):
-        xs = (x - p0)*scaling
-        return sqerror(xs)
-
-    def jac(x):
-        return approx_gradient(sqerror, x0, 1e-4)
-
-    def abserror(x):
-        return np.sum(np.abs(ttrcache.ttr(x)))
-
-    def abserror_grad(x):
-        ttr, jac = tt_residuals_jac(x)
-        signs = ((ttr > 0) - .5) * 2
-        return np.sum(jac * signs, axis=1)
-
-    x0 = -p0 * scaling
-    x0[3] = -p0[3] + np.min(atimes) - 100
-
-    n_init_pts = 20
-    min_atime = np.min(atimes)
-    min_sqr = np.inf
-    best_x = None
-    best_cov = None
-    for i in range(n_init_pts):
-        init_depth = 0.0 if np.random.rand() < 0.8 else 400.0
-        init_time = min_atime - np.random.rand() * 1000
-        init_lon = np.random.rand()*360.0 - 180.0
-        init_lat = np.random.rand()*180.0 - 90.0
-        z0 = np.array((init_lon, init_lat, init_depth, init_time))
-        x0 = (z0 - p0) * scaling
-        x1, cov_x, info_dict, mesg, ier = scipy.optimize.leastsq(ttrcache.ttr, x0, Dfun=ttrcache.jac, full_output=True, col_deriv=True)
-        sqr = sqerror(x1)
-        if sqr < min_sqr:
-            best_x = x1
-            best_cov = cov_x
-            min_sqr = sqr
-
-    x1 = best_x
-    cov_x = best_cov
-
-    scaling_mat = np.outer(scaling, scaling)
-
-    if cov_x is None:
-        try:
-            r = scipy.optimize.minimize(sqerror, x1, jac=sqerror_grad)
-            x2 = r.x
-            H = nd.Hessian(sqerror).hessian(x2)
-            chol = np.linalg.cholesky(H)
-            cx = np.linalg.inv(H)
-            cov_x = cx
-            x1 = x2
-        except np.linalg.LinAlgError as e:
-            print "linalg error", e
-            cov_x = np.diag(scaling**2)
-
-    z = x1 /scaling + p0
-    cov_x /= scaling_mat
-
-    if return_full:
-        return z, cov_x, sqerror(x1), abserror(x1)
-    else:
-        return z, cov_x
 
 def propose_event_lsqr_prob(sg, eid, **kwargs):
     z, C = ev_lstsqr_dist(sg, eid, **kwargs)

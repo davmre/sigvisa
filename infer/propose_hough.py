@@ -301,7 +301,7 @@ def propose_event_from_hough(hough_array, stime, etime):
 
     print "proposal time", t1-t0, t2-t1
 
-    ev = Event(lon=lon, lat=lat, time=t, depth=0, mb=4.5, natural_source=True)
+    ev = Event(lon=lon, lat=lat, time=t, depth=0, mb=4.0, natural_source=True)
     return ev, ev_prob
 
 def visualize_hough_array(hough_array, sites, fname, timeslice=None):
@@ -348,7 +348,9 @@ def visualize_hough_array(hough_array, sites, fname, timeslice=None):
         lon = max(-180 + i * lonbin_deg, -180)
         for j in range(latbins):
             lat = max(-90 + j * latbin_deg, -90)
-            draw_cell(left_lon = lon, bottom_lat = lat, alpha = location_array[i,j]/m)
+            alpha = location_array[i,j]/m
+            if alpha > 1e-2:
+                draw_cell(left_lon = lon, bottom_lat = lat, alpha = alpha)
 
     # draw the stations
     s = Sigvisa()
@@ -482,80 +484,11 @@ hough_array(i,j,k) = exp(hough_array(i,j,k));
     """
     weave.inline(code,['latbins', 'lonbins', 'timebins', 'hough_array'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-def main():
-    """
+def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None):
+    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time)
+    if fix_result:
+        return np.log(event_prob_from_hough(fix_result, hough_array, sg.event_start_time, sg.end_time))
+    else:
+        proposed_ev, ev_prob = propose_event_from_hough(hough_array, sg.event_start_time, sg.end_time)
 
-    Test/debug Hough proposals using the 2009 DPRK event.
-
-    """
-
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-
-    ev = get_event(evid=5393637)
-
-
-    sites = ['AKASG', 'YKA', 'JNU', 'ILAR', 'WRA', 'FINES', 'ASAR', 'NVAR', 'STKA']
-    statimes = [ev.time + tt_predict(event=ev, sta=sta, phase=phase) for (sta, phase) in itertools.product(sites, ['P',])]
-    sig_stime = np.min(statimes) - 60
-    sig_etime = np.max(statimes) + 640
-
-    infer_stime = ev.time - 700
-    infer_etime = sig_etime
-
-    """
-    sg = SigvisaGraph(template_shape = "paired_exp", template_model_type = "gp_lld",
-                      wiggle_family = "dummy", wiggle_model_type = "dummy",
-                      dummy_fallback = False, nm_type = "ar",
-                      runid=14, phases='P', gpmodel_build_trees=False)
-
-
-    segments = load_segments(cursor, sites, sig_stime, sig_etime, chans = ['BHZ', 'SHZ'])
-    segments = [seg.with_filter('env;hz_%.3f' % 5.0) for seg in segments]
-
-    wave_nodes = []
-    for seg in segments:
-        for band in ['freq_2.0_3.0']:
-            filtered_seg = seg.with_filter(band)
-            for chan in filtered_seg.get_chans():
-                wave = filtered_seg[chan]
-                wave_nodes.append(sg.add_wave(wave))
-
-    run_open_world_MH(sg, wave_nodes, wiggles=False, steps=125)
-    f = open('cached_templates2.sg', 'wb')
-    pickle.dump(sg, f, protocol=pickle.HIGHEST_PROTOCOL)
-    f.close()
-
-    sg.debug_dump("templates")
-    """
-
-    f = open('cached_templates2.sg', 'rb')
-    sg = pickle.load(f)
-    f.close()
-
-    #"""
-
-    exclude_sites = ['STKA']
-    #exclude_sites = []
-    hough_array = generate_hough_array(sg, stime=infer_stime, etime=infer_etime, bin_width_deg=1.0, exclude_sites=exclude_sites, time_tick_s=10, debug_ev=ev, smoothbins=True)
-
-    #stas = ['AKBB', 'FITZ', 'JNU']
-    #hough_array = synthetic_hough_array(ev, stas=stas, stime=infer_stime, etime=infer_etime, bin_width_deg=5)
-
-    ev, ev_prob = propose_event_from_hough(hough_array, infer_stime, infer_etime)
-    print ev
-    print ev_prob
-    visualize_hough_array(hough_array, sites, fname="hough.png")
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print e
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        import pdb
-        pdb.post_mortem(tb)
+        return proposed_ev, np.log(ev_prob), hough_array

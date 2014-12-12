@@ -247,6 +247,41 @@ class ARModel(NoiseModel):
                           compiler='gcc')
         return ll
 
+    def residuals(self, d, c, std):
+        #
+        n = len(d)
+        m = d.mask
+        d = d.data - c
+        p = np.array(self.params)
+        n_p = len(p)
+        t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+
+        r = np.empty(d.shape)
+
+        code = """
+        double d_prob = 0;
+        for (int t=0; t < n; ++t) {
+            if (m(t)) { continue; }
+
+           double expected = 0;
+           for (int i=0; i < n_p; ++i) {
+               if (t > i && !m(t-i-1)) {
+                  double ne = p(i) * d(t-i-1);
+                  expected += ne;
+               }
+           }
+           double err = d(t) - expected;
+           double x = err/std;
+           r(t) = x;
+        }
+        """
+        weave.inline(code,
+                     ['n', 'n_p', 'm', 'd', 't1', 'std', 'p', 'r'],
+                     type_converters=converters.blitz,
+                     compiler='gcc')
+        return r
+
+
     def slow_AR(self, d, c, return_debug=False):
         d_prob = 0
         skipped = 0

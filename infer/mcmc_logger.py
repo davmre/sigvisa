@@ -104,16 +104,22 @@ class MCMCLogger(object):
                     plot_with_fit_shapes(os.path.join(self.run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
 
         if step > 0 and ((step % self.print_interval == 0) or (step < 5)):
-            self.print_mcmc_acceptances(sg, lp, step, n_accepted, n_attempted)
+            s = self.acceptance_string(sg, lp, step, n_accepted, n_attempted)
+            print s
+            if "acceptance_rates" not in self.log_handles:
+                self.log_handles["acceptance_rates"] = open(os.path.join(self.run_dir, 'acceptance_rates.txt'), 'a')
+            self.log_handles["acceptance_rates"].write(s + "\n\n")
 
-    def print_mcmc_acceptances(self, sg, lp, step, n_accepted, n_attempted):
 
-        print "step %d: lp %.2f, accepted " % (step, lp),
+
+    def acceptance_string(self, sg, lp, step, n_accepted, n_attempted):
+
+        s = "step %d: lp %.2f, accepted " % (step, lp)
         for key in sorted(n_accepted.keys()):
-            print "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key]),
-        print ", uatemplates: ", len(sg.uatemplates),
-        print ", events: ", len(sg.evnodes)
-
+            s += "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key])
+        s += ", uatemplates: %d " % len(sg.uatemplates)
+        s += ", events: %d " % len(sg.evnodes)
+        return s
 
     def __del__(self):
         for v in self.log_handles.values():

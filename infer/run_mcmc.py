@@ -13,8 +13,8 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.event_swap import swap_events_move
-from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
+from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_lstsqr
+from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
@@ -192,11 +192,13 @@ def run_open_world_MH(sg, steps=10000,
 
 
     if enable_event_openworld:
-        global_moves = {'event_swap': swap_events_move,
-                        'event_birth': ev_birth_move,
-                        'event_death': ev_death_move}
+        global_moves = {'event_swap': swap_events_move_lstsqr,
+                        'event_repropose': repropose_event_move_lstsqr,
+                        'event_birth': ev_birth_move_hough,
+                        'event_death': ev_death_move_hough}
     else:
-        global_moves = {'event_swap': swap_events_move}
+        global_moves = {'event_swap': swap_events_move,
+                        'event_repropose': repropose_event_move}
 
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
                             'evloc_big': ('loc', ('lon', 'lat')),

@@ -101,6 +101,14 @@ class Counter(dict):
         """
         return sum(self.values())
 
+    def normalize_from_logs(self):
+        if len(self) == 0: return
+
+        m = np.max(self.values())
+        for k in self.keys():
+            self[k] = np.exp(self[k] - m)
+        self.normalize()
+
     def normalize(self):
         """
         Edits the counter such that the total count of all

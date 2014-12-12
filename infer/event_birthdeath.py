@@ -10,8 +10,11 @@ from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.graph_utils import extract_sta_node, create_key, get_parent_value, parse_key
 from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel
-from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
-from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution
+from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough_array
+from sigvisa.infer.propose_lstsqr import overpropose_new_locations
+from sigvisa.infer.propose_mb import propose_mb
+
+from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution, peak_log_p
 from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
@@ -88,7 +91,7 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None
     model = load_modelid(modelid)
     return model.log_p(x = val, cond = cond)
 
-def ev_phase_template_logprob(sg, sta, eid, phase, template_dict, ignore_mb=False):
+def ev_phase_template_logprob(sg, sta, eid, phase, template_dict, verbose=False, ignore_mb=False):
 
     """
 
@@ -134,7 +137,10 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict, ignore_mb=Fals
             basisid = None
             wiggle=False
         lp_param = param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=basisid, wiggle=wiggle)
+        if verbose:
+            print "%s lp %s=%.2f is %.2f" % (sta, param, val, lp_param)
         lp += lp_param
+
     return lp
 
 
@@ -146,7 +152,10 @@ def template_association_logodds(sg, sta, tmid, eid, phase, ignore_mb=False):
     lp_unass = unass_template_logprob(sg, sta, param_values, ignore_mb=ignore_mb)
     lp_ev = ev_phase_template_logprob(sg, sta, eid, phase, param_values, ignore_mb=ignore_mb)
 
-    return lp_ev - lp_unass
+
+    logodds = lp_ev - lp_unass
+    #print "%s %d logodds %f" % (sta, tmid, logodds)
+    return logodds
 
 
 def template_association_distribution(sg, sta, eid, phase, ignore_mb=False):
@@ -203,6 +212,7 @@ def sample_template_to_associate(sg, sta, eid, phase, ignore_mb=False):
     assoc_logprob: log probability of the proposal
 
     """
+
 
     c = template_association_distribution(sg, sta, eid, phase, ignore_mb=ignore_mb)
     tmid = c.sample()
@@ -331,13 +341,46 @@ def sample_deassociation_proposal(sg, sta, eid, phase):
     deassociate_lp = lp if deassociate else np.log(1-np.exp(lp))
     return deassociate, deassociate_lp
 
-def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=True):
+def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=None):
+    # instead of sampling arrival time from the prior, sample
+    # from the product of the prior with unexplained signal mass
+    ptime = np.exp(tmvals['peak_offset'])
+
+    pred_peak_time = pred_atime + np.exp(tmvals['peak_offset'])
+
+    arrivals = wn.arrivals()
+    other_arrivals = [a for a in arrivals if a != (eid, phase)]
+    signal_diff_pos = get_signal_diff_positive_part(wn, other_arrivals)
+    t = np.linspace(wn.st, wn.et, wn.npts)
+
+    # consider using a vague travel-time prior to
+    # acknowldege the possibility that the event is not currently
+    # in the correct location
+    #tt_spread = np.random.choice((2.0, 10.0, 30.0, 80.0))
+    tt_spread = 4.0
+
+    peak_prior = np.exp(-np.abs(t - pred_atime)/tt_spread)
+    peak_cdf = merge_distribution(signal_diff_pos, peak_prior)
+
+
+    if not fix_result:
+        peak_time, peak_lp = sample_peak_time_from_signal(peak_cdf, wn.st, wn.srate, return_lp=True)
+        proposed_atime = peak_time - np.exp(tmvals['peak_offset'])
+        proposed_tt_residual = proposed_atime - pred_atime
+        tmvals["tt_residual"] = proposed_tt_residual
+        tmvals["arrival_time"] = proposed_atime
+        return peak_lp
+    else:
+        peak_time = tmvals["arrival_time"] + np.exp(tmvals["peak_offset"])
+        peak_lp = peak_log_p(peak_cdf, wn.st, wn.srate, peak_time)
+        return peak_lp
+
+def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=True, fix_result=False, ev=None):
     # sample a set of params for a phase template from an appropriate distribution (as described above).
     # return as an array.
 
     s = Sigvisa()
     site = s.get_array_site(sta)
-
 
     assert (len(list(sg.site_bands[site])) == 1)
     band = list(sg.site_bands[site])[0]
@@ -347,57 +390,43 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=Tru
     # we assume that add_event already sampled all the params parent-conditionally
     if tmvals is None:
         tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
-    if 'amp_transfer' in tmvals:
-        del tmvals['amp_transfer']
 
-    ev = sg.get_event(eid)
+    if ev is None:
+        ev = sg.get_event(eid)
     pred_atime = ev.time + tt_predict(ev, sta, phase)
     wn = sg.get_wave_node_by_atime(sta, band, chan, pred_atime, allow_out_of_bounds=True)
     lp = 0
     if smart_peak_time:
-        # instead of sampling arrival time from the prior, sample
-        # from the product of the prior with unexplained signal mass
-        ptime = np.exp(tmvals['peak_offset'])
-
-
-        pred_peak_time = pred_atime + np.exp(tmvals['peak_offset'])
-
-        arrivals = wn.arrivals()
-        other_arrivals = [a for a in arrivals if a != (eid, phase)]
-        signal_diff_pos = get_signal_diff_positive_part(wn, other_arrivals)
-        t = np.linspace(wn.st, wn.et, wn.npts)
-
-        # deliberately use a highly vague travel-time prior to
-        # acknowldege the possibility that the event is not currently
-        # in the correct location
-        peak_prior = np.exp(-np.abs(t - pred_atime)/15.0)
-        peak_cdf = merge_distribution(signal_diff_pos, peak_prior)
-        peak_time, peak_lp = sample_peak_time_from_signal(peak_cdf, wn.st, wn.srate, return_lp=True)
-        proposed_atime = peak_time - np.exp(tmvals['peak_offset'])
-        proposed_tt_residual = proposed_atime - pred_atime
-        tmvals["tt_residual"] = proposed_tt_residual
-        tmvals["arrival_time"] = proposed_atime
-
+        peak_lp = smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=fix_result)
         lp += peak_lp
+        proposed_tt_residual = tmvals["tt_residual"]
+        proposed_atime = tmvals["arrival_time"]
 
-    amp_dist = get_signal_based_amplitude_distribution(sg, wn, tmvals)
+    amp_dist = get_signal_based_amplitude_distribution(sg, wn, tmvals, exclude_arr=(eid, phase))
+
+    if 'amp_transfer' in tmvals:
+        del tmvals['amp_transfer']
+
+    if smart_peak_time:
+        del tmvals["tt_residual"]
+        del tmvals["arrival_time"]
+
     if amp_dist is not None:
 
-        amplitude = amp_dist.sample()
-
+        if fix_result:
+            amplitude = tmvals["coda_height"]
+        else:
+            amplitude = amp_dist.sample()
         del tmvals['coda_height']
-        if smart_peak_time:
-            del tmvals["tt_residual"]
-            del tmvals["arrival_time"]
 
         # compute log-prob of non-amplitude parameters
-        lp += ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
+        param_lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
+        lp += param_lp
+
         tmvals['coda_height'] = amplitude
         lp += amp_dist.log_p(amplitude)
 
-        if smart_peak_time:
-            tmvals["tt_residual"] = proposed_tt_residual
-            tmvals["arrival_time"] = proposed_atime
+
 
 
     else:
@@ -411,49 +440,22 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=Tru
         raise ValueError()
 
     # wiggles!
-    wave_node = sg.station_waves[sta][0]
-    wg = sg.wiggle_generator(phase=phase, srate=wave_node.srate)
+    wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
     wnodes = sg.get_wiggle_nodes(eid, sta, phase, band, chan)
-    wiggle_proposal_lp = propose_wiggles_from_signal(eid, phase, wave_node, wg, wnodes)
-    lp += wiggle_proposal_lp
-    wvals = sg.get_wiggle_vals(eid, sta, phase, band, chan)
-    tmvals.update(wvals)
-
-    return tmvals, lp
-
-def phase_template_proposal_logp(sg, sta, eid, phase, tmvals):
-    # return the logprob of params from the proposal distribution
-
-    tmvals = copy.copy(tmvals)
-    if 'amp_transfer' in tmvals:
-        del tmvals['amp_transfer']
-
-    assert(len(sg.station_waves[sta]) == 1)
-    wave_node = sg.station_waves[sta][0]
-
-    amplitude = tmvals['coda_height']
-    amp_dist = get_signal_based_amplitude_distribution(sg, wave_node, tmvals)
-
-    lp = 0.0
-
-    # wiggles!
-    wg = sg.wiggle_generator(phase=phase, srate=wave_node.srate)
-    wiggle_proposal_lp = wiggle_proposal_lprob_from_signal(eid, phase, wave_node, wg, wvals=tmvals)
+    if fix_result:
+        wiggle_proposal_lp = wiggle_proposal_lprob_from_signal(eid, phase, wn, wg, wvals=tmvals)
+    else:
+        wiggle_proposal_lp = propose_wiggles_from_signal(eid, phase, wn, wg, wnodes)
+        wvals = sg.get_wiggle_vals(eid, sta, phase, band, chan)
+        tmvals.update(wvals)
     lp += wiggle_proposal_lp
 
-    wiggle_param_set = set(wg.params())
-    tmvals = dict([(p,v) for (p,v) in tmvals.items() if not p in wiggle_param_set])
+    if fix_result:
+        return lp
+    else:
+        return tmvals, lp
 
-    if amp_dist is not None:
-        del tmvals['coda_height']
-        lp += amp_dist.log_p(amplitude)
-    lp += ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
-
-    if lp < -50:
-        print "%s %d %s amp %f tlp %f vals %s" % (sta, eid, phase, amp_dist.log_p(amplitude), ev_phase_template_logprob(sg, sta, eid, phase, tmvals), tmvals)
-        import pdb; pdb.set_trace()
-
-    return lp
+#########################################################################################
 
 def death_proposal_log_ratio(sg, eid):
 
@@ -484,20 +486,8 @@ def death_proposal_distribution(sg):
     for eid in sg.evnodes.keys():
         c[eid] = death_proposal_log_ratio(sg, eid)
 
-    #
     c_log = copy.copy(c)
-    if len(c) > 0:
-
-        log_normalizer=np.float('-inf')
-        for v in c_log.values():
-            log_normalizer = np.logaddexp(v, log_normalizer)
-        for k in c_log.keys():
-            c_log[k] -= log_normalizer
-
-        v = np.max(c.values())
-        for eid in c.keys():
-            c[eid] = np.exp(c[eid] - v)
-        c.normalize()
+    c.normalize_from_logs()
 
     return c, c_log
 
@@ -514,28 +504,12 @@ def death_proposal_logprob(sg, eid):
         return 1.0
     return c_log[eid]
 
-def ev_death_move(sg):
-    eid, eid_logprob = sample_death_proposal(sg)
-    if eid is None:
-        return False
-    move_logprob = eid_logprob
-    n_current_events = len(sg.evnodes)
-    reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
-
-    lp_old = sg.current_log_p()
-    log_qforward, log_qbackward, revert_move = ev_death_helper(sg, eid)
-    lp_new = sg.current_log_p()
-
-    log_qbackward += reverse_logprob
-    log_qforward += move_logprob
-
-    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, **hough_options)
-    log_qbackward += np.log(event_prob_from_hough(ev, hough_array, sg.event_start_time, sg.end_time))
-    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)
 
 def ev_death_helper(sg, eid, associate_using_mb=True):
 
     ev = sg.get_event(eid)
+
+    next_uatemplateid = sg.next_uatemplateid
 
     move_logprob = 0
     reverse_logprob = 0
@@ -580,7 +554,7 @@ def ev_death_helper(sg, eid, associate_using_mb=True):
                 else:
                     template_param_array = sg.get_arrival_vals(eid, sta, phase, band, chan)
                     inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
-                    tmp = phase_template_proposal_logp(sg, sta, eid, phase, template_param_array)
+                    tmp = propose_phase_template(sg, sta, eid, phase, template_param_array, fix_result=True)
                     reverse_logprob += tmp
                     print "proposing to delete at %s (lp %f, reverse %f)"% (sta, deassociate_logprob, tmp)
 
@@ -614,39 +588,53 @@ def ev_death_helper(sg, eid, associate_using_mb=True):
         for fn in inverse_fns:
             fn()
         sg._topo_sort()
-
+        sg.next_uatemplateid = next_uatemplateid
 
     return move_logprob, reverse_logprob, revert_move
 
+def ev_death_helper_full(sg, eid, location_proposal):
+    ev = sg.get_event(eid)
+    lqb, reset_coda_heights = propose_mb(sg, eid, fix_result=ev.mb)
+    sg.evnodes[eid]["mb"].set_value(4.0)
+    reset_coda_heights()
 
-def ev_birth_move(sg, log_to_run_dir=None):
-    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, **hough_options)
-    proposed_ev, ev_prob = propose_event_from_hough(hough_array, sg.event_start_time, sg.end_time)
+    log_qforward, log_qbackward, revert_move = ev_death_helper(sg, eid, associate_using_mb=False)
+    lp_loc = location_proposal(sg, fix_result=ev)
+    print "death helper", lqb, log_qbackward, lp_loc
 
+    def revert():
+        revert_move()
+        sg.evnodes[eid]["mb"].set_value(ev.mb)
+        reset_coda_heights()
+
+    return log_qforward, lqb + log_qbackward + lp_loc, revert
+
+def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None):
+    eid, eid_logprob = sample_death_proposal(sg)
+    if eid is None:
+        return False
+    move_logprob = eid_logprob
     n_current_events = len(sg.evnodes)
-    move_logprob = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
-    move_logprob += np.log(ev_prob)
+    reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
 
     lp_old = sg.current_log_p()
-    log_qforward, log_qbackward, revert_move = ev_birth_helper(sg, proposed_ev)
+    log_qforward, log_qbackward, revert_move = ev_death_helper_full(sg, eid, location_proposal)
     lp_new = sg.current_log_p()
+
     log_qforward += move_logprob
+    log_qbackward += reverse_logprob
 
-    def revert_and_log():
-        if np.random.rand() < 0.1:
-            sites = sg.site_elements.keys()
-            print "saving hough array picture...",
-            visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, 'last_hough.png'))
-            print "done"
-        revert_move()
+    print "death move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
 
-    def accept_and_log():
-        if log_to_run_dir is not None:
-            log_event_birth(sg, hough_array, log_to_run_dir, eid, associations)
-        else:
-            raise Exception("why are we not logging?")
+    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)
 
-    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept_and_log, reject_move=reject_and_log)
+def ev_death_move_hough(sg, **kwargs):
+    return ev_death_move_abstract(sg, hough_location_proposal, **kwargs)
+
+def ev_death_move_lstsqr(sg, **kwargs):
+    return ev_death_move_abstract(sg, overpropose_new_locations, **kwargs)
+
+##########################################################################################
 
 def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
 
@@ -695,6 +683,8 @@ def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
                     associations.append((sta, phase, False))
                     print "proposing to birth new phase %s,%s with assoc lp %.1f tmpl lp %f" % (sta, phase, assoc_logprob, tmpl_lp)
 
+
+
                 sta_phase_logprob = assoc_logprob + tmpl_lp
                 log_qforward += sta_phase_logprob
 
@@ -709,16 +699,79 @@ def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
     # compute log probability of the reverse move.
     # we have to do this in a separate loop so that
     # we can execute all the forward moves first.
-    log_qbackward = death_proposal_logprob(sg, eid)
+    log_qbackward = 0
     for (sta, phase, associated) in associations:
-        log_qbackward += deassociation_logprob(sg, sta, eid, phase, deletion_prob=not associated)
+        lp = deassociation_logprob(sg, sta, eid, phase, deletion_prob=not associated)
+        log_qbackward += lp
+        #print "deassociation logprob %.2f for %s" % (lp, (sta, phase, associated))
 
     def revert_move():
         for fn in inverse_fns:
             fn()
 
-    return log_qforward, log_qbackward, revert_move
+    return log_qforward, log_qbackward, revert_move, eid, associations
 
+def ev_birth_helper_full(sg, location_proposal, eid=None):
+    # propose a new ev location
+    ev, lp_loc, extra = location_proposal(sg)
+
+    # propose its associations
+    log_qforward, log_qbackward, revert_move, eid, associations = ev_birth_helper(sg, ev, associate_using_mb=False, eid=eid)
+
+    # propose its magnitude
+    lqf = propose_mb(sg, eid)
+
+    print "birth helper", lqf, log_qforward, lp_loc
+
+    return lp_loc + log_qforward + lqf, log_qbackward, revert_move, (extra, eid, associations)
+
+def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_action=None):
+
+    n_current_events = len(sg.evnodes)
+    log_qforward = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
+
+    lp_old = sg.current_log_p()
+    log_qforward, log_qbackward, revert_move, proposal_extra = ev_birth_helper_full(sg, location_proposal)
+    lp_new = sg.current_log_p()
+
+    (extra, eid, associations) = proposal_extra
+
+    log_qbackward += death_proposal_logprob(sg, eid)
+
+    def revert():
+        if revert_action is not None:
+            revert_action(proposal_extra)
+        revert_move()
+
+    def accept():
+        if accept_action is not None:
+            accept_action(proposal_extra)
+
+    print "birth move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
+
+    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert)
+
+def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
+
+    def revert_action(proposal_extra):
+        hough_array, eid, associations = proposal_extra
+        if np.random.rand() < 0.1:
+            sites = sg.site_elements.keys()
+            print "saving hough array picture...",
+            visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, 'last_hough.png'))
+            print "done"
+
+    def accept_action(proposal_extra):
+        hough_array, eid, associations = proposal_extra
+        if log_to_run_dir is not None:
+            log_event_birth(sg, hough_array, log_to_run_dir, eid, associations)
+        else:
+            raise Exception("why are we not logging?")
+
+    return ev_birth_move_abstract(sg, location_proposal=hough_location_proposal, revert_action=revert_action, accept_action=accept_action, **kwargs)
+
+def ev_birth_move_lstsqr(sg, **kwargs):
+    return ev_birth_move_abstract(sg, location_proposal=overpropose_new_locations, **kwargs)
 
 ##############################################################
 
@@ -739,46 +792,3 @@ def log_event_birth(sg, hough_array, run_dir, eid, associations):
     print "visualizing hough array...",
     visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'))
     print "done"
-
-def main():
-
-
-    f = open('cached_templates2.sg', 'rb')
-    sg = pickle.load(f)
-    f.close()
-
-    # update the pickled graph to something resembling the current structure
-    sg.runid = 17
-    from collections import defaultdict
-    sg.extended_evnodes = defaultdict(list)
-    sg.event_rate = 0.00126599049
-    sg.event_start_time = sg.start_time - 2000.0
-
-    np.random.seed(0)
-    print ev_birth_move(sg)
-
-    f = open('postbirth.sg', 'wb')
-    pickle.dump(sg, f)
-    f.close()
-    """
-
-    f = open('postbirth.sg', 'rb')
-    sg = pickle.load(f)
-    f.close()
-    """
-
-    print ev_death_move(sg)
-
-    print "final lp", sg.current_log_p()
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print e
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        import pdb
-        pdb.post_mortem(tb)
