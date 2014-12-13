@@ -130,6 +130,20 @@ class Gaussian(Distribution):
     def sample(self, **kwargs):
         return self.mean + np.random.randn() * self.std
 
+    def product(self, other):
+        # given two Gaussian distributions, return
+        # the Gaussian resulting from normalizing the product
+        # N(x; u1, v1) N(x; u2, v2).
+        # This corresponds to computing a Bayesian posterior
+        # given a Gaussian prior and Gaussian likelihood.
+
+        prec1 = 1.0/self.var
+        prec2 = 1.0/other.var
+        prec = prec1+prec2
+
+        mean = (prec1*self.mean + prec2*other.mean)/prec
+        return Gaussian(mean, 1.0/np.sqrt(prec))
+
     def __str__(self):
         return "Gaussian(mean=%f, std=%f)" % (self.mean, self.std)
 

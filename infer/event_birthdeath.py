@@ -19,10 +19,11 @@ from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
 from sigvisa.models.templates.coda_height import amp_transfer
+from sigvisa.models.distributions import Gaussian
 from sigvisa.utils.counter import Counter
 from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.source.event import get_event
-
+import sigvisa.source.brune_source as brune
 
 hough_options = {'bin_width_deg':1.0, 'time_tick_s': 10.0, 'smoothbins': True}
 
@@ -375,6 +376,46 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
         peak_lp = peak_log_p(peak_cdf, wn.st, wn.srate, peak_time)
         return peak_lp
 
+def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase):
+    """
+    Construct an amplitude proposal distribution by combining the signal likelihood with
+    the prior conditioned on the event location.
+
+    This is especially necessary when proposing phases that don't appear to be
+    present in the signal (i.e., are below the noise floor). If the prior predicts
+    a log-amplitude of -28, and the likelihood predicts a log-amplitude of -4 (because
+    it's impossible for the likelihood to distinguish amplitudes below the noise floor), then
+    proposals from the likelihood alone would ultimately be rejected.
+
+    """
+
+    amp_dist_signal = get_signal_based_amplitude_distribution(sg, wn, tmvals, exclude_arr=(eid, phase))
+
+    k_ampt = create_key("amp_transfer", eid=eid, sta=wn.sta, chan=":", band=":", phase=phase)
+    try:
+        n_ampt = sg.all_nodes[k_ampt]
+    except:
+        import pdb; pdb.set_trace()
+
+    ev = sg.get_event(eid)
+    source_amp = brune.source_logamp(ev.mb, phase=phase, band=wn.band)
+
+    prior_mean = float(n_ampt.model.predict(cond=n_ampt._parent_values())) + source_amp
+    prior_var = float(n_ampt.model.variance(cond=n_ampt._parent_values())) + 1
+    prior_dist = Gaussian(prior_mean, np.sqrt(prior_var))
+
+
+    if amp_dist_signal.mean < -4 and prior_mean < amp_dist_signal.mean:
+        # if both the likelihood and the prior tell us we're below the noise floor,
+        # then what we propose won't affect the signal probability at all.
+        # so we should just propose from the prior to maximize the acceptance rate
+        heuristic_posterior = prior_dist
+    else:
+        # otherwise, combine the likelihood and prior for a heuristic posterior
+        heuristic_posterior = amp_dist_signal.product(prior_dist)
+
+    return heuristic_posterior
+
 def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=True, fix_result=False, ev=None):
     # sample a set of params for a phase template from an appropriate distribution (as described above).
     # return as an array.
@@ -402,7 +443,7 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=Tru
         proposed_tt_residual = tmvals["tt_residual"]
         proposed_atime = tmvals["arrival_time"]
 
-    amp_dist = get_signal_based_amplitude_distribution(sg, wn, tmvals, exclude_arr=(eid, phase))
+    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase)
 
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
