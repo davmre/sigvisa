@@ -32,7 +32,7 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
                     end_time + MAX_TRAVEL_TIME))
 
     for (siteidx, timeidx, cnt) in cursor.fetchall():
-        uptime[siteidx, timeidx] = True
+        uptime[siteidx, int(timeidx)] = True
 
     return uptime
 

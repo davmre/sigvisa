@@ -19,7 +19,7 @@ from sigvisa.database.dataset import *
 import sigvisa.utils.geog as geog
 from sigvisa.signals.io import fetch_waveform
 from sigvisa.source.event import get_event
-from sigvisa.graph.sigvisa_graph import predict_phases
+from sigvisa.graph.sigvisa_graph import predict_phases_sta
 from sigvisa.models.ttime import tt_predict
 import hashlib
 
@@ -108,7 +108,7 @@ def event_wave_view(request, evid):
     ev = LebOrigin.objects.get(evid=evid)
 
     event = get_event(evid=ev.evid)
-    phases = predict_phases(ev=event, sta=sta, phases="auto")
+    phases = predict_phases_sta(ev=event, sta=sta, phases="auto")
     phase_atimes = dict([(phase, event.time + tt_predict(event=event, sta=sta, phase=phase)) for phase in phases])
 
     stime = np.min(phase_atimes.values()) - 10

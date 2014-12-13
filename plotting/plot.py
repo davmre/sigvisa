@@ -13,7 +13,6 @@ from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
 
-shape_colors = dict()
 
 def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
@@ -155,20 +154,30 @@ def plot_with_fit_shapes(fname, wn, title="",
                          unass_lw = 1,
                          ev_lw=2,
                          model_lw = 1,
-                         tmpl_lw = None,
                          highlight_eid=None,
                          fig=None,
+                         axes=None,
+                         plot_dets="leb",
+                         plot_wave=True,
+                         shape_colors=None,
+                         alpha=1.0,
                          **kwargs):
 
-    if fig is None:
-        fig = Figure(figsize=(8, 5), dpi=144)
-    fig.patch.set_facecolor('white')
-    axes = fig.add_subplot(111)
+    if axes is None:
+        if fig is None:
+            fig = Figure(figsize=(8, 5), dpi=144)
+        fig.patch.set_facecolor('white')
+        axes = fig.add_subplot(111)
+
+
     axes.set_title(title)
     axes.set_xlabel("Time (s)", fontsize=8)
 
     if ymin is not None and ymax is not None:
         axes.set_ylim(ymin, ymax)
+
+    if shape_colors is None:
+        shape_colors = dict()
 
     import copy
     mutable = copy.copy(wn._mutable)
@@ -190,6 +199,7 @@ def plot_with_fit_shapes(fname, wn, title="",
             if eid not in shape_colors:
                 shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5)
             unass_tmpls.append((wn.get_wave(), shape_colors[eid]))
+            print "plotting uatemplate", eid, "as color", shape_colors[eid]
         elif arrival[0] != highlight_eid:
             if eid not in shape_colors:
                 shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5+.5)
@@ -197,23 +207,24 @@ def plot_with_fit_shapes(fname, wn, title="",
         else:
             highlight_tmpl = wn.get_wave()
 
-    subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
+    if plot_wave:
+        subplot_waveform(wave, axes, color='black', linewidth=1.5, plot_dets=plot_dets, **kwargs)
     if model_lw is not None:
         subplot_waveform(pred, axes, color="purple",
-                              linewidth=4, alpha = 1, linestyle='-',
+                              linewidth=4, alpha = 1*alpha, linestyle='-',
                               plot_dets=False, **kwargs)
 
     if unass_lw is not None:
         for (unass_tmpl, color) in unass_tmpls:
             subplot_waveform(unass_tmpl, axes, color=color,
-                             linewidth=unass_lw, alpha = 0.5,
+                             linewidth=unass_lw, alpha = 0.5*alpha,
                              plot_dets=False, fill_y2=wn.nm.c,
                              **kwargs)
     if ev_lw is not None:
         evcolors = cm.get_cmap('jet')(np.linspace(0.5,1.0, len(ev_tmpls)))
         for (ev_tmpl,color) in ev_tmpls:
             subplot_waveform(ev_tmpl, axes, color=color,
-                             linewidth=ev_lw, alpha = 0.8,
+                             linewidth=ev_lw, alpha = 0.8*alpha,
                              plot_dets=False, fill_y2=wn.nm.c,
                              **kwargs)
 
@@ -221,10 +232,12 @@ def plot_with_fit_shapes(fname, wn, title="",
     wn._mutable = mutable
     wn._update_mutable_cache()
 
-    if fname is None:
-        return fig
-    else:
+    if fname is not None:
         savefig(fname, fig, bbox_inches="tight", dpi=300)
+    #else:
+    #    return fig
+    return shape_colors
+
 
 def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, color="red", all_arrivals=False):
     if wave is None:
@@ -236,7 +249,7 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
     try:
         arrivals = wave['event_arrivals']
     except:
-        arrivals = wave['arrivals_idcx']
+        arrivals = wave['arrivals']
     if all_arrivals:
         arrivals = wave['arrivals_idcx']
 
@@ -254,7 +267,14 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
 
     if all_det_times is not None:
 
-        maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
+        start_idx = 0
+        end_idx = len(wave.data)
+        if stime:
+            start_idx = max(int(wave['srate']*(stime-wave['stime'])), start_idx)
+        if etime:
+            end_idx = min(int(wave['srate']*(etime-wave['stime'])), end_idx)
+
+        maxwave, minwave = float(np.max(wave.data[start_idx:end_idx])), float(np.min(wave.data[start_idx:end_idx]))
 
         if logscale:
             (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
@@ -266,7 +286,7 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
 
 # does not save for you - you need to call savefig() yourself!
 
-def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None, color="green", **kwargs):
+def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None, color="green", draw_bars=True, draw_text=True, alpha=0.5, bottom=None, top=None, top_rel=1.0, bottom_rel=0.0, **kwargs):
     if predictions is None or wave is None:
         return
 
@@ -276,21 +296,50 @@ def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, e
     if etime is not None:
         old_predictions = predictions
         predictions = dict([p for p in predictions.items() if stime <= p[1] <= etime])
+    else:
+        old_predictions = predictions
 
     if len(predictions) < 1:
-        print "warning: atimes %s not within plot window (%f, %f)!" % (old_predictions, stime, stime)
+        if stime is None:
+            stime = wave['stime']
+        if etime is None:
+            etime = wave['etime']
+        print "warning: atimes %s not within plot window (%f, %f)!" % (old_predictions, stime, etime)
         return
 
     pred_labels, pred_times = zip(*predictions.items())
 
-    maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
-    if logscale:
-        (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
+    if isinstance(color, dict):
+        colors = [color[l] for l in pred_labels]
+    else:
+        colors = [color for l in pred_labels]
 
-    axes.bar(left=pred_times, height=[maxwave - minwave for _ in pred_times],
-             width=.25, bottom=minwave, edgecolor=color, color=color, linewidth=1, alpha=.5, **kwargs)
-    for (lbl, t) in predictions.items():
-        axes.text(t + .5, maxwave - (maxwave - minwave) * 0.1, lbl, color=color, fontsize=10)
+    start_idx = 0
+    end_idx = len(wave.data)
+    if stime:
+        start_idx = max(int(wave['srate']*(stime-wave['stime'])), start_idx)
+    if etime:
+        end_idx = min(int(wave['srate']*(etime-wave['stime'])), end_idx)
+
+    if top is None:
+        top= float(np.max(wave.data[start_idx:end_idx]))
+    if bottom is None:
+        bottom = float(np.min(wave.data[start_idx:end_idx]))
+
+    bottom_final = bottom + bottom_rel*(top-bottom)
+    top_final = bottom + top_rel*(top-bottom)
+    bottom, top = bottom_final, top_final
+
+    if logscale:
+        (top,bottom) = (np.log(top), np.log(bottom))
+
+    if draw_bars:
+        axes.bar(left=pred_times, height=[top-bottom for _ in pred_times],
+                 width=.25, bottom=bottom, edgecolor=colors, color=colors, linewidth=1, alpha=alpha, **kwargs)
+
+    if draw_text:
+        for (lbl, t, c) in zip(pred_labels, pred_times, colors):
+            axes.text(t + .5, top - (top-bottom) * 0.1, lbl, color=c, fontsize=10)
 
 # does not save for you - you need to call savefig() yourself!
 
@@ -372,7 +421,8 @@ def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_de
     else:
         axes.fill_between(timevals, wave_data, y2=fill_y2, **kwargs)
     if plot_dets:
-        plot_det_times(wave, axes=axes, logscale=logscale, stime=stime, etime=etime)
+        all_arrivals = (plot_dets=="idcx")
+        plot_det_times(wave, axes=axes, logscale=logscale, stime=stime, etime=etime, all_arrivals=all_arrivals)
 
     if plot_predictions:
         plot_pred_atimes(predictions=plot_predictions, wave=wave,

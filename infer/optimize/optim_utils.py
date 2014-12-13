@@ -26,10 +26,12 @@ def construct_optim_params(optim_param_str=''):
         "eps": 1e-4,  # increment for approximate gradient evaluation
 
         "bfgscoord_iters": 5,
+        "bfgscoord_prefer_success": False,
         "bfgs_factr": 10,  # used by bfgscoord and bfgs
         "xtol": 0.01,  # used by simplex
         "ftol": 0.01,  # used by simplex, tnc
         "grad_stopping_eps": 1e-4,
+
     }
     overrides = eval("{%s}" % optim_param_str)
 
@@ -217,10 +219,15 @@ def _minimize(f1, f_only, fp1, approx_grad, x0, optim_params, bounds=None):
         iters = 0
         success = False
         x1 = x0
+        last_success = x0
         while iters < optim_params['bfgscoord_iters']:
             x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
                 f1, x1, fprime=fp1, approx_grad=approx_grad, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
             success = (d['warnflag'] == 0)
+
+            if iters == 0 or success:
+                last_success = x1.copy()
+
             print d
             v1 = best_cost
             x2 = coord_steps(f1, fprime=fp1, approx_grad=approx_grad, x=x1, eps=eps, bounds=bounds)
@@ -230,6 +237,8 @@ def _minimize(f1, f_only, fp1, approx_grad, x0, optim_params, bounds=None):
                 break
             x1 = x2
             iters += 1
+        if optim_params['bfgscoord_prefer_success']:
+            x1 = last_success
     elif method == "bfgs_fastcoord":
         iters = 0
         success = False

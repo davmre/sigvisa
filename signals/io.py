@@ -224,7 +224,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
     masked_data = mirror_missing(ma.masked_invalid(global_data))
 
     if pad_seconds > 0:
-        pad_samples = pad_seconds * samprate
+        pad_samples = int(pad_seconds * samprate)
         masked_data[0:pad_samples] = ma.masked
         masked_data[-pad_samples:] = ma.masked
 

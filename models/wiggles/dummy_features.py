@@ -15,7 +15,7 @@ class DummyFeatureGenerator(WiggleGenerator):
 
         self.srate = srate
         self.npts = npts
-        assert( self.npts % 2 == 0 )
+
 
         self.len_s = float(npts-1) / srate
         self.x = np.linspace(0, self.len_s, self.npts)

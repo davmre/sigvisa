@@ -16,7 +16,7 @@ from sigvisa.models.noise.iid import L1IIDModel, train_l1_model
 
 
 from sigvisa.signals.io import fetch_waveform, MissingWaveform
-from sigvisa.signals.common import filter_str_extract_band
+from sigvisa.signals.common import filter_str_extract_band, filter_str_extract_smoothing
 
 
 
@@ -102,6 +102,7 @@ def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta,
     if model_wave is None:
         model_wave = fetch_waveform(sta, chan, window_stime, window_stime + window_len, pad_seconds=NOISE_PAD_SECONDS)
 
+    smooth = filter_str_extract_smoothing(filter_str)
     requested_band = filter_str_extract_band(filter_str)
     bandlist = set((requested_band,))
     if save_models:
@@ -129,7 +130,7 @@ def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta,
             model.dump_to_file(full_fname)
 
             nmid = model.save_to_db(dbconn=dbconn, sta=sta, chan=chan,
-                                    band=band, hz=srate, env=env,
+                                    band=band, hz=srate, env=env, smooth=smooth,
                                     window_stime=window_stime, window_len=window_len,
                                     fname=nm_fname, hour=hour)
 
@@ -179,7 +180,7 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
             order = 0
 
     band = filter_str_extract_band(filter_str)
-
+    smooth = filter_str_extract_smoothing(filter_str)
     s = Sigvisa()
 
     hour = int(time) / 3600
@@ -187,7 +188,7 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     # first see if we already have an applicable noise model
     model = None
     if not force_train:
-        model, details = NoiseModel.load_from_db(dbconn=s.dbconn, sta=sta, chan=chan, band=band, hz=srate, env=env, order=order, model_type=model_type, hour=hour, return_extra=True)
+        model, details = NoiseModel.load_from_db(dbconn=s.dbconn, sta=sta, chan=chan, band=band, smooth=smooth, hz=srate, env=env, order=order, model_type=model_type, hour=hour, return_extra=True)
 
     if model is None:
         # otherwise, train a new model

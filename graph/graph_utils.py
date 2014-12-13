@@ -12,16 +12,18 @@ def extract_sta_node(node_or_dict, sta):
         return node_or_dict
 
 
-def predict_phases(ev, sta, phases):
+def predict_phases_sta(ev, sta, phases):
     s = Sigvisa()
     if phases == "leb":
         cursor = s.dbconn.cursor()
-        predicted_phases = [s.phasenames[id_minus1] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
+        predicted_phases = [s.phasenames[int(id_minus1)] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
         cursor.close()
     elif phases == "auto":
         predicted_phases = s.arriving_phases(event=ev, sta=sta)
     else:
-        predicted_phases = phases
+        predicted_phases = s.arriving_phases(event=ev, sta=sta)
+        predicted_phases = [p for p in predicted_phases if p in phases]
+
     return predicted_phases
 
 def create_key(param, eid=None, sta=None, phase=None, chan=None, band=None):

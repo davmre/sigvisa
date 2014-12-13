@@ -9,7 +9,7 @@
 <h3>Noise at {{nm.sta}}</h3>
 
 <p>time: {{timestr}}<br/>len: {{nm.window_len}}s<br/>
-chan: {{nm.chan}}, band: {{nm.band}}, srate: {{nm.hz}}hz<br/>
+chan: {{nm.chan}}, band: {{nm.band}}, srate: {{nm.hz}}hz, smoothing: {{nm.smooth}}<br/>
 model_type: {{nm.model_type}}, n: {{nm.nparams}}. {% if nm.model_type == "ar" %}<a href="{% url nm_crossval nmid=nm.nmid %}?max_order=50">cross-validate</a>{% endif %}<br/>
 mean: {{nm.mean}}, std: {{nm.std}}</p>
 
@@ -33,7 +33,7 @@ mean: {{nm.mean}}, std: {{nm.std}}</p>
 <tr>
   <td>
     <strong>Training signal (full):</strong><br>
-    <img src="{% url wave_image %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:nm.window_len}};filter_str={{nm.band}}%3Benv%3Bhz_{{nm.hz}};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
+    <img src="{% url wave_image %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:nm.window_len}};filter_str={{ filter_str }};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
   </td>
   <td>
     <strong>Model ({{ nm.window_len }}s sample):</strong><br>
@@ -43,7 +43,7 @@ mean: {{nm.mean}}, std: {{nm.std}}</p>
 <tr>
   <td>
     <strong>Training signal (5s):</strong><br>
-    <img src="{% url wave_image %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:5}};filter_str={{nm.band}}%3Benv%3Bhz_{{nm.hz}};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
+    <img src="{% url wave_image %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:5}};filter_str={{ filter_str }};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
   </td>
 
   <td>

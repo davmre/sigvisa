@@ -1,0 +1,33 @@
+<html>
+<head>
+<title>mcmc runs - sigvisa</title>
+
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+<h1>mcmc runs</h1>
+
+
+{% if dlist or flist %}
+   <h1>Files in //{{ dirname }}/{{ path }}</h1>
+   <ul>
+   {% for d in dlist %}
+   {% with ""|add:path|add:d|add:"/" as fullpath %}
+   <li> <a href="{% url mcmcrun_browsedir dirname=dirname path=fullpath %}" >{{ d }}</a> </li>
+   {% endwith %}
+   {% endfor %}
+   {% for f in flist %}
+   {% with ""|add:path|add:f.name as fullpath_f %}
+   <li> <a href="{% url mcmcrun_browsedir dirname=dirname path=fullpath_f %}" >{{ f.name }}</a> ({{ f.type }})</li>
+   {% endwith %}
+   {% endfor %}
+   </ul>
+{% endif %}
+
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>

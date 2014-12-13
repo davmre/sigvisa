@@ -247,6 +247,41 @@ class ARModel(NoiseModel):
                           compiler='gcc')
         return ll
 
+    def residuals(self, d, c, std):
+        #
+        n = len(d)
+        m = d.mask
+        d = d.data - c
+        p = np.array(self.params)
+        n_p = len(p)
+        t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+
+        r = np.empty(d.shape)
+
+        code = """
+        double d_prob = 0;
+        for (int t=0; t < n; ++t) {
+            if (m(t)) { continue; }
+
+           double expected = 0;
+           for (int i=0; i < n_p; ++i) {
+               if (t > i && !m(t-i-1)) {
+                  double ne = p(i) * d(t-i-1);
+                  expected += ne;
+               }
+           }
+           double err = d(t) - expected;
+           double x = err/std;
+           r(t) = x;
+        }
+        """
+        weave.inline(code,
+                     ['n', 'n_p', 'm', 'd', 't1', 'std', 'p', 'r'],
+                     type_converters=converters.blitz,
+                     compiler='gcc')
+        return r
+
+
     def slow_AR(self, d, c, return_debug=False):
         d_prob = 0
         skipped = 0
@@ -358,6 +393,76 @@ class ARModel(NoiseModel):
             return d_prob, lls, expecteds, errors
         else:
             return d_prob
+
+    def argrad(self, x, zero_mean=False):
+        """
+        return the signal log probability, and the gradient of the log probability
+        with respect to the signal.
+        """
+
+        if isinstance(x, ma.masked_array):
+            d = x
+            if isinstance(d.mask, np.ndarray) :
+                if d.mask.any():
+                    raise Exception("analytic gradients for AR likelihood not implemented for partially-masked signals")
+            else:
+                d.mask = np.zeros(x.shape)
+        else:
+            d = ma.masked_array(x, np.zeros(x.shape))
+
+        if zero_mean:
+            c = 0
+        else:
+            c = self.c
+
+        ll, grad = self.fastAR_grad(d, c, self.em.std)
+
+        return ll, grad
+
+    def fastAR_grad(self, d, c, std):
+        n = len(d)
+        m = d.mask
+        d = d.data - c
+        p = np.array(self.params)
+        n_p = len(p)
+        t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+
+        grad = np.zeros((n,))
+        code = """
+        double d_prob = 0;
+        for (int t=0; t < n; ++t) {
+            if (m(t)) { continue; }
+
+           double expected = 0;
+           for (int i=0; i < n_p; ++i) {
+               if (t > i && !m(t-i-1)) {
+                  double ne = p(i) * d(t-i-1);
+                  expected += ne;
+               }
+           }
+           double err = d(t) - expected;
+           double x = err/std;
+           double ll = (double)t1 + 0.5 * x*x;
+           d_prob -= ll;
+
+           grad(t) -= err/(std*std);
+           for(int i=0; i < n_p; ++i) {
+               if (t > i && !m(t-i-1)) {
+                   grad(t-i-1) += err/(std*std) * p(i);
+               }
+           }
+        // printf("c %d err = %.10f x = %.10f ll = %.10f d_prob=%.10f\\n", t, err, x, ll, d_prob);
+        }
+        return_val = d_prob;
+        """
+        try:
+            ll = weave.inline(code,
+                              ['n', 'n_p', 'm', 'd', 't1', 'std', 'p', 'grad'],
+                              type_converters=converters.blitz,
+                              compiler='gcc')
+        except:
+            import pdb; pdb.set_trace()
+        return ll, grad
 
     # likelihood in log scale
     def log_p(self, x, zero_mean=False, **kwargs):

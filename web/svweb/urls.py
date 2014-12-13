@@ -3,6 +3,7 @@ from svweb.views import *
 from svweb.wiggle_views import *
 from svweb.model_views import *
 from svweb.gridsearch_views import *
+from svweb.mcmc_views import *
 from svweb.event_views import *
 from svweb.site_views import *
 from svweb.wave_views import *
@@ -25,6 +26,7 @@ urlpatterns = patterns('',
                        url(r'^runs/(?P<runid>\d+)/fit_list$', fit_list_view, name='fit_list'),
                        url(r'^runs/(?P<runid>\d+)/heatmap.png$', data_heatmap_plot, name="heatmap"),
                        url(r'^runs/(?P<runid>\d+)/distance_decay.png$', data_distance_plot, name="distance_decay"),
+                       url(r'^runs/(?P<runid>\d+)/pairwise.png$', data_pairwise_plot, name="pairwise_params"),
                        url(r'^runs/(?P<runid>\d+)/histogram.png$', data_histogram_plot, name="param_histogram"),
                        url(r'^fits/(?P<fitid>\d+)/detail$', fit_detail, name="fit_run_detail"),
                        url(r'^fits/(?P<fitid>\d+)/rate/$', rate_fit, name="rate_fit"),
@@ -49,6 +51,14 @@ urlpatterns = patterns('',
                        url(r'^models/(?P<modelid>\d+)/mb_plot.png$', model_mb_plot, name='model_mb_plot'),
                        url(r'^models/(?P<modelid>\d+)/heatmap.png$', model_heatmap, name='model_heatmap'),
                        url(r'^models/(?P<modelid>\d+)/heatmap_std.png$', model_heatmap_std, name='model_heatmap_std'),
+                       url(r'^mcmc/$', mcmc_list_view, name='mcmc_runs'),
+                       url(r'^mcmc/(?P<dirname>.*?)/analyze$', mcmcrun_analyze, name='mcmcrun_analyze'),
+                       url(r'^mcmc/(?P<dirname>[^/]*?)/$', mcmc_run_detail, name='mcmcrun_detail'),
+                       url(r'^mcmc/(?P<dirname>.*?)/browse/(?P<path>.*)$', mcmcrun_browsedir, name='mcmcrun_browsedir'),
+                       url(r'^mcmc/(?P<dirname>.*?)/waves/(?P<wn_label>.*)/vis.png$', mcmc_wave_posterior, name='mcmc_wave_posterior'),
+                       url(r'^mcmc/(?P<dirname>.*?)/waves/(?P<wn_label>.*)/arrivals_(?P<step>\d+).txt$', mcmc_arrivals, name='mcmc_arrivals'),
+                       url(r'^mcmc/(?P<dirname>.*?)/params/(?P<node_label>.*).txt$', mcmc_param_posterior, name='mcmc_param_posterior'),
+                       url(r'^mcmc/(?P<dirname>.*?)/event_posterior.png$', mcmc_event_posterior, name='mcmc_event_posterior'),
                        url(r'^gridsearch/$', gridsearch_list_view, name='gridsearch_list'),
                        url(r'^gridsearch/(?P<gsid>\d+)/$', gridsearch_detail_view, name='gsrun_detail'),
                        url(r'^gridsearch/(?P<gsid>\d+)/heatmap.png$', gs_heatmap_view, name='gs_heatmap'),

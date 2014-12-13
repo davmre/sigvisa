@@ -46,6 +46,9 @@
    <a href="{% url distance_decay runid=runid  %}?plot_param=coda_decay;phases=P;{{ filter_GET_params }}">distance plot</a>
   </td>
  </tr>
+<tr>
+<td></td><td><b>Pairwise</b></td><td colspan=2><a href="{% url pairwise_params runid=runid %}?param1=coda_decay;param2=peak_decay;phases=P;{{ filter_GET_params }}">coda_decay vs peak_decay</a> (for example)</td>
+</tr>
 </table>
 <p>
 {% if fit_list %}

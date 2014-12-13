@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 import os
-
+import time
 
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -16,6 +16,10 @@ class MCMCLogger(object):
         mkdir_p(run_dir)
         self.run_dir = run_dir
 
+        with open(os.path.join(run_dir, 'cmd.txt'), 'w') as f:
+            f.write(" ".join(sys.argv))
+
+
         self.log_handles = dict()
 
         self.dumpsteps = dumpsteps
@@ -23,12 +27,26 @@ class MCMCLogger(object):
         self.dump_interval = dump_interval
         self.print_interval = print_interval
 
+        self.start_time = None
+
+    def start(self):
+        self.start_time = time.time()
+
     def log(self, sg, step, n_accepted, n_attempted, move_times):
 
         if 'lp' not in self.log_handles:
             self.log_handles['lp'] = open(os.path.join(self.run_dir, 'lp.txt'), 'a')
         lp = sg.current_log_p()
         self.log_handles['lp'].write('%f\n' % lp)
+
+
+        if 'times' not in self.log_handles:
+            self.log_handles['times'] = open(os.path.join(self.run_dir, 'times.txt'), 'a')
+        if self.start_time is None:
+            raise Exception("must call logger.start() before calling logger.log()")
+        elapsed = time.time() - self.start_time
+        self.log_handles['times'].write('%f\n' % elapsed)
+
 
         if (step % self.dump_interval == self.dump_interval-1):
             sg.debug_dump(dump_path = os.path.join(self.run_dir, 'step_%06d' % step), pickle_only=True)
@@ -51,10 +69,16 @@ class MCMCLogger(object):
                 for (sta,wns) in sg.station_waves.items():
                     for wn in wns:
                         for phase in sg.phases:
+                            try:
+                                tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
+                            except KeyError:
+                                # if this event does not generate this phase at this station
+                                continue
+
                             lbl = "%d_%s_%s" % (eid, wn.label, phase)
                             mkdir_p(os.path.join(self.run_dir, 'ev_%05d' % eid))
                             lbl_handle = open(os.path.join(self.run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
-                            tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
+
                             lbl_handle.write('%06d %f %f %f %f\n' % (step,
                                                                      tmvals['arrival_time'],
                                                                      tmvals['peak_offset'],
@@ -80,16 +104,22 @@ class MCMCLogger(object):
                     plot_with_fit_shapes(os.path.join(self.run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
 
         if step > 0 and ((step % self.print_interval == 0) or (step < 5)):
-            self.print_mcmc_acceptances(sg, lp, step, n_accepted, n_attempted)
+            s = self.acceptance_string(sg, lp, step, n_accepted, n_attempted)
+            print s
+            if "acceptance_rates" not in self.log_handles:
+                self.log_handles["acceptance_rates"] = open(os.path.join(self.run_dir, 'acceptance_rates.txt'), 'a')
+            self.log_handles["acceptance_rates"].write(s + "\n\n")
 
-    def print_mcmc_acceptances(self, sg, lp, step, n_accepted, n_attempted):
 
-        print "step %d: lp %.2f, accepted " % (step, lp),
+
+    def acceptance_string(self, sg, lp, step, n_accepted, n_attempted):
+
+        s = "step %d: lp %.2f, accepted " % (step, lp)
         for key in sorted(n_accepted.keys()):
-            print "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key]),
-        print ", uatemplates: ", len(sg.uatemplates),
-        print ", events: ", len(sg.evnodes)
-
+            s += "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key])
+        s += ", uatemplates: %d " % len(sg.uatemplates)
+        s += ", events: %d " % len(sg.evnodes)
+        return s
 
     def __del__(self):
         for v in self.log_handles.values():

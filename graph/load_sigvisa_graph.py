@@ -13,23 +13,33 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-    fit_sql_query = "select f.runid, f.evid, f.sta, f.chan, f.band, f.hz, f.stime, f.etime, nm.model_type from sigvisa_coda_fit f, sigvisa_noise_model nm where f.fitid=%d and f.nmid=nm.nmid" % (fitid)
+    fit_sql_query = "select f.runid, f.evid, f.sta, f.chan, f.band, f.hz, f.smooth, f.stime, f.etime, nm.model_type from sigvisa_coda_fit f, sigvisa_noise_model nm where f.fitid=%d and f.nmid=nm.nmid" % (fitid)
     cursor.execute(fit_sql_query)
     fit = cursor.fetchone()
     ev = get_event(evid=fit[1])
-    wave = load_event_station_chan(fit[1], fit[2], fit[3], cursor=cursor).filter('%s;env;hz_%.2f' % (fit[4], fit[5]))
-    nm_type = fit[8]
+    wave = load_event_station_chan(fit[1], fit[2], fit[3], cursor=cursor).filter('%s;env;smooth_%d;hz_%.2f' % (fit[4], fit[6], fit[5]))
+    nm_type = fit[9]
     runid = fit[0]
 
-    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay from sigvisa_coda_fit_phase where fitid=%d" % fitid
+    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, peak_decay, coda_decay from sigvisa_coda_fit_phase where fitid=%d" % fitid
     cursor.execute(phase_sql_query)
     phase_details = cursor.fetchall()
     phases = [p[1] for p in phase_details]
     templates = {}
     tmshapes = {}
+    uatemplates = []
     for (phase, p) in zip(phases, phase_details):
-        tmshapes[phase] = p[2]
-        templates[phase] = {'arrival_time': p[3], 'peak_offset': p[4], 'coda_height': p[5], 'coda_decay': p[6]}
+        shape = p[2]
+        tparams = {'arrival_time': p[3], 'peak_offset': p[4], 'coda_height': p[5], 'coda_decay': p[7]}
+        if p[2]=="lin_polyexp":
+            tparams['peak_decay'] = p[6]
+
+        tmshapes[phase] = shape
+        if phase=="UA":
+            uatemplates.append(tparams)
+        else:
+            templates[phase] = tparams
+
 
     if load_wiggles:
         wiggle_family = None
@@ -50,7 +60,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
             basisids[phase] = w[0][2]
             wiggles[phase] = str(w[0][1])
     else:
-        wiggle_family = "fourier_0.1"
+        wiggle_family = "dummy"
         basisids = None
 
     sg = SigvisaGraph(template_model_type="dummy", wiggle_model_type="dummy",
@@ -60,8 +70,10 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     wave_node = sg.add_wave(wave)
     sg.add_event(ev)
 
+    for uaparams in  uatemplates:
+        sg.create_unassociated_template(wave_node, atime=uaparams['arrival_time'], initial_vals=uaparams)
 
-    for phase in phases:
+    for phase in templates.keys():
         sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
                         chan=wave['chan'], phase=phase,
                         values = templates[phase])
@@ -86,7 +98,7 @@ def register_svgraph_cmdline(parser):
     parser.add_option("--runid", dest="runid", default=None, type="int",
                       help="runid of training run specifying the set of models to use")
     parser.add_option(
-        "--template_shape", dest="template_shape", default="paired_exp", type="str", help="template model type (paired_exp)")
+        "--template_shape", dest="template_shape", default="lin_polyexp", type="str", help="template model type (lin_polyexp)")
     parser.add_option(
         "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
     parser.add_option(
@@ -98,12 +110,15 @@ def register_svgraph_cmdline(parser):
                       help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
     parser.add_option("--arrays_joint", dest="arrays_joint", default=False, action="store_true",
                       help="model array stations with joint nodes (False)")
+    parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true",
+                      help="model Pn arrivals as P (false)")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
-
+    parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=1e-6, type=float, help="Poisson rate (per-second) for unassociated template prior (1e-6)")
 
 def register_svgraph_signal_cmdline(parser):
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
+    parser.add_option("--smooth", dest="smooth", default=None, type=int, help="perform the given level of smoothing")
     parser.add_option("--chans", dest="chans", default="auto", type="str",
                       help="comma-separated list of channel names to use for inference (auto)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
@@ -114,7 +129,7 @@ def register_svgraph_signal_cmdline(parser):
                       help="load signals beginning at this UNIX time (None)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float",
                       help="load signals end at this UNIX time (None)")
-    parser.add_option("--dataset", dest="dataset", default="test", type="str",
+    parser.add_option("--dataset", dest="dataset", default="training", type="str",
                       help="if start_time and end_time not specified, load signals from the time period of the specified dataset (training)")
     parser.add_option("--hour", dest="hour", default=0, type="float",
                       help="start at a particular hour of the given dataset (0)")
@@ -122,10 +137,12 @@ def register_svgraph_signal_cmdline(parser):
                       help="load this many hours from the given dateset")
     parser.add_option("--initialize_leb", dest="initialize_leb", default="no", type="str",
                       help="use LEB events to set the intial state. options are 'no', 'yes', 'perturb' to initialize with locations randomly perturbed by ~5 degrees, or 'count' to initialize with a set of completely random events, having the same count as the LEB events ")
+    parser.add_option("--synth", dest="synth", default=False, action="store_true")
 
 def register_svgraph_event_based_signal_cmdline(parser):
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
+    parser.add_option("--smooth", dest="smooth", default=None, type=int, help="perform the given level of smoothing")
     parser.add_option("--chans", dest="chans", default="auto", type="str",
                       help="comma-separated list of channel names to use for inference (auto)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
@@ -148,7 +165,7 @@ def setup_svgraph_from_cmdline(options, args):
 
     tm_type_str = options.tm_types
     if tm_type_str == "param":
-        tm_type_str = "tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb"
+        tm_type_str = "tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb,peak_decay:param_linear_distmb"
 
     tm_types = {}
     if ',' in tm_type_str:
@@ -168,7 +185,8 @@ def setup_svgraph_from_cmdline(options, args):
     sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
                       wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
                       dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
-                      runid=runid, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint)
+                      runid=runid, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint,
+                      absorb_n_phases=options.absorb_n_phases, uatemplate_rate=options.uatemplate_rate)
 
 
     return sg
@@ -210,29 +228,31 @@ def load_signals_from_cmdline(sg, options, args):
     for seg in segments:
         for band in bands:
             filtered_seg = seg.with_filter(band)
-            for chan in filtered_seg.get_chans():
+            if options.smooth is not None:
+                filtered_seg = filtered_seg.with_filter("smooth_%d" % options.smooth)
 
+            for chan in filtered_seg.get_chans():
                 try:
-                    modelid = get_param_model_id(sg.runid, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta'], wiggle_param=False), 'amp_transfer', 'paired_exp', chan=chan, band=band)
+                    modelid = get_param_model_id(sg.runid, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta'], wiggle_param=False), 'amp_transfer', options.template_shape, chan=chan, band=band)
                 except ModelNotFoundError as e:
                     print "couldn't find amp_transfer model for %s,%s,%s, so not adding to graph." % (seg['sta'], chan, band), e
                     continue
 
                 wave = filtered_seg[chan]
-                sg.add_wave(wave)
+                wn = sg.add_wave(wave)
 
 
-    if options.initialize_leb != "no":
+    if options.initialize_leb != "no" or options.synth:
         st = sg.start_time
         et = sg.end_time - 400
         events, orid2num = read_events(cursor, st, et, 'leb')
         events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
 
-        if options.initialize_leb=="yes":
+        if options.initialize_leb=="yes" or options.synth:
             evs = []
             for evarr in events:
                 ev = get_event(evid=evarr[EV_EVID_COL])
-                sg.add_event(ev)
+                sg.add_event(ev, fixed=options.synth)
                 evs.append(ev)
         elif options.initialize_leb=="perturb":
             raise NotImplementedError("not implemented!")
@@ -242,6 +262,25 @@ def load_signals_from_cmdline(sg, options, args):
             raise Exception("unrecognized argument initialize_leb=%s" % options.initialize_leb)
     else:
         evs = None
+
+    if options.synth:
+        for (sta, wns) in sg.station_waves.items():
+            for wn in wns:
+                wn.unfix_value()
+
+        sg.parent_sample_all()
+
+        for (sta, wns) in sg.station_waves.items():
+            for wn in wns:
+                wn.fix_value()
+
+        eids = sg.evnodes.keys()
+        for eid in eids:
+            if options.initialize_leb=="no":
+                sg.remove_event(eid)
+            else:
+                for evnode in sg.evnodes[eid].values():
+                    evnode.unfix_value()
 
     cursor.close()
 
@@ -281,6 +320,9 @@ def load_event_based_signals_from_cmdline(sg, options, args):
     for seg in segments:
         for band in bands:
             filtered_seg = seg.with_filter(band)
+            if options.smooth is not None:
+                filtered_seg = filtered_seg.with_filter("smooth_%d" % options.smooth)
+
             for chan in filtered_seg.get_chans():
                 wave = filtered_seg[chan]
                 sg.add_wave(wave)

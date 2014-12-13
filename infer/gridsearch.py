@@ -14,7 +14,7 @@ from sigvisa.source.event import *
 from sigvisa.signals.io import load_segments
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.models.ttime import tt_predict
-from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
+from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases_sta
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 def event_at(ev, lon=None, lat=None, t=None, depth=None):

@@ -82,3 +82,8 @@ tests/mcmc/one_station_templates
 Untitled*ipynb
 db_cache
 demos/template_mcmc_dtra_080213/
+/logs
+/scratch
+/experiments/logodds
+/gp_tts
+/notebooks/.ipynb_checkpoints/

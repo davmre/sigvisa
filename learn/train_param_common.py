@@ -13,7 +13,7 @@ import scipy.linalg
 import hashlib
 
 from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
-from sigvisa.sparsegp.gp import GP, optimize_gp_hyperparams
+from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel

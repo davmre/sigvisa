@@ -132,18 +132,15 @@ def fit_detail(request, fitid):
     except:
         fit_view_options = view_options()
         fit_view_options.id = 1
-        fit_view_options.smoothing = 8
+        fit_view_options.smoothing = fit.smooth
         fit_view_options.logscale = False
         fit_view_options.wiggle = False
         fit_view_options.save()
 
     s = Sigvisa()
-    cursor = s.dbconn.cursor()
 
-    # load the waveform so that we can display data about it
     try:
-        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env;hz_%.2f" % fit.hz)
-        cursor.close()
+        wave = wave_from_fit(fit)
 
         wave_stime_str = datetime.fromtimestamp(wave['stime'], timezone('UTC')).strftime(time_format)
         wave_etime_str = datetime.fromtimestamp(wave['etime'], timezone('UTC')).strftime(time_format)
@@ -207,7 +204,7 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
         plot.subplot_waveform(wave.filter(
             "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
     if template is not None:
-        plot.subplot_waveform(template.filter("smooth_%d" % smoothing), axes, color="green",
+        plot.subplot_waveform(template, axes, color="green",
                               linewidth=tmpl_width, alpha = tmpl_alpha,
                               logscale=logscale, plot_dets=False)
 
@@ -220,12 +217,13 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
     canvas.print_png(response)
     return response
 
-def custom_wave_plus_template_view(evid, sta, chan, band, fit_params, nmid, param_type, **kwargs):
+def custom_wave_plus_template_view(evid, sta, chan, band, smooth, hz, fit_params, nmid, tmshape, **kwargs):
+
     cursor = Sigvisa().dbconn.cursor()
-    wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor).filter(str(band) + ";env")
+    wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor).filter(str(band) + ";env;smooth_%d;hz_%d" % (smooth, hz))
     cursor.close()
 
-    sg = setup_sigvisa_graph(evid=evid, wave=wave, fit_params=fit_params)
+    sg = setup_sigvisa_graph(evid=evid, tmshape=tmshape, wave=wave, fit_params=fit_params)
     wave_node = sg.get_wave_node(wave=wave)
     wave_node.set_noise_model(nmid=nmid)
     wave_node.unfix_value()
@@ -235,14 +233,37 @@ def custom_wave_plus_template_view(evid, sta, chan, band, fit_params, nmid, para
 
     return wave_plus_template_view(wave=wave, template=synth_wave, **kwargs)
 
+def tmshape_from_fit(fit):
+    tmshape = "paired_exp"
+    fit_phases = fit.sigvisacodafitphase_set.all()
+    for p in fit_phases:
+        tmshape = str(p.template_model)
+        break
+    return tmshape
 
 def phases_from_fit(fit):
     fit_phases = fit.sigvisacodafitphase_set.all()
-    fit_params = dict([(str(p.phase), {'arrival_time': p.arrival_time,
-                                       'peak_offset': p.peak_offset,
-                                       'coda_height': p.coda_height,
-                                       'coda_decay': p.coda_decay}) for p in fit_phases])
+    fit_params = dict()
+    ua_counter = 0
+    for p in fit_phases:
+        phasename = p.phase
+        if phasename=="UA":
+            ua_counter += 1
+            phasename += str(ua_counter)
+        fit_params[phasename] = {'arrival_time': p.arrival_time,
+                                 'peak_offset': p.peak_offset,
+                                 'coda_height': p.coda_height,
+                                 'peak_decay': p.peak_decay,
+                                 'coda_decay': p.coda_decay}
     return fit_params
+
+def wave_from_fit(fit):
+    cursor = Sigvisa().dbconn.cursor()
+    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
+    cursor.close()
+    return wave
+
+
 
 @cache_page(60 * 60)
 def FitImageView(request, fitid):
@@ -269,6 +290,8 @@ def FitImageView(request, fitid):
     wave_node.parent_predict()
     pred_wave = wave_node.get_wave()
     pred_wave.data.mask = obs_wave.data.mask
+
+
 
     return wave_plus_template_view(wave=None if template_only else obs_wave, template=pred_wave,
                                    logscale=logscale, smoothing=smoothing, request=request,
@@ -325,23 +348,31 @@ def custom_template_view(request, fitid):
     fit_params = filtered_fit_params
     """
 
+    tmshape = tmshape_from_fit(fit)
+
     return custom_wave_plus_template_view(sta=fit.sta, evid=fit.evid, chan=fit.chan, band=fit.band,
-                                   nmid=fit.nmid.nmid, fit_params=fit_params, param_type="paired_exp",
+                                          smooth=fit.smooth, hz=fit.hz,
+                                   nmid=fit.nmid.nmid, fit_params=fit_params, tmshape=tmshape,
                                    logscale=logscale, smoothing=smoothing,
                                    request=request)
 
-def setup_sigvisa_graph(fit_params, evid, wave):
+def setup_sigvisa_graph(fit_params, tmshape, evid, wave):
     event = get_event(evid=evid)
-    sg = SigvisaGraph(phases = fit_params.keys(), no_prune_edges=True)
+    sg = SigvisaGraph(phases = fit_params.keys(), template_shape=tmshape)
     assert(len(sg.toplevel_nodes) == 0)
     assert(len(sg.leaf_nodes) == 0)
-    sg.add_wave(wave)
+    wave_node = sg.add_wave(wave)
+
     sg.add_event(event)
+
     for (phase, vals) in fit_params.items():
         print "setting", phase, vals
-        sg.set_template(eid=event.eid, sta=wave['sta'],
-                        phase=phase, band=wave['band'],
-                        chan=wave['chan'], values= vals)
+        if phase.startswith("UA"):
+            sg.create_unassociated_template(wave_node, atime=vals['arrival_time'], initial_vals=vals)
+        else:
+            sg.set_template(eid=event.eid, sta=wave['sta'],
+                            phase=phase, band=wave['band'],
+                            chan=wave['chan'], values= vals)
     for wm in sg.wiggle_nodes:
         wm.parent_predict()
     return sg
@@ -349,7 +380,7 @@ def setup_sigvisa_graph(fit_params, evid, wave):
 def template_debug_view(request, fitid):
     fit = get_object_or_404(SigvisaCodaFit, pk=fitid)
     logscale = request.GET.get("logscale", "off")
-    smoothing = int(request.GET.get("smooth", "8"))
+    smoothing = int(request.GET.get("smooth", "0"))
 
     fit_params = phases_from_request(request)
     print fit_params
@@ -360,11 +391,12 @@ def template_debug_view(request, fitid):
     if len(fit_params) == 0:
         fit_params = phases_from_fit(fit)
 
-    cursor = Sigvisa().dbconn.cursor()
-    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env" + ';hz_%.2f' % fit.hz)
-    cursor.close()
+    wave = wave_from_fit(fit)
 
-    sg = setup_sigvisa_graph(evid=fit.evid, wave=wave, fit_params=fit_params)
+    fit_phases = fit.sigvisacodafitphase_set.all()
+    tmshape=tmshape_from_fit(fit)
+
+    sg = setup_sigvisa_graph(evid=fit.evid, tmshape=tmshape, wave=wave, fit_params=fit_params)
     wave_node = sg.get_wave_node(wave=wave)
     wave_node.set_noise_model(nmid=fit.nmid.nmid)
 
@@ -415,11 +447,9 @@ def template_residual_view(request, fitid):
     if len(fit_params) == 0:
         fit_params = phases_from_fit(fit)
 
-    cursor = Sigvisa().dbconn.cursor()
-    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env" + ';hz_%.2f' % fit.hz)
-    cursor.close()
+    wave = wave_from_fit(fit)
 
-    sg = setup_sigvisa_graph(evid=fit.evid, wave=wave, fit_params=fit_params)
+    sg = setup_sigvisa_graph(evid=fit.evid, tmshape=tmshape_from_fit(fit), wave=wave, fit_params=fit_params)
     wave_node = sg.get_wave_node(wave=wave)
     wave_node.set_noise_model(nmid=fit.nmid.nmid)
     wave_node.unfix_value()

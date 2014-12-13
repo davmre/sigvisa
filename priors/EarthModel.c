@@ -52,10 +52,17 @@
 /* convert latitude x in radians to geocentric co-latitude in radians */
 #define GEOCENTRIC_COLAT(x) \
   ((x) + (((0.192436*sin((x)+(x))) + (0.000323*sin(4.0*(x))))*DEG2RAD))
+
+#define GEOCENTRIC_COLAT_DERIV(x) \
+  (1 + (0.384872 * cos(2*x) + 0.001292* cos(4*x))*DEG2RAD)
+
 /* convert from geocentric co-latitude in radians back to geographic latitude
  * in degrees */
 #define GEOGRAPHIC_LAT(x)                                               \
   (90.0 - (x*RAD2DEG - (0.192436*sin(x+x) - 0.000323*sin(4.0*x))))
+#define GEOGRAPHIC_LAT_DERIV(x) \
+  -RAD2DEG + 0.384872*cos(2*x) - 0.001292 * cos(4*x)
+
 
 #define	SIGN(a1, a2)	((a2) >= 0 ? -(a1) : (a1))
 
@@ -720,6 +727,114 @@ int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
   return 1;
 }
 
+static void dist_azimuth_jac(double alon1, double alat1, double alon2,
+			     double alat2, double *delta, double *azi, double *baz,
+			     double *d_delta_alon1, double *d_delta_alat1,
+			     double *d_azi_alon1, double *d_azi_alat1,
+			     double *d_baz_alon1, double *d_baz_alat1) {
+
+  /*
+
+    return gradients of delta, azi, baz with respect to alon1, alon2.
+
+   */
+
+
+  double clat1, cdlon, cdel, geoc_co_lat, geoc_lat1, geoc_lat2;
+  double geog_co_lat, rdlon, slat1, sdlon, xazi, xbaz, yazi, ybaz;
+  double clat2, slat2;
+
+  double d_geog_co_lat_alat1, d_geoc_co_lat_alat1, d_geoc_lat1_alat1;
+  double d_rdlon_alon1, d_clat1_alat1, d_slat1_alat1, d_cdlon_alon1, d_sdlon_alon1;
+  double d_cdel_alat1, d_cdel_alon1;
+  double d_yazi_alon1, d_xazi_alat1, d_xazi_alon1, d_ybaz_alat1, d_ybaz_alon1, d_xbaz_alat1, d_xbaz_alon1;
+
+  /*
+   * Convert alat2 from geographic latitude to geocentric latitude
+   * (radians) in geoc_lat2
+   */
+  geog_co_lat = (90.0-(alat2))*DEG2RAD;
+  geoc_co_lat = GEOCENTRIC_COLAT(geog_co_lat);
+  geoc_lat2 = 90.0*DEG2RAD-geoc_co_lat;
+
+  clat2 = cos(geoc_lat2);
+  slat2 = sin(geoc_lat2);
+
+  /*
+   * Convert alat1 from geographic latitude to geocentric latitude
+   * (radians) in geoc_lat1
+   */
+  geog_co_lat = (90.0-(alat1))*DEG2RAD;
+  geoc_co_lat = GEOCENTRIC_COLAT(geog_co_lat);
+  geoc_lat1 = 90.0*DEG2RAD-geoc_co_lat;
+
+  d_geog_co_lat_alat1 = -DEG2RAD;
+  d_geoc_co_lat_alat1 = GEOCENTRIC_COLAT_DERIV(geog_co_lat) * d_geog_co_lat_alat1;
+  d_geoc_lat1_alat1 = -d_geoc_co_lat_alat1;
+
+  rdlon = DEG2RAD * (alon2 - alon1);
+  d_rdlon_alon1 = -DEG2RAD;
+
+  clat1 = cos(geoc_lat1);
+  slat1 = sin(geoc_lat1);
+  cdlon = cos(rdlon);
+  sdlon = sin(rdlon);
+  d_clat1_alat1 = -sin(geoc_lat1) * d_geoc_lat1_alat1;
+  d_slat1_alat1 = cos(geoc_lat1) * d_geoc_lat1_alat1;
+  d_cdlon_alon1 = -sin(rdlon) * d_rdlon_alon1;
+  d_sdlon_alon1 = cos(rdlon) * d_rdlon_alon1;
+
+  cdel = slat1*slat2 + clat1*clat2*cdlon;
+  d_cdel_alat1 = slat2 * d_slat1_alat1 + clat2*cdlon * d_clat1_alat1;
+  d_cdel_alon1 = clat1*clat2*d_cdlon_alon1;
+
+  if (cdel > 1.0) {
+    cdel = 1.0;
+    d_cdel_alat1 = 0.0;
+    d_cdel_alon1 = 0.0;
+  } else if (cdel < -1.0) {
+    cdel = -1.0;
+    d_cdel_alat1 = 0.0;
+    d_cdel_alon1 = 0.0;
+  }
+
+  yazi = sdlon * clat2;
+  d_yazi_alon1 = clat2 * d_sdlon_alon1;
+
+  xazi = clat1*slat2 - slat1*clat2*cdlon;
+  d_xazi_alat1 = slat2 * d_clat1_alat1 - clat2*cdlon*d_slat1_alat1;
+  d_xazi_alon1 = -slat1*clat2*d_cdlon_alon1;
+
+  ybaz = -sdlon * clat1;
+  d_ybaz_alat1 = -sdlon * d_clat1_alat1;
+  d_ybaz_alon1 = -clat1 * d_sdlon_alon1;
+
+  xbaz = clat2*slat1 - slat2*clat1*cdlon;
+  d_xbaz_alat1 = clat2*d_slat1_alat1 - slat2*cdlon*d_clat1_alat1;
+  d_xbaz_alon1 = -slat2*clat1*d_cdlon_alon1;
+
+  *delta = RAD2DEG * acos(cdel);
+  *azi   = RAD2DEG * atan2(yazi, xazi);
+  *baz   = RAD2DEG * atan2(ybaz, xbaz);
+
+  *d_delta_alat1 = RAD2DEG * -1.0/sqrt(1-cdel*cdel) * d_cdel_alat1;
+  *d_delta_alon1 = RAD2DEG * -1.0/sqrt(1-cdel*cdel) * d_cdel_alon1;
+  *d_azi_alat1 = RAD2DEG * ( d_xazi_alat1 * -yazi/(yazi*yazi + xazi*xazi) );
+  *d_azi_alon1 = RAD2DEG * ( d_xazi_alon1 * -yazi/(yazi*yazi + xazi*xazi) + \
+			     d_yazi_alon1 * xazi/(yazi*yazi + xazi*xazi) );
+  *d_baz_alat1 = RAD2DEG * ( d_xbaz_alat1 * -ybaz/(ybaz*ybaz + xbaz*xbaz) + \
+			     d_ybaz_alat1 * xbaz/(ybaz*ybaz + xbaz*xbaz) );
+  *d_baz_alon1 = RAD2DEG * ( d_xbaz_alon1 * -ybaz/(ybaz*ybaz + xbaz*xbaz) + \
+			     d_ybaz_alon1 * xbaz/(ybaz*ybaz + xbaz*xbaz) );
+
+
+  if (*azi < 0.0)
+    *azi += 360.0;
+  if (*baz < 0.0)
+    *baz += 360.0;
+
+}
+
 static void dist_azimuth(double alon1, double alat1, double alon2,
                          double alat2, double *delta, double *azi, double *baz)
 {
@@ -886,6 +1001,15 @@ int iangle_to_slowness(double iangle, int phase, double * slowness) {
   return success;
 }
 
+double bilinear_interpolate(double val11, double val12, double val21, double val22, double x, double y) {
+  return val11 * (1-x) * (1-y) + val12 * x * (1-y) + val21 * (1-x) * y + val22 * x * y;
+}
+
+void bilinear_interpolate_grad(double val11, double val12, double val21, double val22, double x, double y, double * dfdx, double * dfdy) {
+  *dfdx =  - val11 * (1-y) + val12 * (1-y) - val21 * y + val22 * y;
+  *dfdy =  - val11 * (1-x) - val12 * x  + val21 * (1-x) + val22 * x;
+}
+
 static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, double depth, double
                         distance, double * p_trvtime, double * p_slow,
 			double * p_iangle)
@@ -977,58 +1101,13 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
   d_depth = p_phase->p_depths[depthi2] - p_phase->p_depths[depthi];
   d_dist = p_phase->p_dists[disti2] - p_phase->p_dists[disti];
 
-  /* compute the scaled manhattan distance to the four corners */
-  mdist11 = (depth - p_phase->p_depths[depthi]) / d_depth
-    + (distance - p_phase->p_dists[disti]) / d_dist;
+  double x = (distance - p_phase->p_dists[disti]) / d_dist;
+  double y = (depth - p_phase->p_depths[depthi]) / d_depth;
+  double d_x_distance = 1.0/d_dist;
+  double d_y_distance = 1.0/d_depth;
 
-  mdist12 = (depth - p_phase->p_depths[depthi]) / d_depth
-    + (p_phase->p_dists[disti2] - distance) / d_dist;
-
-  mdist21 = (p_phase->p_depths[depthi2] - depth) / d_depth
-    + (distance - p_phase->p_dists[disti]) / d_dist;
-
-  mdist22 = (p_phase->p_depths[depthi2] - depth) / d_depth
-    + (p_phase->p_dists[disti2] - distance) / d_dist;
-
-  /* compute the travel time and incident angle */
-  if (!mdist11) {
-    *p_trvtime = val11;
-    *p_iangle = iaval11;
-  }
-  else if (!mdist12) {
-    *p_trvtime = val12;
-    *p_iangle = iaval12;
-  }
-  else if (!mdist21) {
-    *p_trvtime = val21;
-    *p_iangle = iaval21;
-  }
-  else if (!mdist22) {
-    *p_trvtime = val22;
-    *p_iangle = iaval22;
-  }
-  else
-  {
-    assert((mdist11 > 0) && (mdist12 > 0) && (mdist21 > 0) && (mdist22 > 0));
-
-    /* for debugging*
-    if (fabs(distance - 137.1301) < 1e-3)
-    {
-      printf("depth %lf distance %lf\n", depth, distance);
-      printf("val11 %lf val12 %lf\nval21 %lf val22 %lf\n", val11, val12, val21,
-             val22);
-      printf("mdist11 %lf mdist12 %lf mdist21 %lf mdist22 %lf\n",
-             mdist11, mdist12, mdist21, mdist22);
-    }
-    **/
-
-    *p_trvtime = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21
-                  + val22 / mdist22)
-      / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
-    *p_iangle = (iaval11 / mdist11 + iaval12 / mdist12 + iaval21 / mdist21
-                  + iaval22 / mdist22)
-      / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
-  }
+  *p_trvtime = bilinear_interpolate(val11, val12, val21, val22, x, y);
+  *p_iangle = bilinear_interpolate(iaval11, iaval12, iaval21, iaval22, x, y);
 
   slo_val1 = (val12 - val11) / d_dist;
   slo_val2 = (val22 - val21) / d_dist;
@@ -1062,6 +1141,362 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
     *p_slow = (slo_val1 / slo_mdist1 + slo_val2 / slo_mdist2)
       / (1 / slo_mdist1 + 1 / slo_mdist2);
   }
+}
+
+
+
+static void travel_time_jac(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, double depth, double
+                        distance, double * p_trvtime, double * p_slow,
+			double * p_iangle, double * d_trvtime_depth, double * d_trvtime_distance)
+{
+  int depthi, disti, depthi2, disti2;
+  double val11, val12, val21, val22;
+  double iaval11=0, iaval12=0, iaval21=0, iaval22=0;
+  double mdist11, mdist12, mdist21, mdist22;
+  double d_depth, d_dist;
+  double slo_val1, slo_val2;
+  double slo_mdist1, slo_mdist2;
+  int in_range;
+  int i;
+
+  /* check that the depth and distance are within the bounds for this phase */
+  if ((depth < p_phase->p_depths[0])
+      || (depth > p_phase->p_depths[p_phase->numdepth-1])
+      || (distance < p_phase->p_dists[0])
+      || (distance > p_phase->p_dists[p_phase->numdist-1]))
+  {
+    *p_trvtime = *p_slow = -1;
+    return;
+  }
+
+  /* check that it is within one of the ranges */
+  in_range = 0;
+  for (i=0; i<p_phase->numddrange; i++)
+  {
+    DDRange * range = p_phase->p_ddranges + i;
+
+    if ((distance >= range->mindist) && (distance <= range->maxdist)
+        && (depth >= range->mindepth) && (depth <= range->maxdepth))
+      in_range = 1;
+  }
+
+  if (!in_range && p_earth->enforce_ddrange)
+  {
+    *p_trvtime = *p_slow = *p_iangle = -1;
+    return;
+  }
+
+  for (depthi = 0; (depthi < p_phase->numdepth)
+         && (depth >= p_phase->p_depths[depthi]); depthi++)
+    ;
+  depthi --;
+
+  if (depthi < (p_phase->numdepth-1))
+    depthi2 = depthi + 1;
+  else
+  {
+    depthi = p_phase->numdepth-2;
+    depthi2 = p_phase->numdepth-1;
+  }
+
+  for (disti = 0; (disti < p_phase->numdist)
+         && (distance >= p_phase->p_dists[disti]); disti++)
+    ;
+  disti --;
+
+  if (disti < (p_phase->numdist-1))
+    disti2 = disti + 1;
+  else
+  {
+    disti = p_phase->numdist-2;
+    disti2 = p_phase->numdist-1;
+  }
+  /* the four points are as follows :
+   *    1,1   1,2
+   *    2,1   2,2
+   */
+  val11 = EarthPhaseModel_GetTTSample(p_phase, depthi, disti);
+  val12 = EarthPhaseModel_GetTTSample(p_phase, depthi, disti2);
+  val21 = EarthPhaseModel_GetTTSample(p_phase, depthi2, disti);
+  val22 = EarthPhaseModel_GetTTSample(p_phase, depthi2, disti2);
+
+  if(p_phase->p_iasamples != NULL) {
+    iaval11 = EarthPhaseModel_GetIASample(p_phase, depthi, disti);
+    iaval12 = EarthPhaseModel_GetIASample(p_phase, depthi, disti2);
+    iaval21 = EarthPhaseModel_GetIASample(p_phase, depthi2, disti);
+    iaval22 = EarthPhaseModel_GetIASample(p_phase, depthi2, disti2);
+  }
+
+  if ((val11 < 0) || (val12 < 0) || (val21 < 0) || (val22 < 0))
+  {
+    *p_trvtime = *p_slow = *p_iangle = -1;
+    return;
+  }
+
+  d_depth = p_phase->p_depths[depthi2] - p_phase->p_depths[depthi];
+  d_dist = p_phase->p_dists[disti2] - p_phase->p_dists[disti];
+
+  double x = (distance - p_phase->p_dists[disti]) / d_dist;
+  double y = (depth - p_phase->p_depths[depthi]) / d_depth;
+  double d_x_distance = 1.0/d_dist;
+  double d_y_depth = 1.0/d_depth;
+
+  *p_trvtime = bilinear_interpolate(val11, val12, val21, val22, x, y);
+  *p_iangle = bilinear_interpolate(iaval11, iaval12, iaval21, iaval22, x, y);
+
+  double d_trvtime_x, d_trvtime_y;
+  bilinear_interpolate_grad(val11, val12, val21, val22, x, y, &d_trvtime_x, &d_trvtime_y);
+  *d_trvtime_distance = d_trvtime_x * d_x_distance;
+  *d_trvtime_depth = d_trvtime_y * d_y_depth;
+
+  slo_val1 = (val12 - val11) / d_dist;
+  slo_val2 = (val22 - val21) / d_dist;
+  slo_mdist1 = depth - p_phase->p_depths[depthi];
+  slo_mdist2 = p_phase->p_depths[depthi2] - depth;
+
+  /* compute the slowness */
+  if (!slo_mdist1)
+    *p_slow = slo_val1;
+
+  else if (!slo_mdist2)
+    *p_slow = slo_val2;
+
+  else
+  {
+    assert((slo_mdist1 > 0) && (slo_mdist2 > 0));
+
+    /* for debugging*
+    if (fabs(distance - 80.653904) < 1e-3)
+    {
+      printf("depth %lf distance %lf\n", depth, distance);
+      printf("val11 %lf val12 %lf\nval21 %lf val22 %lf\n", val11, val12, val21,
+             val22);
+      printf("mdist11 %lf mdist12 %lf mdist21 %lf mdist22 %lf\n",
+             mdist11, mdist12, mdist21, mdist22);
+      printf("val1 %lf val2 %lf\nmdist1 %lf mdist2 %lf\n",
+             slo_val1, slo_val2, slo_mdist1, slo_mdist2);
+    }
+    **/
+
+    *p_slow = (slo_val1 / slo_mdist1 + slo_val2 / slo_mdist2)
+      / (1 / slo_mdist1 + 1 / slo_mdist2);
+  }
+}
+
+
+static double ellipticity_corr_jac (double delta, double esaz, double ecolat,
+				    double depth, int phaseid,
+				    double * d_ec_delta, double * d_ec_esaz,
+				    double * d_ec_ecolat, double * d_ec_depth)
+{
+  int     iphs;
+  double  adepth, azim, edist, ellip_corr = 0.0;
+  double  sc0, sc1, sc2, t0, t1, t2;
+
+  static  double  t[][8][10] =
+    {
+      {
+        /* t0 constants */
+        { -0.01711, -1.7791,   0.0000,   0.0000,  0.0000, -0.9630,
+          -13.2326,  13.7390,   0.0000,   0.0000 },
+        { -0.08291, -2.1455,   2.4538,  -0.7907,  0.0000,  2.0258,
+          -12.9357,   2.1287,   5.2668,  -0.9229 },
+        { -1.5022,  -0.0943,   1.9655,  -1.1661,  0.1393,  3.4920,
+          -9.9051,  -0.3875,   5.3581,  -0.0686 },
+        {  2.9971,  -2.9549,   0.4082,   0.0000,  0.0000, 28.1650,
+           9.2160, -17.9030,  -5.2995,   3.2029 },
+        {  3.6775,  -2.2221,   0.0000,   0.0000,  0.0000, -1.3127,
+           -6.2476,   1.6684,   0.0000,   0.0000 },
+        { -10.6238,  15.4993,  -7.4840,   1.0673,  0.0000,  3.2763,
+          -6.4596,  -0.4923,   0.0000,   0.0000 },
+        { -0.01332, -3.2777,  -1.2243,   7.5246,  0.0000, -3.4856,
+          -10.3187,  43.4834, -70.5341, -50.2287 },
+        { -0.07859, -4.0924,   4.6116,  -1.4760,  0.0000,  2.9104,
+          -17.8661,   4.6262,   7.1486,  -1.9154 }
+      },
+      {
+        /* t1 constants */
+        { 0.0040,  -0.7841,   6.0441, -17.5535,  0.0000, -0.2549,
+          2.0519, -19.0605, -37.8235,  54.5110 },
+        { -0.0048,   0.0839,  -2.2705,   2.4137, -0.5957, -2.4241,
+          -4.2792,   1.9728,   3.5644,  -0.5285 },
+        { 0.0033,  -1.3485,   0.1735,   1.1583, -0.4162, -0.1096,
+          0.2576,  -0.5978,   0.1888,   0.1600 },
+        { 2.6249,  -0.0025,  -0.2086,  -0.0184,  0.0000, -1.5077,
+          0.9904,   0.3513,   0.0000,   0.0000 },
+        { 3.4213,  -0.9359,   0.0000,   0.0000,  0.0000,  0.0000,
+          0.0000,   0.0000,   0.0000,   0.0000 },
+        { -8.0633,   8.0238,  -1.7407,   0.0000,  0.0000,  0.0000,
+          0.0000,   0.0000,   0.0000,   0.0000 },
+        { 0.0109,  -1.2300,   8.9145, -27.5847,  0.0000, -0.6951,
+          5.6201, -33.0908, -83.8233, 102.4333 },
+        { -0.0311,   0.1896,  -4.0694,   4.2599, -1.0387, -3.9368,
+          -8.4379,   2.6814,   6.9535,  -0.6086 }
+      },
+      {
+        /* t2 constants */
+        { 0.0107,   0.0275,  -0.6912,   0.0347,  0.1157, -0.1836,
+          0.0000,   0.0296,   0.0000,   0.0000 },
+        { 0.0107,   0.0275,  -0.6912,   0.0347,  0.1157, -0.1836,
+          0.0000,   0.0296,   0.0000,   0.0000 },
+        { 0.0005,  -0.01231, -1.0156,   0.4396,  0.0000,  0.0000,
+          0.0000,   0.0000,   0.0000,   0.0000 },
+        { -3.5838,   2.1474,  -0.3548,   0.0000,  0.0000, -1.3369,
+          -5.4889,   0.6809,   1.5096,  -0.0763 },
+        { -2.9912,   1.0313,   0.0000,   0.0000,  0.0000,  0.0000,
+          0.0000,   0.0000,   0.0000,   0.0000 },
+        { 3.2814,  -7.1224,   3.5418,  -0.5115,  0.0000,  0.0000,
+          0.0000,   0.0000,   0.0000,   0.0000 },
+        { 0.00025,  0.1685,  -2.2435,   3.3433,  0.0000, -0.0503,
+          0.5353,   1.5362, -14.3118,  -3.2938 },
+        { 0.0843,  -0.2917,  -0.6767,  -0.2934,  0.2779, -0.4336,
+          0.0306,  0.07113,   0.0000,   0.0000 }
+      }
+    };
+
+
+  /*
+   * First, determine phase-type index
+   */
+  if (EARTH_PHASE_P == phaseid)
+  {
+    if (delta < 15.0)
+      iphs = 0;
+    else if (delta < 110.0)
+      iphs = 1;
+    else
+      iphs = 5;                             /* Use the PKPdf branch */
+  }
+  else if (EARTH_PHASE_PcP == phaseid)
+  {
+    iphs = 2;
+    if (delta > 90.0)          /* Correction not valid at < 90 deg. */
+      return (0.0);
+  }
+  else if (EARTH_PHASE_PKPab == phaseid)
+  {
+    iphs = 3;
+    if (delta < 140.0)        /* Correction not valid at < 140 deg. */
+      return (0.0);
+  }
+  else if (EARTH_PHASE_PKPbc == phaseid)
+  {
+    iphs = 4;
+    if (delta < 140.0 || delta > 160.0)
+      /* Correction not valid except between 140 & 160 deg. */
+      return (0.0);
+  }
+  else if (EARTH_PHASE_PKP == phaseid) /* TODO (! strcmp (phase, "PKIKP"))*/
+  {
+    iphs = 5;
+    if (delta < 110.0)        /* Correction not valid at < 110 deg. */
+      return (0.0);
+  }
+  else if (EARTH_PHASE_S == phaseid)
+  {
+    if (delta < 15.0)
+      iphs = 6;
+    else if (delta < 110.0)
+      iphs = 7;
+    else                      /* Correction not valid at > 110 deg. */
+      return (0.0);
+  }
+  else
+    return (0.0);     /* No ellipt. correction exists for this phase*/
+
+
+  edist  = delta * DEG2RAD;            /* Event to station distance */
+  azim   = esaz * DEG2RAD;              /* Event to station azimuth */
+  adepth = depth/AVG_EARTH_RADIUS_KM;
+
+  double d_edist_delta = DEG2RAD;
+  double d_azim_esaz = DEG2RAD;
+  double d_adepth_depth = 1.0/AVG_EARTH_RADIUS_KM;
+
+  /*
+   * Set up reference constants
+   */
+
+  sc0 = 0.25*(1.0 + 3.0*cos(2.0*ecolat));
+  sc1 = SQRT3_OVER2*sin(2.0*ecolat);
+  sc2 = SQRT3_OVER2*sin(ecolat)*sin(ecolat);
+
+  double d_sc0_ecolat = - 1.5 * sin( 2* ecolat);
+  double d_sc1_ecolat = 2*SQRT3_OVER2*cos(2*ecolat);
+  double d_sc2_ecolat = 2*SQRT3_OVER2*sin(ecolat)*cos(ecolat);
+
+  /*
+   * Compute tau coefficients of Dziewonski and Gilbert (1976).
+   */
+
+  t0 = t[0][iphs][0] + edist*(t[0][iphs][1] + edist*(t[0][iphs][2]
+		+ edist*(t[0][iphs][3] + edist*t[0][iphs][4])))
+                + adepth*(t[0][iphs][5] + adepth*t[0][iphs][6])
+                + adepth*edist*(t[0][iphs][7] + t[0][iphs][8]*adepth
+                                + t[0][iphs][9]*edist);
+
+
+  /* t0 + e*(t1 + e*(t2 + e*(t3 + e*t3))) + a*(t5 + a*t6) + a*e*(t7 + a*t8 + e*t9)
+
+t1+2 t2 x+3 t3 x^2+4 t5 x^3+t7 y+2 t9 x y+t8 y^2
+
+   */
+
+  double d_t0_edist = t[0][iphs][1] + edist *
+    (2*t[0][iphs][2] + edist*(3*t[0][iphs][3] + edist * 4 * t[0][iphs][4] ))
+    + adepth * t[0][iphs][7] + 2*adepth*edist * t[0][iphs][9] + adepth*adepth*t[0][iphs][8];
+
+  double d_t0_adepth = t[0][iphs][5] + 2*t[0][iphs][6]*adepth +
+    t[0][iphs][7]*edist + 2*t[0][iphs][8]*adepth*edist + t[0][iphs][9]*edist*edist;
+
+  t1 = t[1][iphs][0] + edist*(t[1][iphs][1] + edist*(t[1][iphs][2]
+                + edist*(t[1][iphs][3] + edist*t[1][iphs][4])))
+                + adepth*(t[1][iphs][5] + adepth*t[1][iphs][6])
+                + adepth*edist*(t[1][iphs][7] + t[1][iphs][8]*adepth
+                                + t[1][iphs][9]*edist);
+  double d_t1_edist = t[1][iphs][1] + edist *
+    (2*t[1][iphs][2] + edist*(3*t[1][iphs][3] + edist * 4 * t[1][iphs][4] ))
+    + adepth * t[1][iphs][7] + 2*adepth*edist * t[1][iphs][9] + adepth*adepth*t[1][iphs][8];
+  double d_t1_adepth = t[1][iphs][5] + 2*t[1][iphs][6]*adepth +
+    t[1][iphs][7]*edist + 2*t[1][iphs][8]*adepth*edist + t[1][iphs][9]*edist*edist;
+
+
+  t2 = t[2][iphs][0] + edist*(t[2][iphs][1] + edist*(t[2][iphs][2]
+                + edist*(t[2][iphs][3] + edist*t[2][iphs][4])))
+                + adepth*(t[2][iphs][5] + adepth*t[2][iphs][6])
+                + adepth*edist*(t[2][iphs][7] + t[2][iphs][8]*adepth
+                                + t[2][iphs][9]*edist);
+  double d_t2_edist = t[2][iphs][1] + edist *
+    (2*t[2][iphs][2] + edist*(3*t[2][iphs][3] + edist * 4 * t[2][iphs][4] ))
+    + adepth * t[2][iphs][7] + 2*adepth*edist * t[2][iphs][9] + adepth*adepth*t[2][iphs][8];
+  double d_t2_adepth = t[2][iphs][5] + 2*t[2][iphs][6]*adepth +
+    t[2][iphs][7]*edist + 2*t[2][iphs][8]*adepth*edist + t[2][iphs][9]*edist*edist;
+
+  double d_t0_delta = d_t0_edist * d_edist_delta;
+  double d_t1_delta = d_t1_edist * d_edist_delta;
+  double d_t2_delta = d_t2_edist * d_edist_delta;
+  double d_t0_depth = d_t0_adepth * d_adepth_depth;
+  double d_t1_depth = d_t1_adepth * d_adepth_depth;
+  double d_t2_depth = d_t2_adepth * d_adepth_depth;
+
+  /*
+   * Compute ellipticity correction via equations (22) and (26)
+   * of Dziewonski and Gilbert (1976).
+   */
+
+
+  ellip_corr = sc0*t0 + sc1*cos(azim)*t1 + sc2*cos(2.0*azim)*t2;
+
+  *d_ec_delta = sc0*d_t0_delta + sc1*cos(azim)*d_t1_delta + sc2*cos(2.0*azim)*d_t2_delta;
+  *d_ec_depth = sc0*d_t0_depth + sc1*cos(azim)*d_t1_depth + sc2*cos(2.0*azim)*d_t2_depth;
+  *d_ec_esaz = -sc1*t1*sin(azim)*d_azim_esaz - 2*sc2*t2*sin(2.0*azim)*d_azim_esaz;
+  *d_ec_ecolat = t0*d_sc0_ecolat + cos(azim)*t1*d_sc1_ecolat + t2*cos(2.0*azim)*d_sc2_ecolat;
+
+/*
+        printf ("dist = %5.1f  t0 = %7.3f  t1 = %7.3f  t2 = %7.3f  ellip_corr = %7.3f\n", delta, t0, t1, t2, ellip_corr);
+ */
+
+  return (ellip_corr);
 }
 
 static double ellipticity_corr (double delta, double esaz, double ecolat,
@@ -1230,6 +1665,7 @@ static double ellipticity_corr (double delta, double esaz, double ecolat,
   return (ellip_corr);
 }
 
+
 PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
                                     PyObject * args)
 {
@@ -1321,6 +1757,27 @@ PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
                                                     sitelat, siteelev));
 }
 
+double EarthModel_ArrivalTime_Deriv(EarthModel_t * p_earth, double lon,
+				    double lat, double depth, double evtime,
+				    int phaseid, const char *sitename,
+				    double *d_atime_lon, double *d_atime_lat,
+				    double *d_atime_depth)
+{
+  Site_t * p_site;
+
+  p_site = get_site(p_earth, sitename, evtime);
+  if (p_site == NULL) {
+    printf("p_site is null for %s, returing -2\n", sitename);
+    return -2;
+  }
+
+  return EarthModel_ArrivalTime_Coord_Deriv(p_earth, lon, lat, depth,
+					    evtime, phaseid, p_site->sitelon,
+					    p_site->sitelat, p_site->siteelev,
+					    d_atime_lon, d_atime_lat, d_atime_depth);
+}
+
+
 double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
                               double lat, double depth, double evtime,
                               int phaseid, const char *sitename)
@@ -1336,6 +1793,62 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
   return EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
                                       evtime, phaseid, p_site->sitelon,
                                       p_site->sitelat, p_site->siteelev);
+}
+
+double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
+					  double lat, double depth, double evtime,
+					  int phaseid, double sitelon,
+					  double sitelat, double siteelev,
+					  double *d_atime_lon, double *d_atime_lat,
+					  double *d_atime_depth)
+{
+
+  double trvtime, slow, iangle;
+  EarthPhaseModel_t * p_phase;
+  double delta, esaz, seaz;
+  double d_delta_lon, d_delta_lat, d_esaz_lon, d_esaz_lat, d_seaz_lon, d_seaz_lat;
+  double d_trvtime1_depth, d_trvtime1_delta;
+  double d_ec_delta, d_ec_esaz, d_ec_depth, d_ec_ecolat;
+
+  assert((phaseid < p_earth->numphases) && p_earth->p_phase_time_def[phaseid]);
+
+  p_phase = p_earth->p_phases + phaseid;
+
+
+  dist_azimuth_jac(lon, lat, sitelon, sitelat, &delta, &esaz, &seaz,
+		   &d_delta_lon, &d_delta_lat,
+		   &d_esaz_lon, &d_esaz_lat,
+		   &d_seaz_lon, &d_seaz_lat);
+
+  travel_time_jac(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle, &d_trvtime1_depth, &d_trvtime1_delta);
+
+
+  if (trvtime < 0)
+    return -1;
+
+
+  double ec = ellipticity_corr_jac(delta, esaz,
+				  GEOCENTRIC_COLAT((90-lat) * DEG2RAD),
+				  depth, phaseid,
+				  &d_ec_delta, &d_ec_esaz,
+				  &d_ec_ecolat, &d_ec_depth);
+
+
+  //printf("lon %f lat %f delta %f esaz %f seaz %f trvtime %f ec %f\n", lon, lat, delta, esaz, seaz, trvtime, ec);
+
+  trvtime += ec;
+  double d_ec_lat = d_ec_ecolat*GEOCENTRIC_COLAT_DERIV((90-lat) * DEG2RAD) * -DEG2RAD;
+
+  *d_atime_lon = d_trvtime1_delta * d_delta_lon + d_ec_delta * d_delta_lon + d_ec_esaz * d_esaz_lon;
+  *d_atime_lat = d_trvtime1_delta * d_delta_lat + d_ec_delta * d_delta_lat + d_ec_esaz * d_esaz_lat + d_ec_lat;
+  *d_atime_depth = d_trvtime1_depth + d_ec_depth;
+
+
+
+  if (siteelev >= -998)
+    trvtime += siteelev / p_phase->surf_vel;
+
+  return evtime + trvtime;
 }
 
 

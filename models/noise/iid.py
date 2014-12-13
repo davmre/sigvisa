@@ -17,7 +17,8 @@ class L1IIDModel(NoiseModel):
 
     def __init__(self, median, b):
         self.median = median
-        self.b = b
+        self.c = median
+        self.b = float(b)
         self.normalizer = np.log(.5 * self.b)
         self.nomask = np.array([False,] * 5000, dtype=bool)
 

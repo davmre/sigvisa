@@ -51,7 +51,7 @@ class CodaHeightNode(DeterministicNode):
             return 0.0
         else:
             return 1.0
-        
+
     def _ev_source_amp(self, parent_values):
         if parent_values[self.parent_naturalsource_key]:
             return brune.source_logamp(mb=parent_values[self.parent_mb_key], band=self.band, phase=self.phase)

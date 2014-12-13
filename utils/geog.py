@@ -202,5 +202,32 @@ def stations_by_distance(evlon, evlat, sites):
     sites = zip(range(len(sites)), sites)
     return sorted(sites, key=lambda site: site[1])
 
+def azimuth_gap(evlon, evlat, sites):
+    esazlist = [azimuth((evlon, evlat), (site[0], site[1])) for site in sites]
+    if len(esazlist) < 2:
+        return 360.
+
+    azlist = [x for x in esazlist]        # copy the list
+    azlist.sort()
+
+    gap = max((360 + degdiff(azlist[i], azlist[(i + 1) % len(azlist)])) % 360
+              for i in range(len(azlist)))
+
+    if gap == 0:
+        gap = 360
+    return gap
+
+def wrap_lonlat(lon, lat):
+    lon = (lon + 180) % 360 - 180
+
+    # from http://research.microsoft.com/en-us/projects/wraplatitudelongitude/
+    # I'm sure there's a fast non-trig way to do this, but I'm too lazy to figure it out.
+    if lat < -90 or lat > 90:
+        rlat = lat/180.0 *np.pi
+        rlat = np.arctan(np.sin(rlat)/np.abs(np.cos(rlat)))
+        lat = rlat /np.pi * 180
+
+    return lon, lat
+
 if __name__ == "__main__":
     _test()

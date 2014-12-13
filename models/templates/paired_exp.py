@@ -71,15 +71,19 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                                                parents=[evnodes['loc'], evnodes['mb']],
                                                chan=chan, band=band, template=True, children=children, **kwargs)
 
+
+
     @staticmethod
-    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0):
+    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, fixedlen=None):
         arr_time, peak_offset, coda_height, coda_decay = \
-            vals['arrival_time'], np.exp(vals['peak_offset']), vals['coda_height'], -np.exp(vals['coda_decay'])
+            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
 
         if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
             return np.empty((0,))
 
-        if coda_decay > -0.001:
+        if fixedlen:
+            l = int(fixedlen)
+        elif coda_decay > -0.001:
             l = int(1200 * srate)
         else:
                 # minimum length is 2, so that even very small arrivals
@@ -87,7 +91,8 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                 # approx-gradient routine; it tries making the bump
                 # slightly bigger but with no effect since it's too small
                 # to create a nonzero-length envelope).
-            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate)) if fixedlen is None else int(fixedlen)
+
         d = np.empty((l,))
         code = """
 double onset_slope;
@@ -111,7 +116,7 @@ for (int i=0; i < l-intro_len; ++i) {
   d(i + intro_len) = (i + initial_decay) / srate * coda_decay + coda_height;
 }
 if (l > 0) {
-  d(0) = -999;
+  d(0) = min_logenv;
 }
 """
         weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')

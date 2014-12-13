@@ -101,6 +101,14 @@ def get_shape_training_data(runid, site, chan, band, phases, target, require_hum
                 y = np.concatenate([y, [-.25, -.25, -.25, -.3, -.3, -.3, -.5, -.5, -.5, maxy]])
                 X = np.vstack([X, long_distance_X, short_distance_X])
                 evids = np.concatenate([evids, new_evids])
+        elif target == "peak_decay":
+            y = fit_data[:, FIT_PEAK_DECAY]
+
+            if HACK_FAKE_POINTS:
+                maxy = np.max(y)
+                y = np.concatenate([y, [-.25, -.25, -.25, -.3, -.3, -.3, -.5, -.5, -.5, maxy]])
+                X = np.vstack([X, long_distance_X, short_distance_X])
+                evids = np.concatenate([evids, new_evids])
         elif target == "amp_transfer":
             y = fit_data[:, FIT_AMP_TRANSFER]
 
@@ -180,7 +188,7 @@ def main():
     parser.add_option("-t", "--targets", dest="targets", default=None, type="str",
                       help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
     parser.add_option("-b", "--basisid", dest="basisid", default=None, type="int", help="basisid (from the sigvisa_wiggle_basis DB table) for which to train wiggle param models")
-    parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
+    parser.add_option("--template_shape", dest="template_shape", default="lin_polyexp", type="str", help="")
     parser.add_option(
         "-m", "--model_type", dest="model_type", default="gp_lld", type="str", help="type of model to train (gp_lld)")
     parser.add_option("--require_human_approved", dest="require_human_approved", default=False, action="store_true",
@@ -265,8 +273,8 @@ def main():
     param_var = options.param_var
     slack_var = options.slack_var
     if options.preset == "param":
-        targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_offset'] if targets is None else targets
-        model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb'}
+        targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_decay', 'peak_offset'] if targets is None else targets
+        model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb'}
         iterations = 5
     if options.preset == "gplocal":
         targets = ['tt_residual', 'coda_decay', 'peak_offset', 'amp_transfer'] if targets is None else targets

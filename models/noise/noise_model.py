@@ -19,7 +19,7 @@ class NoiseModel(TimeSeriesDist):
     def order(self):
         raise NotImplementedError('abstract base class')
 
-    def save_to_db(self, dbconn, sta, chan, band, hz, env, window_stime, window_len, fname, hour):
+    def save_to_db(self, dbconn, sta, chan, band, smooth, hz, env, window_stime, window_len, fname, hour):
 
         model_type = self.noise_model_type()
         nparams = self.order()
@@ -27,21 +27,25 @@ class NoiseModel(TimeSeriesDist):
         mean = self.location()
         std = self.scale()
 
-        sql_query = "insert into sigvisa_noise_model (sta, chan, band, hz, env, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp) values ('%s', '%s', '%s', %f, '%s', %f, %f, '%s', %d, %f, %f, '%s', %d, %f)" % (sta, chan, band, hz, 't' if env else 'f', window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time())
+        sql_query = "insert into sigvisa_noise_model (sta, chan, band, smooth, hz, env, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp) values ('%s', '%s', '%s', %d, %f, '%s', %f, %f, '%s', %d, %f, %f, '%s', %d, %f)" % (sta, chan, band, smooth, hz, 't' if env else 'f', window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time())
         return execute_and_return_id(dbconn, sql_query, "nmid")
 
     @staticmethod
-    def load_from_db(dbconn, sta, chan, band, hz, env, order, model_type, hour, return_extra=False):
+    def load_from_db(dbconn, sta, chan, band, hz, smooth, env, order, model_type, hour, return_extra=False):
 
         order_cond = "and nparams=%d" % order if (model_type=='ar' and order != "auto") else ""
 
         cursor = dbconn.cursor()
-        sql_query = "select nmid, window_stime, window_len, mean, std, fname from sigvisa_noise_model where sta='%s' and chan='%s' and band='%s' and hz=%.2f and model_type='%s' and created_for_hour=%d %s and env='%s'" % (sta, chan, band, hz, model_type, hour, order_cond, 't' if env else 'f')
+        sql_query = "select nmid, window_stime, window_len, mean, std, fname from sigvisa_noise_model where sta='%s' and chan='%s' and band='%s' and smooth=%d and hz=%.2f and model_type='%s' and created_for_hour=%d %s and env='%s'" % (sta, chan, band, smooth, hz, model_type, hour, order_cond, 't' if env else 'f')
         cursor.execute(sql_query)
         models = cursor.fetchall()
         cursor.close()
 
-        assert(len(models) <= 1) # otherwise we're confused which model to load
+        if len(models) > 1:  # we're confused which model to load
+            print "multiple noise models", models
+            print "from query", sql_query
+            raise AssertionError("len(models) <= 1")
+
         if len(models) == 0:
             model = None
             nm = None

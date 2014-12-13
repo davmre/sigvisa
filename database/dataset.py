@@ -305,7 +305,7 @@ def read_station_detections(cursor, sta, start_time, end_time, arrival_table="id
 
         # apply SASC correction
         (det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
-         det[DET_DELSLO_COL]) = corr_dict[sitenames[det[DET_SITE_COL]]].correct(
+         det[DET_DELSLO_COL]) = corr_dict[sitenames[int(det[DET_SITE_COL])]].correct(
              det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
              det[DET_DELSLO_COL])
 

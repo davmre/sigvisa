@@ -6,7 +6,7 @@ from sigvisa.models.wiggles.dummy_features import DummyFeatureGenerator
 
 def load_wiggle_generator_by_family(family_name, len_s, srate, envelope, **kwargs):
 
-    npts = len_s * srate
+    npts = int(len_s * srate)
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     cursor.execute("select basisid from sigvisa_wiggle_basis where family_name='%s' and npts=%d and srate=%.2f and envelope='%s' " % (family_name, npts, srate, 't' if envelope else 'f'))

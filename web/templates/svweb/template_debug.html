@@ -61,7 +61,8 @@
 	<td><strong>atime</strong></td>
 	<td><strong>onset_seconds</strong></td>
 	<td><strong>coda_height</strong></td>
-	<td><strong>decay_rate</strong></td>
+	<td><strong>peak_decay</strong></td>
+	<td><strong>coda_decay</strong></td>
 	<td><strong>delete</strong></td>
       </tr>
       {% for phase in phases %}
@@ -70,6 +71,7 @@
 	<td><input name="{{ phase.phase }}__arrival_time" type="text" width=10 value="{{ phase.arrival_time }}"></td>
 	<td><input name="{{ phase.phase }}__peak_offset" type="text" width=10 value="{{ phase.peak_offset }}"></td>
 	<td><input name="{{ phase.phase }}__coda_height" type="text" width=10 value="{{ phase.coda_height }}"></td>
+	<td><input name="{{ phase.phase }}__peak_decay" type="text" width=10 value="{{ phase.peak_decay }}"></td>
 	<td><input name="{{ phase.phase }}__coda_decay" type="text" width=10 value="{{ phase.coda_decay }}"></td>
 	<td><input type="submit" name="action" value="delete_{{ phase.phase}}"></td>
       </tr>

@@ -11,7 +11,7 @@ import marshal
 import types
 
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
-from sigvisa.sparsegp.features import featurizer_from_string, recover_featurizer
+from sigvisa.treegp.features import featurizer_from_string, recover_featurizer
 
 class LinearBasisModel(ParamModel):
 
