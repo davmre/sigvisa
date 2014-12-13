@@ -1,0 +1,205 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{url}
+\usepackage{fullpage}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\I}{\mathcal{I}}
+\newcommand{\R}{\mathbb{R}}
+\renewcommand{\v}[1]{\mathbf{#1}}
+
+\begin{document}
+
+\title{Hierarchical Regression for SIG-VISA}
+\author{Dave Moore}
+\maketitle
+
+\section{Fully Parametric}
+
+We first consider the case where some parameter of interest $y$ (e.g. the amplitude transfer function) is modeled as linear-in-features for some feature representation $\phi$, plus i.i.d. Gaussian noise:
+\[\v{y} = \v{w}^T\phi(X) + \v{\epsilon}, \qquad \v{\epsilon} \sim \N(\v{0}, \sigma^2_n \I).\]
+We allow weights to vary across stations. The weight $\v{w}^{(s)}$ at station $s$ is modeled as the sum of a global weight vector and a station-specific correction:
+\[\v{w}^{(s)} = \v{w} + \v{c}^{(s)}, \qquad \v{w}\sim\N(\v{\mu_g}, \Sigma_g \I), \qquad v{c}^{(s)} \sim \N(\v{0}, \Sigma_e).\]
+We observe data $X^{(s)}, \v{y}^{(s)}$ at each station. We assume as a ``black box'' the ability to run a Bayesian linear regression to obtain the posterior distribution $p(\v{w}^{(s)} | X^{(s)}, \v{y}^{(s)})$ on the regression weights given the observed data. 
+
+
+
+    %% LET:
+    %% prior(g) ~ N(\mu_g, sigma_g)
+    %% s = g + eps, eps ~ N(0, \sigma_e)
+
+
+    %% p(g | d) = int_s p(g|s)p(s|d) ds
+    %% where
+    %% p(s|d) ~ N(s; mu_s, sigma_s)
+
+    %% p(g|s) ~ N(g; mu, sigma)
+    %%          mu = sigma * (sigma_e^-1 * s + sigma_g^-1 * mu_g)
+    %%          sigma = (sigma_e^-1 + sigma_g^-1)^-1
+    %% (see ``observations'' section of my gaussian identity notes)
+
+
+    %% now let A = sigma * sigma_e^-1, b = sigma * sigma_g^-1 * mu_g, then
+    %% p(g|d) = int_s N(g; As+b, sigma) N(s; mu_s, sigma_s) ds
+    %% by the ``linear gaussian marginalization'' section of my notes, this gives
+
+    %% p(g|d) ~ N(g; A*mu_s +b, sigma + A * sigma_s * A^T )
+
+    %% so
+
+    %% mu_g <= A*mu_s + b
+    %%       = sigma * (sigma_e^-1 * mu_s + sigma_g^-1 * mu_g)
+    %%       = sigma * (p_e * mu_s + p_g * mu_g)
+
+    %% sigma_g <= sigma + A * sigma_s * A^T
+    %%          = sigma + sigma * sigma_e^-1 * sigma_s * sigma_e^-1 * sigma
+    %%          = sigma * (I + sigma_e^-1 * sigma_s * sigma_e^-1)
+
+
+    %% where sigma = (p_e + p_g)^-1: if we had a specific value of s to update with, we'd get a new precision for the global params by summing our current precision, with the precision on our observed value of s.
+
+
+    %% TODO: implement the equations above, hope for numerical stability
+
+message passing interpretation?
+
+we have a big tree graph. lots of station params tied together by global params. below each station param in station data, which we observe. 
+
+The message passed by the station params to the global params is
+
+m_s->g = \int_s p(s|g) * m_d->s p(d | s)
+       = \int_s p(s|g) * p(d|s)
+
+so the marginal on global params is proportional to
+
+p(g) * \prod_s m_s->g
+
+and the marginal on params at any station should be prop to
+
+m_g->s * m_d->s
+= \int p(s|g) dg * p(d|s)
+which is exactly p(s|d) if we marginalize out g, and just use p(g) + station_slack as our prior on s.
+so given a marginal on g, we should be able to get the appropriate marginals on s just by building the regression model.
+
+
+
+argh. if we have a single station, and we marginalize out g, we literally just have the standard regression model. so we should get the same results. 
+but somehow this is just totally incompatible with the idea that we compute p(g|d), then train under that prior.
+the answer, somehow, is going to come from the fact that in message passing, we don't pass a node's own messages back down to it. we just pass messages from elsewhere in the tree. 
+
+let's take the simplest possible case. just a single scalar. we have
+
+g ~ N(0,1)
+s ~ N(g, 1)
+d ~ N(s, 1)
+
+we observe d. now we have a ``regression'' procedure which computes p(s|d) \propto p(d|s)p(s)
+where p(s) = int dg p(s|g)p(g) = N(0, 2). Then the ``regression'' is given by
+p(s|d) = N( d/2, .5  )
+following the ``observation'' section of my Gaussian notes.
+
+and the global posterior is now 
+p(g | d) \propto p(d | g)p(g)
+               = p(g) int_s p(d|s) p(s|g) 
+               = N(g, 0, 1) * 
+         = N(.25, .75)
+following the equations I figured out elsewhere, which seems plausible. 
+but it would NOT be okay to go back and update s by training with this prior. 
+why not? shouldn't message passing reach a fixed point? yes, but the messages I pass to s are always going to be the messages from elsewhere. they'll never be exactly the same as the marginal. 
+
+so I think it'd be okay to compute, for each station, the posterior on the global params from ALL OTHER stations, then use that as the prior to train. that takes n^2 work though. is there a more efficient way of getting these messages?
+
+repeating from above, our messages are
+
+m_s->g (g) = \int_s p(s|g) * p(d|s)
+           = p(d|g)
+
+
+I have p(g|d) ~ p(d|g)p(g)
+
+
+now say I want to compute the message to station i
+formally speaking this is the product of messages from all the other stations, with the global prior
+
+so if I went through and updated to get the global marginal, can I get the message by ``dividing out'' the contribution from that one station?
+
+dividing by a Gaussian density is (up to constants) the same as multiplying by that density with a negative sign on the covariance matrix. 
+so let's say I have a marginal on g. now I want the ``message'', i.e., the distribution with which to do regression in order to get s to work. 
+
+if my previous ``update'' corresponded to multiplying g by the message from s, then renormalizing to get a posterior on g, I should be able to ``divide'' just by doing the exact same update, but with the negative of the covariance matrix from s.
+
+oh shit.
+the ``message'' that I send from s to g should *just* be from the data. it shouldn't have any component from g at all. 
+in other words, my message should be
+
+M_s->g = \int_s p(s|g) p(d|s)
+= N(Hg; d, noise_var*I H sigma_e H^T)
+
+somehow this isn't satisfying though: I should still be able to do an ``update'' on p(g).
+
+so I could write code to do an ``update'' on p(g), by taking whatever the current p(g) mean and cov are, and incorporating the message from d. this doesn't let me use the existing regression code. but hopefully it would work, and would let me debug the current code approach.
+
+okay, so my message-passing approach is
+
+p(g|d) \propto p(d|g)p(g)
+             = N(Hg; d, noise_var*I H sigma_e H^T) * N(mu_g, sigma_g)
+       where we just update mu_g and sigma_g
+
+my other approach is
+p(g|d) = int_s p(g,s|d)
+       = int_s p(g|s)p(s|d)
+where p(s|d) comes from the bayesian regression. now formally, we have p(s|d) \propto p(d|s)p(s),
+where p(s) is a prior on s. in our graph, this comes from pushing down the *prior* on g. 
+so I should be running my p(s|d) regression using the prior on s, if I want this to work out.
+
+then we have p(g|s). this is
+p(s|g)p(g) = N(s; g, cov_e) N(g; mu_g, cov_g)
+           = N(c, C)
+C = (cov_g^-1 + cov_e^-1)^-1
+c = C (cov_g^-1 * mu_g + cov_e^-1 * s)
+
+which matches what I got before.
+
+then p(g|d) = int_s p(g|s) p(s|d)
+            = int_s N(C * (cov_e^-1 * s) + C * (cov_g^-1)*mu_g, C) N(mu_s, cov_s) 
+
+IT WORKS!
+
+now to ``back out'' a station's contributions.
+we have p(g|d) = p(d|g)p(g)
+and we want
+p(g) = p(g|d)
+       ------
+       p(d|g)
+where p(d|g) = int_s p(d|s)p(s|g)
+             = int_s p(s|d)p(d)/p(s) * p(g|s)p(s)/p(g)
+             = int_s p(s|d)p(g|s) / p(g)
+             = p(g|d) / p(g)
+
+well, we know explicitly that p(d|g) = N(Hg; d, noise_var*I H sigma_e H^T)
+
+we have an expression for the posterior on the global params, given all of our stations
+we also have, for station i, a posterior on the station params given the data
+(which we previously used to update the global posterior)
+
+maybe I just need to use math.
+
+sg2 = (se^-1 + sg1^-1)^-1 + (se^-1 + sg1^-1)^-1 * se^-1 * sigma_s * se^-1 * (se^-1 + sg1^-1)^-1
+
+sg2 (se^-1 + sg1^-1) = I + (se^-1 + sg1^-1)^-1 * se^-1 * sigma_s * se^-1
+
+(se^-1 + sg1^-1) sg2 (se^-1 + sg1^-1) = se^-1 + sg1^-1 + se^-1 * sigma_s * se^-1
+
+(sei *sg2 * sei) + (sg1i * sg2 * se1) + (sei * sg2 * sg1i) + (sg1i * sg2 * sg1i) = 
+sei + sg1i + sei * sigma_s * sei
+
+
+
+\end{document}
