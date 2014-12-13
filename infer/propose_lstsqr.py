@@ -314,6 +314,11 @@ def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, n_
     # sample random associations
     proposals = []
     have_uatemplates = [k for (k, tmids) in sg.uatemplate_ids.items() if len(tmids)>=min_uatemplates]
+    if len(have_uatemplates) < 3:
+        print "only %d stations have uatemplates; cannot construct triplets for event birth proposal" % len(have_uatemplates)
+        n_locations = 0
+        n_eval_pairs = 0
+
     for i in range(n_locations):
         stations, tmids = sample_associated_triple(sg, have_uatemplates)
         z, _, sqerror, abserror = eval_associations(sg, stations, tmids, no_cov=True, n_restarts=2)

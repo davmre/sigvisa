@@ -1359,6 +1359,13 @@ def merge_proposal_distribution(sg, wn, eid, phase, fix_result=None, use_ar_nois
     (w_start_idx, w_end_idx) = wn.template_idx_window(eid, phase)
     unexplained_signal = wn.unexplained_signal(eid, phase)
     peak_idx = (peak_time-wn.st)*wn.srate
+    if peak_idx > len(unexplained_signal)-1 or peak_idx < 0:
+        lp = -np.inf
+        if fix_result is None:
+            print "somehow we sampled an invalid peak_idx! debugging.."
+            import pdb; pdb.set_trace()
+        return fix_result, lp
+
     peak_idx_int = int(peak_idx) if unexplained_signal[int(peak_idx)] > unexplained_signal[int(peak_idx)+1] else int(peak_idx)+1
     w_start_idx = max(0, min(w_start_idx, peak_idx_int - int(10.0*wn.srate)))
     atime_signal = unexplained_signal[w_start_idx:peak_idx_int]
@@ -1549,13 +1556,12 @@ def merge_helper(sg, wn, arr1, arr2, merge_choice_prob, split_atime_width, split
 
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
 
-
     # remove old template, and
     remove_old_template(sg, wn, arr2, n2)
     if new_style:
         pv, lp = merge_proposal_distribution(sg, wn, eid1, phase1, fix_result=None, use_ar_noise=True)
-        #proposed_vals = np.array([pv[sp] for sp in sp1])
-        set_template_values_from_dict(n1, pv)
+        if pv is not None:
+            set_template_values_from_dict(n1, pv)
         log_qforward += lp
     else:
         proposal = get_merge_distribution(sg, wn, arr1, n1, sp1, **merge_dist_options)
