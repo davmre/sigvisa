@@ -22,8 +22,14 @@
 </ul>
 {% endif %}
 
+<p>True events:<ul>
+{% for tev in true_ev_strs %}
+<li> {{tev}}</li>
+{% endfor %}
+</ul></p>
+
 {% if evs %}
-<p>Events: <a href="{% url mcmc_event_posterior dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=0">global posterior</a></p>
+<p>Inferred events: <a href="{% url mcmc_event_posterior dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=0">global posterior</a></p>
 <table>
 <tr><td><b>eid</b></td><td><b>info</b></td><td><b>azimuth gap</b></td><td><b>loc error (km)</b></td><td><b>(lon, lat) std</b></td><td><b>vis</b></td><td><b>inspect</b></td></tr>
 {% for ev in evs %}

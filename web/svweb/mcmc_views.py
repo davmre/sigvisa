@@ -123,7 +123,7 @@ def mcmc_run_detail(request, dirname):
     site_names = sg.site_elements.keys()
     site_info = np.array([s.earthmodel.site_info(sta, 0) for sta in site_names])
 
-
+    true_ev_strs = [str(ev) for ev in true_evs]
 
     for eid in eids:
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
@@ -155,6 +155,7 @@ def mcmc_run_detail(request, dirname):
                                'analyze_cmd': analyze_cmd,
                                'max_step': max_step,
                                'evs': evs,
+                               'true_ev_strs': true_ev_strs,
                                }, context_instance=RequestContext(request))
 
 def rundir_eids(mcmc_run_dir):
