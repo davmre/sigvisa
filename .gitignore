@@ -85,5 +85,6 @@ demos/template_mcmc_dtra_080213/
 /logs
 /scratch
 /experiments/logodds
+/experiments/template_mcmc
 /gp_tts
 /notebooks/.ipynb_checkpoints/
