@@ -1,0 +1,112 @@
+\documentclass{article}
+
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{fullpage}
+
+\newcommand{\N}{\mathcal{N}}
+\renewcommand{\v}[1]{\mathbf{#1}}
+\begin{document}
+
+We have an observed signal $O(t)$. We have an arrival at time $t_0$, with a latent shape $S(t)$, repeatable wiggle $R(t)$, and nonrepeatable wiggle $W(t)$. These combine to form a latent signal $L(t) = S(t) \cdot (R(t) + W(t))$.
+
+We assume the observed signal is modeled as $O(t) = L(t) + N(t)$ where $N(t)$ is an $AR(p_N)$ noise process with mean $0$, parameters $\phi^N$, and step variance $\sigma^2_N$. Here we are ignoring, for simplicity of exposition, the contribution to $O(t)$ of any other simultaneous arrivals, along with any nonzero noise mean, since WLOG these can be subtracted out beforehand. We also assume that $W(t)$ is an $AR(p_W)$ noise process with mean $1$, parameters $\phi_W$ and step variance $\sigma^2_W$.
+
+We consider here the problem of Gibbs sampling a new entry at time $k$ of the latent nonrepeatable wiggle $W(k)$. That is, we want to find the distribution
+\[p(W(k) | W(\not k), O, S, R).\]
+
+It's most enlightening to consider the problem in terms of the autoregressive processes $W$ and $N$. We can solve for $N$ as $N = O - L = O - S \cdot (R + W)$. Note that, with $O$, $S$, $R$ observed, $N$ has a deterministic dependence on $W$: given any latent wiggle hypothesis, we can compute the station noise that would be required to explain the remainder of the observed signal. We deal with this deterministic dependence by 'integrating out' $N$, i.e. just modeling $O$ as a noisy function of $L$ with no explicit representation of $N$ in the model. This means that, when resampling $W(k)$, we do not have access to $N(k)$, since $N(k)$ can only be computed from the current value of $W(k)$.
+
+The Markov blanket of $W(k)$ includes the $p_W$ entries of $W$ preceding $W(k)$ as well as the $p_W$ entries following it. Since $N(k)$ is a deterministic function of $W(K)$, it also includes the $p_N$ entries of $N$ preceding $N(k)$ and the $p_N$ entries following. We can write the joint distribution on all of these quantities as
+\[p(W,O) = p_{AR}(W(k-p_W), \cdots, W(k+p_W) \cdot p_{AR}(N(k-p_N), \cdots, N(k+p_N))\]
+where $p_{AR}$ denotes probability under the relevant AR model and we take $N = O - SR - SW$.
+
+Since $N$ depends linearly on $W$, this is a linear Gaussian system. We can determine the posterior on $W(k)$ by the messages that are passed from the variables in its Markov blanket. We can divide these messages into $W$-messages and $N$-messages. The $W$ messages together will yield exactly the AR smoothing distribution on $W(k)$ given the other entries of $W$. Similarly, the $N$ messages together will yield the AR smoothing distribution on $N(k)$, which is just a linear function of $W(k)$, so we can transform that distribution into a message to $W(k)$ which we will combine with the smoothing distribution already received.
+
+
+\section{Fully Observed Smoothing Distributions}
+
+Here we consider the smoothing distribution of an AR process $W$ with mean 0, parameters $\phi$ and step variance $\sigma^2$. We assume that all entries other than $W(k)$ are observed.
+
+Notation: we define an AR process by $W(k) = \phi^T W(k-p : k-1) + \N(0,\sigma^2) = \sum_{i=1}^{p} \phi_i W(k-i)$. So increasing indices to $\phi$ denote coefficients that are 'further back' in time.
+
+The joint distribution on the Markov blanket is given by
+\begin{align*}
+p(W(k-p_W : k+p_W)) &= \N(W(k); \phi^T W(k-p : k-1); \sigma^2 ) \prod_{j=1}^p \N(W(k+j); \phi^T W(k-p+j : k+j-1); \sigma^2 )
+\end{align*}
+If we adopt the shorthand $\Pi(k') = W(k'-p : k'-1)$, i.e. we let $\Pi(k')$ denote the vector of values that directly influence $W(k')$, we can rewrite this as
+\begin{align*}
+p(W(k-p_W : k+p_W)) &= \N(W(k); \phi^T \Pi(k); \sigma^2 ) \prod_{j=1}^p \N(W(k+j); \phi^T \Pi(k+j); \sigma^2 )\\
+&\propto \exp\left(\left( \left( W(k) - \phi^T \Pi(k) \right)^2  + \sum_{j=1}^p \left( W(k+j) - \phi^T \Pi(k+j)\right)^2 \right) / \sigma^2 \right)\\
+\end{align*}
+Note that each term inside the exponential includes $W(k)$ somewhere: the first term explicitly, and all subsequent terms as a component of the $\Pi(k')$ vector. We can thus imagine rewriting each of these terms as $(\phi^*_j W(k) - z_j)$ for some $z_j$, where $\phi^*_j$ is the coefficient on the $W(k)$ term that we've pulled out, and $z_j$ is just ``whatever's left'' after pulling out that term. Formally, this gives
+\begin{align*}
+z_0 &= \phi^T \Pi(k)\\
+z_j &= W(k+j) - \sum_{i=1, i \ne j}^p \phi_i W(k+j-i)
+\end{align*}
+
+\begin{align*}
+\phi^*_0 &= 1\\
+\phi^*_j &= -\phi_j
+\end{align*}
+
+Under this notation we can write
+
+\begin{align*}
+p(W(k-p_W : k+p_W)) & \propto \exp\left( \sum_{j=0}^p \left(\phi^*_j W(k) - z_j \right)^2  / \sigma^2 \right)\\
+&= \exp\left( \| W(k) \v{\phi^*} - \v{z} \|^2 / \sigma^2 \right)\\
+\end{align*}
+We can view this as a Gaussian distribution on $W(k) \v{\phi^*}$ with mean $\v{z}$ and covariance $\sigma^2 \mathcal{I}$. By the standard formula for linear transformations of a Gaussian, we can transform by $\v{\phi^*}^T / \|\v{\phi^*}\|^2$ to yield a Gaussian $\N\left(W(k); \mu, \sigma^2 / \|\v{\phi^*}\|^2\right)$  where $\mu = \v{\phi^*}^T\v{z} /  \|\v{\phi^*}\|^2$. This gives the smoothing distribution on $W(k)$.
+
+We can calculate this efficiently by first computing the filtered means $f_t = \sum_{i=1}^p \phi_i W(t-i)$, then computing each $z$ value as $z_j = W(k+j) - (f_{k+j} - \phi_{j} f_k)$, i.e. we remove the $k$ term from the filtered prediction at each timestep.
+
+\section{Partly Observed Smoothing Distributions}
+
+We now consider the case where some of the $W(t)$'s are unknown.
+
+\subsection{Filtering}
+
+We begin by considering just the filtering distribution. In particular, suppose some $W(\ell)$ is unobserved, where $k-p < \ell < k$ and we let $L = k-\ell$ denote the coefficient $\phi_L$ by which $W(\ell)$ predicts $W(k)$. Now we have unknowns $W(k)$ and $W(\ell)$. We solve for the marginal on $W(k)$:
+\begin{align*}
+p(W(k) | W(\ell-p), &\ldots, W(\ell-1), W(\ell+1), \ldots, W(k-1)) \\
+&= \int p\left(W(k), W(\ell) | W(\ell-p), \ldots, W(\ell-1), W(\ell+1), \ldots, W(k-1)\right) d W(\ell)\\
+&= \int \N\left(W(k); \phi_{\neg L}^T \Pi_{\neg \ell}(k)  + \phi_L W(\ell), \sigma^2 \right) \N\left(W(\ell); \phi^T \Pi(\ell), \sigma^2\right) dW(\ell)
+\end{align*}
+where $\phi_{\neg L}$ and $\Pi_{\neg \ell}$ have the obvious interpretations as vectors excluding the element corresponding to $W(\ell)$. By the ``marginalization'' section of my notes on multivariate Gaussians, we find
+\[p(W(k)) \sim \N\left(\phi_{\neg L}^T \Pi_{\neg \ell}(k)  + \phi_L \phi^T \Pi(\ell), \sigma^2 + \sigma^2\phi_L^2  \right).\]
+This is essentially the usual filtering distribution on $W(k)$, but with $W(\ell)$ replaced by its filtered prediction $\phi^T \Pi(\ell)$, and the variance increased slightly to compensate.
+
+It is easy to see that if we had {\em multiple} missing values in the dependence set for $W(k)$, we could apply this formula recursively: first calculate the filtering distribution for the second missing value given the first, then for the third given the second and first, and so on: in each case we substitute the filtered mean for each missing variable in the mean calculation, and add the filtered variance of each missing variable, weighted by its squared coefficient, to the variance.
+
+{\bf But wait!} This is wrong because if we depend on multiple missing values, they will in general also depend on each other. A good way to think of this is that each filtered timestep $W(k)$ is a Gaussian random variable formed by the linear combination $\phi^T \Pi(k) + \N(0, \sigma^2)$, where each of its dependencies in $\Pi(k)$ is {\em also} such a Gaussian variable. As a sum of correlated variables, $\phi^T \Pi(k)$ has variance
+\begin{align*}
+Var\left(\sum_i^p \phi_i W(k-i) \right) &= \sum_{i,j} \phi_i \phi_j Cov(W(k-i), W(k-j))  \\
+&= \sum_i \phi_i^2 Var(W(k-i)) + \sum_{i \ne j} \phi_i \phi_j Cov(W(k-i), W(k-j)) \\
+&= \sum_i \phi_i^2 Var(W(k-i)) + 2\sum_{i > j} \phi_i \phi_j Cov(W(k-i), W(k-j))
+\end{align*}
+
+Now how do we find these covariances? In general if we have $Z = X+Y$ where $X$ and $Y$ are uncorrelated Gaussian rvs, then $var(Z) = var(X) + var(Y)$ and $cov(Z, X) = E[X(X+Y)] = E[X^2 + XY] = E[X^2] = Var(X)$.
+What if $X$ and $Y$ are correlated with some covariance $\xi$? Then $cov(Z, X) = Var(X) + \xi$.
+
+In the autoregressive case, say we know the variance and covariances up to $W(k)$. Now we want $W(k+1)$.
+
+
+Assume WLOG that $i > j$, then we have
+\begin{align*}
+Cov(W(k-i), W(k-j)) &= E\left[ W(k-i) W(k-j) \right]\\
+&= E\left[\left(\sum_{i'}\phi_{i'} W(k-i-i')\right) \left(\sum_{j'} \phi_{j'}W(k-j-j')\right)  \right]\\
+&= E\left[\sum_{i',j'}\phi_{i'} \phi_{j'} W(k-i-i') W(k-j-j')  \right]
+\end{align*}
+
+
+\subsection{Smoothing}
+
+We now return to the smoothing calculation as described above. Recall that we factored the joint distribution on $W(k), \ldots, W(k+p)$, conditioned on $W(k-p), \ldots, W(k-1)$, into the product of filtering distributions for each of $W(k), \ldots, W(k+p)$. Thus a missing observation will have two effects: first, we will not have a factor for the filtering distribution of that variable, and second, that variable will be missing from the filtering condition for all other relevant variables.
+
+I don't want to figure out the notation to write this all out, but the implementation is: we compute the filtering distribution as described above, then also just ignore any component of $z$ corresponding to a missing observation. A slight change is that we now have different filtering variances for different variables. Let $\sigma^2_j$ denote the filtering variance for $W(k+j)$, so that $\v{\sigma^2}$ is a $p+1$-dimensional vector. Then
+\begin{align*}
+p(W(k-p_W : k+p_W)) & \propto \exp\left( \sum_{j=0}^p \left(\phi^*_j W(k) - z_j \right)^2  / \sigma_j^2 \right)\\
+&= \exp\left( ( W(k) \v{\phi^*} - \v{z})^T \text{diag}(\sigma^2)^{-1}  ( W(k) \v{\phi^*} - \v{z}) \right)
+\end{align*}
+and applying the linear transformation $\v{\phi^*}^T / \|\v{\phi^*}\|^2$ now yields the Gaussian $\N\left(W(k); \mu,   \xi   \right)$  where $\mu = \v{\phi^*}^T\v{z} /  \|\v{\phi^*}\|^2$ and $\xi = \v{\phi^*}^T  \text{diag}(\sigma^2) \v{\phi^*} / \| \v{\phi^*}\|^4$.
+
+\end{document}

@@ -150,9 +150,12 @@ class Heatmap(object):
 
     def load(self):
         fname = self.fname
+        data_file = open(fname, 'r')
+
+
         print "loading heat map values from %s" % fname
 
-        data_file = open(fname, 'r')
+
         meta_info = data_file.readline()
         left_lon, right_lon, bottom_lat, top_lat, n = [float(x) for x in meta_info.split()]
         self.n = int(n)
@@ -197,7 +200,7 @@ class Heatmap(object):
 
                     if checkpoint is not None:
                         self.save(checkpoint)
-                    print "computed (%.2f, %.2f) = %.6f" % (lon, lat, self.fvals[loni, lati])
+                    #print "computed (%.2f, %.2f) = %.6f" % (lon, lat, self.fvals[loni, lati])
 
     def coord_list(self):
         cl = []
@@ -303,25 +306,32 @@ class Heatmap(object):
                     bmap.ax.arrow( edge_pt[0] - edge_arrow[0], edge_pt[1] - edge_arrow[1],
                                    edge_arrow[0], edge_arrow[1], fc="black", ec="black",
                                    length_includes_head=True, overhang = .6,
-                                   head_starts_at_zero=False, width=0.01,
+                                   head_starts_at_zero=False, width=0.005,
                                    head_width= 3 * base_scale, head_length = 3 * base_scale, zorder=zorder)
 
 
             if labels is not None and labels[enum] is not None:
+                if offmap_arrows:
+                    lx, ly = x,y
+                else:
+                    lx, ly = x1, x2
+
                 axes = bmap.ax
                 xbounds = bmap(self.right_lon, self.top_lat)
-                x_off = 6 if x1 < self.right_lon else -20
-                y_off = 6 if x2 < self.top_lat else -20
+                x_off = 6 if lx < self.right_lon else -20
+                y_off = 6 if ly < self.top_lat else -20
+                print labels[enum], x_off, y_off, lx, ly
                 #label_color = plotargs['mec']
                 axes.annotate(
                     labels[enum],
-                    xy=(x1, x2),
+                    xy=(lx, ly),
                     xytext=(x_off, y_off),
                     textcoords='offset points',
                     size=8,
                     color = 'black',
                     zorder=zorder,
                     arrowprops = None)
+
 
     def plot_density(self, f_preprocess=None, colorbar=True, nolines=False,
                      colorbar_orientation="vertical", colorbar_shrink=0.9, colorbar_format='%.1f',
@@ -499,7 +509,7 @@ class Heatmap(object):
         # finally construct the border_pt along with v, the direction of travel
         assert(interp >= 0)
         border_pt = last_pt + interp * v
-        print "center", self.center, "border", border_pt, "v", v
+        #print "center", self.center, "border", border_pt, "v", v
         return border_pt, v / np.linalg.norm(v, 2)
 
     def __mul__(self, other):

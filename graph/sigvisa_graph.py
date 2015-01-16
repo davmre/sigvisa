@@ -115,7 +115,9 @@ class SigvisaGraph(DirectedGraphModel):
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True, smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
-                 absorb_n_phases=False, hack_param_constraint=False, uatemplate_rate=1e-3):
+                 absorb_n_phases=False, hack_param_constraint=False,
+                 uatemplate_rate=1e-3,
+                 fixed_arrival_npts=None):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -191,6 +193,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.evnodes = dict() # keys are eids, vals are attribute:node dicts
         self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
+
+        self.fixed_arrival_npts = fixed_arrival_npts
 
     def ev_arriving_phases(self, eid, sta=None, site=None):
         if sta is None and site is not None:
@@ -456,8 +460,8 @@ class SigvisaGraph(DirectedGraphModel):
         print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
         ev_total += ev_prior_lp + ev_tt_lp + ne_lp
         ua_total += nt_lp
-        print "non signals: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total + ua_total)
-        print "signals: %.1f" % (signal_lp)
+        print "priors+params: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total + ua_total)
+        print "station noise (observed signals): %.1f" % (signal_lp)
         print "overall: %.1f" % (ev_total + ua_total + signal_lp)
         print "official: %.1f" % self.current_log_p()
 
@@ -728,6 +732,8 @@ class SigvisaGraph(DirectedGraphModel):
         tg = self.template_generator(phase=phase)
         wg = self.wiggle_generator(phase=phase, srate=wave_node.srate)
 
+
+
         tnodes = dict()
         wnodes = dict()
         at_label = create_key(param="arrival_time", sta=wave_node.sta,
@@ -940,6 +946,8 @@ class SigvisaGraph(DirectedGraphModel):
             for wave_node in self.station_waves[sta]:
                 child_wave_nodes.add(wave_node)
 
+        # create nodes common to all bands and channels: travel
+        # time/arrival time, and amp_transfer.
         tt_model_type = self._tm_type(param="tt_residual", site=site, wiggle_param=False)
         tt_residual_node = tg.create_param_node(self, site, phase,
                                                 band=None, chan=None, param="tt_residual",
@@ -948,8 +956,8 @@ class SigvisaGraph(DirectedGraphModel):
                                                 low_bound = -15,
                                                 high_bound = 15)
         arrival_time_node = self.setup_tt(site, phase, evnodes=evnodes,
-                                tt_residual_node=tt_residual_node,
-                                children=child_wave_nodes)
+                                          tt_residual_node=tt_residual_node,
+                                          children= child_wave_nodes)
         ampt_model_type = self._tm_type(param="amp_transfer", site=site, wiggle_param=False)
         amp_transfer_node = tg.create_param_node(self, site, phase,
                                                  band=None, chan=None, param="amp_transfer",
@@ -960,6 +968,7 @@ class SigvisaGraph(DirectedGraphModel):
         nodes = dict()
         nodes["arrival_time"] = arrival_time_node
 
+        # create all other shape param nodes, specific to each band and channel
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
                 for param in tg.params():
@@ -1006,20 +1015,19 @@ class SigvisaGraph(DirectedGraphModel):
                         else:
                             invalid_offsets = (v >= 0)
                             v[invalid_offsets] = -0.01
-
-
                 else:
                     n.parent_predict()
                 fullnodes.append(n)
         self.extended_evnodes[eid].extend(fullnodes)
         return fullnodes
 
-    def add_wave(self, wave):
+
+    def add_wave(self, wave, fixed=True):
         """
         Add a wave node to the graph. Assume that all waves are added before all events.
         """
 
-        wave_node = ObservedSignalNode(model_waveform=wave, nm_type=self.nm_type, observed=True, label=self._get_wave_label(wave=wave), graph=self)
+        wave_node = ObservedSignalNode(model_waveform=wave, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), graph=self)
 
         s = Sigvisa()
         sta = wave['sta']

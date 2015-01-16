@@ -10,7 +10,7 @@ class WiggleGenerator(object):
 
     def __init__(self, **kwargs):
         # child classes should set these before calling super()
-        assert(self.srate is not None and self.npts is not None and self.logscale is not None and self.basisid is not None)
+        assert(self.srate is not None and self.npts is not None  and self.basisid is not None)
 
     def signal_from_features(self, features):
         raise NotImplementedError("called unimplemented function on WiggleGenerator")

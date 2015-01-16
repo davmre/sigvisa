@@ -1,5 +1,6 @@
 import numpy as np
 from functools32 import lru_cache
+from sigvisa.infer.autoregressive_mcmc import gibbs_sweep
 
 @lru_cache(maxsize=2048)
 def get_node_scales(node_list):
@@ -36,7 +37,6 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
     lp_old = sg.joint_logprob_keys(relevant_nodes, proxy_lps=proxy_lps) # assume oldvalues are still set
     lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list,
                                    relevant_nodes=relevant_nodes, proxy_lps=proxy_lps)
-
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):

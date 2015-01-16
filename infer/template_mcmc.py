@@ -52,7 +52,6 @@ def node_set_value(nodes, param, value):
     n.set_value(key=k, value=value)
 
 
-######################################################################
 
 def get_signal_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None, peak_period_s = 2.0, exclude_arr=None):
 

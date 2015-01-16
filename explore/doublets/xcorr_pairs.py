@@ -157,7 +157,7 @@ def xcorr_valid(a,b):
     return xcmax, offset
 
 
-def xcorr(a, b):
+def xcorr(a, b, window=200):
 
     a = (a - np.mean(a)) / (np.std(a) * np.sqrt(len(a)))
     b = (b - np.mean(b)) / (np.std(b) * np.sqrt(len(a)))
@@ -167,9 +167,11 @@ def xcorr(a, b):
     unbiased = np.array([float(N) / (N - np.abs(N - i)) for i in range(1, 2 * N)])
     xc *= unbiased
 
-    shifted = xc[N - 200: N + 200]
+
+    midpoint = N-1
+    shifted = xc[midpoint - window: midpoint + window]
     xcmax = np.max(shifted)
-    offset = np.argmax(shifted) - 200
+    offset = np.argmax(shifted) - window
 
     return xcmax, offset
 

@@ -112,6 +112,11 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
             # dict a second time.
             l = int(1200 * srate)
         else:
+                # minimum length is 2, so that even very small arrivals
+                # can create a small bump (not doing this confuses the
+                # approx-gradient routine; it tries making the bump
+                # slightly bigger but with no effect since it's too small
+                # to create a nonzero-length envelope).
             l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
 
         if return_jac_exp:

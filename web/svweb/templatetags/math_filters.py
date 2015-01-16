@@ -7,6 +7,10 @@ register = template.Library()
 def log(value):
     return np.log(float(value))
 
+@register.filter(name='exp')
+def exp(value):
+    return np.exp(float(value))
+
 @register.filter(name='div')
 def div(value, arg):
     return float(value) / float(arg)

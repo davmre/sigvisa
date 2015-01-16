@@ -17,7 +17,7 @@ from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import get_parent_value, create_key
-
+from sigvisa.plotting.plot import subplot_waveform
 
 import scipy.weave as weave
 from scipy.weave import converters
@@ -70,7 +70,7 @@ class ObservedSignalNode(Node):
 
     def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, **kwargs):
 
-        key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['band'], band=model_waveform['band'])
+        key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
         super(ObservedSignalNode, self).__init__(model=None, initial_value=model_waveform.data, keys=[key,], fixed=observed, **kwargs)
 
@@ -84,7 +84,6 @@ class ObservedSignalNode(Node):
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
         self.valid_len = model_waveform['valid_len']
-        self.env = 'env' in self.filter_str
 
         self.signal_diff = np.empty((self.npts,))
         self.pred_signal = np.empty((self.npts,))
@@ -92,14 +91,10 @@ class ObservedSignalNode(Node):
         self.set_noise_model(nm_type=nm_type, nmid=nmid)
 
 
-        self._tmpl_params = dict()
-        self._wiggle_params = dict()
-        self._keymap = dict()
         self._arrivals = set()
         self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
 
         self.graph = graph
-
 
     def __str__(self):
         try:
@@ -123,6 +118,16 @@ class ObservedSignalNode(Node):
             self.nmid = nmid
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
+
+    def arrival_start_idx(self, eid, phase, skip_pv_call=False):
+        if not skip_pv_call:
+            self._parent_values()
+
+        atime = self._arrival_times[(eid, phase)]
+        start = (atime - self.st) * self.srate
+        start_idx = int(np.floor(start))
+        return start_idx
+
 
     def assem_signal(self, include_wiggles=True, arrivals=None, window_start_idx=0, npts=None):
         """
@@ -169,7 +174,6 @@ class ObservedSignalNode(Node):
 
         npts = self.npts-window_start_idx if not npts else int(npts)
         n = len(arrivals)
-        envelope = int(self.env or (not include_wiggles))
         signal = self.pred_signal
         code = """
       for(int i=window_start_idx; i < window_start_idx+npts; ++i) signal(i) = 0;
@@ -222,6 +226,15 @@ class ObservedSignalNode(Node):
 
         return signal
 
+
+    """
+
+    keep the following members in sync:
+    - self._arrivals: set of (eid, phase) pairs
+    - self._arrival_times: map from (eid, phase) to arrival times as floats
+    - self._latent_arrivals: map from (eid, phase) to nodes representing the latent signal
+
+    """
     def _parent_values(self):
         parent_keys_removed = self.parent_keys_removed
         parent_keys_changed = self.parent_keys_changed
@@ -345,13 +358,6 @@ signal_diff(i) =value(i) - pred_signal(i);
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):
          return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values, **kwargs)
 
-    def get_wiggle_for_arrival(self, eid, phase, parent_values=None):
-        parent_values = parent_values if parent_values else self._parent_values()
-        wg = self.graph.wiggle_generator(phase, self.srate)
-        if len(self._wiggle_params[(eid, phase)]) == wg.dimension():
-            return wg.signal_from_features(features = self._wiggle_params[(eid, phase)])
-        else:
-            return np.ones((wg.npts,))
 
     def get_template_params_for_arrival(self, eid, phase, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()

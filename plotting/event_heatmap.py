@@ -27,9 +27,9 @@ class EventHeatmap(Heatmap):
             labels = [None for loc in locations]
 
         self.event_locations.extend([(l[0], l[1]) for l in locations])
-        if yvals:
+        if yvals is not None:
             self.event_yvals.extend(yvals)
-        if labels:
+        if labels is not None:
             self.event_labels.extend(labels)
 
     def add_stations(self, names):
@@ -51,9 +51,9 @@ class EventHeatmap(Heatmap):
 
         self.save(fname + ".log")
 
-    def plot(self, event_alpha=0.6, axes=None, offmap_station_arrows=True, label_stations=True, nofillcontinents=True, meridians=True, **density_args):
+    def plot(self, event_alpha=0.6, axes=None, offmap_station_arrows=True, label_stations=True, nofillcontinents=True, meridians=True, projection="cyl", **density_args):
 
-        self.init_bmap(axes=axes, nofillcontinents=nofillcontinents)
+        self.init_bmap(axes=axes, nofillcontinents=nofillcontinents, projection=projection)
 
         if meridians:
             self.plot_earth()
@@ -93,12 +93,15 @@ class EventHeatmap(Heatmap):
         return title
 
     def __aggregate(self, other, hm):
-        hm.sitenames = self.sitenames
+        #hm.sitenames = self.sitenames
 
-        my_ev = zip(self.event_locations, self.event_labels)
-        other_ev = zip(other.event_locations, other.event_labels)
-        all_ev = list(set(my_ev + other_ev))
-        hm.event_locations, hm.event_labels = zip(*all_ev)
+        try:
+            my_ev = zip(self.event_locations, self.event_labels)
+            other_ev = zip(other.event_locations, other.event_labels)
+            all_ev = list(set(my_ev + other_ev))
+            hm.event_locations, hm.event_labels = zip(*all_ev)
+        except Exception as e:
+            print "could not combine event locations:", e
 
         hm.stations = list(set(self.stations + other.stations))
 

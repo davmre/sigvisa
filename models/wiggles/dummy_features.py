@@ -34,12 +34,6 @@ class DummyFeatureGenerator(WiggleGenerator):
 
     def signal_from_features(self, features):
         signal = np.zeros((self.npts,))
-        if self.envelope:
-            if self.logscale:
-                signal = np.exp(signal)
-            else:
-                signal += 1
-
         return signal
 
     def features_from_signal(self, signal):
