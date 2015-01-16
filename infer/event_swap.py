@@ -67,8 +67,8 @@ def repropose_event_move_hough(sg, **kwargs):
 def repropose_event_move_lstsqr(sg, **kwargs):
     return swap_events_move(sg, n_events=1, location_proposal=overpropose_new_locations, **kwargs)
 
-def swap_threeway_move(sg, **kwargs):
-    return swap_events_move(sg, n_events=3, **kwargs)
+def swap_threeway_lstsqr(sg, **kwargs):
+    return swap_events_move(sg, n_events=3, location_proposal=overpropose_new_locations, **kwargs)
 
 def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, return_probs=False):
     eids, lp_swap = sample_events_to_swap(sg, n_events=n_events)

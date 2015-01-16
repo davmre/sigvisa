@@ -10,6 +10,9 @@ import time
 from sigvisa.models import TimeSeriesDist
 from sigvisa.models.noise.noise_model import NoiseModel
 
+class ARGradientException(Exception):
+    pass
+
 class ARModel(NoiseModel):
 
     # params: array of parameters
@@ -400,11 +403,21 @@ class ARModel(NoiseModel):
         with respect to the signal.
         """
 
+        expand_result_from_mask=False
         if isinstance(x, ma.masked_array):
             d = x
             if isinstance(d.mask, np.ndarray) :
                 if d.mask.any():
-                    raise Exception("analytic gradients for AR likelihood not implemented for partially-masked signals")
+
+                    # as long as the masking is only at the beginning
+                    # or the end (or both), we can ignore it.
+                    masked_positions = np.arange(len(d))[d.mask]
+                    unmasked_region_count = np.sum(np.diff(masked_positions) > 1)
+                    if unmasked_region_count < 2:
+                        d = x[~x.mask]
+                        expand_result_from_mask = True
+                    else:
+                        raise ARGradientException("analytic gradients for AR likelihood not implemented for partially-masked signals")
             else:
                 d.mask = np.zeros(x.shape)
         else:
@@ -416,6 +429,11 @@ class ARModel(NoiseModel):
             c = self.c
 
         ll, grad = self.fastAR_grad(d, c, self.em.std)
+
+        if expand_result_from_mask:
+            grad_full = np.zeros((len(x)))
+            grad_full[~x.mask] = grad
+            grad = grad_full
 
         return ll, grad
 
@@ -543,6 +561,116 @@ class ARModel(NoiseModel):
         for i in range(int(float(n) * 0.8)):
             rss += np.square(psd[i] - S[i])
         return rss
+
+    def roots(self):
+        # roots of phi(z) = 1-phi_1 z - phi_2 z^2 - ... where phi_i is the ith autoregressive parameter
+        poly = np.concatenate([(1,), -np.asarray(self.params)])
+        return np.roots(poly[::-1])
+
+    def linearized_coefs(self, N):
+        # The linearization of an AR process expresses the current
+        # observation as a linear combination of previous white noise
+        # samples (as opposed to previous observations).  Due to the
+        # recursive structure of the process, the sequence of
+        # coefficients is infinite (there is *some* nonzero dependence
+        # on samples from arbitrarily long times ago), but for
+        # stationary processses it decays geometrically so only a
+        # small number of coefficients are usually necessary in
+        # practice.
+
+        # general background on linear processes from
+        # http://www-stat.wharton.upenn.edu/~stine/stat910/lectures/08_intro_arma.pdf
+
+        # specifically, for AR processes the linearized form is:
+        #
+        #        1
+        # -------------      * w_t  = X_t
+        # prod_i (1 - B/z_i)
+        #
+        # where w_t is the current white noise, X_t is the current observation,
+        # B is the backshift operator (from notes linked above) and z_i's are the
+        # roots of the autoregression polynomial phi(z).
+        #
+        # by definition of the backshift operator, the coefficient of B^k in the expanded
+        # version of the LHS of the above equation is the coefficient on w_{t-k} in the
+        # linearized expansion. The polynomial in B is the homogeneous symmetric
+        # polynomial defined on the 1/z_i's (thanks Jake), whose coefficients we can efficiently
+        # compute using the recurrence given at
+        # http://en.wikipedia.org/wiki/Newton%27s_identities#A_variant_using_complete_homogeneous_symmetric_polynomials
+        #
+        # n: number of coefficients to return. time complexity is O(n^2).
+
+        invRoots = 1.0/self.roots()
+        # compute the elementary symmetric polynomials, used below
+        ps = np.array([np.real(np.sum(invRoots**d)) for d in range(N+1)])
+
+        zs = np.zeros((N,))
+        zs[0] = 1
+        for n in range(1, N):
+            zs[n] = 1.0/n * np.sum([ps[k] * zs[n-k] for k in range(1,n+1)])
+        return zs
+
+    def autocovariances(self, n, eps=1e-5):
+        # compute the first n autocovariances using the linearized process,
+        # expanded out to include all coefficients of size at least eps.
+
+        def autocov(zs, k):
+        # compute the k-th order autocovariance as a function of the
+        # linearized coefs
+            return np.sum([zs[i] * zs[i+k] for i in range(len(zs)-k)])
+
+        n_zs = 10
+        zs = self.linearized_coefs(n_zs)
+        while zs[-1] > eps and n_zs < 1000:
+            n_zs *= 2
+            zs = self.linearized_coefs(n_zs)
+
+        ac = np.array([autocov(zs, k) for k in range(n)])
+        return ac * self.em.std**2
+
+    def cov_matrix(self, n):
+        ac = self.autocovariances(n)
+        C = np.zeros((n,n))
+        for i in range(n):
+            C[i,i:] = ac[:n-i]
+            C[i:,i] = ac[:n-i]
+        return C
+
+    def prec_matrix(alpha, n):
+        # compute the precision matrix for the multivariate Gaussian
+        # on n timesteps induced by this AR process.
+        # should be equal to inv(cov_matrix), up to numeric precision,
+        # but is much faster to compute (and sparse!).
+
+        # HACK ALERT: I've verified empirically that this function
+        # describes the relation between the AR params and the precision
+        # matrix, but I don't have a good mathematical story as to why.
+        # I don't think it should be too hard: the Robert Stine Stat910 notes,
+        # linked above, show that the partial autocorrelations are just the
+        # AR params, but the content of the precision matrix isn't
+        # just the partial autocorrelations.
+        # (in part because the partial autocorrelations condition only on
+        # *intermediate* timesteps, whereas the precision matrix conditions
+        # on *all* timesteps. these notions are equivalent at the edges of the
+        # precision matrix, but different in the interior).
+
+        p = len(alpha)
+        sqAlpha = np.asarray(alpha)**2
+
+        m = np.zeros((n,n))
+
+        for i in range(n):
+            edge_distance = min(i, n-i-1)
+            alpha_sum = np.sum(sqAlpha[:edge_distance])
+            m[i,i] = 1 + alpha_sum
+
+        for k in range(p):
+            terms = [alpha[j]*alpha[j+k+1] for j in range(p-k-1)]
+            for i in range(n-k-1):
+                m[i, i+k+1] = -alpha[k] + np.sum(terms[:i])
+                m[i+k+1, i] = m[i, i+k+1]
+
+        return m / self.em.std**2
 
     @staticmethod
     def load_from_file(fname):

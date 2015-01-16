@@ -13,7 +13,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_lstsqr
+from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_lstsqr, swap_threeway_lstsqr
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
@@ -194,13 +194,19 @@ def run_open_world_MH(sg, steps=10000,
     if enable_event_openworld:
         global_moves = {'event_swap': swap_events_move_lstsqr,
                         'event_repropose': repropose_event_move_lstsqr,
+                        'event_threeway_swap': swap_threeway_lstsqr,
                         'event_birth_hough': ev_birth_move_hough,
                         'event_death_hough': ev_death_move_hough,
                         'event_birth_lstsqr': ev_birth_move_lstsqr,
                         'event_death_lstsqr': ev_death_move_lstsqr}
     else:
-        global_moves = {'event_swap': swap_events_move,
-                        'event_repropose': repropose_event_move}
+        if enable_template_openworld:
+            # swap moves leave behind uatemplates, so only allow them
+            # if we have uatemplate birth/death moves
+            global_moves = {'event_swap': swap_events_move_lstsqr,
+                            'event_repropose': repropose_event_move_lstsqr}
+        else:
+            global_moves = {}
 
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
                             'evloc_big': ('loc', ('lon', 'lat')),
@@ -239,7 +245,7 @@ def run_open_world_MH(sg, steps=10000,
 
     stds = global_stds
     tmpl_openworld_move_probability = 0.05
-    ev_openworld_move_probability = .02
+    ev_openworld_move_probability = .05
 
     move_probs = defaultdict(lambda : 0.05)
     move_probs["swap_association"] = 0.2
@@ -382,6 +388,8 @@ def main():
                       help="MCMC steps to take (1000)")
     parser.add_option("--skip", dest="skip", default=500, type="int",
                       help="how often to print/save MCMC state, in steps (500)")
+    parser.add_option("--seed", dest="seed", default=0, type="int",
+                      help="random seed")
     parser.add_option("--no_template_openworld", dest="no_template_openworld", default=False, action="store_true",
                       help="disable template birth/death/merge/split moves")
     parser.add_option("--no_event_openworld", dest="no_event_openworld", default=False, action="store_true",
@@ -389,7 +397,7 @@ def main():
     parser.add_option("--run_dir", dest="run_dir", default=None, type="str",
                       help="directory to save results  (auto)")
     parser.add_option("--preset", dest="preset", default=None, type="str", help="options are 'localize' (default None)")
-    parser.add_option("--template_move_type", dest="template_move_type", default="hamiltonian", type="str", help="options are 'hamiltonian' (default), 'rw', or 'both'")
+    parser.add_option("--template_move_type", dest="template_move_type", default="rw", type="str", help="options are 'hamiltonian' (default), 'rw', or 'both'")
     parser.add_option("--disable_moves", dest="disable_moves", default='', type="str", help="comma-separated list of specific MCMC move names to disable")
 
     register_svgraph_cmdline(parser)
@@ -455,7 +463,7 @@ def main():
 
 
     sys.setrecursionlimit(20000)
-    np.random.seed(0)
+    np.random.seed(options.seed)
 
 
     run_open_world_MH(sg, steps=options.steps,

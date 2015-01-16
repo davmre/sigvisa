@@ -98,6 +98,7 @@ class Node(object):
     # to just remove the edge.
     def removeChild(self, child):
         self.children.remove(child)
+        self.child_set_changed = True
 
     def removeParent(self, parent):
         self.parent_nodes_added.discard(parent)

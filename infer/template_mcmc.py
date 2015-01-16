@@ -16,6 +16,7 @@ from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.distributions import Gaussian
 from sigvisa.models.signal_model import extract_arrival_from_key, unify_windows
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle_for_proposal
+from sigvisa.models.noise.armodel.model import ARGradientException
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing, mh_accept_util
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
@@ -1212,9 +1213,14 @@ def propose_peak_offset(wn, tg, onset_signal, signal_idx,
         arrival_offset_idx = start_idx-signal_idx
         if arrival_offset_idx >= 0:
             pred_env = np.zeros(onset_signal.shape)
-            pred_env[arrival_offset_idx:] = np.exp(pred_logenv[:len(onset_signal)-arrival_offset_idx])
+            pred_env_shifted = np.exp(pred_logenv[:len(onset_signal)-arrival_offset_idx])
+            pred_env[arrival_offset_idx:arrival_offset_idx+len(pred_env_shifted)] = pred_env_shifted
         else:
             pred_env = np.exp(pred_logenv[-arrival_offset_idx:len(onset_signal)-arrival_offset_idx])
+            if len(pred_env) < len(onset_signal):
+                tmp = np.zeros((len(onset_signal),))
+                tmp[:len(pred_env)] = pred_env
+                pred_env = tmp
 
         diff = onset_signal - pred_env
 
@@ -1281,7 +1287,8 @@ def propose_peak_offset(wn, tg, onset_signal, signal_idx,
 
     return peak_offset, p
 
-def merge_distribution(peak_signal, prior, return_debug=False):
+def merge_distribution(peak_signal, prior, return_debug=False,
+                       uniform_lik_mass=0.2, smoothing=None):
     exp_peak_signal = np.exp(peak_signal - np.max(peak_signal))
 
     derivs = np.zeros(len(exp_peak_signal))
@@ -1289,7 +1296,16 @@ def merge_distribution(peak_signal, prior, return_debug=False):
     derivs[0] = 1 if np.max(derivs) <= 0 else derivs[1]
     positive_derivs = np.where(derivs>0, derivs, 0)
 
-    peak_dist = exp_peak_signal * positive_derivs * prior
+    lik = exp_peak_signal * positive_derivs
+    lik = lik / np.sum(lik)
+
+    lik += uniform_lik_mass/float(len(lik))
+    if smoothing is not None:
+        window = np.ones((int(smoothing),))
+        window = window/float(len(window))
+        lik = np.convolve(lik, window, 'same')
+
+    peak_dist = lik * prior
     peak_dist = peak_dist / np.sum(peak_dist)
 
     peak_cdf = preprocess_signal_for_sampling(peak_dist)
@@ -1361,9 +1377,6 @@ def merge_proposal_distribution(sg, wn, eid, phase, fix_result=None, use_ar_nois
     peak_idx = (peak_time-wn.st)*wn.srate
     if peak_idx > len(unexplained_signal)-1 or peak_idx < 0:
         lp = -np.inf
-        if fix_result is None:
-            print "somehow we sampled an invalid peak_idx! debugging.."
-            import pdb; pdb.set_trace()
         return fix_result, lp
 
     peak_idx_int = int(peak_idx) if unexplained_signal[int(peak_idx)] > unexplained_signal[int(peak_idx)+1] else int(peak_idx)+1
@@ -1431,7 +1444,11 @@ def amp_decay_proposal_laplace_ar(wn, tg, signal_window, window_start_idx, peak_
         diff = signal_window - pred_signal[window_start_idx:window_start_idx+len(signal_window)]
 
 
-        lp, grad = wn.nm.argrad(diff)
+        try:
+            lp, grad = wn.nm.argrad(diff)
+        except ARGradientException as e:
+            raise e
+
         shifted_jacobian = np.zeros((len(signal_window), 5))
         if tmpl_end_idx-overshoot > early + tmpl_start_idx:
             shifted_jacobian[early + tmpl_start_idx_rel:tmpl_end_idx_rel-overshoot, :] = jacobian[early:len(pred_env)-overshoot,:]
@@ -1599,8 +1616,6 @@ def merge_helper(sg, wn, arr1, arr2, merge_choice_prob, split_atime_width, split
         wn.arrivals()
         sg._topo_sorted_list = orig_topo_sorted
         sg._gc_topo_sorted_nodes()
-
-    assert(np.isfinite((lp_new + log_qbackward) - (lp_old + log_qforward)))
 
     return lp_old, lp_new, log_qforward, log_qbackward, accept_move, revert_move
 

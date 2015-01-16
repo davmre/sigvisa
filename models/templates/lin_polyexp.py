@@ -77,8 +77,8 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
 
     @staticmethod
     def abstract_logenv_length(vals, min_logenv=-7.0, srate=40.0):
-        arr_time, peak_offset, peak_decay, coda_height, coda_decay = \
-            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
+        peak_offset, peak_decay, coda_height, coda_decay = \
+            float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
 
         if coda_decay > -0.001:
             l = int(1200 * srate)
@@ -95,9 +95,8 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
 
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, return_jac_exp=False, fixedlen=None):
-        min_logenv=-np.inf
-        arr_time, peak_offset, peak_decay, coda_height, coda_decay = \
-            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
+        peak_offset, peak_decay, coda_height, coda_decay = \
+            float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
         return_jac_exp = int(return_jac_exp)
         idx_offset = float(idx_offset)
 
@@ -177,7 +176,8 @@ if (l > 0) {
 """
         weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'min_logenv', 'idx_offset', 'srate', 'return_jac_exp', 'jacobian'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-        if (~np.isfinite(d[1:])).any():
+        if np.isfinite(vals.values()).all() and (~np.isfinite(d[1:])).any():
+            # finite parameters should never produce an infinite signal...
             import pdb; pdb.set_trace()
 
         if return_jac_exp:

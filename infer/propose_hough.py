@@ -304,7 +304,7 @@ def propose_event_from_hough(hough_array, stime, etime):
     ev = Event(lon=lon, lat=lat, time=t, depth=0, mb=4.0, natural_source=True)
     return ev, ev_prob
 
-def visualize_hough_array(hough_array, sites, fname, timeslice=None):
+def visualize_hough_array(hough_array, sites, fname=None, ax=None, timeslice=None):
     """
 
     Save an image visualizing the given Hough accumulator array. If
@@ -323,9 +323,11 @@ def visualize_hough_array(hough_array, sites, fname, timeslice=None):
         location_array = hough_array[:,:,timeslice]
 
     # set up the map
-    fig = Figure(figsize=(8, 5), dpi=300)
-    axes = fig.add_subplot(111)
-    bmap = Basemap(resolution="c", projection = "robin", lon_0 = 0, ax=axes)
+    if ax is None:
+        fig = Figure(figsize=(8, 5), dpi=300)
+        ax = fig.add_subplot(111)
+
+    bmap = Basemap(resolution="c", projection = "robin", lon_0 = 0, ax=ax)
     bmap.drawcoastlines(zorder=10)
     bmap.drawmapboundary()
     parallels = [int(k) for k in np.linspace(-90, 90, 10)]
@@ -342,7 +344,7 @@ def visualize_hough_array(hough_array, sites, fname, timeslice=None):
         x, y = bmap( lons, lats )
         xy = zip(x,y)
         poly = Polygon( xy, facecolor=facecolor, alpha=alpha )
-        axes.add_patch(poly)
+        ax.add_patch(poly)
     m = np.max(location_array)
     for i in range(lonbins):
         lon = max(-180 + i * lonbin_deg, -180)
@@ -360,11 +362,11 @@ def visualize_hough_array(hough_array, sites, fname, timeslice=None):
         bmap.plot([x1], [x2], marker="x", ms=4, mfc="none", mec="blue", mew=1, alpha=1, zorder=10)
         x_off = 3
         y_off = 3
-        axes.annotate(site,xy=(x1, x2),xytext=(x_off, y_off),textcoords='offset points',
+        ax.annotate(site,xy=(x1, x2),xytext=(x_off, y_off),textcoords='offset points',
                       size=6,color = 'blue',zorder=10)
 
-
-    savefig(fname, fig, dpi=300, bbox_inches='tight')
+    if fname is not None:
+        savefig(fname, fig, dpi=300, bbox_inches='tight')
 
 
 

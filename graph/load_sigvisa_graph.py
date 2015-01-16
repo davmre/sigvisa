@@ -242,26 +242,17 @@ def load_signals_from_cmdline(sg, options, args):
                 wn = sg.add_wave(wave)
 
 
+    evs = get_leb_events(sg, cursor)
     if options.initialize_leb != "no" or options.synth:
-        st = sg.start_time
-        et = sg.end_time - 400
-        events, orid2num = read_events(cursor, st, et, 'leb')
-        events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
-
-        if options.initialize_leb=="yes" or options.synth:
-            evs = []
-            for evarr in events:
-                ev = get_event(evid=evarr[EV_EVID_COL])
+        if options.initialize_leb == "yes" or options.synth:
+            for ev in evs:
                 sg.add_event(ev, fixed=options.synth)
-                evs.append(ev)
         elif options.initialize_leb=="perturb":
             raise NotImplementedError("not implemented!")
         elif options.initialize_leb=="count":
             evs = sg.prior_sample_events(stime=st, etime=et, n_events=len(events))
         else:
             raise Exception("unrecognized argument initialize_leb=%s" % options.initialize_leb)
-    else:
-        evs = None
 
     if options.synth:
         for (sta, wns) in sg.station_waves.items():
@@ -284,6 +275,21 @@ def load_signals_from_cmdline(sg, options, args):
 
     cursor.close()
 
+    return evs
+
+def get_leb_events(sg, cursor):
+    st = sg.start_time
+    et = sg.end_time
+    events, orid2num = read_events(cursor, st, et, 'leb')
+    events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
+
+    evs = []
+    eid = 1
+    for evarr in events:
+        ev = get_event(evid=evarr[EV_EVID_COL])
+        ev.eid = eid
+        eid += 1
+        evs.append(ev)
     return evs
 
 def load_event_based_signals_from_cmdline(sg, options, args):

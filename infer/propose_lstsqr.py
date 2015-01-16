@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.stats
+import scipy.optimize
 import scipy
 import sys
 import os
@@ -15,7 +16,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.source.event import Event
 from sigvisa.utils.geog import wrap_lonlat
 
-
+import itertools
 import numdifftools as nd
 
 
@@ -199,6 +200,23 @@ def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targe
 #####################################################################################
 
 
+def sample_truncated_gaussian(rv, lb, hb, max_trials=20):
+    sample = rv.rvs()
+    lbounds_violation = sample < lb
+    hbounds_violation = sample > hb
+    trials = 0
+    while lbounds_violation.any() or hbounds_violation.any():
+        if trials > max_trials:
+            print "WARNING: could not sample valid event location"
+            sample[lbounds_violation] = lb[lbounds_violation]
+            sample[hbounds_violation] = hb[hbounds_violation]
+            break
+        sample = rv.rvs()
+        lbounds_violation = sample < lb
+        hbounds_violation = sample > hb
+        trials += 1
+    return sample
+
 def propose_event_from_gaussian(sg, z, C, p_uniform_component, old_ev=None):
     # given a Gaussian mean and covariance on (lon, lat, depth, time),
     # sample an event to propose. since Gaussian have thin tails, also
@@ -207,11 +225,25 @@ def propose_event_from_gaussian(sg, z, C, p_uniform_component, old_ev=None):
 
     rv = scipy.stats.multivariate_normal(z, C)
 
+    lb = np.array((-np.inf, -np.inf, 0, -np.inf))
+    hb = np.array((np.inf, np.inf, 700, np.inf))
+    truncated_mass, j = scipy.stats.mvn.mvnun(lb,hb, z, C)
+
     uniform_scaling = np.array((360, 180, 700, sg.end_time - sg.event_start_time), dtype=float)
-    logpdf = lambda v : np.logaddexp(np.log(1-p_uniform_component) + rv.logpdf(v), np.log(p_uniform_component) + np.sum(-np.log(uniform_scaling)))
+    logpdf = lambda v : np.logaddexp(np.log(1-p_uniform_component) + rv.logpdf(v), np.log(p_uniform_component) + np.sum(-np.log(uniform_scaling))) - np.log(truncated_mass)
 
     if old_ev is not None:
-        old_vals = np.array((old_ev.lon, old_ev.lat, old_ev.depth, old_ev.time))
+
+        # hack to correct for the fact that Gaussians aren't a great
+        # model of locations on a sphere.
+        unwrapped_lon = old_ev.lon
+        lon_residual = z[0] - old_ev.lon
+        if  lon_residual > 180:
+            unwrapped_lon += 360
+        elif lon_residual < -180:
+            unwrapped_lon -= 380
+
+        old_vals = np.array((unwrapped_lon, old_ev.lat, old_ev.depth, old_ev.time))
         return logpdf(old_vals)
     else:
         uniform_proposal=np.random.rand() < p_uniform_component
@@ -219,22 +251,15 @@ def propose_event_from_gaussian(sg, z, C, p_uniform_component, old_ev=None):
             uniform_shift = np.array((-180, -90, 0, sg.event_start_time), dtype=float)
             proposed_vals = np.random.rand(4) * uniform_scaling + uniform_shift
         else:
-            proposed_vals = rv.rvs(1)
+            proposed_vals = sample_truncated_gaussian(rv, lb, hb)
 
         lon, lat, depth, time = proposed_vals
         proposal_lp = logpdf(proposed_vals)
+
         # this breaks Gaussianity, technically we should be using a
         # circular (von Mises?) distribution. but hopefully it doesn't
         # matter too much.
         lon, lat = wrap_lonlat(lon, lat)
-
-        # this definitely breaks Gaussianity, we should be explicitly truncating the distribution.
-        # depending on posterior variance this might actually matter, a substantial portion of the
-        # Gaussian mass could be outside of these bounds...
-        if depth > 699:
-            depth = 699
-        elif depth < 0:
-            depth = 0
 
         new_ev = Event(lon=lon, lat=lat, depth=depth, time=time, mb=4.0)
         return new_ev, proposal_lp
@@ -291,7 +316,7 @@ def tt_residual(sg, z_loc, sta, band, chan, tmid):
 
 
 
-def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, n_stations=10, min_uatemplates=1, p_uniform_component=1e-4, fix_result=None, proposal_dist_seed=None):
+def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, min_uatemplates=1, p_uniform_component=1e-4, fix_result=None, proposal_dist_seed=None):
     #
 
     def sample_associated_triple(sg, valid_stas=None):
@@ -308,6 +333,8 @@ def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, n_
 
     if proposal_dist_seed is not None:
         np.random.seed(proposal_dist_seed)
+
+    print "overproposing with seed", proposal_dist_seed
 
     t0 = time.time()
 
@@ -404,10 +431,10 @@ def propose_new_location_greedy(sg, n_stations=5, min_uatemplates=1, p_uniform_c
     def update_location_for_new_station(z_loc, stas, choices, new_sta, tmids_sta):
         sta, chan, band = new_sta
         tmids_sta = list(tmids_sta)
-        tt_residuals = [tt_residual(z_loc, sta, band, chan, tmid) for tmid in tmids_sta]
+        tt_residuals = [tt_residual(sg, z_loc, sta, band, chan, tmid) for tmid in tmids_sta]
         assoc_tmid = tmids_sta[np.argmin(tt_residuals)]
         choices  = choices + (assoc_tmid,)
-        z, C, sqerror, abserror = eval_associations(stas + [new_sta,], choices, init_z=z_loc)
+        z, C, sqerror, abserror = eval_associations(sg, stas + [new_sta,], choices, init_z=z_loc)
         return z, C, abserror, choices
 
     if proposal_dist_seed is not None:
@@ -421,7 +448,7 @@ def propose_new_location_greedy(sg, n_stations=5, min_uatemplates=1, p_uniform_c
     for i in range(3, len(stations)):
         new_hypotheses = []
         for abserror, z, C, choices  in hypotheses:
-            z, C, abserror, choices = update_location_for_new_station(sg, z, stations[:i], choices, stations[i], tmids[i])
+            z, C, abserror, choices = update_location_for_new_station(z, stations[:i], choices, stations[i], tmids[i])
             new_hypotheses.append((abserror, z, C, choices))
             print "updated error", abserror, "for hypothesis", z, "with stations", [sta for (sta, chan, band) in stations[:i+1]]
         hypotheses = sorted(new_hypotheses)[:beam_size]

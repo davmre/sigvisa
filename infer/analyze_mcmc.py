@@ -52,6 +52,7 @@ def trace_stats(trace, true_evs):
 
     true_ev = None
     best_distance = np.float('inf')
+    true_evs = true_evs if true_evs is not None else []
     for ev in true_evs:
         dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
         if dist < best_distance:
@@ -94,6 +95,7 @@ def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=Tr
     scplot = hm.plot_locations(lonlats, marker=".", ms=ms, mfc="red", mew=0, mec="none", alpha=alpha)
 
 
+
     results, txt = trace_stats(trace, true_evs)
 
     if text:
@@ -116,6 +118,8 @@ def load_trace(logfile, burnin):
             f.write(''.join(lines[:-1]))
         trace = np.loadtxt(logfile)
 
+    if len(trace.shape) == 1:
+        trace = np.reshape(trace, (1, -1))
     trace = np.array([row for row in trace if row[0] > burnin])
     if len(trace) == 0:
         return trace, 0, 0

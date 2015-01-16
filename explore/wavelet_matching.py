@@ -64,17 +64,25 @@ def select_events(train=True):
 def flatten_wavelet_coefs(coefs, levels=3):
     return np.concatenate([coefs[i] for i in range(min(levels, len(coefs)))])
 
-def unflatten_wavelet_coefs(cc, wtype="db2"):
+def unflatten_wavelet_coefs(cc, wtype="db9", len_s=600):
     coefs = []
 
     cc = np.asarray(cc)
 
-    if wtype == "db2": # assuming len(s)==400
-        bounds = (0, 4, 8, 15, 28, 53, 103, 203, 403)
-    elif wtype=="db9": # assuming len(s)==600
-        bounds = (0, 19, 38, 76, 151, 301, 601)
-    else:
-        raise Exception("CONFUSED AS BALLS")
+    filter_len = pywt.Wavelet(wtype).dec_len
+    levels = pywt.dwt_max_level(len_s, filter_len)
+    level_sizes = []
+    k = len_s
+    for i in range(levels):
+        k = int(np.ceil(k/float(2)))
+        level_sizes.append(k)
+    level_sizes.append(k)
+    level_sizes.append(0)
+    level_sizes.reverse()
+    bounds = np.cumsum(level_sizes)
+    # wtype db9, len_s 600 should yield
+    # bounds = [  0  19  38  76 151 301 601]
+
     for i in range(len(bounds)-1):
         if len(cc) >= bounds[i+1]:
             ncc = cc[bounds[i]:bounds[i+1]]

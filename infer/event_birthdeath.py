@@ -159,7 +159,7 @@ def template_association_logodds(sg, sta, tmid, eid, phase, ignore_mb=False):
     return logodds
 
 
-def template_association_distribution(sg, sta, eid, phase, ignore_mb=False):
+def template_association_distribution(sg, sta, eid, phase, ignore_mb=False, forbidden=None):
     """
     Returns a counter with normalized probabilities for associating
     any existing unassociated templates at station sta with a given
@@ -176,6 +176,7 @@ def template_association_distribution(sg, sta, eid, phase, ignore_mb=False):
 
     c = Counter()
     for tmid in sg.uatemplate_ids[(sta,chan,band)]:
+        if forbidden is not None and tmid in forbidden: continue
         c[tmid] += np.exp(template_association_logodds(sg, sta, tmid, eid,
                                                        phase, ignore_mb=ignore_mb))
 
@@ -198,7 +199,7 @@ def template_association_distribution(sg, sta, eid, phase, ignore_mb=False):
 
     return c
 
-def sample_template_to_associate(sg, sta, eid, phase, ignore_mb=False):
+def sample_template_to_associate(sg, sta, eid, phase, ignore_mb=False, forbidden=None):
     """
     Propose associating an unassociate template at sta with the
     (eid,phase) arrival, with probability proportional to the odds
@@ -215,7 +216,7 @@ def sample_template_to_associate(sg, sta, eid, phase, ignore_mb=False):
     """
 
 
-    c = template_association_distribution(sg, sta, eid, phase, ignore_mb=ignore_mb)
+    c = template_association_distribution(sg, sta, eid, phase, ignore_mb=ignore_mb, forbidden=forbidden)
     tmid = c.sample()
     assoc_logprob = np.log(c[tmid])
 
@@ -351,7 +352,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
 
     arrivals = wn.arrivals()
     other_arrivals = [a for a in arrivals if a != (eid, phase)]
-    signal_diff_pos = get_signal_diff_positive_part(wn, other_arrivals)
+    signal_diff_pos = get_signal_diff_positive_part(wn, other_arrivals) + wn.nm.c
     t = np.linspace(wn.st, wn.et, wn.npts)
 
     # consider using a vague travel-time prior to
@@ -361,7 +362,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
     tt_spread = 4.0
 
     peak_prior = np.exp(-np.abs(t - pred_atime)/tt_spread)
-    peak_cdf = merge_distribution(signal_diff_pos, peak_prior)
+    peak_cdf = merge_distribution(signal_diff_pos, peak_prior, smoothing=3)
 
 
     if not fix_result:
@@ -374,9 +375,11 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
     else:
         peak_time = tmvals["arrival_time"] + np.exp(tmvals["peak_offset"])
         peak_lp = peak_log_p(peak_cdf, wn.st, wn.srate, peak_time)
+        print "peak_lp is", peak_lp, "for", peak_time
+
         return peak_lp
 
-def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase):
+def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
     """
     Construct an amplitude proposal distribution by combining the signal likelihood with
     the prior conditioned on the event location.
@@ -404,15 +407,37 @@ def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase):
     prior_var = float(n_ampt.model.variance(cond=n_ampt._parent_values())) + 1
     prior_dist = Gaussian(prior_mean, np.sqrt(prior_var))
 
+    if debug:
+        import pdb; pdb.set_trace()
 
-    if amp_dist_signal.mean < -4 and prior_mean < amp_dist_signal.mean:
-        # if both the likelihood and the prior tell us we're below the noise floor,
-        # then what we propose won't affect the signal probability at all.
-        # so we should just propose from the prior to maximize the acceptance rate
-        heuristic_posterior = prior_dist
+    if amp_dist_signal is None:
+        return prior_dist
+
+    if amp_dist_signal.mean < np.log(wn.nm.c):
+        # the Gaussian model of log-amplitude isn't very good at the noise floor
+        # (it should really be a model of non-log amplitude, since noise is additive).
+        # so we hack in some special cases:
+        # TODO: find a better solution here.
+
+        if prior_mean < amp_dist_signal.mean:
+            # if the prior thinks the signal needs to be *really* small, vs just kind of small,
+            # we believe the prior. Since we're proposing below the noise floor, our proposal
+            # won't affect signal probabilities anyway, so we should just maximize probability
+            # under the prior.
+            heuristic_posterior = prior_dist
+        elif prior_mean > np.log(wn.nm.c) + 2:
+            # if the prior thinks there *should* be a visible arrival
+            # here, but that's not supported by the signal, we propose
+            # to fit the signal (paying the cost under the prior) since
+            # this is almost certainly cheaper than believing the prior
+            # at the cost of not fitting the signal.
+            heuristic_posterior = amp_dist_signal
+        else:
+            heuristic_posterior = amp_dist_signal.product(prior_dist)
     else:
         # otherwise, combine the likelihood and prior for a heuristic posterior
         heuristic_posterior = amp_dist_signal.product(prior_dist)
+
 
     return heuristic_posterior
 
@@ -439,6 +464,7 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=Tru
     lp = 0
     if smart_peak_time:
         peak_lp = smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=fix_result)
+
         lp += peak_lp
         proposed_tt_residual = tmvals["tt_residual"]
         proposed_atime = tmvals["arrival_time"]
@@ -467,7 +493,8 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=Tru
         tmvals['coda_height'] = amplitude
         lp += amp_dist.log_p(amplitude)
 
-
+        amp_log_p =  amp_dist.log_p(amplitude)
+        #print "amp_log_p", amp_log_p, "for", amplitude, "under", amp_dist
 
 
     else:
@@ -583,6 +610,7 @@ def ev_death_helper(sg, eid, associate_using_mb=True):
             assert (len(list(sg.site_chans[site])) == 1)
             chan = list(sg.site_chans[site])[0]
 
+            reverse_proposed_tmids = []
             for phase in sg.ev_arriving_phases(eid, sta):
                 deassociate, deassociate_logprob = sample_deassociation_proposal(sg, sta, eid, phase)
                 deassociations.append((sta, phase, deassociate, tmid_i))
@@ -711,12 +739,19 @@ def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
             assert (len(list(sg.site_chans[site])) == 1)
             chan = list(sg.site_chans[site])[0]
 
+            proposed_tmids = set()
             for phase in site_phases:
-                tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase, ignore_mb=not associate_using_mb)
+                # we should really do the associations one-by-one,
+                # instead of just keeping a list of tmids we've
+                # proposed to associate and then doing it all at the
+                # end.as it currently stands the death move doesn't
+                # quite compute the correct reverse probabilities.
+                tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase, ignore_mb=not associate_using_mb, forbidden=proposed_tmids)
                 if tmid is not None:
                     forward_fns.append(lambda sta=sta,phase=phase,tmid=tmid: associate_template(sg, sta, tmid, eid, phase))
                     inverse_fns.append(lambda sta=sta,phase=phase,tmid=tmid: unassociate_template(sg, sta, eid, phase, tmid=tmid))
                     associations.append((sta, phase, True))
+                    proposed_tmids.add(tmid)
                     print "proposing to associate template %d at %s,%s with assoc lp %.1f" % (tmid, sta, phase, assoc_logprob)
                     tmpl_lp  = 0.0
                 else:
@@ -760,6 +795,7 @@ def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
 def ev_birth_helper_full(sg, location_proposal, eid=None):
     # propose a new ev location
     ev, lp_loc, extra = location_proposal(sg)
+    print "proposing new ev", ev
 
     # propose its associations
     log_qforward, log_qbackward, revert_move, eid, associations = ev_birth_helper(sg, ev, associate_using_mb=False, eid=eid)

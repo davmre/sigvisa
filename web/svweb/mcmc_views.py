@@ -49,6 +49,12 @@ def mcmc_list_view(request, sort_by_time=False):
         mcmcrun['machine_time'] = os.path.getctime(os.path.join(mcmc_log_dir, rundir))
         mcmcrun['time'] = str(time.ctime(mcmcrun['machine_time']))
 
+        steps = [int(d[5:]) for d in os.listdir(os.path.join(mcmc_log_dir, rundir)) if d.startswith("step_")]
+        if len(steps) == 0:
+            mcmcrun['steps'] = 0
+        else:
+            mcmcrun['steps'] = np.max(steps)
+
         cmd = ""
         try:
             with open(os.path.join(mcmc_log_dir, rundir, 'cmd.txt'), 'r') as f:
@@ -123,7 +129,10 @@ def mcmc_run_detail(request, dirname):
     site_names = sg.site_elements.keys()
     site_info = np.array([s.earthmodel.site_info(sta, 0) for sta in site_names])
 
-    true_ev_strs = [str(ev) for ev in true_evs]
+    if true_evs is not None:
+        true_ev_strs = [str(ev) for ev in true_evs]
+    else:
+        true_ev_strs = []
 
     for eid in eids:
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
@@ -135,7 +144,7 @@ def mcmc_run_detail(request, dirname):
         ev = sg.get_event(eid)
         evdict = {'eid': eid,
                   'evstr': str(ev),
-                  'azgap': azimuth_gap(ev.lon, ev.lat, site_info),
+                  'azgap': 0.0, #azimuth_gap(ev.lon, ev.lat, site_info),
                   'dist_mean': results['dist_mean'] if "dist_mean" in results else "",
                   'lon_std_km': results['lon_std_km'] if "lon_std_km" in results else "",
                   'lat_std_km': results['lat_std_km'] if "lat_std_km" in results else "",
@@ -215,14 +224,15 @@ def mcmc_event_posterior(request, dirname):
         trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
         n = trace.shape[0]
         print eid, trace.shape
-        scplot = hm.plot_locations(trace[:, 0:2], marker=".", ms=8, mfc=shape_colors[eid_i-1], mew=0, mec="none", alpha=1.0/np.log(n+1))
-        eid_patches.append(mpatches.Patch(color=shape_colors[eid_i-1]))
-        eid_labels.append('%d' % eid)
+        if len(trace.shape)==2:
+            scplot = hm.plot_locations(trace[:, 0:2], marker=".", ms=8, mfc=shape_colors[eid_i-1], mew=0, mec="none", alpha=1.0/np.log(n+1))
+            eid_patches.append(mpatches.Patch(color=shape_colors[eid_i-1]))
+            eid_labels.append('%d' % eid)
 
-        if plot_mean:
-            clon, clat = find_center(trace[:, 0:2])
-            loc = np.array(((clon, clat), ))
-            hm.plot_locations(loc,  labels=None, marker="+", ms=16, mfc="none", mec=shape_colors[eid_i-1], mew=2, alpha=1)
+            if plot_mean:
+                clon, clat = find_center(trace[:, 0:2])
+                loc = np.array(((clon, clat), ))
+                hm.plot_locations(loc,  labels=None, marker="+", ms=16, mfc="none", mec=shape_colors[eid_i-1], mew=2, alpha=1)
 
     f.legend(handles=eid_patches, labels=eid_labels)
 
@@ -232,6 +242,8 @@ def mcmc_event_posterior(request, dirname):
                 true_evs = pickle.load(evfile)
         except Exception as e:
             print e
+            true_evs = []
+        if true_evs is None:
             true_evs = []
         for ev in true_evs:
             loc = np.array(((ev.lon, ev.lat), ))
@@ -308,7 +320,6 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     ua_alpha = 0.4/len(sgs)
 
     nevents = last_sg.next_eid-1
-
 
     wn = last_sg.all_nodes[wn_label]
     real_wave = wn.get_wave()
