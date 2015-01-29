@@ -349,7 +349,7 @@ class Node(object):
             grad[i + ni] = deriv
         return len(keys)
 
-    def parent_sample(self, parent_values=None):
+    def parent_sample(self, parent_values=None, set_new_value=True):
         # sample a new value at this node conditioned on its parents
         if self._fixed: return
         if parent_values is None:

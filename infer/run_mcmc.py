@@ -62,22 +62,16 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds,
 
     for param in tg.params():
 
-        if param == "peak_offset": continue
-
         k, n = tmnodes[param]
 
         # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
-        relevant_nodes = [latent,]
+        relevant_nodes = [wn,]
         if n.deterministic():
             parent = n.parents[n.default_parent_key()]
             relevant_nodes.append(parent)
             # technically we should also add the children of parent, but for template moves this will never matter
         else:
             relevant_nodes.append(n)
-
-        if param == 'arrival_time':
-            raise Exception("why are we treating arrival time as a tg param? it should be a special-case move")
-            relevant_nodes.append(wn)
 
         try:
             run_move(move_name=param, fn=gaussian_MH_move,
@@ -249,12 +243,6 @@ def run_open_world_MH(sg, steps=10000,
             except KeyError:
                 continue
 
-    # also, some optional moves are not enabled by default
-    for move in enable_moves:
-        move_set, fn = optional_moves[move]
-        move_set[move] = fn
-
-
     stds = global_stds
     tmpl_openworld_move_probability = 0.05
     ev_openworld_move_probability = .05
@@ -354,7 +342,7 @@ def run_open_world_MH(sg, steps=10000,
 
                         if enable_template_moves and template_move_type in ("rw", "both"):
                             do_template_moves(sg, wn, tmnodes, tg, wg, stds,
-                                              n_attempted, n_accepted, move_times, step, joint=True)
+                                              n_attempted, n_accepted, move_times, step)
 
         for (move, fn) in global_moves.items():
 

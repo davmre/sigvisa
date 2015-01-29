@@ -84,13 +84,16 @@ class ObservedSignalNode(Node):
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
         self.valid_len = model_waveform['valid_len']
+        self.env = 'env' in self.filter_str
 
         self.signal_diff = np.empty((self.npts,))
         self.pred_signal = np.empty((self.npts,))
 
         self.set_noise_model(nm_type=nm_type, nmid=nmid)
 
-
+        self._tmpl_params = dict()
+        self._wiggle_params = dict()
+        self._keymap = dict()
         self._arrivals = set()
         self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
 
@@ -174,6 +177,7 @@ class ObservedSignalNode(Node):
 
         npts = self.npts-window_start_idx if not npts else int(npts)
         n = len(arrivals)
+        envelope = int(self.env or (not include_wiggles))
         signal = self.pred_signal
         code = """
       for(int i=window_start_idx; i < window_start_idx+npts; ++i) signal(i) = 0;
@@ -363,6 +367,14 @@ signal_diff(i) =value(i) - pred_signal(i);
         parent_values = parent_values if parent_values else self._parent_values()
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg
+
+    def get_wiggle_for_arrival(self, eid, phase, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        wg = self.graph.wiggle_generator(phase, self.srate)
+        if len(self._wiggle_params[(eid, phase)]) == wg.dimension():
+            return wg.signal_from_features(features = self._wiggle_params[(eid, phase)])
+        else:
+            return np.ones((wg.npts,))
 
     def cache_latent_signal_for_template_optimization(self, eid, phase, force_bounds=True, return_llgrad=False):
 
