@@ -13,6 +13,14 @@ class ARSSM(StateSpaceModel):
     def apply_transition_matrix(self, x, k, x_new):
         x_new[1:] = x[:-1]
         x_new[0] = np.dot(self.params, x)
+        return self.max_dimension
+
+    def transition_matrix_debug(self, k):
+        F = np.zeros((self.max_dimension,self.max_dimension))
+        F[0,:] = self.params
+        for i in range(1, self.max_dimension):
+            F[i, i-1] = 1
+        return F
 
     def transition_bias(self, k, x):
         pass
@@ -27,6 +35,11 @@ class ARSSM(StateSpaceModel):
         else:
             assert(len(x.shape)==2)
             result[:] = x[0,:]
+
+    def obs_vector_debug(self, k):
+        H = np.zeros((self.max_dimension,))
+        H[0] = 1
+        return H
 
     def observation_noise(self, k):
         return 0.0
