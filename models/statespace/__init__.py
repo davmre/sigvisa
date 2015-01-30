@@ -96,6 +96,12 @@ class StateSpaceModel(object):
         # TODO: find a less ugly way to do this.
         raise Exception("not implemented")
 
+    def observation_bias(self, k):
+        """
+        Return a scalar bias term for the observation.
+        """
+        return 0.0
+
     def observation_variance(self, P, k):
         # P: state covariance at time k
         # returns the (scalar) variance of the (noiseless) observation at time k,
@@ -136,7 +142,7 @@ class StateSpaceModel(object):
         #              filtered state estimate.
         #    (implicitly) xk, Pk: the updated state estimate
 
-        pred_z = self.apply_observation_matrix(xk, k)
+        pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
         yk = zk - pred_z
 
         Sk = self.observation_variance(Pk, k)
@@ -205,7 +211,7 @@ class StateSpaceModel(object):
         prior_mean = self.prior_mean()
         x[:len(prior_mean)] = scipy.stats.multivariate_normal(prior_mean, np.diag(self.prior_vars())).rvs(1)
 
-        pred_obs = self.apply_observation_matrix(x, 0)
+        pred_obs = self.apply_observation_matrix(x, 0) + self.observation_bias(0)
         z1 = scipy.stats.norm(pred_obs, self.observation_noise(0)).rvs(1)
         z1 = z1.reshape((-1,))
 
@@ -222,7 +228,7 @@ class StateSpaceModel(object):
             noise_cov = np.diag(noise_diag)
             x[:state_size] = scipy.stats.multivariate_normal(pred_state[:state_size], noise_cov).rvs(1)
 
-            pred_obs = self.apply_observation_matrix(x, k)
+            pred_obs = self.apply_observation_matrix(x, k) + self.observation_bias(k)
             z[k] = scipy.stats.norm(pred_obs, self.observation_noise(k)).rvs(1)
 
         return z

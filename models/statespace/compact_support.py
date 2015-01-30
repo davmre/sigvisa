@@ -3,10 +3,12 @@ import scipy.stats
 
 from sigvisa.models.statespace import StateSpaceModel
 
+
 class CompactSupportSSM(StateSpaceModel):
 
-    def __init__(self, bases, coef_prior_means=None, coef_prior_vars=None):
+    def __init__(self, bases, coef_prior_means=None, coef_prior_vars=None, bias=0.0):
         self.bases=bases
+        self.bias=bias
         self.n_basis, self.n_steps = bases.shape
 
         def active_at(k, bases):
@@ -35,6 +37,7 @@ class CompactSupportSSM(StateSpaceModel):
             assert(len(coef_prior_vars)==self.n_basis)
             self.coef_vars = coef_prior_vars
 
+
     def apply_transition_matrix(self, x, k, x_new):
         # compute F_k*x for the given x, where
         # F_k is the transition matrix from time
@@ -46,10 +49,19 @@ class CompactSupportSSM(StateSpaceModel):
         assert(k>0)
         active = self.active_bases[k]
 
-        for i, idx in enumerate(self.active_bases[k]):
+        for i, idx in enumerate(active):
             prev_idx = self.active_indices[idx, k-1]
             x_new[i] = 0 if prev_idx < 0 else x[prev_idx]
+        return len(active)
 
+    def transition_matrix_debug(self, k):
+        x = np.zeros((self.max_dimension,))
+        F = np.zeros((self.max_dimension,self.max_dimension))
+        for i in range(self.max_dimension):
+            x[:] = 0
+            x[i] = 1.0
+            self.apply_transition_matrix(x, k, F[:,i])
+        return F
 
     def transition_bias(self, k, x):
         """
@@ -80,6 +92,15 @@ class CompactSupportSSM(StateSpaceModel):
             # matrix-matrix multiplication, produces a (1 x x.shape[1])
             r = np.dot(obs, x[:len(obs), :], result[:x.shape[1]])
 
+    def obs_vector_debug(self, k):
+        active = self.active_bases[k]
+        obs = self.bases[active, k]
+        H = np.zeros((self.max_dimension,))
+        H[:len(obs)] = obs
+        return H
+
+    def observation_bias(self, k):
+        return self.bias
 
     def observation_noise(self, k):
         return 0.01

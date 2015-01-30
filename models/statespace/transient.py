@@ -206,8 +206,19 @@ class TransientCombinedSSM(StateSpaceModel):
             i += len(v)
         return H
 
+    def observation_bias(self, k):
+        bias = 0.0
+        ssm_indices = self.active_ssms(k)
+        for j in ssm_indices:
+            kk = k-self.ssm_starts[j]
+            b = self.ssms[j].observation_bias(kk)
+            if self.scales[j] is not None:
+                b *= self.scales[j][kk]
+            bias += b
+        return bias
+
     def observation_noise(self, k):
-        return 0.01
+        return 0.0
 
     def prior_mean(self):
         return np.concatenate([self.ssms[i].prior_mean() for i in self.active_ssms(0)])
