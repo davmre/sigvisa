@@ -190,7 +190,9 @@ class StateSpaceModel(object):
         Pk1 = Pk.copy()
         for k in range(1, N):
             state_size = self.kalman_predict(k, xk1, Pk1, xk, Pk)
-            ell += self.kalman_observe(k, z[k], xk, Pk, tmp, state_size)
+
+            if not np.isnan(z[k]):
+                ell += self.kalman_observe(k, z[k], xk, Pk, tmp, state_size)
 
             # the result of the filtering update, stored in xk, Pk,
             # now becomes the new "previous" version (xk1, Pk1) for
