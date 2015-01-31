@@ -6,22 +6,22 @@ from sigvisa.models.statespace import StateSpaceModel
 
 class CompactSupportSSM(StateSpaceModel):
 
-    def __init__(self, bases, coef_prior_means=None, coef_prior_vars=None, bias=0.0):
-        self.bases=bases
+    def __init__(self, basis, coef_prior_means=None, coef_prior_vars=None, bias=0.0):
+        self.basis=basis
         self.bias=bias
-        self.n_basis, self.n_steps = bases.shape
+        self.n_basis, self.n_steps = basis.shape
 
-        def active_at(k, bases):
-            return np.arange(bases.shape[0])[np.abs(bases[:, k]) > 0]
+        def active_at(k, basis):
+            return np.arange(basis.shape[0])[np.abs(basis[:, k]) > 0]
 
-        self.active_bases = [active_at(k, bases) for k in range(self.n_steps)]
+        self.active_basis = [active_at(k, basis) for k in range(self.n_steps)]
 
-        self.max_dimension = np.max([len(b) for b in self.active_bases])
+        self.max_dimension = np.max([len(b) for b in self.active_basis])
 
         # precompute the state-space indices of each basis vector at each timestep
         def basis_activation_index(i, k):
             try:
-                return list(active_at(k, bases)).index(i)
+                return list(active_at(k, basis)).index(i)
             except ValueError as e:
                 return -1
         self.active_indices = np.array([[basis_activation_index(i, k) for k in range(self.n_steps)] for i in range(self.n_basis)], dtype=np.int32)
@@ -47,7 +47,7 @@ class CompactSupportSSM(StateSpaceModel):
         # touched (so may still contain garbage).
 
         assert(k>0)
-        active = self.active_bases[k]
+        active = self.active_basis[k]
 
         for i, idx in enumerate(active):
             prev_idx = self.active_indices[idx, k-1]
@@ -68,7 +68,7 @@ class CompactSupportSSM(StateSpaceModel):
         in general this will be the prior means of the new coefs.
         for now we assume these are all zero.
         """
-        for i, idx in enumerate(self.active_bases[k]):
+        for i, idx in enumerate(self.active_basis[k]):
             prev_idx = self.active_indices[idx, k-1]
             if prev_idx < 0:
                 assert(x[i])==0
@@ -76,13 +76,13 @@ class CompactSupportSSM(StateSpaceModel):
 
     def transition_noise_diag(self, k, noise):
         noise[:] = 0
-        for i, idx in enumerate(self.active_bases[k]):
+        for i, idx in enumerate(self.active_basis[k]):
             prev_idx = self.active_indices[idx, k-1]
             noise[i] = self.coef_vars[idx] if prev_idx < 0 else 0.0
 
     def apply_observation_matrix(self, x, k, result=None):
-        active = self.active_bases[k]
-        obs = self.bases[active, k]
+        active = self.active_basis[k]
+        obs = self.basis[active, k]
 
         if len(x.shape)==1:
             # matrix-vector multiplication, produces a scalar in this case since the observation "matrix" is really a row vector
@@ -93,8 +93,8 @@ class CompactSupportSSM(StateSpaceModel):
             r = np.dot(obs, x[:len(obs), :], result[:x.shape[1]])
 
     def obs_vector_debug(self, k):
-        active = self.active_bases[k]
-        obs = self.bases[active, k]
+        active = self.active_basis[k]
+        obs = self.basis[active, k]
         H = np.zeros((self.max_dimension,))
         H[:len(obs)] = obs
         return H
@@ -107,12 +107,12 @@ class CompactSupportSSM(StateSpaceModel):
 
     def prior_mean(self):
         p = np.zeros((self.max_dimension,))
-        for j, idx in enumerate(self.active_bases[0]):
+        for j, idx in enumerate(self.active_basis[0]):
             p[j] = self.coef_means[idx]
         return p
 
     def prior_vars(self):
         p = np.zeros((self.max_dimension,))
-        for j, idx in enumerate(self.active_bases[0]):
+        for j, idx in enumerate(self.active_basis[0]):
             p[j] = self.coef_vars[idx]
         return p

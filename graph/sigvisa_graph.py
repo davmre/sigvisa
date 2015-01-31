@@ -25,6 +25,7 @@ from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.database.signal_data import execute_and_return_id
+from sigvisa.models.wiggles.wavelets import construct_wavelet_basis
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_by_family
 from sigvisa.plotting.plot import plot_with_fit
@@ -106,6 +107,7 @@ class SigvisaGraph(DirectedGraphModel):
         else:
             return tmtype
 
+
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
                  wiggle_len_s = 30.0, wiggle_basisids=None,
@@ -141,16 +143,21 @@ class SigvisaGraph(DirectedGraphModel):
 
 
         self.wiggle_model_type = wiggle_model_type
-        self.wiggle_family = wiggle_family
+        if wiggle_family == "dummy":
+            self.wavelet_basis = None
+            self.wiggle_res_hz = -1
+        else:
+            basis, hz = wiggle_family.split("_")
+            self.wavelet_basis_family = basis
+            self.wiggle_res_hz = float(hz)
         self.wiggle_len_s = wiggle_len_s
+        self.wavelet_basis_cache = dict()
+
         self.base_srate = base_srate
         self.assume_envelopes = assume_envelopes
         self.smoothing = smoothing
-        self.wgs = dict()
-        if wiggle_basisids is not None:
-            for (phase, basisid) in wiggle_basisids.items():
-                wg = load_wiggle_generator(basisid=basisid)
-                self.wgs[(phase, wg.srate)] = wg
+
+
 
         self.dummy_fallback = dummy_fallback
 
@@ -208,23 +215,14 @@ class SigvisaGraph(DirectedGraphModel):
             self.tg[phase] = load_template_generator(self.template_shape)
         return self.tg[phase]
 
-    def wiggle_generator(self, phase, srate):
-        if (phase, srate) not in self.wgs:
-            self.wgs[(phase, srate)] =  load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=srate, envelope=self.assume_envelopes)
-        return self.wgs[(phase, srate)]
+    def wavelet_basis(self, srate):
+        if self.wavelet_basis_family is None:
+            return None
 
-    def get_wiggle_nodes(self, eid, sta, phase, band, chan):
-        wg = self.wiggle_generator(phase=phase, srate=self.base_srate)
-        nodes = dict()
-        for param in wg.params():
-            k, node = get_parent_value(eid=eid, sta=sta, phase=phase, param_name=param, chan=chan, band=band, parent_values=self.nodes_by_key, return_key=True)
-            nodes[param]=(k, node)
-        return nodes
-
-    def get_wiggle_vals(self, eid, sta, phase, band, chan):
-        nodes = self.get_wiggle_nodes(eid, sta, phase, band, chan)
-        vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
-        return vals
+        if srate not in self.wavelet_basis_cache:
+            self.wavelet_basis_cache[srate] = \
+                construct_wavelet_basis(srate, self.wavelet_basis_family, self.wiggle_res_hz, self.wiggle_len_s)
+        return self.wavelet_basis_cache[srate]
 
     def get_template_nodes(self, eid, sta, phase, band, chan):
         tg = self.template_generator(phase)
@@ -689,8 +687,7 @@ class SigvisaGraph(DirectedGraphModel):
                     elif phase == "Sn":
                         phase = "S"
                 tg = self.template_generator(phase)
-                wg = self.wiggle_generator(phase, self.base_srate)
-                self.add_event_site_phase(tg, wg, site, phase, evnodes, sample_templates=sample_templates)
+                self.add_event_site_phase(tg, site, phase, evnodes, sample_templates=sample_templates)
 
 
         self._topo_sort()
@@ -928,7 +925,7 @@ class SigvisaGraph(DirectedGraphModel):
             nodes[sta] = arrtimenode
         return nodes
 
-    def add_event_site_phase(self, tg, wg, site, phase, evnodes, sample_templates=False):
+    def add_event_site_phase(self, tg, site, phase, evnodes, sample_templates=False):
         # the "nodes" we create here can either be
         # actual nodes (if we are modeling these quantities
         # jointly across an array) or sta:node dictionaries (if we
@@ -945,6 +942,11 @@ class SigvisaGraph(DirectedGraphModel):
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
                 child_wave_nodes.add(wave_node)
+
+                # wave nodes depend directly on event location
+                # since they need to know what GP prior
+                # to use on wiggles.
+                evnodes["loc"].addChild(wave_node)
 
         # create nodes common to all bands and channels: travel
         # time/arrival time, and amp_transfer.
@@ -987,13 +989,6 @@ class SigvisaGraph(DirectedGraphModel):
                                                                       low_bound = tg.low_bounds()[param],
                                                                       high_bound = tg.high_bounds()[param],
                                                                       initial_value = tg.default_param_vals()[param])
-                for param in wg.params():
-                    model_type = self._tm_type(param, site, wiggle_param=True)
-                    nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
-                                                                            model_type=model_type,
-                                                                            phase=phase, parents=[evnodes['loc'],],
-                                                                            band=band, chan=chan, basisid=wg.basisid,
-                                                                            children=child_wave_nodes, wiggle=True)
 
         fullnodes = []
         for ni in [tt_residual_node, amp_transfer_node] + nodes.values():

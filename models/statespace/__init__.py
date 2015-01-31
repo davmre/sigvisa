@@ -208,6 +208,23 @@ class StateSpaceModel(object):
         else:
             return ell, x
 
+    def mean_obs(self, N):
+        z = np.empty((N,))
+        x = np.empty((self.max_dimension,))
+        prior_mean = self.prior_mean()
+        x[:len(prior_mean)] = prior_mean
+        z[0] = self.apply_observation_matrix(x, 0) + self.observation_bias(0)
+
+        pred_state = x.copy()
+        for k in range(1, N):
+            state_size = self.apply_transition_matrix(x, k, pred_state)
+            self.transition_bias(k, pred_state)
+            x[:state_size]=pred_state[:state_size]
+
+            z[k] = self.apply_observation_matrix(x, k) + self.observation_bias(k)
+        return z
+
+
     def prior_sample(self, N):
         x = np.empty((self.max_dimension,))
         prior_mean = self.prior_mean()
