@@ -220,6 +220,21 @@ class TransientCombinedSSM(StateSpaceModel):
     def observation_noise(self, k):
         return 0.0
 
+    def stationary(self, k):
+        s1 = self.active_ssms(k)
+
+        # TODO: can precompute this comparison
+        if k > 0:
+            s2 = self.active_ssms(k-1)
+            if s2 != s1:
+                return False
+        for j in s1:
+            if self.scales[j] is not None:
+                return False
+            if not self.ssms[j].stationary(k-self.ssm_starts[j]):
+                return False
+        return True
+
     def prior_mean(self):
         return np.concatenate([self.ssms[i].prior_mean() for i in self.active_ssms(0)])
 

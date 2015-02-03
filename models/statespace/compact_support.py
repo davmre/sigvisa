@@ -105,6 +105,9 @@ class CompactSupportSSM(StateSpaceModel):
     def observation_noise(self, k):
         return 0.01
 
+    def stationary(self, k):
+        return False
+
     def prior_mean(self):
         p = np.zeros((self.max_dimension,))
         for j, idx in enumerate(self.active_basis[0]):

@@ -37,6 +37,9 @@ class ARSSM(StateSpaceModel):
             assert(len(x.shape)==2)
             result[:] = x[0,:]
 
+    def obs_model_changed(self, k1, k2):
+        return False
+
     def obs_vector_debug(self, k):
         H = np.zeros((self.max_dimension,))
         H[0] = 1
@@ -47,6 +50,9 @@ class ARSSM(StateSpaceModel):
 
     def observation_noise(self, k):
         return 0.0
+
+    def stationary(self, k):
+        return True
 
     def prior_mean(self):
         return np.zeros((self.max_dimension,))

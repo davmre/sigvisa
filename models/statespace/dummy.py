@@ -38,6 +38,9 @@ class DummySSM(StateSpaceModel):
     def observation_noise(self, k):
         return 0.0
 
+    def stationary(self, k):
+        return True
+
     def prior_mean(self):
         return np.zeros((self.max_dimension,))
 

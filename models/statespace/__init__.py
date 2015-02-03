@@ -281,34 +281,54 @@ class StateSpaceModel(object):
 
 
     def kalman_observe_sqrt(self, k, zk, xk, U, d, state_size):
-        K = np.zeros((state_size,))
-        f = np.zeros((state_size,))
 
-        r = self.observation_noise(k)
-        self.apply_observation_matrix(U[:state_size,:state_size], k, f)
-        v = d[:state_size] * f
+        if self.at_fixed_point and self.stationary(k):
+            K = self.cached_gain[:state_size]
+            alpha = self.cached_alpha
+            U[:state_size,:state_size] = self.cached_obs_U[:state_size,:state_size]
+            d[:state_size] = self.cached_obs_d[:state_size]
+        else:
+            self.at_fixed_point = False
 
-        if np.isnan(v).any():
-            raise Exception("v is %s" % v)
+            K = np.zeros((state_size,))
+            f = np.zeros((state_size,))
 
-        alpha = r + v[0]*f[0]
-        d[0] *= r/alpha
-        K[0] = v[0]
-        u_tmp = np.empty((state_size,))
-        for j in range(1, state_size):
-            old_alpha = alpha
-            alpha += v[j]*f[j]
-            d[j] *= old_alpha/alpha
-            u_tmp[:] = U[:state_size,j]
-            U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
-            K += v[j]*u_tmp
+            r = self.observation_noise(k)
+            self.apply_observation_matrix(U[:state_size,:state_size], k, f)
+            v = d[:state_size] * f
+
+            if np.isnan(v).any():
+                raise Exception("v is %s" % v)
+
+            alpha = r + v[0]*f[0]
+            d[0] *= r/alpha
+            K[0] = v[0]
+            u_tmp = np.empty((state_size,))
+            for j in range(1, state_size):
+                old_alpha = alpha
+                alpha += v[j]*f[j]
+                d[j] *= old_alpha/alpha
+                u_tmp[:] = U[:state_size,j]
+                U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
+                K += v[j]*u_tmp
+
+            if self.stationary(k):
+                if (np.abs(self.cached_obs_d[:state_size] - d[:state_size]) < self.eps_stationary).all():
+                    if (np.abs(self.cached_gain[:state_size] - K) < self.eps_stationary).all():
+                        if (np.abs(self.cached_obs_U[:state_size,:state_size] - U[:state_size,:state_size]) < self.eps_stationary).all():
+                            self.at_fixed_point = True
+                if not self.at_fixed_point:
+                    self.cached_alpha = alpha
+                    self.cached_gain[:state_size] = K
+                    self.cached_obs_U[:state_size,:state_size] = U[:state_size,:state_size]
+                    self.cached_obs_d[:state_size] = d[:state_size]
 
         pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
         yk = zk - pred_z
-        xk[:state_size] += K/alpha*yk
-        step_ell= scipy.stats.norm.logpdf(yk, loc=0, scale=np.sqrt(alpha))
-        assert(not np.isnan(step_ell))
+        xk[:state_size] += K*(yk/alpha)
 
+        step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
+        assert(not np.isnan(step_ell))
 
         return step_ell
 
@@ -333,41 +353,65 @@ class StateSpaceModel(object):
         state_size = self.apply_transition_matrix(xk1, k, xk)
         self.transition_bias(k, xk)
 
-        self.transition_noise_diag(k, xk1)
+        if self.at_fixed_point and self.stationary(k):
+            return self.cached_pred_U, self.cached_pred_d, prev_state_size
+        else:
+            self.at_fixed_point = False
 
-        U1 = U.copy()
+            self.transition_noise_diag(k, xk1)
+            U1 = U.copy()
+            small_size = min(prev_state_size, state_size)
+            for i in range(small_size):
+                self.apply_transition_matrix(U[:,i], k, U1[:,i])
 
-        small_size = min(prev_state_size, state_size)
-        for i in range(small_size):
-            self.apply_transition_matrix(U[:,i], k, U1[:,i])
+            if prev_state_size < state_size:
+                for i in range(prev_state_size, state_size):
+                    U1[:, i] = 0
+                    d[i] = 0
 
-        if prev_state_size < state_size:
-            for i in range(prev_state_size, state_size):
-                U1[:, i] = 0
-                d[i] = 0
+            # if no noise, we can save the expensive part
+            if np.sum(xk1!= 0) == 0:
+                return U1, d, state_size
 
-        # if no noise, we can save the expensive part
-        if np.sum(xk1!= 0) == 0:
+            P = np.dot(d[:state_size]*U1[:state_size,:state_size], U1[:state_size,:state_size].T)
+            np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
+            U1[:state_size,:state_size], d[:state_size] = udu(P)
+
+            if np.isnan(U1[:state_size,:state_size]).any():
+                raise Exception("U is nan")
+
+            # if this is (almost) the same as the previous invocation,
+            # we've reached a stationary state
+            if self.stationary(k):
+                if (np.abs(self.cached_pred_d - d) < self.eps_stationary).all():
+                    if (np.abs(self.cached_pred_U - U1) < self.eps_stationary).all():
+                        self.at_fixed_point = True
+                if not self.at_fixed_point:
+                    self.cached_pred_U[:,:] = U1
+                    self.cached_pred_d[:] = d
+
             return U1, d, state_size
 
-        P = np.dot(d[:state_size]*U1[:state_size,:state_size], U1[:state_size,:state_size].T)
-        np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
-        U1[:state_size,:state_size], d[:state_size] = udu(P)
-
-        if np.isnan(U1[:state_size,:state_size]).any():
-            raise Exception("U is nan")
-
-        return U1, d, state_size
 
 
-
-    def run_filter(self, z):
-        for x, U, d in self.filtered_states(z):
+    def run_filter(self, z, *args, **kwargs):
+        for x, U, d in self.filtered_states(z, *args, **kwargs):
             pass
 
         return self.ell
 
-    def filtered_states(self, z):
+    def init_caches(self):
+        self.at_fixed_point = False
+        self.wasnan = False
+        self.eps_stationary = 1e-10
+
+        self.cached_gain = np.empty((self.max_dimension,))
+        self.cached_obs_d = np.empty((self.max_dimension,))
+        self.cached_obs_U = np.empty((self.max_dimension, self.max_dimension))
+        self.cached_pred_d = np.empty((self.max_dimension,))
+        self.cached_pred_U = np.empty((self.max_dimension,self.max_dimension))
+
+    def filtered_states(self, z, no_cache=False):
         """
         Run a factored UDU' Kalman filter (see Bruce Gibbs, Advanced
         Kalman Filtering, Least-Squares and Modeling: A Practical
@@ -376,6 +420,8 @@ class StateSpaceModel(object):
         to return the filtered state estimates. The run_filter method
         wraps this to return marginal likelihoods instead.
         """
+
+        self.init_caches()
 
         N = len(z)
         ell = 0
@@ -397,10 +443,27 @@ class StateSpaceModel(object):
         # create temporary variables
         xk1 = xk.copy()
         for k in range(1, N):
+
+            if no_cache:
+                self.at_fixed_point=False
+
             U, d, state_size = self.kalman_predict_sqrt(k, xk1, U, d, xk, state_size)
 
-            if not np.isnan(z[k]):
+            if no_cache:
+                self.at_fixed_point=False
+
+
+            if np.isnan(z[k]):
+                if self.at_fixed_point and not self.wasnan:
+                    self.at_fixed_point = False
+                self.wasnan = True
+            else:
+                if self.at_fixed_point and self.wasnan:
+                    self.at_fixed_point = False
+                self.wasnan = False
+
                 ell += self.kalman_observe_sqrt(k, z[k], xk, U, d, state_size)
+
             yield xk, U, d
 
             xk, xk1 = xk1, xk
