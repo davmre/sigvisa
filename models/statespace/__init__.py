@@ -1,6 +1,42 @@
 import numpy as np
 import scipy.stats
 
+def udu(M):
+    # STOLEN from pykalman.sqrt.bierman (BSD license)
+
+    """Construct the UDU' decomposition of a positive, semidefinite matrix M
+
+    Parameters
+    ----------
+    M : [n, n] array
+        Matrix to factorize
+
+    Returns
+    -------
+    UDU : UDU_decomposition of size n
+        UDU' representation of M
+    """
+    assert np.allclose(M, M.T), 'M must be symmetric, positive semidefinite'
+    n = M.shape[0]
+
+    # perform Bierman's COV2UD subroutine (fucking inclusive indices)
+    M = np.triu(M)
+    U = np.eye(n)
+    d = np.zeros(n)
+    for j in reversed(range(2, n + 1)):
+        d[j - 1] = M[j - 1, j - 1]
+        if d[j - 1] > 0:
+            alpha = 1.0 / d[j - 1]
+        else:
+            alpha = 0.0
+        for k in range(1, j):
+            beta = M[k - 1, j - 1]
+            U[k - 1, j - 1] = alpha * beta
+            M[0:k, k - 1] = M[0:k, k - 1] - beta * U[0:k, j - 1]
+
+    d[0] = M[0, 0]
+    return U, d
+
 def conjugate(M, left_multiply_X, MX, result):
     # given an NxN matrix M, and an NxD matrix X,
     # return the DxD matrix X*M*X'.
@@ -166,7 +202,7 @@ class StateSpaceModel(object):
     def prior_vars(self):
         pass
 
-    def run_filter(self, z, likelihood_only=True):
+    def run_filter_naive(self, z):
         N = len(z)
         ell = 0
 
@@ -174,16 +210,12 @@ class StateSpaceModel(object):
         mean = self.prior_mean()
         state_size = len(mean)
         xk[:state_size] = self.prior_mean()
-        print "k=0, state size", state_size
 
         Pk = np.empty((self.max_dimension, self.max_dimension))
         Pk[:state_size, :state_size] = np.diag(self.prior_vars())
 
         tmp = np.empty((self.max_dimension,))
         ell = self.kalman_observe(0, z[0], xk, Pk, tmp, state_size)
-        if not likelihood_only:
-            x = np.empty((self.max_dimension, N))
-            x[:len(xk), 0:1] = xk
 
         # create temporary variables
         xk1 = xk.copy()
@@ -192,7 +224,8 @@ class StateSpaceModel(object):
             state_size = self.kalman_predict(k, xk1, Pk1, xk, Pk)
 
             if not np.isnan(z[k]):
-                ell += self.kalman_observe(k, z[k], xk, Pk, tmp, state_size)
+                step_ell = self.kalman_observe(k, z[k], xk, Pk, tmp, state_size)
+                ell += step_ell
 
             # the result of the filtering update, stored in xk, Pk,
             # now becomes the new "previous" version (xk1, Pk1) for
@@ -200,13 +233,7 @@ class StateSpaceModel(object):
             xk1, xk = xk, xk1
             Pk1, Pk = Pk, Pk1
 
-            if not likelihood_only:
-                x[:, k:k+1] = xk
-
-        if likelihood_only:
-            return ell
-        else:
-            return ell, x
+        return ell
 
     def mean_obs(self, N):
         z = np.empty((N,))
@@ -251,3 +278,131 @@ class StateSpaceModel(object):
             z[k] = scipy.stats.norm(pred_obs, self.observation_noise(k)).rvs(1)
 
         return z
+
+
+    def kalman_observe_sqrt(self, k, zk, xk, U, d, state_size):
+        K = np.zeros((state_size,))
+        f = np.zeros((state_size,))
+
+        r = self.observation_noise(k)
+        self.apply_observation_matrix(U[:state_size,:state_size], k, f)
+        v = d[:state_size] * f
+
+        if np.isnan(v).any():
+            raise Exception("v is %s" % v)
+
+        alpha = r + v[0]*f[0]
+        d[0] *= r/alpha
+        K[0] = v[0]
+        u_tmp = np.empty((state_size,))
+        for j in range(1, state_size):
+            old_alpha = alpha
+            alpha += v[j]*f[j]
+            d[j] *= old_alpha/alpha
+            u_tmp[:] = U[:state_size,j]
+            U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
+            K += v[j]*u_tmp
+
+        pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
+        yk = zk - pred_z
+        xk[:state_size] += K/alpha*yk
+        step_ell= scipy.stats.norm.logpdf(yk, loc=0, scale=np.sqrt(alpha))
+        assert(not np.isnan(step_ell))
+
+
+        return step_ell
+
+    def kalman_predict_sqrt(self, k, xk1, U, d, xk, prev_state_size):
+        # here we do the *very* lazy thing of constructing the
+        # full cov, adding noise, and then re-factoring it.
+        # this is super-expensive compared to the noiseless case
+        # (in which we just multiply U by the transition matrix),
+        # so given that we usually only have one or two
+        # noise dimensions, we should probably try to do
+        # some more efficient update.
+
+
+        # U starts as PxP
+        # let state_size be S
+        # so F is an SxP matrix
+        # and the resulting U will be SxP
+        # which we can pad to SxS by including zeros, or by
+        # setting the relevant d's to be zero
+        #
+
+        state_size = self.apply_transition_matrix(xk1, k, xk)
+        self.transition_bias(k, xk)
+
+        self.transition_noise_diag(k, xk1)
+
+        U1 = U.copy()
+
+        small_size = min(prev_state_size, state_size)
+        for i in range(small_size):
+            self.apply_transition_matrix(U[:,i], k, U1[:,i])
+
+        if prev_state_size < state_size:
+            for i in range(prev_state_size, state_size):
+                U1[:, i] = 0
+                d[i] = 0
+
+        # if no noise, we can save the expensive part
+        if np.sum(xk1!= 0) == 0:
+            return U1, d, state_size
+
+        P = np.dot(d[:state_size]*U1[:state_size,:state_size], U1[:state_size,:state_size].T)
+        np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
+        U1[:state_size,:state_size], d[:state_size] = udu(P)
+
+        if np.isnan(U1[:state_size,:state_size]).any():
+            raise Exception("U is nan")
+
+        return U1, d, state_size
+
+
+
+    def run_filter(self, z):
+        for x, U, d in self.filtered_states(z):
+            pass
+
+        return self.ell
+
+    def filtered_states(self, z):
+        """
+        Run a factored UDU' Kalman filter (see Bruce Gibbs, Advanced
+        Kalman Filtering, Least-Squares and Modeling: A Practical
+        Handbook, section 10.2) and compute marginal likelihood of
+        the given signal. This method functions as a generator
+        to return the filtered state estimates. The run_filter method
+        wraps this to return marginal likelihoods instead.
+        """
+
+        N = len(z)
+        ell = 0
+
+        xk = np.empty((self.max_dimension,))
+        mean = self.prior_mean()
+        state_size = len(mean)
+        xk[:state_size] = self.prior_mean()
+
+        d = np.zeros((self.max_dimension, ))
+        d[:state_size] = self.prior_vars()
+
+        U = np.zeros((self.max_dimension,self.max_dimension))
+        U[:state_size,:state_size] = np.eye(state_size)
+
+        ell = self.kalman_observe_sqrt(0, z[0], xk, U, d, state_size)
+        yield xk, U, d
+
+        # create temporary variables
+        xk1 = xk.copy()
+        for k in range(1, N):
+            U, d, state_size = self.kalman_predict_sqrt(k, xk1, U, d, xk, state_size)
+
+            if not np.isnan(z[k]):
+                ell += self.kalman_observe_sqrt(k, z[k], xk, U, d, state_size)
+            yield xk, U, d
+
+            xk, xk1 = xk1, xk
+
+        self.ell=ell

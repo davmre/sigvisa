@@ -187,7 +187,7 @@ class TransientCombinedSSM(StateSpaceModel):
             for j in ssm_indices:
                 ssm, scale = self.ssms[j], self.scales[j]
                 state_size = ssm.max_dimension
-                ssm.apply_observation_matrix(x[i:i+state_size], k-self.ssm_starts[j], rr)
+                ssm.apply_observation_matrix(x[i:i+state_size,:], k-self.ssm_starts[j], rr)
                 #print "%d: applied observation matrix to model %d (subj k %d), state %d:%d, result %s" % (k, j, k-self.ssm_starts[j], i, i+state_size, rr)
                 if scale is not None:
                     rr *= scale[k-self.ssm_starts[j]]
