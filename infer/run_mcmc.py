@@ -310,7 +310,7 @@ def run_open_world_MH(sg, steps=10000,
                 # also adjust every event arrival at this station
                 for (eid,evnodes) in sg.evnodes.iteritems():
 
-                    nodes_by_phase = sg.get_arrival_nodes_byphase(eid, sta, wn.band, wn.chan)
+                    nodes_by_phase = sg.get_template_nodes_byphase(eid, sta, wn.band, wn.chan)
                     for (phase, tmnodes) in nodes_by_phase.items():
                         tg = sg.template_generator(phase)
 
