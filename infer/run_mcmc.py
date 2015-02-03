@@ -17,7 +17,7 @@ from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_mo
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
+from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth_move, death_move_for_optimizing_birth, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -25,8 +25,6 @@ global_stds = {'coda_height': .7,
                'coda_height_small': .1,
                'coda_decay': .5,
                'peak_decay': 0.5,
-               'wiggle_amp': .1,
-               'wiggle_phase': .1,
                'peak_offset': 1.0,
                'improve_offset_move_gaussian': 0.5,
                'arrival_time_big': 9.0,
@@ -55,7 +53,7 @@ extra_move_args = {'hamiltonian_reversing': {'log_eps_mean': 5,
                                              'reverse_block_max_std': 1000,}}
 """
 
-def do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+def do_template_moves(sg, wn, tmnodes, tg, stds,
                       n_attempted=None, n_accepted=None,
                       move_times=None, step=None, proxy_lps=None):
 
@@ -81,22 +79,6 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds,
                      relevant_nodes=relevant_nodes, std=stds[param], proxy_lps=proxy_lps)
         except KeyError:
             continue
-
-    for param in wg.params():
-        k, n = tmnodes[param]
-
-        if param.startswith("amp"):
-            phase_wraparound = False
-            move = 'wiggle_amp'
-        else:
-            phase_wraparound = True
-            move = 'wiggle_phase'
-
-        run_move(move_name=move, fn=gaussian_MH_move, step=step,
-                 n_accepted=n_accepted, n_attempted=n_attempted,
-                 move_times=move_times,
-                 sg=sg, keys=(k,), node_list=(n,), relevant_nodes=(n, wn),
-                 std=stds[move], phase_wraparound=phase_wraparound, proxy_lps=proxy_lps)
 
 
 def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, cyclic=False, **kwargs):
@@ -161,11 +143,10 @@ def single_template_MH(sg, wn, tmnodes, phase, steps=1000, rw=True, hamiltonian=
         if rw:
             # also do basic wiggling-around of all template params
             tg = sg.template_generator(phase)
-            wg = sg.wiggle_generator(phase, wn.srate)
 
             proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
 
-            do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+            do_template_moves(sg, wn, tmnodes, tg, stds,
                               n_attempted=n_attempted, n_accepted=n_accepted,
                               proxy_lps=proxy_lps)
 
@@ -220,8 +201,8 @@ def run_open_world_MH(sg, steps=10000,
         sta_moves = template_openworld_custom
     else:
         if enable_template_openworld:
-            sta_moves = {'tmpl_birth': birth_move,
-                         'tmpl_death': death_move,
+            sta_moves = {'tmpl_birth': optimizing_birth_move,
+                         'tmpl_death': death_move_for_optimizing_birth,
                          'tmpl_split': split_move,
                          'tmpl_merge': merge_move,
                          'swap_association': swap_association_move}
@@ -299,7 +280,6 @@ def run_open_world_MH(sg, steps=10000,
 
                 # moves to adjust existing unass. templates
                 tg = sg.template_generator('UA')
-                wg = sg.wiggle_generator('UA', wn.srate)
                 for tmid in sg.uatemplate_ids[(sta, wn.chan, wn.band)]:
                     tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
@@ -323,7 +303,7 @@ def run_open_world_MH(sg, steps=10000,
                         if use_proxy_lp:
                             proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
 
-                        do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                        do_template_moves(sg, wn, tmnodes, tg, stds,
                                           n_attempted, n_accepted, move_times, step,
                                           proxy_lps=proxy_lps)
 
@@ -333,7 +313,6 @@ def run_open_world_MH(sg, steps=10000,
                     nodes_by_phase = sg.get_arrival_nodes_byphase(eid, sta, wn.band, wn.chan)
                     for (phase, tmnodes) in nodes_by_phase.items():
                         tg = sg.template_generator(phase)
-                        wg = sg.wiggle_generator(phase, wn.srate)
 
                         for (move_name, fn) in template_moves_special.iteritems():
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
@@ -341,7 +320,7 @@ def run_open_world_MH(sg, steps=10000,
                                      sg=sg, wave_node=wn, tmnodes=tmnodes)
 
                         if enable_template_moves and template_move_type in ("rw", "both"):
-                            do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                            do_template_moves(sg, wn, tmnodes, tg, stds,
                                               n_attempted, n_accepted, move_times, step)
 
         for (move, fn) in global_moves.items():

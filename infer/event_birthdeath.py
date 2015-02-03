@@ -14,7 +14,7 @@ from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.propose_mb import propose_mb
 
-from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution, peak_log_p
+from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution, peak_log_p
 from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
@@ -44,7 +44,6 @@ def unass_template_logprob(sg, sta, template_dict, ignore_mb=False):
     wn = sg.station_waves[sta][0]
 
     tg = sg.template_generator(phase="UA")
-    wg = sg.wiggle_generator(phase="UA", srate=wn.srate)
 
 
     lp = 0.0
@@ -53,12 +52,9 @@ def unass_template_logprob(sg, sta, template_dict, ignore_mb=False):
         if ignore_mb and param=="coda_height": continue
         model = tg.unassociated_model(param, nm=wn.nm)
         lp += model.log_p(template_dict[param])
-    for param in wg.params():
-        model = wg.unassociated_model(param, nm=wn.nm)
-        lp += model.log_p(template_dict[param])
     return lp
 
-def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None, wiggle=False):
+def param_logprob(sg, site, sta, ev, phase, chan, band, param, val):
 
     """
 
@@ -68,7 +64,7 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None
 
     """
 
-    model_type = sg._tm_type(param, site=site, wiggle_param=wiggle)
+    model_type = sg._tm_type(param, site=site)
     if model_type == "dummy":
         return 0.0
     if model_type == "dummyPrior":
@@ -80,13 +76,13 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None
         modelid = get_param_model_id(runid=sg.runid, sta=site,
                                      phase=phase, model_type=model_type,
                                      param=param, template_shape=sg.template_shape,
-                                     chan=chan, band=band, basisid=basisid)
+                                     chan=chan, band=band)
         cond = lldlld_X(ev, sta)
     else:
         modelid = get_param_model_id(runid=sg.runid, sta=sta,
                                      phase=phase, model_type=model_type,
                                      param=param, template_shape=sg.template_shape,
-                                     chan=chan, band=band, basisid=basisid)
+                                     chan=chan, band=band)
         cond = ev
 
     model = load_modelid(modelid)
@@ -108,8 +104,6 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict, verbose=False,
     # HACK
     assert(len(sg.station_waves[sta]) == 1)
     wn = sg.station_waves[sta][0]
-    wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
-    wiggle_params = set(wg.params())
 
     if 'tt_residual' not in template_dict and 'arrival_time' in template_dict:
         template_dict['tt_residual'] = tt_residual(ev, sta, template_dict['arrival_time'], phase=phase)
@@ -131,13 +125,7 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict, verbose=False,
     for (param, val) in template_dict.items():
         if param in ('arrival_time', 'coda_height'): continue
         if ignore_mb and param == 'amp_transfer': continue
-        if param in wiggle_params:
-            basisid = wg.basisid
-            wiggle = True
-        else:
-            basisid = None
-            wiggle=False
-        lp_param = param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=basisid, wiggle=wiggle)
+        lp_param = param_logprob(sg, site, sta, ev, phase, chan, band, param, val)
         if verbose:
             print "%s lp %s=%.2f is %.2f" % (sta, param, val, lp_param)
         lp += lp_param
@@ -242,8 +230,7 @@ def associate_template(sg, sta, tmid, eid, phase, create_phase_arrival=False, no
     phase_created = False
     if create_phase_arrival and phase not in sg.ev_arriving_phases(eid, sta=sta):
         tg = sg.template_generator(phase)
-        wg = sg.wiggle_generator(phase, sg.base_srate)
-        sg.add_event_site_phase(tg, wg, site, phase, sg.evnodes[eid])
+        sg.add_event_site_phase(tg, site, phase, sg.evnodes[eid])
         phase_created=True
 
     if node_lps is not None:
@@ -273,11 +260,11 @@ def unassociate_template(sg, sta, eid, phase, tmid=None, remove_event_phase=Fals
     band = list(sg.site_bands[site])[0]
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
-    ev_tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
+    ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
 
     wave_node = sg.station_waves[sta][0]
     atime = ev_tmvals['arrival_time']
-    tmnodes = sg.create_unassociated_template(wave_node, atime, wiggles=True, nosort=True,
+    tmnodes = sg.create_unassociated_template(wave_node, atime, nosort=True,
                                            tmid=tmid, initial_vals=ev_tmvals)
     tmid = tmnodes.values()[0].tmid
     if node_lps is not None:
@@ -304,7 +291,7 @@ def deassociation_logprob(sg, sta, eid, phase, deletion_prob=False, min_logprob=
     band = list(sg.site_bands[site])[0]
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
-    ev_tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
+    ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
 
     unass_lp = unass_template_logprob(sg, sta, ev_tmvals)
 
@@ -507,17 +494,6 @@ def propose_phase_template(sg, sta, eid, phase, tmvals=None, smart_peak_time=Tru
     if np.isnan(np.array(tmvals.values(), dtype=float)).any():
         raise ValueError()
 
-    # wiggles!
-    wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
-    wnodes = sg.get_wiggle_nodes(eid, sta, phase, band, chan)
-    if fix_result:
-        wiggle_proposal_lp = wiggle_proposal_lprob_from_signal(eid, phase, wn, wg, wvals=tmvals)
-    else:
-        wiggle_proposal_lp = propose_wiggles_from_signal(eid, phase, wn, wg, wnodes)
-        wvals = sg.get_wiggle_vals(eid, sta, phase, band, chan)
-        tmvals.update(wvals)
-    lp += wiggle_proposal_lp
-
     if fix_result:
         return lp
     else:
@@ -540,7 +516,7 @@ def death_proposal_log_ratio(sg, eid):
             for phase in sg.ev_arriving_phases(eid, sta):
                 for chan in sg.site_chans[site]:
                     for band in sg.site_bands[site]:
-                        tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
+                        tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
 
                         lp_unass_tmpl = unass_template_logprob(sg, sta, tmvals)
                         lp_ev_tmpl = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
@@ -626,7 +602,7 @@ def ev_death_helper(sg, eid, associate_using_mb=True):
                     print "proposing to deassociate at %s (lp %.1f)" % (sta, deassociate_logprob)
 
                 else:
-                    template_param_array = sg.get_arrival_vals(eid, sta, phase, band, chan)
+                    template_param_array = sg.get_template_vals(eid, sta, phase, band, chan)
                     inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
                     tmp = propose_phase_template(sg, sta, eid, phase, template_param_array, fix_result=True)
                     reverse_logprob += tmp

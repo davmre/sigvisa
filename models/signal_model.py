@@ -222,7 +222,6 @@ class ObservedSignalNode(Node):
         int j = early;
         for(j=early; j < len_logenv - overshoot; ++j) {
                signal(j + start_idx) += exp(logenv[j]);
-            }
         }
     }
 
@@ -306,7 +305,7 @@ class ObservedSignalNode(Node):
         for (eid, phase) in removed_arrivals:
             del self.arrival_ssms[(eid, phase)]
         for eid in evs_moved:
-            for phase in self.arrival_phases[eid]:
+            for phase in self._arrival_phases[eid]:
                 self.arrival_ssms[(eid, phase)] = self.arrival_ssm(eid, phase)
 
         # if any arrival times or templates might have changed, recompute the tssm
@@ -324,7 +323,7 @@ class ObservedSignalNode(Node):
         basis = self.wavelet_basis
 
         if basis is None:
-            return DummySSM(bias=1.0)
+            return None
 
         if phase in self.gps_by_phase and len(self.gps_by_phase[phase]) > 0:
             evdict = self._ev_params[eid]
@@ -363,8 +362,9 @@ class ObservedSignalNode(Node):
             offset = float(start - start_idx)
             env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
             wssm = self.arrival_ssms[(eid, phase)]
+            if wssm is not None:
+                components.append((wssm, start_idx, min(len(env), wssm.basis.shape[0]), env))
             dssm = DummySSM(bias=1.0)
-            components.append((wssm, start_idx, wssm.basis.shape[0], env))
             components.append((dssm, start_idx, len(env), env))
 
         return TransientCombinedSSM(components)
@@ -421,6 +421,8 @@ signal_diff(i) =value(i) - pred_signal(i);
             return lp
 
     def deriv_log_p(self, parent_key=None, lp0=None, eps=1e-4):
+
+
         parent_values = self._parent_values()
         lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
         parent_values[parent_key] += eps
@@ -429,18 +431,13 @@ signal_diff(i) =value(i) - pred_signal(i);
         except KeyError:
             # if this key doesn't affect signals at this node
             return 0.0
-        if is_tmpl:
-            self._tmpl_params[(eid, phase)][p] += eps
-        else:
-            self._wiggle_params[(eid, phase)][p] += eps
+        if not is_tmpl:
+            raise Exception("don't know how to take signal probability derivatives wrt non-template parameters!")
+        self._tmpl_params[(eid, phase)][p] += eps
         deriv = ( self.log_p() - lp0 ) / eps
         parent_values[parent_key] -= eps
-        if is_tmpl:
-            self._tmpl_params[(eid, phase)][p] -= eps
-        else:
-            self._wiggle_params[(eid, phase)][p] -= eps
+        self._tmpl_params[(eid, phase)][p] -= eps
         return deriv
-
 
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):
          return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values, **kwargs)
