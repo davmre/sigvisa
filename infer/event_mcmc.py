@@ -161,7 +161,6 @@ def clear_node_caches(sg, eid):
 
 def add_phase_template(sg, sta, eid, phase, vals=None, node_lps=None):
     tg = sg.template_generator(phase)
-    wg = sg.wiggle_generator(phase, sg.base_srate)
 
     phase_added = False
     if phase not in sg.ev_arriving_phases(eid, sta=sta):
@@ -169,7 +168,7 @@ def add_phase_template(sg, sta, eid, phase, vals=None, node_lps=None):
         site = s.get_array_site(sta)
         if node_lps is not None:
             node_lps.register_new_phase_pre(sg, site, phase, eid)
-        sg.add_event_site_phase(tg, wg, site, phase, sg.evnodes[eid], sample_templates=True)
+        sg.add_event_site_phase(tg, site, phase, sg.evnodes[eid], sample_templates=True)
         phase_added=True
 
     tmvals, lp = propose_phase_template(sg, sta, eid, phase)
@@ -948,7 +947,6 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
             arrivals = wn.arrivals()
             eid, phase = list(arrivals)[0]
 
-            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
             tmnodes = templates[wn.sta]
 
             n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["tt_residual"],
