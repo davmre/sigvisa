@@ -163,8 +163,6 @@ def add_phase_template(sg, sta, eid, phase, vals=None, node_lps=None):
     tg = sg.template_generator(phase)
     wg = sg.wiggle_generator(phase, sg.base_srate)
 
-
-
     phase_added = False
     if phase not in sg.ev_arriving_phases(eid, sta=sta):
         s = Sigvisa()
@@ -276,7 +274,7 @@ class UpdatedNodeLPs(object):
         for sta in sg.site_elements[site]:
             for band in sg.site_bands[site]:
                 for chan in sg.site_chans[site]:
-                    nodes = sg.get_arrival_nodes(eid, sta, phase, band, chan)
+                    nodes = sg.get_template_nodes(eid, sta, phase, band, chan)
                     for (k, n) in nodes.values():
                         if not n.deterministic():
                             if isinstance(d, dict):
@@ -541,7 +539,7 @@ def ev_phasejump(sg, eid, new_ev, params_changed, adaptive_blocking=False, birth
                     tmid_i += 1
                     print "proposing to deassociate %s for %d at %s (lp %.1f)" % (phase, eid, sta, deassociate_logprob),
                 else:
-                    template_param_array = sg.get_arrival_vals(eid, sta, phase, band, chan)
+                    template_param_array = sg.get_template_vals(eid, sta, phase, band, chan)
 
                     forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_pre(sg, site, phase, eid))
                     forward_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, sta, phase))
