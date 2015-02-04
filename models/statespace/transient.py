@@ -42,7 +42,7 @@ class TransientCombinedSSM(StateSpaceModel):
         starts = [(st, i, True) for (i, st) in enumerate(self.ssm_starts)]
         ends = [(et, i, False) for (i, et) in enumerate(self.ssm_ends)]
         events = sorted(starts+ends)
-        active_set = []
+        active_set = [ ]
         t_prev = 0
         for (t, i_ssm, start) in events:
             if t != t_prev:
@@ -235,8 +235,55 @@ class TransientCombinedSSM(StateSpaceModel):
                 return False
         return True
 
+    def component_means(self, z):
+        means = []
+        for i in range(self.n_ssms):
+            means.append(self.ssms[i].mean_obs(self.ssm_ends[i]-self.ssm_starts[i]))
+
+        for k, (x, U, d) in enumerate(self.filtered_states(z)):
+            ssm_indices = self.active_ssms(k)
+            i=0
+            for j in ssm_indices:
+                ssm = self.ssms[j]
+                state_size = ssm.max_dimension
+                ix = k-self.ssm_starts[j]
+                means[j][ix] = ssm.apply_observation_matrix(x[i:i+state_size], ix)
+                means[j][ix] += ssm.observation_bias(ix)
+                i += state_size
+        return means
+
     def prior_mean(self):
-        return np.concatenate([self.ssms[i].prior_mean() for i in self.active_ssms(0)])
+        priors = []
+        for i in self.active_ssms(0):
+            ssm = self.ssms[i]
+            prior = ssm.prior_mean()
+            if self.ssm_starts[i] < 0:
+                p2 = prior.copy()
+                for k in range(-self.ssm_starts[i]):
+                    state_size = ssm.apply_transition_matrix(p2, k+1, prior)
+                    ssm.transition_bias(k, prior)
+                    p2 = prior
+            priors.append(prior)
+        return np.concatenate(priors)
 
     def prior_vars(self):
-        return np.concatenate([self.ssms[i].prior_vars() for i in self.active_ssms(0)])
+        priors = []
+        for i in self.active_ssms(0):
+            ssm = self.ssms[i]
+            prior = ssm.prior_vars()
+
+            if self.ssm_starts[i] < 0:
+                P = np.diag(prior)
+                P2 = P.copy()
+                for k in range(-self.ssm_starts[i]):
+                    ssm.transition_covariance(P2, k+1, P)
+                    ssm.transition_noise_diag(k+1, prior)
+                    np.fill_diagonal(P, np.diag(P) + prior)
+                    P2 = P
+
+                # since the interface only supports independent
+                # priors, return a diagonal approximation of the true
+                # prior
+                prior = np.diag(P)
+            priors.append(prior)
+        return np.concatenate(priors)

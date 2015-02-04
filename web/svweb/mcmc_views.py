@@ -295,6 +295,44 @@ def mcmc_arrivals(request, dirname, wn_label, step):
     return HttpResponse(response, content_type="text/plain")
 
 
+def mcmc_signal_posterior_page(request, dirname, wn_label):
+    pass
+
+def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
+    zoom = float(request.GET.get("zoom", '1'))
+    vzoom = float(request.GET.get("vzoom", '1'))
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    wn = sg.all_nodes[wn_label]
+
+    arrival_info = wn.signal_component_means()
+
+    if key1=="signal" or key1=="noise":
+        d = arrival_info[key1]
+    else:
+        eid, phase = key1.split("_")
+        eid = int(eid)
+        key2 = request.GET.get("component", 'combined')
+        d = arrival_info[(eid, phase)][key2]
+
+    len_s = len(d)/wn.srate
+    f = Figure((len_s/10.0 * zoom, 5*vzoom))
+    f.patch.set_facecolor('white')
+    axes = f.add_subplot(111)
+    t = np.linspace(0, len_s, len(d))
+    axes.plot(t, d)
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
+
 def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))

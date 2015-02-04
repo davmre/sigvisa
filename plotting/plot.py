@@ -12,7 +12,7 @@ import sigvisa.database.db
 from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
-
+from sigvisa.signals.common import Waveform
 
 def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
@@ -153,7 +153,7 @@ def plot_with_fit_shapes(fname, wn, title="",
                          ymin=None, ymax=None,
                          unass_lw = 1,
                          ev_lw=2,
-                         model_lw = 1,
+                         model_lw = 2,
                          highlight_eid=None,
                          fig=None,
                          axes=None,
@@ -180,57 +180,54 @@ def plot_with_fit_shapes(fname, wn, title="",
         shape_colors = dict()
 
     import copy
-    mutable = copy.copy(wn._mutable)
-    wave = wn.get_wave()
-    wn.unfix_value()
-    wn.parent_predict(include_wiggles=True)
-    pred = wn.get_wave()
 
     unass_tmpls = []
     ev_tmpls = []
     highlight_tmpl = None
-    wn.parent_predict(include_wiggles=False)
-    tmpl = wn.get_wave()
+
+    cmeans = wn.signal_component_means()
 
     for arrival in wn.arrivals():
-        wn.parent_predict(include_wiggles=False, arrivals=[arrival,])
-        eid = arrival[0]
+        eid, phase = arrival
         if eid < 0:
             if eid not in shape_colors:
                 shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5)
-            unass_tmpls.append((wn.get_wave(), shape_colors[eid]))
+            m = cmeans[(eid, phase)]
+            unass_tmpls.append((m["combined"], m["stime"], shape_colors[eid]))
             print "plotting uatemplate", eid, "as color", shape_colors[eid]
         elif arrival[0] != highlight_eid:
             if eid not in shape_colors:
                 shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5+.5)
-            ev_tmpls.append((wn.get_wave(), shape_colors[eid]))
+            m = cmeans[(eid, phase)]
+            ev_tmpls.append((m["combined"], m["stime"], shape_colors[eid]))
         else:
-            highlight_tmpl = wn.get_wave()
+            highlight_tmpl = (cmeans[(eid, phase)]["combined"], cmeans[(eid, phase)]["stime"])
 
     if plot_wave:
         subplot_waveform(wave, axes, color='black', linewidth=1.5, plot_dets=plot_dets, **kwargs)
+
     if model_lw is not None:
-        subplot_waveform(pred, axes, color="purple",
-                              linewidth=4, alpha = 1*alpha, linestyle='-',
+
+        w = Waveform(cmeans["signal"]+wn.nm.c, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+        subplot_waveform(w, axes, color="purple",
+                              linewidth=model_lw, alpha = 1*alpha, linestyle='-',
                               plot_dets=False, **kwargs)
 
     if unass_lw is not None:
-        for (unass_tmpl, color) in unass_tmpls:
-            subplot_waveform(unass_tmpl, axes, color=color,
+        for (unass_tmpl, st, color) in unass_tmpls:
+            w = Waveform(unass_tmpl+wn.nm.c, srate=wn.srate, stime=st, sta=wn.sta, band=wn.band, chan=wn.chan)
+            subplot_waveform(w, axes, color=color,
                              linewidth=unass_lw, alpha = 0.5*alpha,
                              plot_dets=False, fill_y2=wn.nm.c,
                              **kwargs)
     if ev_lw is not None:
         evcolors = cm.get_cmap('jet')(np.linspace(0.5,1.0, len(ev_tmpls)))
-        for (ev_tmpl,color) in ev_tmpls:
-            subplot_waveform(ev_tmpl, axes, color=color,
+        for (ev_tmpl, st, color) in ev_tmpls:
+            w = Waveform(ev_tmpl+wn.nm.c, srate=wn.srate, stime=st, sta=wn.sta, band=wn.band, chan=wn.chan)
+            subplot_waveform(w, axes, color=color,
                              linewidth=ev_lw, alpha = 0.8*alpha,
                              plot_dets=False, fill_y2=wn.nm.c,
                              **kwargs)
-
-    wn.set_value(wave.data)
-    wn._mutable = mutable
-    wn._update_mutable_cache()
 
     if fname is not None:
         savefig(fname, fig, bbox_inches="tight", dpi=300)

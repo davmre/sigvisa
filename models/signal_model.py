@@ -351,6 +351,8 @@ class ObservedSignalNode(Node):
 
         components = [(self.noise_arssm, 0, self.npts, None)]
 
+        self.tssm_components = [(None, None, None, 0, self.npts, "noise"),]
+
         for (i, (eid, phase)) in enumerate(arrivals):
             v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase, parent_values=parent_values)
             start = (v['arrival_time'] - self.st) * self.srate
@@ -361,11 +363,17 @@ class ObservedSignalNode(Node):
 
             offset = float(start - start_idx)
             env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
+            if start_idx + len(env) < 0:
+                continue
+
             wssm = self.arrival_ssms[(eid, phase)]
             if wssm is not None:
-                components.append((wssm, start_idx, min(len(env), wssm.basis.shape[0]), env))
+                npts = min(len(env), wssm.basis.shape[0])
+                components.append((wssm, start_idx, npts, env))
+                self.tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
             dssm = DummySSM(bias=1.0)
             components.append((dssm, start_idx, len(env), env))
+            self.tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
 
         return TransientCombinedSSM(components)
 
@@ -446,6 +454,48 @@ signal_diff(i) =value(i) - pred_signal(i);
         parent_values = parent_values if parent_values else self._parent_values()
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg
+
+    def signal_component_means(self):
+        self.tssm = self.transient_ssm()
+
+        v = self.get_value()
+        d = v.data
+        m = v.mask
+        if isinstance(m, np.ndarray):
+            d[m] = np.nan
+
+        means = self.tssm.component_means(d)
+        noise_mean = means[0]
+        signal_mean = np.zeros((self.npts,))
+        arrival_info = collections.defaultdict(dict)
+
+        for mean, (eid, phase, scale, sidx, npts, component_type) in zip(means[1:], self.tssm_components[1:]):
+            if scale is not None:
+                arrival_info[(eid, phase)][component_type] = mean*scale[:len(mean)]
+            else:
+                arrival_info[(eid, phase)][component_type] = mean
+            arrival_info[(eid, phase)]["stime"] = sidx/self.srate + self.st
+
+            start_idx = max(sidx, 0)
+            end_idx = min(sidx+npts, self.npts)
+
+            src = arrival_info[(eid, phase)][component_type]
+            signal_mean[start_idx:end_idx] += src[start_idx-sidx:end_idx-start_idx]
+
+        for k in arrival_info.keys():
+
+            signals = [v for (kk,v) in arrival_info[k].items() if kk !="stime"]
+            l = np.max([len(s) for s in signals])
+            combined = np.zeros((l,))
+            for s in signals:
+                combined[:len(s)] += s
+            arrival_info[k]["combined"] = combined
+
+
+        arrival_info["noise"] = noise_mean
+        arrival_info["signal"] = signal_mean
+
+        return arrival_info
 
     def cache_latent_signal_for_template_optimization(self, eid, phase, force_bounds=True, return_llgrad=False):
 
