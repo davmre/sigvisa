@@ -2,8 +2,7 @@ import numpy as np
 import scipy.stats
 
 def udu(M):
-    # STOLEN from pykalman.sqrt.bierman (BSD license)
-
+    # this method stolen from pykalman.sqrt.bierman by Daniel Duckworth (BSD license)
     """Construct the UDU' decomposition of a positive, semidefinite matrix M
 
     Parameters
@@ -37,40 +36,6 @@ def udu(M):
     d[0] = M[0, 0]
     return U, d
 
-def conjugate(M, left_multiply_X, MX, result):
-    # given an NxN matrix M, and an NxD matrix X,
-    # return the DxD matrix X*M*X'.
-    # Here X is expressed implicitly as two functions:
-    # left_multiply_Xt(v) = X*v
-    # right_multiply_X(v) = v*X
-    # if these functions are linear-time, then the whole
-    # operation is just quadratic (as opposed to cubic in
-    # a naive implementation).
-    #
-    # if arrays MX (NxD) and result (DxD) are specified, they
-    # are used as temporary storage, otherwise, new storage
-    # will be allocated
-
-    N, _ = M.shape
-    D = result.shape[0]
-
-    for i, row in enumerate(M):
-        left_multiply_X(row, MX[i,:])
-    for i, col in enumerate(MX.T):
-        left_multiply_X(col, result[:,i])
-
-    return result
-
-def conjugate_scalar(M, left_multiply_X, MX=None):
-    N, _ = M.shape
-
-    if MX is None:
-        MX = np.empty((N,))
-
-    left_multiply_X(M.T, MX)
-    return left_multiply_X(MX.T)
-
-
 class StateSpaceModel(object):
 
     # general notation:
@@ -90,23 +55,6 @@ class StateSpaceModel(object):
         # implicitly (in result) return the vector (F_k)x
         # explicitly return the length of that vector (in case result is too big).
         pass
-
-    def transition_covariance(self, P, k, result):
-        """
-        P: covariance matrix at time k-1
-        return predicted covariance matrix at time k,
-        implicitly computing FPF'
-        """
-
-        try:
-            MX = self.tmpDD
-        except:
-            self.tmpDD = np.empty((self.max_dimension, self.max_dimension))
-            MX = self.tmpDD
-
-        Fx = lambda x, r : self.apply_transition_matrix(x, k, r)
-
-        return conjugate(P, Fx, MX, result)
 
     def transition_bias(self, k, x):
         """
@@ -149,93 +97,37 @@ class StateSpaceModel(object):
         # return the (scalar) observation noise variance at time k
         raise Exception("not implemented")
 
-    def kalman_predict(self, k, xk1, Pk1, xk, Pk):
-        # xk1, Pk1: mean and covariance for the state at time k-1
-        # xk, Pk: empty vector/matrix in which the mean and covariance
-        #         at time k will be stored
-
-        # return values are stored in xk and Pk
-        state_size = self.apply_transition_matrix(xk1, k, xk)
-        self.transition_bias(k, xk)
-
-        # can use xk1 as temporary storage now since we've
-        # already computed the state transition
-        self.transition_covariance(Pk1, k, Pk)
-        self.transition_noise_diag(k, xk1)
-        np.fill_diagonal(Pk, np.diag(Pk) + xk1)
-        return state_size
-
-    def kalman_observe(self, k, zk, xk, Pk, KkT, state_size):
-
-        # zk: (scalar) observation at time k
-        # xk, Pk: mean and covariance of the predicted state
-        #         at time k. These are overwritten with
-        #         updated state estimate.
-        # KkT: temporary vector of length len(xk)
-        #
-        # returns:
-        #    step_ell: likelihood of this observation, given the
-        #              filtered state estimate.
-        #    (implicitly) xk, Pk: the updated state estimate
-
-        pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
-        yk = zk - pred_z
-
-        Sk = self.observation_variance(Pk, k)
-        assert(Sk > 0)
-        Sk += self.observation_noise(k)
-
-        self.apply_observation_matrix(Pk.T, k, KkT)
-
-        xk[:state_size] += KkT[:state_size] * yk / Sk
-        Pk[:state_size, :state_size] -= np.outer(KkT[:state_size], KkT[:state_size]/Sk)
-
-        # update log likelihood
-        step_ell= scipy.stats.norm.logpdf(yk, loc=0, scale=np.sqrt(Sk))
-        assert(not np.isnan(step_ell))
-
-        return step_ell
-
     def prior_mean(self):
-        pass
+        raise Exception("not implemented")
 
     def prior_vars(self):
-        pass
+        raise Exception("not implemented")
 
-    def run_filter_naive(self, z):
-        N = len(z)
-        ell = 0
-
-        xk = np.empty((self.max_dimension,))
-        mean = self.prior_mean()
-        state_size = len(mean)
-        xk[:state_size] = self.prior_mean()
-
-        Pk = np.empty((self.max_dimension, self.max_dimension))
-        Pk[:state_size, :state_size] = np.diag(self.prior_vars())
-
-        tmp = np.empty((self.max_dimension,))
-        ell = self.kalman_observe(0, z[0], xk, Pk, tmp, state_size)
-
-        # create temporary variables
-        xk1 = xk.copy()
-        Pk1 = Pk.copy()
-        for k in range(1, N):
-            state_size = self.kalman_predict(k, xk1, Pk1, xk, Pk)
-
-            if not np.isnan(z[k]):
-                step_ell = self.kalman_observe(k, z[k], xk, Pk, tmp, state_size)
-                ell += step_ell
-
-            # the result of the filtering update, stored in xk, Pk,
-            # now becomes the new "previous" version (xk1, Pk1) for
-            # the next round.
-            xk1, xk = xk, xk1
-            Pk1, Pk = Pk, Pk1
-
-        return ell
+    def stationary(self, k):
+        """
+        Return whether the process is (locally) stationary at step k,
+        meaning that the transition and observation models have not
+        changed since the previous step. This is purely an
+        optimization: it is always correct to return False, in which
+        case no caching of covariances will be performed.
+        """
+        raise Exception("not implemented")
 
     def mean_obs(self, N):
+        """
+        Compute the mean observation under the prior distribution. That is,
+        we initialize the state at the prior mean, compute the
+        expected observation for the first timestep, apply the
+        transition model (with no noise) to get the mean state at the
+        next step, compute the expected observation at that step, etc.
+
+        For many typical models (AR processes, wavelet models with std
+        normal priors) this will just compute the zero vector. But in
+        models with interesting priors (e.g. wavelet models with
+        nonzero means on the coefs), or models with a nonzero observation bias,
+        the result can be useful.
+        """
+
         z = np.empty((N,))
         x = np.empty((self.max_dimension,))
         prior_mean = self.prior_mean()
@@ -251,8 +143,11 @@ class StateSpaceModel(object):
             z[k] = self.apply_observation_matrix(x, k) + self.observation_bias(k)
         return z
 
-
     def prior_sample(self, N):
+        """
+        Draw an observation from the prior distribution by forward-sampling.
+        """
+
         x = np.empty((self.max_dimension,))
         prior_mean = self.prior_mean()
         x[:len(prior_mean)] = scipy.stats.multivariate_normal(prior_mean, np.diag(self.prior_vars())).rvs(1)
@@ -280,179 +175,81 @@ class StateSpaceModel(object):
         return z
 
 
-    def kalman_observe_sqrt(self, k, zk, xk, U, d, state_size):
-
-        if self.at_fixed_point and self.stationary(k):
-            K = self.cached_gain[:state_size]
-            alpha = self.cached_alpha
-            U[:state_size,:state_size] = self.cached_obs_U[:state_size,:state_size]
-            d[:state_size] = self.cached_obs_d[:state_size]
-        else:
-            self.at_fixed_point = False
-
-            K = np.zeros((state_size,))
-            f = np.zeros((state_size,))
-
-            r = self.observation_noise(k)
-            self.apply_observation_matrix(U[:state_size,:state_size], k, f)
-            v = d[:state_size] * f
-
-            if np.isnan(v).any():
-                raise Exception("v is %s" % v)
-
-            alpha = r + v[0]*f[0]
-            d[0] *= r/alpha
-            K[0] = v[0]
-            u_tmp = np.empty((state_size,))
-            for j in range(1, state_size):
-                old_alpha = alpha
-                alpha += v[j]*f[j]
-                d[j] *= old_alpha/alpha
-                u_tmp[:] = U[:state_size,j]
-                U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
-                K += v[j]*u_tmp
-
-            if self.stationary(k):
-                if (np.abs(self.cached_obs_d[:state_size] - d[:state_size]) < self.eps_stationary).all():
-                    if (np.abs(self.cached_gain[:state_size] - K) < self.eps_stationary).all():
-                        if (np.abs(self.cached_obs_U[:state_size,:state_size] - U[:state_size,:state_size]) < self.eps_stationary).all():
-                            self.at_fixed_point = True
-                if not self.at_fixed_point:
-                    self.cached_alpha = alpha
-                    self.cached_gain[:state_size] = K
-                    self.cached_obs_U[:state_size,:state_size] = U[:state_size,:state_size]
-                    self.cached_obs_d[:state_size] = d[:state_size]
-
-        pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
-        yk = zk - pred_z
-        xk[:state_size] += K*(yk/alpha)
-
-        step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
-        assert(not np.isnan(step_ell))
-
-        return step_ell
-
-    def kalman_predict_sqrt(self, k, xk1, U, d, xk, prev_state_size):
-        # here we do the *very* lazy thing of constructing the
-        # full cov, adding noise, and then re-factoring it.
-        # this is super-expensive compared to the noiseless case
-        # (in which we just multiply U by the transition matrix),
-        # so given that we usually only have one or two
-        # noise dimensions, we should probably try to do
-        # some more efficient update.
-
-
-        # U starts as PxP
-        # let state_size be S
-        # so F is an SxP matrix
-        # and the resulting U will be SxP
-        # which we can pad to SxS by including zeros, or by
-        # setting the relevant d's to be zero
-        #
-
-        state_size = self.apply_transition_matrix(xk1, k, xk)
-        self.transition_bias(k, xk)
-
-        if self.at_fixed_point and self.stationary(k):
-            return self.cached_pred_U, self.cached_pred_d, prev_state_size
-        else:
-            self.at_fixed_point = False
-
-            self.transition_noise_diag(k, xk1)
-            U1 = U.copy()
-            small_size = min(prev_state_size, state_size)
-            for i in range(small_size):
-                self.apply_transition_matrix(U[:,i], k, U1[:,i])
-
-            if prev_state_size < state_size:
-                for i in range(prev_state_size, state_size):
-                    U1[:, i] = 0
-                    d[i] = 0
-
-            # if no noise, we can save the expensive part
-            if np.sum(xk1!= 0) == 0:
-                return U1, d, state_size
-
-            P = np.dot(d[:state_size]*U1[:state_size,:state_size], U1[:state_size,:state_size].T)
-            np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
-            U1[:state_size,:state_size], d[:state_size] = udu(P)
-
-            if np.isnan(U1[:state_size,:state_size]).any():
-                raise Exception("U is nan")
-
-            # if this is (almost) the same as the previous invocation,
-            # we've reached a stationary state
-            if self.stationary(k):
-                if (np.abs(self.cached_pred_d - d) < self.eps_stationary).all():
-                    if (np.abs(self.cached_pred_U - U1) < self.eps_stationary).all():
-                        self.at_fixed_point = True
-                if not self.at_fixed_point:
-                    self.cached_pred_U[:,:] = U1
-                    self.cached_pred_d[:] = d
-
-            return U1, d, state_size
-
-
-
-    def run_filter(self, z, *args, **kwargs):
-        for x, U, d in self.filtered_states(z, *args, **kwargs):
-            pass
-
-        return self.ell
-
-    def init_caches(self):
-        self.at_fixed_point = False
-        self.wasnan = False
-        self.eps_stationary = 1e-10
-
-        self.cached_gain = np.empty((self.max_dimension,))
-        self.cached_obs_d = np.empty((self.max_dimension,))
-        self.cached_obs_U = np.empty((self.max_dimension, self.max_dimension))
-        self.cached_pred_d = np.empty((self.max_dimension,))
-        self.cached_pred_U = np.empty((self.max_dimension,self.max_dimension))
-
-    def filtered_states(self, z, no_cache=False):
-        """
-        Run a factored UDU' Kalman filter (see Bruce Gibbs, Advanced
+    def filtered_states(self, z):
+        """Run a factored UDU' Kalman filter (see Bruce Gibbs, Advanced
         Kalman Filtering, Least-Squares and Modeling: A Practical
         Handbook, section 10.2) and compute marginal likelihood of
         the given signal. This method functions as a generator
         to return the filtered state estimates. The run_filter method
         wraps this to return marginal likelihoods instead.
+
+        When the observation and transition models are stationary
+        (constant over time, as in an AR process), the filtered
+        covariance matrix will eventually converge to a fixed
+        point. When this occurs, it's not necessary to recompute the
+        covariance (or its factored representation) at each step;
+        instead we can save computation by using a cached value. This
+        implementation attempts to detect fixed points of the covariance
+        matrix and cache them appropriately.
         """
+
+        def init_caches(self):
+            self.at_fixed_point = False
+
+            # two ways to reach a fixed point: long sequence of
+            # observed values, or long sequence of unobserved
+            # values. switching from observed to unobserved or vice
+            # versa is really an (implicit) change in the observation
+            # model, so we need to track when it happens.
+            self.wasnan = False
+
+            # a matrix has reached a fixed point if no entry in the
+            # new version differs from the previous by more than this
+            # amount.
+            self.eps_stationary = 1e-10
+
+            # caches for covariance representations
+            self.cached_gain = np.empty((self.max_dimension,))
+            self.cached_obs_d = np.empty((self.max_dimension,))
+            self.cached_obs_U = np.empty((self.max_dimension, self.max_dimension))
+            self.cached_pred_d = np.empty((self.max_dimension,))
+            self.cached_pred_U = np.empty((self.max_dimension,self.max_dimension))
 
         self.init_caches()
 
         N = len(z)
-        ell = 0
 
+
+        # initialize the state at the prior mean.
+        # pre-allocate space for the largest
+        # possible state vector, even if we don't
+        # use it all at the first timestep
         xk = np.empty((self.max_dimension,))
         mean = self.prior_mean()
         state_size = len(mean)
         xk[:state_size] = self.prior_mean()
 
+
+        # initializae the covariance to the
+        # (diagional) prior.
         d = np.zeros((self.max_dimension, ))
         d[:state_size] = self.prior_vars()
-
         U = np.zeros((self.max_dimension,self.max_dimension))
         U[:state_size,:state_size] = np.eye(state_size)
 
+        # update the state from the observation at the first timestep
         ell = self.kalman_observe_sqrt(0, z[0], xk, U, d, state_size)
         yield xk, U, d
 
-        # create temporary variables
-        xk1 = xk.copy()
+        xk1 = xk.copy() # temp variable
         for k in range(1, N):
 
-            if no_cache:
-                self.at_fixed_point=False
-
+            # run the transition model to get the state estimate for the current timestep
             U, d, state_size = self.kalman_predict_sqrt(k, xk1, U, d, xk, state_size)
 
-            if no_cache:
-                self.at_fixed_point=False
 
-
+            # if there is an observation at this timestep, update the state estimate
+            # accordingly. (and do some bookkeeping for the covariance cache)
             if np.isnan(z[k]):
                 if self.at_fixed_point and not self.wasnan:
                     self.at_fixed_point = False
@@ -468,4 +265,144 @@ class StateSpaceModel(object):
 
             xk, xk1 = xk1, xk
 
+        # generators can't return a value, but we save the marginal
+        # likelihood so that run_filter can return it.
         self.ell=ell
+
+
+    def run_filter(self, z, *args, **kwargs):
+        """
+        Compute the marginal likelihood of an observation under this
+        state space model.
+        """
+        for x, U, d in self.filtered_states(z, *args, **kwargs):
+            pass
+
+        return self.ell
+
+    def kalman_observe_sqrt(self, k, zk, xk, U, d, state_size):
+        """
+        Incorporate a new observation into the UDU' factored state estimate.
+        """
+
+        # Either load the updated covariance and Kalman gain from cache, or compute it if necessary
+        if self.at_fixed_point and self.stationary(k):
+            K = self.cached_gain[:state_size]
+            alpha = self.cached_alpha
+            U[:state_size,:state_size] = self.cached_obs_U[:state_size,:state_size]
+            d[:state_size] = self.cached_obs_d[:state_size]
+        else:
+            self.at_fixed_point = False
+
+            K = np.zeros((state_size,))
+            f = np.zeros((state_size,))
+            r = self.observation_noise(k)
+
+            # for this update, see Gerald Bierman, "Factorization
+            # methods for Discrete Sequential Estimation" (1977),
+            # section V.3, p. 78.
+            # Another reference is Bruce Gibbs, "Advanced Kalman
+            # Filtering, Least-Squares, and Modeling" (2011).
+            self.apply_observation_matrix(U[:state_size,:state_size], k, f)
+            v = d[:state_size] * f
+            if np.isnan(v).any():
+                raise Exception("v is %s" % v)
+            alpha = r + v[0]*f[0]
+            d[0] *= r/alpha
+            K[0] = v[0]
+            u_tmp = np.empty((state_size,))
+            for j in range(1, state_size):
+                old_alpha = alpha
+                alpha += v[j]*f[j]
+                d[j] *= old_alpha/alpha
+                u_tmp[:] = U[:state_size,j]
+                U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
+                K += v[j]*u_tmp
+
+            # don't bother checking to see if we've reached a
+            # fixed point: if we have, we'll realize it when we
+            # run the prediction step. Instead, just assume we
+            # haven't and update the caches accordingly.
+            if self.stationary(k) and not self.at_fixed_point:
+                    self.cached_alpha = alpha
+                    self.cached_gain[:state_size] = K
+                    self.cached_obs_U[:state_size,:state_size] = U[:state_size,:state_size]
+                    self.cached_obs_d[:state_size] = d[:state_size]
+
+        assert(not np.isnan(U[:state_size,:state_size]).any())
+        assert(not np.isnan(d[:state_size]).any())
+
+
+        # given the Kalman gain from the covariance update, compute
+        # the updated mean vector.
+        pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
+        yk = zk - pred_z
+        xk[:state_size] += K*(yk/alpha)
+
+        # also compute log marginal likelihood for this observation
+        step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
+        assert(not np.isnan(step_ell))
+
+        return step_ell
+
+    def kalman_predict_sqrt(self, k, xk1, U, d, xk, prev_state_size):
+        # here we do the *very* lazy thing of constructing the
+        # full cov, adding noise, and then re-factoring it.
+        # this is super-expensive compared to the noiseless case
+        # (in which we just multiply U by the transition matrix),
+        # so given that we usually only have one or two
+        # noise dimensions, we should probably try to do
+        # some more efficient update.
+
+        # first push the mean through the transition model
+        state_size = self.apply_transition_matrix(xk1, k, xk)
+        self.transition_bias(k, xk)
+
+        if self.at_fixed_point and self.stationary(k):
+            return self.cached_pred_U, self.cached_pred_d, prev_state_size
+        else:
+            self.at_fixed_point = False
+
+            # use xk1 as temp space to store the transition noise
+            self.transition_noise_diag(k, xk1)
+
+            # pushing the covariance P through the
+            # transition model F yields FPF'. In a factored
+            # representation, this is FUDU'F', so we just
+            # need to compute FU.
+            U1 = U.copy() # temp space, could be more efficient here
+            min_size = min(prev_state_size, state_size)
+            for i in range(min_size):
+                self.apply_transition_matrix(U[:,i], k, U1[:,i])
+            if prev_state_size < state_size:
+                for i in range(prev_state_size, state_size):
+                    U1[:, i] = 0
+                    d[i] = 0
+
+            # if there is transition noise, do the expensive reconstruction/factoring step
+            if np.sum(xk1!= 0) != 0:
+                # construct the cov matrix
+                P = np.dot(d[:state_size]*U1[:state_size,:state_size], U1[:state_size,:state_size].T)
+
+                # add transition noise
+                np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
+
+                # get the new factored representation
+                U1[:state_size,:state_size], d[:state_size] = udu(P)
+
+
+            assert(not np.isnan(U1[:state_size,:state_size]).any())
+            assert(not np.isnan(d[:state_size]).any())
+
+            # if our factored representation is (almost) the same as the previous invocation,
+            # we've reached a stationary state
+            if self.stationary(k):
+                if (np.abs(self.cached_pred_d - d) < self.eps_stationary).all():
+                    if (np.abs(self.cached_pred_U - U1) < self.eps_stationary).all():
+                        self.at_fixed_point = True
+                if not self.at_fixed_point:
+                    self.cached_pred_U[:,:] = U1
+                    self.cached_pred_d[:] = d
+
+
+            return U1, d, state_size
