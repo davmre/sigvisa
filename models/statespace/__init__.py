@@ -56,6 +56,19 @@ class StateSpaceModel(object):
         # explicitly return the length of that vector (in case result is too big).
         pass
 
+    def transition_covariance(self, P, k, P_new):
+        try:
+            MX = self.tmpDD
+        except:
+            self.tmpDD = np.empty((self.max_dimension, self.max_dimension))
+            MX = self.tmpDD
+
+        N, _ = P.shape
+        for i, row in enumerate(P):
+            self.apply_transition_matrix(row, k, MX[i,:])
+        for i, col in enumerate(MX.T):
+            self.apply_transition_matrix(col, k, P_new[:,i])
+
     def transition_bias(self, k, x):
         """
         result: stores x+b_k into x, where b_k is the transition bias
@@ -193,7 +206,7 @@ class StateSpaceModel(object):
         matrix and cache them appropriately.
         """
 
-        def init_caches(self):
+        def init_caches():
             self.at_fixed_point = False
 
             # two ways to reach a fixed point: long sequence of
@@ -215,7 +228,7 @@ class StateSpaceModel(object):
             self.cached_pred_d = np.empty((self.max_dimension,))
             self.cached_pred_U = np.empty((self.max_dimension,self.max_dimension))
 
-        self.init_caches()
+        init_caches()
 
         N = len(z)
 
@@ -308,14 +321,19 @@ class StateSpaceModel(object):
             if np.isnan(v).any():
                 raise Exception("v is %s" % v)
             alpha = r + v[0]*f[0]
-            d[0] *= r/alpha
+            if alpha > 0:
+                d[0] *= r/alpha
+
             K[0] = v[0]
             u_tmp = np.empty((state_size,))
             for j in range(1, state_size):
                 old_alpha = alpha
                 alpha += v[j]*f[j]
-                d[j] *= old_alpha/alpha
+                if alpha > 0:
+                    d[j] *= old_alpha/alpha
                 u_tmp[:] = U[:state_size,j]
+                if old_alpha == 0:
+                    old_alpha = 1e-10
                 U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
                 K += v[j]*u_tmp
 
