@@ -329,3 +329,33 @@ class TransientCombinedSSM(StateSpaceModel):
                 prior = np.diag(P)
             priors.append(prior)
         return np.concatenate(priors)
+
+    def component_state_indices(self, k, component_idx):
+        ssms = self.active_ssms(k)
+        i = 0
+        for ssm in ssms:
+            next_i = i + self.ssms[ssm].max_dimension
+            if ssm == component_idx:
+                return i, next_i
+            i = next_i
+        raise ValueError("component %d is not active at timestep %d" % (component_idx, k))
+
+    def filtered_cssm_coef_marginals(self, z, component_idx):
+        # return the marginal means and variances on the basis
+        # coefficients for a CompactSupportSSM component.
+
+        ssm = self.ssms[component_idx]
+        start = self.ssm_starts[component_idx]
+        end = self.ssm_ends[component_idx]
+        coef_means = np.empty((ssm.n_basis,))
+        coef_vars = np.empty((ssm.n_basis,))
+
+        for k, (x, U, d) in enumerate(self.filtered_states(z)):
+            if k < start: continue
+            if k >= end: break
+
+            i1, i2 = self.component_state_indices(k, component_idx)
+            P = np.dot(d*U, U.T)
+            ssm.extract_coefs(x[i1:i2], P[i1:i2,i1:i2], k-start, coef_means, coef_vars)
+
+        return coef_means, coef_vars

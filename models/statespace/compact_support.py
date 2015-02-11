@@ -6,9 +6,10 @@ from sigvisa.models.statespace import StateSpaceModel
 
 class CompactSupportSSM(StateSpaceModel):
 
-    def __init__(self, basis, coef_prior_means=None, coef_prior_vars=None, bias=0.0):
+    def __init__(self, basis, coef_prior_means=None, coef_prior_vars=None, bias=0.0, obs_noise=0.01):
         self.basis=basis
         self.bias=bias
+        self.obs_noise = obs_noise
         self.n_basis, self.n_steps = basis.shape
 
         def active_at(k, basis):
@@ -103,7 +104,7 @@ class CompactSupportSSM(StateSpaceModel):
         return self.bias
 
     def observation_noise(self, k):
-        return 0.01
+        return self.obs_noise
 
     def stationary(self, k):
         return False
@@ -119,3 +120,23 @@ class CompactSupportSSM(StateSpaceModel):
         for j, idx in enumerate(self.active_basis[0]):
             p[j] = self.coef_vars[idx]
         return p
+
+    def extract_coefs(self, x, P, k, coef_means, coef_vars):
+        # given a state estimate at some time k, extract marginals for
+        # whatever coefficients we can reasonably do so for at the
+        # current time. Earlier estimates will always be overwritten
+        # by later ones.
+        for i, basis_idx in enumerate(self.active_basis[k]):
+            state_idx = self.active_indices[basis_idx, k]
+            coef_means[basis_idx] = x[state_idx]
+            coef_vars[basis_idx] = P[state_idx,state_idx]
+
+    def filtered_coef_marginals(self, z):
+        coef_means = np.empty((self.n_basis,))
+        coef_vars = np.empty((self.n_basis,))
+
+        for k, (x, U, d) in enumerate(self.filtered_states(z)):
+            P = np.dot(d*U, U.T)
+            self.extract_coefs(x, P, k, coef_means, coef_vars)
+
+        return coef_means, coef_vars
