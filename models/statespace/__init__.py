@@ -321,7 +321,7 @@ class StateSpaceModel(object):
             if np.isnan(v).any():
                 raise Exception("v is %s" % v)
             alpha = r + v[0]*f[0]
-            if alpha > 0:
+            if alpha > 1e-30:
                 d[0] *= r/alpha
 
             K[0] = v[0]
@@ -329,11 +329,11 @@ class StateSpaceModel(object):
             for j in range(1, state_size):
                 old_alpha = alpha
                 alpha += v[j]*f[j]
-                if alpha > 0:
+                if alpha > 1e-30:
                     d[j] *= old_alpha/alpha
                 u_tmp[:] = U[:state_size,j]
-                if old_alpha == 0:
-                    old_alpha = 1e-10
+                if old_alpha < 1e-30:
+                    old_alpha = 1e-30
                 U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
                 K += v[j]*u_tmp
 
