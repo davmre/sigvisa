@@ -359,3 +359,26 @@ class TransientCombinedSSM(StateSpaceModel):
             ssm.extract_coefs(x[i1:i2], P[i1:i2,i1:i2], k-start, coef_means, coef_vars)
 
         return coef_means, coef_vars
+
+    def all_filtered_cssm_coef_marginals(self, z):
+
+        cssms = []
+        marginals = dict()
+        for i, ssm in enumerate(self.ssms):
+            if "extract_coefs" in dir(ssm):
+                cssms.append(i)
+                marginals[i] = (np.zeros((ssm.basis.shape[0],)), np.ones((ssm.basis.shape[0],))*1e50   )
+
+        for k, (x, U, d) in enumerate(self.filtered_states(z)):
+            for i in cssms:
+                ssm = self.ssms[i]
+                start = self.ssm_starts[i]
+                end = self.ssm_ends[i]
+
+                if k < start or k >= end: continue
+
+                i1, i2 = self.component_state_indices(k, i)
+                P = np.dot(d*U, U.T)
+                ssm.extract_coefs(x[i1:i2], P[i1:i2,i1:i2], k-start, marginals[i][0], marginals[i][1])
+
+        return marginals
