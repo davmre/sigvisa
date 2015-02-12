@@ -83,7 +83,14 @@ class ObservedSignalNode(Node):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
-        super(ObservedSignalNode, self).__init__(model=None, initial_value=model_waveform.data, keys=[key,], fixed=observed, **kwargs)
+        # maintain the invariant that masked data is always NaN
+        wave_data = model_waveform.data
+        d = wave_data.data
+        m = wave_data.mask
+        if isinstance(m, np.ndarray):
+            d[m] = np.nan
+
+        super(ObservedSignalNode, self).__init__(model=None, initial_value=wave_data, keys=[key,], fixed=observed, **kwargs)
 
         self.mw = model_waveform
         self.filter_str = model_waveform['filter_str']
@@ -130,6 +137,13 @@ class ObservedSignalNode(Node):
 
     def set_value(self, value):
         assert(len(value) == len(self.get_value(self.single_key)))
+
+        # represent missing data as NaN for easy processing
+        d = value.data
+        m = value.mask
+        if isinstance(m, np.ndarray):
+            d[m] = np.nan
+
         super(ObservedSignalNode, self).set_value(value=value, key=self.single_key)
 
     def get_wave(self):
@@ -397,11 +411,7 @@ class ObservedSignalNode(Node):
 
     def log_p(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
-        v = self.get_value()
-        d = v.data
-        m = v.mask
-        if isinstance(m, np.ndarray):
-            d[m] = np.nan
+        d = self.get_value().data
         return self.tssm.run_filter(d)
 
 
@@ -458,11 +468,7 @@ signal_diff(i) =value(i) - pred_signal(i);
     def signal_component_means(self):
         self.tssm = self.transient_ssm()
 
-        v = self.get_value()
-        d = v.data
-        m = v.mask
-        if isinstance(m, np.ndarray):
-            d[m] = np.nan
+        d = self.get_value().data
 
         means = self.tssm.component_means(d)
         noise_mean = means[0]

@@ -201,8 +201,12 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
     axes.set_xlabel("Time (s)", fontsize=8)
 
     if wave is not None:
-        plot.subplot_waveform(wave.filter(
-            "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
+        nans = np.isnan(wave.data.data)
+        wave.data.data[nans] = 0.0
+        smoothed = wave.filter("smooth_%d" % smoothing) if smoothing > 0 else wave
+        wave.data.data[nans]=np.nan
+
+        plot.subplot_waveform(smoothed, axes, color='black', linewidth=1.5, logscale=logscale)
     if template is not None:
         plot.subplot_waveform(template, axes, color="green",
                               linewidth=tmpl_width, alpha = tmpl_alpha,
@@ -290,7 +294,6 @@ def FitImageView(request, fitid):
     wave_node.parent_predict()
     pred_wave = wave_node.get_wave()
     pred_wave.data.mask = obs_wave.data.mask
-
 
 
     return wave_plus_template_view(wave=None if template_only else obs_wave, template=pred_wave,

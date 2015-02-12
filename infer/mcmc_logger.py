@@ -2,12 +2,13 @@ import numpy as np
 import sys
 import os
 import time
+import shutil
 
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
 class MCMCLogger(object):
 
-    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=500, template_move_step=True, print_interval=20):
+    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=500, template_move_step=True, print_interval=20, transient=False):
 
         if run_dir is None:
             base_path = os.path.join("logs", "mcmc")
@@ -28,6 +29,9 @@ class MCMCLogger(object):
         self.print_interval = print_interval
 
         self.start_time = None
+
+        # whether to delete the log directoryat the end of the run
+        self.transient = transient
 
     def start(self):
         self.start_time = time.time()
@@ -68,7 +72,11 @@ class MCMCLogger(object):
             if self.write_template_vals:
                 for (sta,wns) in sg.station_waves.items():
                     for wn in wns:
-                        for phase in sg.phases:
+                        if sg.phases=="leb" or sg.phases=="auto":
+                            phases = sg.ev_arriving_phases(eid, sta=sta)
+                        else:
+                            phases = sg.phases
+                        for phase in phases:
                             try:
                                 tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
                             except KeyError:
@@ -79,10 +87,11 @@ class MCMCLogger(object):
                             mkdir_p(os.path.join(self.run_dir, 'ev_%05d' % eid))
                             lbl_handle = open(os.path.join(self.run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
 
-                            lbl_handle.write('%06d %f %f %f %f\n' % (step,
+                            lbl_handle.write('%06d %f %f %f %f %f\n' % (step,
                                                                      tmvals['arrival_time'],
                                                                      tmvals['peak_offset'],
                                                                      tmvals['coda_height'],
+                                                                     tmvals['peak_decay'],
                                                                      tmvals['coda_decay']))
                             lbl_handle.close()
 
@@ -112,6 +121,24 @@ class MCMCLogger(object):
 
 
 
+    def load_template_vals(self, eid, phase, wn):
+        """
+        Return a numpy array containing the template vals saved for this run, along with
+        the logprob of each state.
+        """
+
+        if not self.write_template_vals:
+            raise Exception("MCMC logger did not save template vals, cannot load")
+
+        lbl = "%d_%s_%s" % (eid, wn.label, phase)
+        lbl_fname = os.path.join(self.run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl)
+        vals = np.loadtxt(lbl_fname)
+        labels = ('step', 'arrival_time', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay')
+
+
+        lps = np.loadtxt(os.path.join(self.run_dir, 'lp.txt'))
+        return vals, labels, lps
+
     def acceptance_string(self, sg, lp, step, n_accepted, n_attempted):
 
         s = "step %d: lp %.2f, accepted " % (step, lp)
@@ -125,3 +152,7 @@ class MCMCLogger(object):
         for v in self.log_handles.values():
             if type(v) == file:
                 v.close()
+
+        if self.transient:
+            shutil.rmtree(self.run_dir)
+            print "run finished, deleted log dir %s" % (self.run_dir)

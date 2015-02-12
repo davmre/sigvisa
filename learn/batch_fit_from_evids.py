@@ -135,7 +135,11 @@ def main():
         if a.startswith("--"):
             extra_option_string += " " + a
         else:
-            extra_option_string += "=" + a
+            if "'" in a:
+                # hack to escape args that contain quotes (eg tmpl_optim_params)
+                extra_option_string += "=\"" + a + "\""
+            else:
+                extra_option_string += "=" + a
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -191,7 +195,7 @@ def main():
             if options.per_station_limit and len(sta_evids[sta]) > options.per_station_limit:
                 continue
 
-            cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s %s" % (
+            cmd_str = "python -m learn.fit_shape_params_mcmc -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s %s" % (
                 int(evid), sta, "--fit_wiggles" if options.fit_wiggles else "",
                 "--template_shape=%s" % options.template_shape if options.template_shape else "",
                 "--template_model=\"%s\"" % options.template_model if options.template_model else "",

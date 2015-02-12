@@ -131,6 +131,9 @@ class Gaussian(Distribution):
     def predict(self, **kwargs):
         return self.mean
 
+    def variance(self, **kwargs):
+        return self.var
+
     def sample(self, **kwargs):
         return self.mean + np.random.randn() * self.std
 

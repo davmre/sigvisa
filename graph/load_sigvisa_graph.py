@@ -71,29 +71,14 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     wave_node = sg.add_wave(wave)
     sg.add_event(ev)
 
-    for uaparams in  uatemplates:
+    for uaparams in uatemplates:
         sg.create_unassociated_template(wave_node, atime=uaparams['arrival_time'], initial_vals=uaparams)
 
     for phase in templates.keys():
         sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
                         chan=wave['chan'], phase=phase,
                         values = templates[phase])
-
-        print wave_node.parents
-        k_latent = create_key('latent_arrival', eid=ev.eid, sta=wave['sta'], phase=phase, chan=wave['chan'], band=wave['band'])
-        n_latent = sg.all_nodes[k_latent]
-        if load_wiggles:
-            n_latent.parent_sample()
-        else:
-            n_latent.parent_predict()
-
-        #
-        #    wg = sg.wiggle_generator(phase=phase, srate=wave['srate'])
-        #    param_array = wg.decode_params(wiggles[phase])
-        #    sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
-        #                    chan=wave['chan'], phase=phase,
-        #                    values = wg.array_to_param_dict(param_array))
-
+        print "setting template", ev.eid, phase, "to", templates[phase]
 
     return sg
 
