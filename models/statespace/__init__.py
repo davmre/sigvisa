@@ -251,7 +251,13 @@ class StateSpaceModel(object):
         U[:state_size,:state_size] = np.eye(state_size)
 
         # update the state from the observation at the first timestep
-        ell = self.kalman_observe_sqrt(0, z[0], xk, U, d, state_size)
+
+        if np.isnan(z[0]):
+            self.wasnan=True
+            ell = 0
+        else:
+            self.wasnan=False
+            ell = self.kalman_observe_sqrt(0, z[0], xk, U, d, state_size)
         yield xk, U, d
 
         xk1 = xk.copy() # temp variable
@@ -415,9 +421,13 @@ class StateSpaceModel(object):
             # if our factored representation is (almost) the same as the previous invocation,
             # we've reached a stationary state
             if self.stationary(k):
-                if (np.abs(self.cached_pred_d - d) < self.eps_stationary).all():
-                    if (np.abs(self.cached_pred_U - U1) < self.eps_stationary).all():
-                        self.at_fixed_point = True
+                # we don't allow a fixed point on the first step after
+                # the series becomes stationary, because the caches
+                # won't have had time to be updated.
+                if k > 0 and self.stationary(k-1):
+                    if (np.abs(self.cached_pred_d[:state_size] - d[:state_size]) < self.eps_stationary).all():
+                        if (np.abs(self.cached_pred_U[:state_size,:state_size] - U1[:state_size,:state_size]) < self.eps_stationary).all():
+                            self.at_fixed_point = True
                 if not self.at_fixed_point:
                     self.cached_pred_U[:,:] = U1
                     self.cached_pred_d[:] = d
