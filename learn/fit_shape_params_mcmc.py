@@ -154,6 +154,11 @@ def compute_wavelet_messages(sg, wn):
         message_means = posterior_means.copy()
         message_vars = posterior_vars.copy()
         for j, (prm, prv, psm, psv) in enumerate(zip(prior_means, prior_vars, posterior_means, posterior_vars)):
+
+            if psv < 1e-8:
+                print "large posterior!"
+                import pdb; pdb.set_trace()
+
             message_means[j], message_vars[j] = multiply_scalar_gaussian(psm, psv, prm, -prv)
 
         gp_messages[(eid, phase)] = message_means, message_vars
@@ -189,7 +194,7 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_it
     wavelet_messages = compute_wavelet_messages(sigvisa_graph, wn)
 
     for k, v in wavelet_messages.items():
-        messages[k]['wavelet'] = v
+        messages[k][sigvisa_graph.wiggle_family] = v
 
     tops=repr(tmpl_optim_params)[1:-1]
     fitids = save_template_params(sigvisa_graph,
@@ -254,11 +259,11 @@ def save_template_params(sg, tmpl_optim_param_str,
             peak_decay = fit_params['peak_decay'] if 'peak_decay' in fit_params else 0.0
 
             if eid > 0:
-                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer, peak_decay) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f)" % (
-                fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'], peak_decay)
+                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer, peak_decay, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f, '%s')" % (
+                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'], peak_decay, sg.wiggle_family)
             else:
-                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, peak_decay) values (%d, '%s', '%s', %f, %f, %f, %f, %f)" % (
-                fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], peak_decay)
+                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, peak_decay, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, '%s')" % (
+                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], peak_decay, sg.wiggle_family)
 
             fpid = execute_and_return_id(s.dbconn, phase_insert_query, "fpid")
             for (k, n) in fit_param_nodes.values():
@@ -275,8 +280,8 @@ def save_template_params(sg, tmpl_optim_param_str,
                 message_fname = "%d.msg" % (fpid,)
                 with open(os.path.join(run_message_dir, message_fname), 'w') as f:
                     f.write(repr(messages[(eid, phase)] ))
-            sql_query = "update sigvisa_coda_fit_phase set wiggle_fname='%s' where fpid=%d" % (message_fname, fpid,)
-            cursor.execute(sql_query)
+                sql_query = "update sigvisa_coda_fit_phase set message_fname='%s' where fpid=%d" % (message_fname, fpid,)
+                cursor.execute(sql_query)
 
 
         fitids.append(fitid)

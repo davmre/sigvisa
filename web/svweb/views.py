@@ -102,7 +102,7 @@ class FitsFilterSet(FilterSet):
         'band',
         'human_approved',
         'tmpl_optim_method',
-        'dist',
+        #'dist',
         'azi',
     ]
 

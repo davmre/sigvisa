@@ -16,7 +16,7 @@ import scipy.optimize
 from sigvisa.treegp.gp import GPCov
 
 from sigvisa import Sigvisa
-from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, read_fitting_run
+from sigvisa.database.signal_data import get_fitting_runid, ensure_dir_exists, read_fitting_run
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 from sigvisa.models.distributions import InvGamma, Gaussian, LogNormal

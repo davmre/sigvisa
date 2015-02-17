@@ -16,7 +16,7 @@ from sigvisa.database.signal_data import *
 from sigvisa import *
 from sigvisa.models.wiggles import load_wiggle_generator
 from sigvisa.learn.train_param_common import load_model
-from sigvisa.learn.train_coda_models import  get_shape_training_data, get_wiggle_training_data
+from sigvisa.learn.train_coda_models import  get_training_data
 
 
 from matplotlib.figure import Figure
@@ -323,19 +323,10 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
 
         xy_by_phase = {}
         for phase in phases:
-            if basisid:
-                wg = load_wiggle_generator(basisid=basisid)
-                param_num = wg.params().index(param)
-                X, y, evids = get_wiggle_training_data(runid=runid,
-                                                site=sta, chan=chan, band=band, phases=phases,
-                                                target_num=param_num,require_human_approved=require_human_approved,
-                                                max_acost=max_acost, min_amp=min_amp,
-                                                      wg = wg, **d)
-            else:
-                X, y, evids = get_shape_training_data(runid=runid,
-                                                site=sta, chan=chan, band=band, phases=phases,
-                                                target=param,require_human_approved=require_human_approved,
-                                                max_acost=max_acost, min_amp=min_amp, **d)
+            X, y, yvars, evids = get_training_data(runid=runid,
+                                                   site=sta, chan=chan, band=band, phases=phases,
+                                                   target=param,require_human_approved=require_human_approved,
+                                                   max_acost=max_acost, min_amp=min_amp, **d)
             if log_transform:
                 y = np.log(np.abs(y))
             xy_by_phase[phase] = (X, y)
@@ -458,12 +449,12 @@ def data_pairwise_plot(request, runid=None, **kwargs):
     template_shape = request.GET.get("shape", "paired_exp")
     require_human_approved = str(request.GET.get("human_approved", "0")) == "2"
 
-    X, y1, evids = get_shape_training_data(runid=runid,
+    X, y1, yvars, evids = get_training_data(runid=runid,
                                            site=sta, chan=chan, band=band, phases=phases,
                                            target=param1,require_human_approved=require_human_approved,
                                            max_acost=max_acost, min_amp=min_amp)
 
-    X, y2, evids = get_shape_training_data(runid=runid,
+    X, y2, yvars, evids = get_training_data(runid=runid,
                                            site=sta, chan=chan, band=band, phases=phases,
                                            target=param2,require_human_approved=require_human_approved,
                                            max_acost=max_acost, min_amp=min_amp)

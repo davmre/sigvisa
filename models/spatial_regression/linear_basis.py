@@ -15,7 +15,7 @@ from sigvisa.treegp.features import featurizer_from_string, recover_featurizer
 
 class LinearBasisModel(ParamModel):
 
-    def __init__(self, fname=None, sta=None, X=None, y=None, basis="poly1", param_mean=None, param_cov=None, param_var=1.0, noise_std=1, featurizer_recovery=None, compute_ll=False, H=None, extract_dim=0):
+    def __init__(self, fname=None, sta=None, X=None, y=None, yvars=None, basis="poly1", param_mean=None, param_cov=None, param_var=1.0, noise_std=1, featurizer_recovery=None, compute_ll=False, H=None, extract_dim=0):
         super(LinearBasisModel, self).__init__(sta=sta)
 
         if fname is not None:
@@ -37,16 +37,20 @@ class LinearBasisModel(ParamModel):
         b = np.zeros((d,)) if param_mean is None else param_mean
         B = np.eye(d) * param_var if param_cov is None else param_cov
 
-        self.noise_var = float(noise_std**2)
+        self.noise_var  = float(noise_std**2)
+        noise_diag = np.ones((n,)) * self.noise_var
+        if yvars is not None:
+            noise_diag += yvars
+        self.noise_prec_diag = 1.0/noise_diag
 
         B_chol = scipy.linalg.cholesky(B, lower=True)
         B_chol_inv = scipy.linalg.inv(B_chol)
         prior_precision = np.dot(B_chol_inv.T, B_chol_inv)
-        precision = 1.0/self.noise_var * np.dot(H.T, H) + prior_precision
+        precision = np.dot( self.noise_prec_diag*H.T, H) + prior_precision
         precision_chol = scipy.linalg.cholesky(precision, lower=True)
         precision_chol_inv = scipy.linalg.inv(precision_chol)
         covar = np.dot(precision_chol_inv.T, precision_chol_inv)
-        self.mean = np.dot(covar, np.dot(prior_precision, b) + 1.0/self.noise_var * np.dot(H.T, y))
+        self.mean = np.dot(covar, np.dot(prior_precision, b) + np.dot(H.T, y * self.noise_prec_diag))
         self.sqrt_covar=precision_chol_inv
         self.ll=None
         if compute_ll:
@@ -54,19 +58,21 @@ class LinearBasisModel(ParamModel):
             # using the matrix inversion lemma:
             # (sigma2*I + H*B*H.T)^(-1) = 1/sigma2 * I - 1/sigma2**2 * H(Binv + 1/sigma2 H.T*H)^(-1)H.T
 
-            empirical_covar = np.dot(H.T, H)
-            inner = prior_precision + 1.0/self.noise_var * empirical_covar
+            N_diag = np.diag(self.noise_prec_diag)
+
+            empirical_covar = np.dot(self.noise_prec_diag * H.T, H)
+            inner = prior_precision + empirical_covar
             inner_chol = scipy.linalg.cholesky(inner, lower=True)
             inner_chol_inv = scipy.linalg.inv(inner_chol)
             inner_inv = np.dot(inner_chol_inv.T, inner_chol_inv)
-            outer = 1.0/self.noise_var**2 * np.dot(H, np.dot(inner_inv, H.T))
-            marginal_precision = np.eye(outer.shape[0]) * 1/self.noise_var - outer
+            outer = np.dot(N_diag, np.dot(H, np.dot(inner_inv, np.dot(H.T, N_diag))))
+            marginal_precision = N_diag - outer
 
             # also using the matrix determinant lemma:
             # |sigma2*I + H*B*H.T| = |Binv + 1/sigma2 * H.T * H| * |B| * |sigma2 * I|
             inner_logdet = 2*np.log(np.diag(inner_chol)).sum()
             B_logdet = 2*np.log(np.diag(B_chol)).sum()
-            s2I_logdet = n * np.log(self.noise_var)
+            s2I_logdet = np.sum(-np.log(self.noise_prec_diag))
             marginal_covar_logdet = inner_logdet + B_logdet + s2I_logdet
 
             r = y - np.dot(H, b)

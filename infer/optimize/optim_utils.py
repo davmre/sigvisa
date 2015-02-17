@@ -138,39 +138,40 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
     normalize = optim_params['normalize']
     random_inits = optim_params['random_inits']
 
+    if normalize and bounds is None or (None in bounds[0]):
+        print "WARNING: normalized optimization requested but full bounds not provided, disabling normalizing... (bounds: %s)" % (bounds)
+        normalize=False
+
     if normalize:
-        if bounds is None:
-            raise Exception("the normalize option requires optimization bounds to be specified")
+        low_bounds, high_bounds = zip(*bounds)
+        low_bounds = np.asarray(low_bounds)
+        high_bounds = np.asarray(high_bounds)
+
+        x0n = scale_normalize(x0, low_bounds, high_bounds)
+        bounds = [(-1 if np.isfinite(low_bounds[i]) else np.float('-inf'), 1 if np.isfinite(high_bounds[i]) else np.float('inf')) for (i, s) in enumerate(x0)]
+        f1 = lambda params: f(scale_unnormalize(params, low_bounds, high_bounds))
+        assert(    (np.abs(x0 - scale_unnormalize(x0n, low_bounds, high_bounds) ) < 0.001 ).all() )
+        x0 = x0n
+
+        if fprime is not None:
+            # we want to take approximate gradients in the normalized scale
+            half_width = (high_bounds - low_bounds) / 2.0
+            bounded = np.isfinite(half_width)
+            normalized_eps = eps * np.ones(len(x0))
+            if bounded.any():
+                normalized_eps[bounded] = eps * half_width[bounded]
+            fp1 = lambda params: fprime(scale_unnormalize(params, low_bounds, high_bounds),
+                                        eps=normalized_eps)  \
+                                        * normalized_eps/eps
+            approx_grad = 0
         else:
-            low_bounds, high_bounds = zip(*bounds)
-            low_bounds = np.asarray(low_bounds)
-            high_bounds = np.asarray(high_bounds)
+            print "fp1 is None, not normalizing gradient..."
+            fp1 = None
+            approx_grad = 1
 
-            x0n = scale_normalize(x0, low_bounds, high_bounds)
-            bounds = [(-1 if np.isfinite(low_bounds[i]) else np.float('-inf'), 1 if np.isfinite(high_bounds[i]) else np.float('inf')) for (i, s) in enumerate(x0)]
+        if fprime == "grad_included":
             f1 = lambda params: f(scale_unnormalize(params, low_bounds, high_bounds))
-            assert(    (np.abs(x0 - scale_unnormalize(x0n, low_bounds, high_bounds) ) < 0.001 ).all() )
-            x0 = x0n
-
-            if fprime is not None:
-                # we want to take approximate gradients in the normalized scale
-                half_width = (high_bounds - low_bounds) / 2.0
-                bounded = np.isfinite(half_width)
-                normalized_eps = eps * np.ones(len(x0))
-                if bounded.any():
-                    normalized_eps[bounded] = eps * half_width[bounded]
-                fp1 = lambda params: fprime(scale_unnormalize(params, low_bounds, high_bounds),
-                                            eps=normalized_eps)  \
-                                            * normalized_eps/eps
-                approx_grad = 0
-            else:
-                print "fp1 is None, not normalizing gradient..."
-                fp1 = None
-                approx_grad = 1
-
-            if fprime == "grad_included":
-                f1 = lambda params: f(scale_unnormalize(params, low_bounds, high_bounds))
-                fp1 = None
+            fp1 = None
     else:
         f1 = f
         fp1 = fprime if fprime != "grad_included" else None

@@ -9,7 +9,7 @@ from collections import defaultdict
 from functools32 import lru_cache
 from sigvisa import Sigvisa
 
-from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, RunNotFoundException
+from sigvisa.database.signal_data import get_fitting_runid, ensure_dir_exists, RunNotFoundException
 
 from sigvisa.source.event import get_event
 from sigvisa.learn.train_param_common import load_modelid
@@ -25,7 +25,7 @@ from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.database.signal_data import execute_and_return_id
-from sigvisa.models.wiggles.wavelets import construct_wavelet_basis
+from sigvisa.models.wiggles.wavelets import construct_wavelet_basis, parse_wavelet_basis_str
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
 
@@ -101,8 +101,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
-                 wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                 wiggle_len_s = 30.0, wiggle_basisids=None,
+                 wiggle_model_type="dummy", wiggle_family="db4_0.5_99_30",
                  dummy_fallback=False,
                  nm_type="ar",
                  run_name=None, iteration=None, runid = None,
@@ -135,14 +134,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
         self.wiggle_model_type = wiggle_model_type
-        if wiggle_family == "dummy":
-            self.wavelet_basis_family = None
-            self.wiggle_res_hz = -1
-        else:
-            basis, hz = wiggle_family.split("_")
-            self.wavelet_basis_family = basis
-            self.wiggle_res_hz = float(hz)
-        self.wiggle_len_s = wiggle_len_s
+        self.wiggle_family = wiggle_family
         self.wavelet_basis_cache = dict()
 
         self.base_srate = base_srate
@@ -208,12 +200,12 @@ class SigvisaGraph(DirectedGraphModel):
         return self.tg[phase]
 
     def wavelet_basis(self, srate):
-        if self.wavelet_basis_family is None:
+        if self.wiggle_family is None or self.wiggle_family=="dummy":
             return None
 
         if srate not in self.wavelet_basis_cache:
             self.wavelet_basis_cache[srate] = \
-                construct_wavelet_basis(srate, self.wavelet_basis_family, self.wiggle_res_hz, self.wiggle_len_s)
+                construct_wavelet_basis(srate, wavelet_str=self.wiggle_family)
         return self.wavelet_basis_cache[srate]
 
     def get_template_nodes(self, eid, sta, phase, band, chan):
@@ -1186,32 +1178,3 @@ class SigvisaGraph(DirectedGraphModel):
 
         os.system("tar cfz %s.tgz %s/*" % (dump_path, dump_path))
         print "generated tarball"
-
-    def save_wiggle_params(self):
-        """
-        Saves the current values of the wiggle model parameters for
-        all waves in the graph. Assumes template parameters have
-        already been saved, so tm.fpid is available at each template
-        node.
-        """
-
-        raise Exception("need to figure out the right way to train GPs in the marginalized wiggle model")
-
-        s = Sigvisa()
-        for wave_node in self.leaf_nodes:
-            pv = wave_node._parent_values()
-            arrivals = update_arrivals(pv)
-
-            for (eid, phase) in arrivals:
-                wg = self.wiggle_generator(phase=phase, srate=wave_node.srate)
-                fit_param_nodes = self.get_template_nodes(eid=eid, phase=phase,
-                                                              chan=wave_node.chan, band=wave_node.band,
-                                                              sta=wave_node.sta)
-                fpid = list(fit_param_nodes.values())[0][1].fpid
-
-                v = dict([(p, wave_node.get_parent_value(eid, phase, p, pv)) for p in wg.params()])
-                param_blob = wg.encode_params(v)
-                p = {"fpid": fpid, 'timestamp': time.time(),  "params": param_blob, 'basisid': wg.basisid}
-                wiggleid = insert_wiggle(s.dbconn, p)
-
-            s.dbconn.commit()

@@ -57,12 +57,12 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, **kwargs):
+def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, **kwargs):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
         kernel_str = s[1]
         basisfn_str = s[2]
-        model = learn_gp(X=X, y=y, sta=sta,
+        model = learn_gp(X=X, y=y, y_obs_variances=yvars, sta=sta,
                          basisfn_str=basisfn_str,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
@@ -70,18 +70,20 @@ def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_
                          bounds=bounds, **kwargs)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
-        model = learn_gp(X=X, y=y, sta=sta,
+        if "param_var" in kwargs:
+            del kwargs['param_var']
+        model = learn_gp(X=X, y=y, y_obs_variances=yvars, sta=sta,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
                          optim_params=optim_params, k=k,
                          bounds=bounds, **kwargs)
     elif model_type == "constant_gaussian":
-        model = learn_constant_gaussian(sta=sta, X=X, y=y, **kwargs)
+        model = learn_constant_gaussian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type == "constant_laplacian":
-        model = learn_constant_laplacian(sta=sta, X=X, y=y, **kwargs)
+        model = learn_constant_laplacian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
-        model = learn_parametric(X=X, y=y, sta=sta, basisfn_str=basisfn_str, **kwargs)
+        model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta, basisfn_str=basisfn_str, **kwargs)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
@@ -184,22 +186,22 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
 
     try:
         st = target.split('_')
-        float(st[1])
-        target = st[0]
+        int(st[-1])
+        target = "_".join(st[:-1])
     except (ValueError, AttributeError):
         pass
+
 
     distance_idx = None
     if kernel_str == "lld":
         distance_idx = 3
     elif kernel_str == "lldlld":
         distance_idx = 6
-    if "distmb" in basisfn_str:
-        extract_dim = (distance_idx, distance_idx+1)
+    if basisfn_str is not None:
+        basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
     else:
-        extract_dim = distance_idx
-
-    basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
+        featurizer_recovery = None
+        extract_dim = None
 
     if cov_main is None:
         noise_var, noise_prior, cov_main, cov_fic = build_starting_hparams(kernel_str, target)

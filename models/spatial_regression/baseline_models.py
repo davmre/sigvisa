@@ -116,15 +116,22 @@ class ParamModel(Distribution):
 
 class ConstGaussianModel(ParamModel):
 
-    def __init__(self, X=None, y=None, sta=None, fname=None, mean=None, std=None):
+    def __init__(self, X=None, y=None, yvars=None, sta=None, fname=None, mean=None, std=None):
         super(ConstGaussianModel, self).__init__(sta=sta)
 
         if fname is not None:
             self.load_trained_model(fname)
             return
 
-        self.mean = np.mean(y) if mean is None else mean
-        self.std = np.std(y) if std is None else std
+        # assume our points are samples from a single Gaussian with some mean and var
+        # we observe each point with addition noise variance yvar.
+
+        # I'm too lazy to work out a proper Bayesian analysis, so instead we'll do a hack where
+        # we just assume var=1
+        weights = 1.0/(yvars+1.0)
+        self.mean = np.average(y, weights=weights)
+        variance = np.average((y-self.mean)**2, weights=weights)
+        self.std = np.sqrt(variance)
 
         self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
         self.ll = np.sum(self.l1 - .5 * ((y - self.mean)/self.std)**2)
@@ -184,12 +191,15 @@ class ConstGaussianModel(ParamModel):
 
 class ConstLaplacianModel(ParamModel):
 
-    def __init__(self, X=None, y=None, sta=None, fname=None, center=None, scale=None):
+    def __init__(self, X=None, y=None, yvars=None, sta=None, fname=None, center=None, scale=None):
         super(ConstLaplacianModel, self).__init__(sta=sta)
 
         if fname is not None:
             self.load_trained_model(fname)
             return
+
+        if yvars is not None:
+            print "warning: ignoring message variances in estimating Laplacian"
 
         self.center = np.median(y) if center is None else center
         self.scale = np.mean(np.abs(y-self.center)) if scale is None else scale

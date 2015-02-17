@@ -22,18 +22,20 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     nm_type = fit[9]
     runid = fit[0]
 
-    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, peak_decay, coda_decay from sigvisa_coda_fit_phase where fitid=%d" % fitid
+    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, peak_decay, coda_decay, wiggle_family from sigvisa_coda_fit_phase where fitid=%d" % fitid
     cursor.execute(phase_sql_query)
     phase_details = cursor.fetchall()
     phases = [p[1] for p in phase_details]
     templates = {}
     tmshapes = {}
     uatemplates = []
+    wiggle_family="dummy"
     for (phase, p) in zip(phases, phase_details):
         shape = p[2]
         tparams = {'arrival_time': p[3], 'peak_offset': p[4], 'coda_height': p[5], 'coda_decay': p[7]}
         if p[2]=="lin_polyexp":
             tparams['peak_decay'] = p[6]
+        wiggle_family=p[-1]
 
         tmshapes[phase] = shape
         if phase=="UA":
@@ -41,33 +43,10 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
         else:
             templates[phase] = tparams
 
-
-    if load_wiggles:
-        wiggle_family = None
-        wiggles = {}
-        basisids = {}
-        wiggle_family = None
-        for (phase, phase_detail) in zip(phases, phase_details):
-            wiggle_sql_query = "select w.wiggleid, w.params, w.basisid from sigvisa_wiggle w where w.fpid=%d " % (phase_detail[0])
-            cursor.execute(wiggle_sql_query)
-            w = cursor.fetchall()
-            if len(w) < 1:
-                raise KeyError("no wiggle found for phase fit ID %d" % phase_detail[0])
-
-            assert(len(w) == 1) # if there's more than one wiggle
-                                # parameterization of a phase, we'd need
-                                # some way to disambiguate.
-
-            basisids[phase] = w[0][2]
-            wiggles[phase] = str(w[0][1])
-    else:
-        wiggle_family = "dummy"
-        basisids = None
-
     sg = SigvisaGraph(template_model_type="dummy", wiggle_model_type="dummy",
                       template_shape=tmshapes, wiggle_family=wiggle_family,
                       nm_type = nm_type, runid=runid, phases=phases,
-                      wiggle_basisids=basisids, base_srate=wave['srate'])
+                      base_srate=wave['srate'])
     wave_node = sg.add_wave(wave)
     sg.add_event(ev)
 

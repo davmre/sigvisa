@@ -25,12 +25,13 @@ class Event(object):
 
     __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'eid']
 
-    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, eid=None, autoload=True):
+    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, eid=None, autoload=True, cursor=None):
 
         if (evid is not None or orid is not None) and evtype is not None and autoload:
 
             try:
-                ev = read_event(Sigvisa().dbconn.cursor(), evid=evid, evtype=evtype, orid=orid)
+                cursor = Sigvisa().dbconn.cursor() if cursor is None else cursor
+                ev = read_event(cursor, evid=evid, evtype=evtype, orid=orid)
                 self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid = ev
             except TypeError as e:
                 raise EventNotFound("couldn't load evid %d" % evid)
@@ -49,6 +50,8 @@ class Event(object):
 
         if eid is not None:
             self.eid = eid
+        else:
+            self.eid = evid
 
     def source_logamp(self, band, phase):
         if self.natural_source:
