@@ -294,7 +294,7 @@ class StateSpaceModel(object):
         Compute the marginal likelihood of an observation under this
         state space model.
         """
-        for x, U, d in self.filtered_states(z, *args, **kwargs):
+        for k, (x, U, d) in enumerate(self.filtered_states(z, *args, **kwargs)):
             pass
 
         return self.ell

@@ -13,7 +13,7 @@ class TransientCombinedSSM(StateSpaceModel):
     active.
     """
 
-    def __init__(self, components):
+    def __init__(self, components, obs_noise=0.0):
         """
         components: list of tuples (ssm, start_idx, npts, scale), where
           ssm: StateSpaceModel object
@@ -24,6 +24,7 @@ class TransientCombinedSSM(StateSpaceModel):
 
         # save basic info
         self.n_ssms = len(components)
+        self.obs_noise = obs_noise
         self.ssms = []
         self.ssm_starts = []
         self.ssm_ends = []
@@ -223,7 +224,7 @@ class TransientCombinedSSM(StateSpaceModel):
         return bias
 
     def observation_noise(self, k):
-        return 0.0
+        return self.obs_noise
 
     def stationary(self, k):
         """
@@ -367,7 +368,8 @@ class TransientCombinedSSM(StateSpaceModel):
         for i, ssm in enumerate(self.ssms):
             if "extract_coefs" in dir(ssm):
                 cssms.append(i)
-                marginals[i] = (np.zeros((ssm.basis.shape[0],)), np.ones((ssm.basis.shape[0],))*1e50   )
+                # initialize marginals to the prior
+                marginals[i] = (ssm.coef_means.copy(), ssm.coef_vars.copy() )
 
         for k, (x, U, d) in enumerate(self.filtered_states(z)):
             for i in cssms:
