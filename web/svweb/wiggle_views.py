@@ -14,7 +14,9 @@ from sigvisa.database.signal_data import *
 
 from sigvisa import *
 
-from sigvisa.models.wiggles.wiggle import create_wiggled_phase
+
+from sigvisa.models.wiggles.wavelets import parse_wavelet_basis_str, construct_wavelet_basis
+from sigvisa.models.statespace.compact_support import CompactSupportSSM
 from sigvisa.signals.common import Waveform
 
 import matplotlib
@@ -38,153 +40,68 @@ from sigvisa.graph.load_sigvisa_graph import load_sg_from_db_fit
 
 
 def wiggle_detail_view(request, fpid):
+    fphase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
 
+    family, res, levels, len_s = parse_wavelet_basis_str(fphase.wiggle_family)
 
-    s = Sigvisa()
-
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
-    fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
-    run = get_object_or_404(SigvisaCodaFittingRun, pk=fit.runid.runid)
-
-    cursor = s.dbconn.cursor()
-    env_wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
-
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
-    wiggle_wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
-
-    env_ymin, env_ymax = bounds_without_outliers(env_wave.data)
-    wiggle_ymin, wiggle_ymax = bounds_without_outliers(wiggle_wave.data)
-
-    wiggle_len = float(request.GET.get('wiggle_len', '-1'))
-    if wiggle_len == -1:
-        #if phase.sigvisawiggle_set.count() > 0:
-        #    wiggle_len = np.max([(w.etime - w.stime) * 1.2 for w in phase.sigvisawiggle_set.all()])
-        #else:
-        wiggle_len = wiggle_wave['len']
-
-    xmin = wiggle_wave['stime'] - 4
-    xmax = xmin + wiggle_len + 8
+    messages = read_messages(fphase.message_fname, fphase.fitid.runid.runid)
+    pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
+    print "posterior vars", pvars
 
     return render_to_response('svweb/wiggle.html', {
                               #        'wiggle': wiggle,
-                              'phase': phase,
-                              'fit': fit,
-                              'run': run,
-                              'env_ymin': env_ymin,
-                              'env_ymax': env_ymax,
-                              'wiggle_ymin': wiggle_ymin,
-                              'wiggle_ymax': wiggle_ymax,
-                              'xmax': xmax,
-                              'xmin': xmin,
+                              'messages': messages,
+                              'message_repr': repr(messages),
+                              'pmeans': pmeans,
+                              'pvars': pvars,
+                              'n_coefs': len(pmeans),
+                              'fphase': fphase,
                               }, context_instance=RequestContext(request))
 
 
+def FitWiggleView(request, fpid):
+    # plot the posterior wiggle
+    # (mean plus samples?)
+    # also show the wiggle coefs
+
+    n_samples = int(request.GET.get("samples", "20"))
+    srate = float(request.GET.get("srate", "-1"))
+
+    fphase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
 
 
-def raw_wiggle_view(request, fpid):
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
-    fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
+    family, res, levels, len_s = parse_wavelet_basis_str(fphase.wiggle_family)
+    if srate < 0:
+        srate = fphase.fitid.hz
 
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
-    wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
-    return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)
+    messages = read_messages(fphase.message_fname, fphase.fitid.runid.runid)
+    pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
+    print "posterior vars", pvars
 
+    basis = construct_wavelet_basis(srate, fphase.wiggle_family)
+    cssm = CompactSupportSSM(basis, coef_prior_means=pmeans, coef_prior_vars=pvars, obs_noise=0.0, bias=1.0)
 
-def psd_of_wave(request, wave):
+    N = basis.shape[1]
+    wiggle_mean = cssm.mean_obs(N)
+    wiggle_var = cssm.obs_var(N)
+    print "priors", cssm.prior_vars()
+    samples = [cssm.prior_sample(N) for i in range(n_samples)]
 
-    def empirical_psd(x, hz):
-        y, x = matplotlib.mlab.psd(x, NFFT=len(x), Fs=1)
-        return (x * hz, np.log(y))
-
-    fig = Figure(figsize=(8, 5), dpi=144)
+    fig = Figure(figsize=(10, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
+    axes.set_xlabel("Time (s)", fontsize=8)
 
-    x, y = empirical_psd(wave.data.compressed(), hz=wave['srate'])
-    axes.plot(x, y)
-    axes.set_xlabel('Frequency (Hz)', fontsize=8)
-    axes.set_ylabel('Power (natural log scale)', fontsize=8)
+    x = np.linspace(0, len_s, N)
 
-    process_plot_args(request, axes)
+    axes.plot(x, wiggle_mean, c="black", lw=2)
+    axes.plot(x, wiggle_mean + 2*np.sqrt(wiggle_var), c="red", lw=2)
+    axes.plot(x, wiggle_mean - 2*np.sqrt(wiggle_var), c="red", lw=2)
+    for s in samples:
+        axes.plot(x, s)
 
     canvas = FigureCanvas(fig)
     response = django.http.HttpResponse(content_type='image/png')
     fig.tight_layout()
     canvas.print_png(response)
     return response
-
-
-def wiggle_spectrum_view(request, fpid):
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
-    fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
-
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
-    wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
-    return psd_of_wave(request, wave)
-
-
-def template_wiggle_view(request, fpid):
-
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
-    fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
-    ev = get_event(evid=fit.evid)
-
-    s = Sigvisa()
-
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
-    wiggle = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
-
-    sg = load_sg_from_db_fit(fit.fitid)
-    wave_node = list(sg.leaf_nodes)[0]
-    wiggled = create_wiggled_phase(arrival=(int(ev.eid), str(phase.phase)), wave_node=wave_node,
-                                   wiggle_data=wiggle.data)
-    wave_node.unfix_value()
-    wave_node.set_value(wiggled)
-    wiggled_wave = wave_node.get_wave()
-
-    np.savetxt('extract_envelope_%d.txt' % int(fpid), wave_node.get_wave().data)
-
-    actual_wave = fetch_waveform(station=wiggle['sta'], chan=wiggle['chan'], stime=wiggle['stime'], etime=wiggle['etime']).filter('%s;env;hz_%.2f' % (fit.band, fit.hz))
-    np.savetxt('actual_envelope.txt', actual_wave.data)
-
-    return view_wave(request, wiggled_wave, color='black', linewidth=1.5, logscale=False)
-
-
-def reconstruct_wiggle_wave(request, wiggleid):
-
-    wiggle = get_object_or_404(SigvisaWiggle, pk=wiggleid)
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
-    fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
-    ev = get_event(evid=fit.evid)
-
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
-    extracted_wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
-
-    sg = load_sg_from_db_fit(fit.fitid)
-
-    wave_node = list(sg.leaf_nodes)[0]
-    wiggle_wave = Waveform(data = wave_node.get_wiggle_for_arrival(eid=ev.eid, phase=phase.phase), stime=extracted_wave['stime'], srate=wave_node.srate, sta=fit.sta, chan=fit.chan, filter_str='%s;env;hz_%.2f' % (fit.band, wave_node.srate))
-    return wiggle_wave
-
-def reconstructed_wiggle_spectrum_view(request, wiggleid):
-    wiggle_wave = reconstruct_wiggle_wave(request, wiggleid)
-    return psd_of_wave(request, wiggle_wave)
-
-def reconstructed_wiggle_view(request, wiggleid):
-    wiggle_wave = reconstruct_wiggle_wave(request, wiggleid)
-    return view_wave(request, wiggle_wave, color='black', linewidth=1.5, logscale=False)
-
-
-def reconstructed_template_wiggle_view(request, wiggleid):
-
-    wiggle = get_object_or_404(SigvisaWiggle, pk=wiggleid)
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
-    fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
-
-    sg = load_sg_from_db_fit(fit.fitid)
-    wave_node = list(sg.leaf_nodes)[0]
-    wave_node.unfix_value()
-    wave_node.parent_predict()
-
-    np.savetxt('param_envelope_%d.txt' % phase.fpid, wave_node.get_wave().data)
-    return view_wave(request, wave_node.get_wave(), color='black', linewidth=1.5, logscale=False)

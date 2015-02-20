@@ -19,6 +19,7 @@ from sigvisa.source.event import get_event, EventNotFound
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import load_sg_from_db_fit
+
 import sigvisa.utils.geog as geog
 
 from matplotlib.figure import Figure
@@ -135,6 +136,7 @@ def fit_detail(request, fitid):
         fit_view_options.smoothing = fit.smooth
         fit_view_options.logscale = False
         fit_view_options.wiggle = False
+        fit_view_options.noise = False
         fit_view_options.save()
 
     s = Sigvisa()
@@ -193,7 +195,7 @@ def fit_detail(request, fitid):
 
 
 def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=None,
-                            ratio=1.6, dpi=144, tmpl_alpha=1, tmpl_width=3):
+                            ratio=1.6, dpi=144, tmpl_alpha=1, tmpl_width=3, tmpl_color="green"):
 
     fig = Figure(figsize=(ratio*5, 5), dpi=144)
     fig.patch.set_facecolor('white')
@@ -208,7 +210,7 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
 
         plot.subplot_waveform(smoothed, axes, color='black', linewidth=1.5, logscale=logscale)
     if template is not None:
-        plot.subplot_waveform(template, axes, color="green",
+        plot.subplot_waveform(template, axes, color=tmpl_color,
                               linewidth=tmpl_width, alpha = tmpl_alpha,
                               logscale=logscale, plot_dets=False)
 
@@ -277,6 +279,7 @@ def FitImageView(request, fitid):
     logscale = request.GET.get("logscale", "False").lower().startswith('t')
     smoothing = int(request.GET.get("smooth", "0"))
     wiggle = request.GET.get("wiggle", "False").lower().startswith('t')
+    noise = request.GET.get("noise", "False").lower().startswith('t')
     saveprefs = request.GET.get("saveprefs", "False").lower().startswith('t')
 
     template_only = request.GET.get("template_only", "False").lower().startswith('t')
@@ -287,18 +290,38 @@ def FitImageView(request, fitid):
         fit_view_options.logscale = logscale
         fit_view_options.save()
 
-    sg = load_sg_from_db_fit(fit.fitid, load_wiggles=wiggle)
+    sg = load_sg_from_db_fit(fit.fitid)
     wave_node = list(sg.leaf_nodes)[0]
     obs_wave = wave_node.get_wave()
     wave_node.unfix_value()
-    wave_node.parent_predict()
-    pred_wave = wave_node.get_wave()
-    pred_wave.data.mask = obs_wave.data.mask
+    wave_node._parent_values()
 
+    if noise:
+        means = wave_node.tssm.component_means(wave_node.get_value().data)
+        pred_wave = Waveform(means[0], segment_stats=wave_node.mw.segment_stats.copy(), my_stats=wave_node.mw.my_stats.copy())
+        pred_wave.data.mask = obs_wave.data.mask
+    else:
+        for fphase in fit.sigvisacodafitphase_set.all():
+            for i, (eid, phase, env, start_idx, npts, component_type) in enumerate(wave_node.tssm_components):
+                if phase != fphase.phase: continue
+                if component_type != "wavelet": continue
+
+                if wiggle:
+                    messages = read_messages(fphase.message_fname, fit.runid.runid)
+                    pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
+                    wave_node.tssm.ssms[i].coef_means[:] = pmeans
+                else:
+                    wave_node.tssm.ssms[i].coef_means[:] = 0
+                v = wave_node.tssm.mean_obs(wave_node.npts)
+
+        wave_node.parent_predict()
+        pred_wave = wave_node.get_wave()
+        pred_wave.data.mask = obs_wave.data.mask
 
     return wave_plus_template_view(wave=None if template_only else obs_wave, template=pred_wave,
                                    logscale=logscale, smoothing=smoothing, request=request,
-                                   tmpl_alpha = 0.8 if wiggle else 1)
+                                   tmpl_alpha = 0.8 if wiggle else 1, tmpl_color="red" if noise else "green")
+
 
 def phases_from_request(request):
     fit_params = {}

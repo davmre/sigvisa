@@ -18,6 +18,7 @@ class view_options(models.Model):
     smoothing = models.IntegerField()
     logscale = models.BooleanField()
     wiggle = models.BooleanField()
+    noise = models.BooleanField()
 
     class Meta:
         db_table = u'coda_fits_view_options'

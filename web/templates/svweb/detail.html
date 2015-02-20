@@ -104,8 +104,12 @@ document.getElementById('loading').style.visibility = 'hidden';
 	    <label for="fitlog">logscale</label>
 	  </td>
 	  <td valign='top'>
-	    <input id="fitwiggle" type="checkbox" onchange="updateFitImage()" {% if fit_view_options.wiggle %}checked{% endif %}>
+	    <input id="fitwiggle" type="checkbox" onchange="changeWiggle()" {% if fit_view_options.wiggle %}checked{% endif %}>
 	    <label for="fitwiggle">wiggle</label>
+	  </td>
+	  <td valign='top'>
+	    <input id="fitnoise" type="checkbox" onchange="changeNoise()" {% if fit_view_options.noise %}checked{% endif %}>
+	    <label for="fitnoise">noise</label>
 	  </td>
 	  <td valign='top'>
 	    <div id="loading" style="color: red">loading...</div>
@@ -119,10 +123,10 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr>
 	<td><strong>Phase</strong></td>
 	<td><strong>atime</strong></td>
-	<td><strong>onset_seconds</strong></td>
-	<td><strong>coda_height</strong></td>
-	<td><strong>peak_decay</strong></td>
-	<td><strong>coda_decay</strong></td>
+	<td><strong>log(onset_seconds)</strong></td>
+	<td><strong>log(coda_height)</strong></td>
+	<td><strong>log(peak_decay)</strong></td>
+	<td><strong>log(coda_decay)</strong></td>
 	<td><strong>amp_transfer</strong></td>
 	<td><strong>trained wiggles</strong></td>
       </tr>
@@ -135,14 +139,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td>{{ phase.peak_decay }}</td>
 	<td>{{ phase.coda_decay }}</td>
 	<td>{{ phase.amp_transfer }}</td>
-	<td>
-	{% if phase.wiggle_fname and phase.wiggle_fname != 'NONE' %}
-	<a href="{% url fit_phase_wiggles fpid=phase.fpid%}">{{ phase.sigvisawiggle_set.count }} parameterization{{ phase.sigvisawiggle_set.count|pluralize }}</a>
-	  {% endif %}
-	{% if phase.wiggle_fname == 'NONE' %}
-	could not extract wiggle.
-	  {% endif %}
-	</td>
+	<td><a href="{% url fit_phase_wiggles fpid=phase.fpid%}">wiggle</a></td>
       </tr>
       {% endfor %}
     </table>
@@ -256,15 +253,27 @@ display.innerHTML=slide.value;
 
 }
 
+function changeNoise() {
+document.getElementById("fitwiggle").checked = !document.getElementById("fitnoise").checked;
+updateFitImage()
+}
+
+function changeWiggle() {
+document.getElementById("fitnoise").checked = !document.getElementById("fitwiggle").checked;
+updateFitImage()
+}
+
+
 function updateFitImage() {
 var slide = document.getElementById("slide");
 slideAmount = slide.value;
 
 fitlog = document.getElementById("fitlog").checked;
 fitwiggle = document.getElementById("fitwiggle").checked;
+fitnoise = document.getElementById("fitnoise").checked;
 
 var fit_img = document.getElementById("fit");
-new_src = "{% url visual fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";wiggle=" + fitwiggle + ";saveprefs=true";
+new_src = "{% url visual fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";wiggle=" + fitwiggle + ";noise=" + fitnoise + ";saveprefs=true";
 
 // only show the loading message if the image has actually changed
 if ('/' + fit_img.src.split("/").slice(3).join("/") != new_src) {
