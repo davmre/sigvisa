@@ -45,7 +45,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
 
     sg = SigvisaGraph(template_model_type="dummy", wiggle_model_type="dummy",
                       template_shape=tmshapes, wiggle_family=wiggle_family,
-                      nm_type = nm_type, runid=runid, phases=phases,
+                      nm_type = nm_type, runids=(runid,), phases=phases,
                       base_srate=wave['srate'])
     wave_node = sg.add_wave(wave)
     sg.add_event(ev)
@@ -68,7 +68,7 @@ def register_svgraph_cmdline(parser):
                       help="comma-separated list of stations with which to locate the event")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str",
                       help="name of training run specifying the set of models to use")
-    parser.add_option("--runid", dest="runid", default=None, type="int",
+    parser.add_option("--runid", dest="runid", default=None, type="str",
                       help="runid of training run specifying the set of models to use")
     parser.add_option(
         "--template_shape", dest="template_shape", default="lin_polyexp", type="str", help="template model type (lin_polyexp)")
@@ -110,6 +110,8 @@ def register_svgraph_signal_cmdline(parser):
                       help="load this many hours from the given dateset")
     parser.add_option("--initialize_leb", dest="initialize_leb", default="no", type="str",
                       help="use LEB events to set the intial state. options are 'no', 'yes', 'perturb' to initialize with locations randomly perturbed by ~5 degrees, or 'count' to initialize with a set of completely random events, having the same count as the LEB events ")
+    parser.add_option("--initialize_evids", dest="initialize_evids", default=None, type="str",
+                      help="initialize with a specified list of LEB evids")
     parser.add_option("--synth", dest="synth", default=False, action="store_true")
 
 def register_svgraph_event_based_signal_cmdline(parser):
@@ -132,8 +134,9 @@ def setup_svgraph_from_cmdline(options, args):
         run_name = options.run_name
         iters = np.array(sorted(list(read_fitting_run_iterations(cursor, run_name))))
         run_iter, runid = iters[-1, :]
+        runids = (runid,)
     else:
-        runid = options.runid
+        runids = tuple(int(ss) for ss in options.runid.split(","))
 
 
     tm_type_str = options.tm_types
@@ -158,7 +161,7 @@ def setup_svgraph_from_cmdline(options, args):
     sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
                       wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
                       dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
-                      runid=runid, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint,
+                      runids=runids, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint,
                       absorb_n_phases=options.absorb_n_phases, uatemplate_rate=options.uatemplate_rate)
 
 
@@ -198,6 +201,7 @@ def load_signals_from_cmdline(sg, options, args):
     segments = load_segments(cursor, stas, stime, etime, chans = chans)
     segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
 
+    n_waves = 0
     for seg in segments:
         for band in bands:
             filtered_seg = seg.with_filter(band)
@@ -206,19 +210,27 @@ def load_signals_from_cmdline(sg, options, args):
 
             for chan in filtered_seg.get_chans():
                 try:
-                    modelid = get_param_model_id(sg.runid, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta'], wiggle_param=False), 'amp_transfer', options.template_shape, chan=chan, band=band)
+                    modelid = get_param_model_id(sg.runids, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta']), 'amp_transfer', options.template_shape, chan=chan, band=band)
                 except ModelNotFoundError as e:
                     print "couldn't find amp_transfer model for %s,%s,%s, so not adding to graph." % (seg['sta'], chan, band), e
                     continue
 
                 wave = filtered_seg[chan]
                 wn = sg.add_wave(wave)
+                n_waves += 1
+
+    assert(n_waves > 0)
 
 
-    evs = get_leb_events(sg, cursor)
-    if options.initialize_leb != "no" or options.synth:
-        if options.initialize_leb == "yes" or options.synth:
+    if options.initialize_evids is not None:
+        evids = [int(evid) for evid in options.initialize_evids.split(",")]
+        evs = [get_event(evid=evid) for evid in evids]
+    else:
+        evs = get_leb_events(sg, cursor)
+    if options.initialize_leb != "no" or options.initialize_evids is not None or options.synth:
+        if options.initialize_leb == "yes" or options.initialize_evids is not None or options.synth:
             for ev in evs:
+                print "initializing with event", ev
                 sg.add_event(ev, fixed=options.synth)
         elif options.initialize_leb=="perturb":
             raise NotImplementedError("not implemented!")

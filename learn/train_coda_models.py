@@ -87,7 +87,7 @@ def explode_sites(options):
         sites = [s.get_default_sta(site) for site in sites]
     return sites
 
-def load_site_data(elems, wiggles, target, param_num, wg=None, **kwargs):
+def load_site_data(elems, target, param_num, **kwargs):
     X, y, yvars, evids = None, None, None, None
     for array_elem in elems:
         try:
@@ -120,7 +120,6 @@ def main():
                       help="comma-separated list of phases for which to train models)")
     parser.add_option("-t", "--targets", dest="targets", default=None, type="str",
                       help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
-    parser.add_option("-b", "--basisid", dest="basisid", default=None, type="int", help="basisid (from the sigvisa_wiggle_basis DB table) for which to train wiggle param models")
     parser.add_option("--template_shape", dest="template_shape", default="lin_polyexp", type="str", help="")
     parser.add_option(
         "-m", "--model_type", dest="model_type", default="gp_lld", type="str", help="type of model to train (gp_lld)")
@@ -159,16 +158,7 @@ def main():
     model_type = options.model_type
     band = options.band
 
-    if options.basisid is None:
-        wiggles = False
-        basisid = None
-        wg = None
-        targets = options.targets.split(',') if options.targets is not None else None
-    else:
-        wiggles = True
-        basisid = options.basisid
-        wg = load_wiggle_generator(basisid=basisid)
-        targets = wg.params()
+    targets = options.targets.split(',') if options.targets is not None else None
 
 
     optim_params = construct_optim_params(options.optim_params)
@@ -221,7 +211,7 @@ def main():
         model_types = dict([(target, "gp_lld") for target in targets])
         iterations = 0
 
-    modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.template_shape, wiggles, wg, basisid, options.subsample, param_var + slack_var, options.optimize)
+    modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.template_shape, options.subsample, param_var + slack_var, options.optimize)
 
     for target in targets:
         model_type = model_types[target]
@@ -229,7 +219,7 @@ def main():
             print "training models for iteration %d..." % (i,)
             modelids[target] = retrain_models(modelids[target], model_type, global_var=param_var, station_slack_var=slack_var)
 
-def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, template_shape, wiggles, wg, basisid, subsample, prior_var, optimize):
+def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, template_shape, subsample, prior_var, optimize):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
@@ -255,14 +245,9 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
             model_type = model_types[target]
 
             for phase in phases:
-                if wiggles:
-                    basisid_cond = 'and wiggle_basisid=%d' % basisid
-                else:
-                    basisid_cond = ''
-
                 # check for duplicate model
-                sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' %s" % (
-                    model_type, site, chan, band, phase, runid, target, basisid_cond)
+                sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s'" % (
+                    model_type, site, chan, band, phase, runid, target)
                 cursor.execute(sql_query)
                 dups = cursor.fetchall()
                 if len(dups) > 0 and not enable_dupes:
@@ -278,15 +263,12 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     elems = [site,]
 
                 try:
-                    X, y, yvars, evids = load_site_data(elems, wiggles, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, array = array_joint)
+                    X, y, yvars, evids = load_site_data(elems, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, array = array_joint)
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
 
-                if wiggles:
-                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=template_shape, unique=True)
-                else:
-                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=basisid, unique=True)
+                model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=template_shape, unique=True)
 
                 evid_fname = os.path.splitext(os.path.splitext(os.path.splitext(model_fname)[0])[0])[0] + '.evids'
                 Xy_fname = os.path.splitext(os.path.splitext(os.path.splitext(model_fname)[0])[0])[0] + '.Xy.npz'
@@ -310,9 +292,8 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     continue
 
                 model.save_trained_model(model_fname)
-                wiggle_options = {'wiggle_basisid': basisid,}
                 template_options = {'template_shape': template_shape, }
-                insert_options = wiggle_options if wiggles else template_options
+                insert_options = template_options
 
                 shrinkage = {}
                 if model_type.startswith("param") or model_type.startswith('gplocal'):

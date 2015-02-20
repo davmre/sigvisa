@@ -230,6 +230,20 @@ class SavedFit(object):
         self.coda_decay=coda_decay
         self.messages=messages
 
+
+
+
+def read_messages(message_fname, runid):
+    s = Sigvisa()
+    messages = None
+    if message_fname is not None and message_fname.endswith("msg"):
+        message_dir = os.path.join(s.homedir, "training_messages", "runid_%d" % runid)
+        message_full_fname = os.path.join(message_dir, message_fname)
+        with open(message_full_fname, 'r') as f:
+            message_str = f.read()
+        messages = eval(message_str, {'array': np.array})
+    return messages
+
 def load_training_messages(cursor, **kwargs):
     cond = sql_param_condition(**kwargs)
 
@@ -249,13 +263,7 @@ def load_training_messages(cursor, **kwargs):
         for row in message_data:
             evid, phase, sta, dist, azi, band, atime, peak_offset, coda_height, peak_decay, coda_decay, runid, message_fname = row
 
-            messages = None
-            if message_fname is not None and message_fname.endswith("msg"):
-                message_dir = os.path.join(s.homedir, "training_messages", "runid_%d" % runid)
-                message_full_fname = os.path.join(message_dir, message_fname)
-                with open(message_full_fname, 'r') as f:
-                    message_str = f.read()
-                messages = eval(message_str, {'array': np.array})
+            messages = read_messages(message_fname, runid)
 
             ev = get_event(evid=evid, cursor=cursor)
             fit = SavedFit(ev=ev, phase=phase, sta=sta, band=band, dist=dist,azi=azi, arrival_time=atime, peak_offset=peak_offset, coda_height=coda_height, peak_decay=peak_decay, coda_decay=coda_decay, messages=messages)

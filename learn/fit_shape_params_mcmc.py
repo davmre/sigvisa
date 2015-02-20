@@ -35,14 +35,21 @@ def setup_graph(event, sta, chan, band,
     Set up the graph with the signal for a given training event.
     """
 
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    try:
+        input_runid = get_fitting_runid(cursor, init_run_name, init_iteration, create_if_new = False)
+        runids = (input_runid,)
+    except RunNotFoundException:
+        runids = ()
+
     sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, nm_type = nm_type,
-                      run_name=init_run_name, iteration=init_iteration,
+                      runids = runids,
                       absorb_n_phases=absorb_n_phases)
 
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
     cursor.close()
     if smoothing > 0:
@@ -88,7 +95,9 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
     """
     Unnormalized product of two Gaussian densities: precisions add, means are averaged weighted by precision.
     """
-    v = 1.0/(1.0/v1 + 1.0/v2)
+
+    prec = (1.0/v1 + 1.0/v2)
+    v = 1.0/prec if ( np.abs(prec) > 1e-30) else 1e30
     m = v * (m1/v1 + m2/v2)
     return m, v
 
@@ -133,6 +142,7 @@ def compute_template_messages(sg, wn, logger):
 
             print "param", p, "prior", (prior_mean, prior_var), "posterior", (m, v)
             gp_messages[(eid, phase)][p] = multiply_scalar_gaussian(m, v, prior_mean, -prior_var)
+            gp_messages[(eid, phase)][p+"_posterior"] = m, v
 
         best_lp_idx = np.argmax(lps)
         best_vals[(eid, phase)] = (tvals[best_lp_idx,1:], [tnodes[lbl][1] for lbl in labels[1:]])
@@ -142,6 +152,7 @@ def compute_template_messages(sg, wn, logger):
 def compute_wavelet_messages(sg, wn):
 
     gp_messages = dict()
+    gp_posteriors = dict()
 
     wn._parent_values() # update the SSM to include current templates
     marginals = wn.tssm.all_filtered_cssm_coef_marginals(wn.get_value().data)
@@ -161,9 +172,14 @@ def compute_wavelet_messages(sg, wn):
 
             message_means[j], message_vars[j] = multiply_scalar_gaussian(psm, psv, prm, -prv)
 
+            if message_vars[j] < 0:
+                print "negative message!"
+                import pdb; pdb.set_trace()
+
+        gp_posteriors[(eid, phase)] = posterior_means, posterior_vars
         gp_messages[(eid, phase)] = message_means, message_vars
 
-    return gp_messages
+    return gp_messages, gp_posteriors
 
 def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_iteration, steps):
 
@@ -191,10 +207,11 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_it
             n.set_value(v)
 
     # compute wavelet posterior
-    wavelet_messages = compute_wavelet_messages(sigvisa_graph, wn)
+    wavelet_messages, wavelet_posteriors = compute_wavelet_messages(sigvisa_graph, wn)
 
     for k, v in wavelet_messages.items():
         messages[k][sigvisa_graph.wiggle_family] = v
+        messages[k][sigvisa_graph.wiggle_family + "_posterior"] = wavelet_posteriors[k]
 
     tops=repr(tmpl_optim_params)[1:-1]
     fitids = save_template_params(sigvisa_graph,

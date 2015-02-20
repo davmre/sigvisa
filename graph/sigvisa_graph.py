@@ -38,29 +38,35 @@ class ModelNotFoundError(Exception):
 MAX_TRAVEL_TIME = 2000.0
 
 @lru_cache(maxsize=1024)
-def get_param_model_id(runid, sta, phase, model_type, param,
-                       template_shape, basisid=None, chan=None, band=None):
-    if runid is None:
-        raise ModelNotFoundError("no runid specified, so not loading parameter model.")
+def get_param_model_id(runids, sta, phase, model_type, param,
+                       template_shape, chan=None, band=None):
 
-    # get a DB modelid for a previously-trained parameter model
     s = Sigvisa()
     cursor = s.dbconn.cursor()
+
+
+
+    if len(runids) is None:
+        raise ModelNotFoundError("no runid specified, so not loading parameter model.")
+
     chan_cond = "and chan='%s'" % chan if chan else ""
     band_cond = "and band='%s'" % band if band else ""
-    basisid_cond = "and wiggle_basisid=%d" % (basisid) if basisid is not None else ""
+    for runid in runids:
+        # get a DB modelid for a previously-trained parameter model
+        sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param)
+        try:
+            cursor.execute(sql_query)
+            results = cursor.fetchall()
+            modelid = sorted(results, key = lambda x : -x[1])[0][0] # use the model with the most shrinkage iterations
+        except:
+            continue
 
-    sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond)
-    try:
-        cursor.execute(sql_query)
-        results = cursor.fetchall()
-        modelid = sorted(results, key = lambda x : -x[1])[0][0] # use the model with the most shrinkage iterations
-    except:
-        raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond))
-    finally:
         cursor.close()
+        return modelid
 
-    return modelid
+    cursor.close()
+    raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid in %s and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runids, template_shape, param))
+
 
 
 def dummyPriorModel(param):
@@ -104,7 +110,7 @@ class SigvisaGraph(DirectedGraphModel):
                  wiggle_model_type="dummy", wiggle_family="db4_0.5_99_30",
                  dummy_fallback=False,
                  nm_type="ar",
-                 run_name=None, iteration=None, runid = None,
+                 run_name=None, iteration=None, runids = None,
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True, smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
@@ -150,14 +156,16 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.phases_used = set()
 
-        self.runid = runid
+        self.runids = runids
         if run_name is not None and iteration is not None:
             cursor = Sigvisa().dbconn.cursor()
             try:
-                self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = False)
+                runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = False)
+                self.runids = (runid,)
             except RunNotFoundException:
-                self.runid=None
+                self.runids = ()
             cursor.close()
+        assert(isinstance(self.runids, tuple))
 
         self.template_nodes = []
         self.wiggle_nodes = []
@@ -239,7 +247,6 @@ class SigvisaGraph(DirectedGraphModel):
             except KeyError:
                 continue
         return allnodes
-
 
     def set_template(self, eid, sta, phase, band, chan, values):
         for (param, value) in values.items():
@@ -616,13 +623,12 @@ class SigvisaGraph(DirectedGraphModel):
 
         self._topo_sort()
 
-    def add_event(self, ev, basisids=None, tmshapes=None, sample_templates=False, fixed=False, eid=None):
+    def add_event(self, ev, tmshapes=None, sample_templates=False, fixed=False, eid=None):
         """
 
         Add an event node to the graph and connect it to all waves
         during which its signals might arrive.
 
-        basisids: optional dictionary of wiggle basis ids (integers), keyed on phase name.
         tmshapes: optional dictionary of template shapes (strings), keyed on phase name.
 
         """
@@ -748,17 +754,17 @@ class SigvisaGraph(DirectedGraphModel):
             return self.setup_site_param_node_indep(**kwargs)
 
     def setup_site_param_node_joint(self, param, site, phase, parents, model_type,
-                              chan=None, band=None, basisid=None,
+                              chan=None, band=None,
                               modelid=None,
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
 
         if not model_type.startswith("dummy") and modelid is None:
             try:
-                modelid = get_param_model_id(runid=self.runid, sta=site,
+                modelid = get_param_model_id(runids=self.runids, sta=site,
                                              phase=phase, model_type=model_type,
                                              param=param, template_shape=self.template_shape,
-                                             chan=chan, band=band, basisid=basisid)
+                                             chan=chan, band=band)
             except ModelNotFoundError:
                 if self.dummy_fallback:
                     print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
@@ -769,7 +775,7 @@ class SigvisaGraph(DirectedGraphModel):
                            phase=phase, eid=parents[0].eid,
                            chan=chan, band=band)
         if model_type.startswith("dummy"):
-            return self.setup_site_param_indep(param=param, site=site, phase=phase, parents=parents, chan=chan, band=band, basisid=basisid, model_type=model_type, children=children, low_bound=low_bound, high_bound=high_bound, initial_value=initial_value, **kwargs)
+            return self.setup_site_param_indep(param=param, site=site, phase=phase, parents=parents, chan=chan, band=band, model_type=model_type, children=children, low_bound=low_bound, high_bound=high_bound, initial_value=initial_value, **kwargs)
         else:
             sorted_elements = sorted(self.site_elements[site])
             sk = [create_key(param=param, eid=parents[0].eid, sta=sta, phase=phase, chan=chan, band=band) for sta in sorted_elements]
@@ -784,7 +790,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
     def setup_site_param_node_indep(self, param, site, phase, parents, model_type,
-                              chan=None, band=None, basisid=None,
+                              chan=None, band=None,
                               modelid=None,
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
@@ -796,10 +802,10 @@ class SigvisaGraph(DirectedGraphModel):
         for sta in self.site_elements[site]:
             if not model_type.startswith("dummy") and modelid is None:
                 try:
-                    modelid = get_param_model_id(runid=self.runid, sta=sta,
+                    modelid = get_param_model_id(runids=self.runids, sta=sta,
                                                  phase=phase, model_type=model_type,
                                                  param=param, template_shape=self.template_shape,
-                                                 chan=chan, band=band, basisid=basisid)
+                                                 chan=chan, band=band)
                 except ModelNotFoundError:
                     if self.dummy_fallback:
                         print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
@@ -888,6 +894,7 @@ class SigvisaGraph(DirectedGraphModel):
                 # since they need to know what GP prior
                 # to use on wiggles.
                 evnodes["loc"].addChild(wave_node)
+                evnodes["mb"].addChild(wave_node)
 
         # create nodes common to all bands and channels: travel
         # time/arrival time, and amp_transfer.
@@ -963,7 +970,24 @@ class SigvisaGraph(DirectedGraphModel):
         Add a wave node to the graph. Assume that all waves are added before all events.
         """
 
-        wave_node = ObservedSignalNode(model_waveform=wave, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), graph=self)
+        basis = self.wavelet_basis(wave['srate'])
+
+        param_models = {}
+        if self.wiggle_model_type != "dummy":
+            for phase in self.phases:
+                param_models[phase] = []
+                for param in [self.wiggle_family + "_%d" % i for i in range(basis.shape[0])]:
+                    try:
+                        modelid = get_param_model_id(runids=self.runids, sta=wave['sta'],
+                                                     phase=phase, model_type=self.wiggle_model_type,
+                                                     param=param, template_shape=self.template_shape,
+                                                     chan=wave['chan'], band=wave['band'])
+                    except ModelNotFoundError:
+                        continue
+                    model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+                    param_models[phase].append(model)
+
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models)
 
         s = Sigvisa()
         sta = wave['sta']

@@ -73,13 +73,13 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val):
 
     s = Sigvisa()
     if s.is_array_station(site) and sg.arrays_joint:
-        modelid = get_param_model_id(runid=sg.runid, sta=site,
+        modelid = get_param_model_id(runids=sg.runids, sta=site,
                                      phase=phase, model_type=model_type,
                                      param=param, template_shape=sg.template_shape,
                                      chan=chan, band=band)
         cond = lldlld_X(ev, sta)
     else:
-        modelid = get_param_model_id(runid=sg.runid, sta=sta,
+        modelid = get_param_model_id(runids=sg.runids, sta=sta,
                                      phase=phase, model_type=model_type,
                                      param=param, template_shape=sg.template_shape,
                                      chan=chan, band=band)

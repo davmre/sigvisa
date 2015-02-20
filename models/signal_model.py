@@ -38,7 +38,7 @@ def extract_arrival_from_key(k, r):
 def get_new_arrivals(new_nodes, r):
     new_arrivals = set()
     for n in new_nodes:
-        if "loc" in n.label: continue
+        if "loc" in n.label or "mb" in n.label: continue
         for k in n.keys():
             new_arrivals.add(extract_arrival_from_key(k, r))
     return new_arrivals
@@ -57,7 +57,7 @@ def update_arrivals(parent_values):
     r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
     for k in parent_values.keys():
         if k=="prefix": continue
-        if "lon" in k or "lat" in k or "depth" in k: continue
+        if "lon" in k or "lat" in k or "depth" in k or "mb" in k: continue
         arrivals.add(extract_arrival_from_key(k, r))
     return arrivals
 
@@ -79,7 +79,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, **kwargs):
+    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -126,7 +126,8 @@ class ObservedSignalNode(Node):
 
         self.tssm = TransientCombinedSSM(((self.noise_arssm, 0, self.npts, None),))
 
-        self.wavelet_basis = self.graph.wavelet_basis(self.srate)
+        self.wavelet_basis = wavelet_basis
+        self.wavelet_param_models = wavelet_param_models
 
     def __str__(self):
         try:
@@ -283,9 +284,9 @@ class ObservedSignalNode(Node):
 
             if eid >= 0:
                 self._ev_params[eid] = dict()
-                for p in ("lon", "lat", "depth"):
+                for p in ("lon", "lat", "depth", "mb"):
                     k= "%d;%s" % (eid, p)
-                    self._ev_params[eid][p] = float(v)
+                    self._ev_params[eid][p] = pv[k]
                     self._keymap[k] = (False, eid, None, p)
 
         for k in parent_keys_removed:
@@ -339,11 +340,11 @@ class ObservedSignalNode(Node):
         if basis is None:
             return None
 
-        if phase in self.gps_by_phase and len(self.gps_by_phase[phase]) > 0:
+        if phase in self.wavelet_param_models:
             evdict = self._ev_params[eid]
             # TODO: this will actually have to change a lot since we'll want to share covariance matrices
-            prior_means = [gp.predict(cond=evdict) for gp in self.gps_by_phase[phase]]
-            prior_vars = [gp.variance(cond=evdict) for gp in self.gps_by_phase[phase]]
+            prior_means = [gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]]
+            prior_vars = [gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]]
         else:
             prior_means = np.zeros((len(basis),))
             prior_vars = np.ones((len(basis),))
@@ -382,7 +383,7 @@ class ObservedSignalNode(Node):
 
             wssm = self.arrival_ssms[(eid, phase)]
             if wssm is not None:
-                npts = min(len(env), wssm.basis.shape[0])
+                npts = min(len(env), wssm.basis.shape[1])
                 components.append((wssm, start_idx, npts, env))
                 self.tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
             dssm = DummySSM(bias=1.0)

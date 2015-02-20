@@ -57,7 +57,7 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, **kwargs):
+def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, optimize=True, **kwargs):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
         kernel_str = s[1]
@@ -67,7 +67,7 @@ def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=Non
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
                          optim_params=optim_params, k=k,
-                         bounds=bounds, **kwargs)
+                         bounds=bounds, optimize=optimize, **kwargs)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
         if "param_var" in kwargs:
@@ -76,14 +76,16 @@ def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=Non
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
                          optim_params=optim_params, k=k,
-                         bounds=bounds, **kwargs)
+                         bounds=bounds, optimize=optimize, **kwargs)
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type == "constant_laplacian":
         model = learn_constant_laplacian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
-        model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta, basisfn_str=basisfn_str, **kwargs)
+        model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta,
+                                 optimize_marginal_ll=optimize,
+                                 basisfn_str=basisfn_str, **kwargs)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
@@ -221,6 +223,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
 
     if len(y) > max_n:
         X, y = subsample_data(X=X, y=y, k=max_n)
+
 
     gp = SparseGP(X=X, y=y, basis=basisfn_str, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
     return gp

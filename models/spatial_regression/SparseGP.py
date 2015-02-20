@@ -35,7 +35,7 @@ default_phase_params = (1.0, InvGamma(beta=1.0, alpha=1),
 default_wavelet_params = (.1, InvGamma(beta=1.0, alpha=1),
         GPCov([1.0,], [ 40.0, 20.0], dfn_str="lld",
               wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
-              wfn_str="compact2",
+              wfn_str="se",
               dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 

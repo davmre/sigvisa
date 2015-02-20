@@ -156,6 +156,44 @@ class StateSpaceModel(object):
             z[k] = self.apply_observation_matrix(x, k) + self.observation_bias(k)
         return z
 
+    def obs_var(self, N):
+        P = np.empty((self.max_dimension, self.max_dimension))
+        prior_var = self.prior_vars()
+        n_start = len(prior_var)
+        P[:n_start,:n_start] = np.diag(prior_var)
+        noise = np.zeros((self.max_dimension,))
+
+        obs_vars = np.zeros((N,))
+
+        k=0
+        self.apply_observation_matrix(P, k, result=noise)
+        pred_var = self.apply_observation_matrix(noise, k)
+        r = self.observation_noise(k)
+        obs_vars[k] = pred_var + r
+
+        for k in range(1, N):
+
+            TP = P.copy()
+            state_size = self.apply_transition_matrix(P[:,0], k, TP[:,0])
+            # have to range over the full dimension because the state
+            # size at the previous timestep could have been larger
+            # than now.
+            for i in range(self.max_dimension):
+                self.apply_transition_matrix(P[:,i], k, TP[:,i])
+            for i in range(state_size):
+                self.apply_transition_matrix(TP[i,:], k, P[i,:])
+
+            self.transition_noise_diag(k, noise)
+            np.fill_diagonal(P, np.diag(P)[:state_size] + noise[:state_size])
+
+            self.apply_observation_matrix(P, k, result=noise)
+            pred_var = self.apply_observation_matrix(noise[:state_size], k)
+            r = self.observation_noise(k)
+            obs_vars[k] = pred_var + r
+
+
+        return obs_vars
+
     def prior_sample(self, N):
         """
         Draw an observation from the prior distribution by forward-sampling.

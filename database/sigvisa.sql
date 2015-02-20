@@ -106,7 +106,7 @@ create table sigvisa_param_model (
  modelid int not null auto_increment,
  fitting_runid int not null,
  template_shape varchar(15),
- param varchar(15) not null,
+ param varchar(30) not null,
  site varchar(10) not null,
  chan varchar(10) not null,
  band varchar(15) not null,
