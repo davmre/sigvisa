@@ -72,9 +72,25 @@ sigvisa_module = Extension('sigvisa_c',
                            )
 
 
+ssm_sources = ['statespace.cc', 'compact_support.cc']
+from imp import find_module
+f, pathname, descr = find_module("pyublas")
+CTREE_INCLUDE_DIRS = [os.path.join(pathname, "include"),]
+
+statespacemodel_module = Extension('ssms_c',
+                           sources=([os.path.join("models", "statespace", "fast_c", f)
+                                     for f in ssm_sources]
+                                    ),
+                           include_dirs=CTREE_INCLUDE_DIRS,
+                           library_dirs = sys_libraries,
+                           libraries=['boost_python'],
+                           runtime_library_dirs = sys_libraries,
+                           extra_compile_args = extra_compile_args,
+                           extra_link_args = extra_link_args,
+                           )
 
 setup(name='sigvisa',
       version='1.0',
       description='Signal-Based Vertically Integrated Seismological Processing',
       include_dirs=[np.get_include()] + sys_includes,
-      ext_modules=[sigvisa_module, ])
+      ext_modules=[sigvisa_module, statespacemodel_module])

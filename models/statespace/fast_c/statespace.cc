@@ -1,0 +1,290 @@
+#include <boost/python/module.hpp>
+#include <boost/python/def.hpp>
+#include <pyublas/numpy.hpp>
+#include <boost/numeric/ublas/matrix_proxy.hpp>
+#include <boost/numeric/ublas/matrix.hpp>
+
+#include <cmath>
+#include <memory>
+#include <vector>
+#include <limits>
+
+#include "statespace.hpp"
+
+using namespace boost::numeric::ublas;
+
+void udu(matrix<double> &M, matrix<double> &U, vector<double> &d, int state_size) {
+  // this method stolen from pykalman.sqrt.bierman by Daniel Duckworth (BSD license)
+  /*Construct the UDU' decomposition of a positive, semidefinite matrix M
+
+    Parameters
+    ----------
+    M : [n, n] array
+        Matrix to factorize
+
+    Returns
+    -------
+    UDU : UDU_decomposition of size n
+        UDU' representation of M
+  */
+
+  int n = state_size;
+
+  // make M upper triangular: not sure if this is necessary?
+  for (int i=0; i < n; ++i) {
+    for (int j=0; j < i; ++j) {
+      M(i,j) = 0;
+    }
+  }
+
+  d.clear();
+  U.clear();
+  for (int i=0; i < n; ++i) {
+    U(i,i) = 1;
+  }
+
+  for (int j=n; j >= 2; --j) {
+    d(j - 1) = M(j - 1, j - 1);
+    double alpha = 0.0;
+    double beta = 0.0;
+    if (d(j - 1) > 0) {
+      alpha = 1.0 / d(j - 1);
+    }
+    for (int k=1; k < j; ++k) {
+      beta = M(k - 1, j - 1);
+      U(k - 1, j - 1) = alpha * beta;
+
+      // M[0:k, k - 1] = M[0:k, k - 1] - beta * U[0:k, j - 1]
+      for (int kk=0; kk < k; ++kk) {
+	M(kk, k - 1) = M(kk, k - 1) - beta * U(kk, j - 1);
+      }
+    }
+  }
+  d(0) = M(0, 0);
+}
+
+FilterState::FilterState(int max_dimension, double eps_stationary) {
+  this->eps_stationary = eps_stationary;
+  this->at_fixed_point=false;
+  this->alpha = 0;
+  this->wasnan = false;
+
+  this->obs_U = matrix<double>(max_dimension, max_dimension);
+  this->pred_U = matrix<double>(max_dimension, max_dimension);
+  this->tmp_U1 = matrix<double>(max_dimension, max_dimension);
+  this->tmp_U2 = matrix<double>(max_dimension, max_dimension);
+  this->P = matrix<double>(max_dimension, max_dimension);
+
+  this->obs_d = vector<double>(max_dimension);
+  this->pred_d = vector<double>(max_dimension);
+  this->gain = vector<double>(max_dimension);
+  this->f = vector<double>(max_dimension);
+  this->v = vector<double>(max_dimension);
+
+  this->xk = vector<double>(max_dimension);
+}
+
+
+void FilterState::init_priors(StateSpaceModel &ssm) {
+  this->state_size = ssm.prior_mean(this->xk);
+  this->state_size = ssm.prior_vars(this->pred_d);
+
+  this->pred_U.clear();
+  for (int i=0; i < ssm.max_dimension; ++i) {
+    this->pred_U(i,i) = 1;
+  }
+  return;
+}
+
+
+double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk) {
+
+  // if needed, use this for isnan: #include <boost/math/special_functions/fpclassify.hpp>
+  if (isnan(zk)) {
+    if (cache.at_fixed_point && !cache.wasnan) {
+       cache.at_fixed_point = false;
+    }
+    cache.wasnan = true;
+    return 0;
+  } else {
+    if (cache.at_fixed_point && cache.wasnan) {
+       cache.at_fixed_point = false;
+    }
+    cache.wasnan = false;
+  }
+
+  double alpha = cache.alpha;
+  int state_size = cache.state_size;
+  if (!cache.at_fixed_point || !ssm.stationary(k)) {
+    cache.at_fixed_point = false;
+
+    matrix<double> &U_old = cache.pred_U;
+    vector<double> &d_old = cache.pred_d;
+
+    matrix<double> &U = cache.obs_U;
+    vector<double> &d = cache.obs_d;
+    vector<double> &K = cache.gain;
+    vector<double> &f = cache.f;
+    vector<double> &v = cache.v;
+    double r = ssm.observation_noise(k);
+
+    K.clear();
+    f.clear();
+
+    ssm.apply_observation_matrix(U_old, k, f, state_size);
+    for (int i=0; i < state_size; ++i) {
+      v(i) = d_old(i)*f(i);
+    }
+
+    alpha = r + v(0)*f(0);
+    if (alpha > 1e-30) {
+       d(0) = d_old(0) * r/alpha;
+    }
+    K(0)=v(0);
+
+    U(0, 0) = U_old(0,0);
+    for (int j=1; j < state_size; ++j) {
+      double old_alpha = alpha;
+      alpha += v(j)*f(j);
+      if (alpha > 1e-30) {
+         d(j) = d_old(j) * old_alpha/alpha;
+      }
+      if (old_alpha < 1e-30) {
+	old_alpha = 1e-30;
+      }
+
+      for (int i=0; i < state_size; ++i) {
+	U(i, j) = U_old(i,j) - f(j)/old_alpha*K(i);
+        K(i) += v(j) * U_old(i,j);
+      }
+
+    }
+    cache.alpha = alpha;
+  }
+
+  // given the Kalman gain from the covariance update, compute
+  // the updated mean vector.
+  vector<double> &xk = cache.xk;
+  double pred_z = ssm.apply_observation_matrix(xk, k) + ssm.observation_bias(k);
+  double yk = zk - pred_z;
+  for (int i=0; i < state_size; ++i) {
+    xk(i) += cache.gain(i) * yk/alpha;
+  }
+
+  // also compute log marginal likelihood for this observation
+  return -.5 * log(2*PI*alpha) - .5 * yk*yk / alpha;
+}
+
+void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
+
+  int prev_state_size = cache.state_size;
+
+  vector<double> &tmp = cache.f;
+  int state_size = ssm.apply_transition_matrix(cache.xk, k, tmp);
+  vector<double> &xk = cache.xk;
+  subrange(xk, 0, state_size) = subrange(tmp, 0, state_size);
+  ssm.transition_bias(k, xk);
+
+  if (cache.at_fixed_point and ssm.stationary(k)) {
+    return;
+  }
+
+  cache.at_fixed_point = false;
+
+  matrix<double> &U_old = cache.obs_U;
+  vector<double> &d_old = cache.obs_d;
+
+  matrix<double> &U_tmp = cache.tmp_U1;
+  vector<double> &d_tmp = cache.v;
+
+  // get transition noise into temporary storage
+  ssm.transition_noise_diag(k, tmp);
+
+  /* pushing the covariance P through the transition model F yields
+     FPF'. In a factored representation, this is FUDU'F', so we just need
+     to compute FU. */
+  int min_size = std::min(prev_state_size, state_size);
+
+  for (int i=0; i < min_size; ++i) {
+    ssm.apply_transition_matrix(column(U_old, i), k, d_tmp);
+    column(U_tmp, i) = d_tmp;
+  }
+
+  subrange(d_tmp, 0, state_size) = subrange(d_old, 0, state_size);
+  for (int i=prev_state_size; i < state_size; ++i) {
+    d_tmp(i) = 0;
+    for (int j=0; j < state_size; ++i) {
+      U_tmp(j, i) = 0;
+    }
+  }
+
+  // if there is transition noise, do the expensive reconstruction/factoring step
+  if (norm_2(tmp) > 0) {
+
+    matrix<double> &mtmp = cache.tmp_U2;
+    matrix<double> &P = cache.P;
+
+    // construct the cov matrix
+    for (int i=0; i < state_size; ++i) {
+      subrange(mtmp, 0, state_size, i, i+1) = subrange(U_tmp, 0, state_size, i, i+1);
+      subrange(mtmp, 0, state_size, i, i+1) *= d_tmp(i);
+    }
+    noalias(subrange(P, 0, state_size, 0, state_size)) \
+      = prod(subrange(mtmp, 0, state_size, 0, state_size),
+	     trans(subrange(U_tmp, 0, state_size, 0, state_size)));
+
+    // add transition noise
+    for (int i=0; i < state_size; ++i) {
+      P(i,i) += tmp(i);
+    }
+
+    // get the new factored representation
+    udu(P, U_tmp, d_tmp, state_size);
+  }
+
+  // if our factored representation is (almost) the same as the previous invocation,
+  // we've reached a stationary state
+  matrix<double> &U_cached = cache.pred_U;
+  vector<double> &d_cached = cache.pred_d;
+  if (ssm.stationary(k)) {
+    if (k > 0 && ssm.stationary(k-1)) {
+      bool potential_fixed_point = true;
+      for (int i=0; i < state_size; ++i) {
+	if (std::abs(d_tmp(i) - d_cached(i)) > cache.eps_stationary) {
+	  potential_fixed_point=false;
+	  break;
+	}
+	for (int j=0; j < state_size; ++j) {
+	  if (std::abs(U_tmp(i,j) - U_cached(i,j)) > cache.eps_stationary) {
+	    potential_fixed_point=false;
+	    break;
+	  }
+	}
+	if (!potential_fixed_point) {
+	  break;
+	}
+      }
+      if (potential_fixed_point) {
+	cache.at_fixed_point = true;
+      }
+    }
+  }
+  if (!cache.at_fixed_point) {
+    subrange(U_cached, 0, state_size, 0, state_size) = subrange(U_tmp, 0, state_size, 0, state_size);
+    subrange(d_cached, 0, state_size) = subrange(d_tmp, 0, state_size);
+  }
+  cache.state_size = state_size;
+}
+
+double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
+  FilterState cache(ssm.max_dimension, 1e-10);
+  cache.init_priors(ssm);
+  int N = z.size();
+  double ell = 0;
+  ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
+  for (int k=0; k < N; ++k) {
+    kalman_predict_sqrt(ssm, cache, k);
+    ell += kalman_observe_sqrt(ssm, cache, k, z(k));
+  }
+  return ell;
+}
