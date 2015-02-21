@@ -4,14 +4,17 @@ import os
 import time
 import shutil
 
+from sigvisa import Sigvisa
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
 class MCMCLogger(object):
 
     def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=500, template_move_step=True, print_interval=20, transient=False):
 
+        s = Sigvisa()
+
         if run_dir is None:
-            base_path = os.path.join("logs", "mcmc")
+            base_path = os.path.join(s.homedir, "logs", "mcmc")
             mkdir_p(base_path)
             run_dir = os.path.join(base_path, "%05d" % next_unused_int_in_dir(base_path))
         mkdir_p(run_dir)

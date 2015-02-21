@@ -254,12 +254,16 @@ display.innerHTML=slide.value;
 }
 
 function changeNoise() {
-document.getElementById("fitwiggle").checked = !document.getElementById("fitnoise").checked;
+if (document.getElementById("fitnoise").checked) {
+   document.getElementById("fitwiggle").checked = false;
+}
 updateFitImage()
 }
 
 function changeWiggle() {
-document.getElementById("fitnoise").checked = !document.getElementById("fitwiggle").checked;
+if (document.getElementById("fitwiggle").checked) {
+   document.getElementById("fitnoise").checked = false;
+}
 updateFitImage()
 }
 
