@@ -298,12 +298,15 @@ class StateSpaceModel(object):
             ell = self.kalman_observe_sqrt(0, z[0], xk, U, d, state_size)
         yield xk, U, d
 
+        #print "post observe(0)", U, d
+
         xk1 = xk.copy() # temp variable
         for k in range(1, N):
 
             # run the transition model to get the state estimate for the current timestep
             U, d, state_size = self.kalman_predict_sqrt(k, xk1, U, d, xk, state_size)
 
+            #print "post pred(%d)" % k, U, d, xk
 
             # if there is an observation at this timestep, update the state estimate
             # accordingly. (and do some bookkeeping for the covariance cache)
@@ -317,6 +320,8 @@ class StateSpaceModel(object):
                 self.wasnan = False
 
                 ell += self.kalman_observe_sqrt(k, z[k], xk, U, d, state_size)
+
+            #print "post obs(%d)" % k, U, d, xk
 
             yield xk, U, d
 
@@ -360,11 +365,16 @@ class StateSpaceModel(object):
             # section V.3, p. 78.
             # Another reference is Bruce Gibbs, "Advanced Kalman
             # Filtering, Least-Squares, and Modeling" (2011).
+
+            # print "initial U", U
             self.apply_observation_matrix(U[:state_size,:state_size], k, f)
+            # print "predicted obs", f
             v = d[:state_size] * f
+            # print "got v", v
             if np.isnan(v).any():
                 raise Exception("v is %s" % v)
             alpha = r + v[0]*f[0]
+            # print "   alpha", alpha
             if alpha > 1e-30:
                 d[0] *= r/alpha
 
@@ -373,6 +383,8 @@ class StateSpaceModel(object):
             for j in range(1, state_size):
                 old_alpha = alpha
                 alpha += v[j]*f[j]
+                # print "   alpha", j, alpha
+                assert(alpha > 0)
                 if alpha > 1e-30:
                     d[j] *= old_alpha/alpha
                 u_tmp[:] = U[:state_size,j]
@@ -403,6 +415,9 @@ class StateSpaceModel(object):
 
         # also compute log marginal likelihood for this observation
         step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
+
+        # print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
+
         assert(not np.isnan(step_ell))
 
         return step_ell

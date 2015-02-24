@@ -96,6 +96,23 @@ void FilterState::init_priors(StateSpaceModel &ssm) {
   return;
 }
 
+void print_vec(const vector<double> & v) {
+  for(int i=0; i < v.size(); ++i) {
+    printf("%.3f ", v(i));
+  }
+  printf("\n");
+}
+
+void print_mat(const matrix<double> & m) {
+  for(int i=0; i < m.size1(); ++i) {
+    for(int j=0; j < m.size2(); ++j) {
+      printf("%.3f ", m(i,j));
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
 
 double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk) {
 
@@ -131,21 +148,32 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     K.clear();
     f.clear();
 
+    //printf("initial U ");
+    // print_mat(U_old);
+
     ssm.apply_observation_matrix(U_old, k, f, state_size);
     for (int i=0; i < state_size; ++i) {
       v(i) = d_old(i)*f(i);
     }
+    //printf("predicted obs ");
+    //print_vec(f);
+
+    // printf("got v ");
+    // print_vec(v);
+
 
     alpha = r + v(0)*f(0);
     if (alpha > 1e-30) {
        d(0) = d_old(0) * r/alpha;
     }
+    // printf("   alpha C: %f\n", alpha);
     K(0)=v(0);
 
     U(0, 0) = U_old(0,0);
     for (int j=1; j < state_size; ++j) {
       double old_alpha = alpha;
       alpha += v(j)*f(j);
+      // printf("   alpha C %d: %f\n", j, alpha);
       if (alpha > 1e-30) {
          d(j) = d_old(j) * old_alpha/alpha;
       }
@@ -172,7 +200,11 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   }
 
   // also compute log marginal likelihood for this observation
-  return -.5 * log(2*PI*alpha) - .5 * yk*yk / alpha;
+  double step_ell = -.5 * log(2*PI*alpha) - .5 * yk*yk / alpha;
+
+  //printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
+
+  return step_ell;
 }
 
 void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
@@ -282,9 +314,36 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   int N = z.size();
   double ell = 0;
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
-  for (int k=0; k < N; ++k) {
+
+  /*printf("post observe(0) obs_U ");
+  print_mat(cache.obs_U);
+  printf("post observe(0) obs_d ");
+  print_vec(cache.obs_d);*/
+
+  for (int k=1; k < N; ++k) {
+
+
     kalman_predict_sqrt(ssm, cache, k);
+
+    /*printf("post pred(%d) obs_U ", k);
+  print_mat(cache.pred_U);
+  printf("post pred(%d) obs_d ", k);
+  print_vec(cache.pred_d);
+
+  printf("post pred(%d) xk ", k);
+  print_vec(cache.xk);*/
+
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
+
+    /*printf("post observe(%d) obs_U ", k);
+  print_mat(cache.obs_U);
+  printf("post observe(%d) obs_d ", k);
+  print_vec(cache.obs_d);
+
+  printf("post obs(%d) xk ", k);
+  print_vec(cache.xk);*/
+
+
   }
   return ell;
 }

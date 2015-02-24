@@ -5,6 +5,7 @@
 using namespace boost::numeric::ublas;
 
 #include <google/dense_hash_map>
+#include <boost/functional/hash.hpp>
 using google::dense_hash_map;
 
 //typedef matrix_range< matrix<double> > mr;
@@ -26,29 +27,25 @@ public:
   virtual int prior_vars(vector<double> &result) = 0;
   virtual bool stationary(int k) = 0;
 
+  virtual ~StateSpaceModel() { return; };
+
   int max_dimension;
 };
 
 
 class CompactSupportSSM : public StateSpaceModel {
+public:
   int n_basis;
   int n_steps;
 
 
-  std::vector<int> & start_idxs;
-  std::vector<int> & end_idxs;
-  std::vector<int> & identities;
-  std::vector< vector<double> > & basis_prototypes;
 
-  vector<double> & coef_means;
-  vector<double> & coef_vars;
-  double obs_noise;
-  double bias;
-
-  CompactSupportSSM(std::vector<int> & start_idxs, std::vector<int> & end_idxs,
-		    std::vector<int> & identities, std::vector< vector<double> > & basis_prototypes,
-		    vector<double> & coef_means,  vector<double> & coef_vars,
+  CompactSupportSSM(const vector<int> & start_idxs, const vector<int> & end_idxs,
+		    const vector<int> & identities, const matrix<double> & basis_prototypes,
+		    const vector<double> & coef_means,  const vector<double> & coef_vars,
 		    double obs_noise, double bias);
+
+  ~CompactSupportSSM();
 
   int apply_transition_matrix (const vector<double> &x, int k, vector<double> &result);
   void transition_bias (int k, vector<double> & result) ;
@@ -62,8 +59,20 @@ class CompactSupportSSM : public StateSpaceModel {
   bool stationary(int k);
 
 private:
-  dense_hash_map< std::pair<int, int>, int> active_indices;
+dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  > active_indices;
   matrix<int> active_basis;
+
+  const vector<int> & start_idxs;
+  const vector<int> & end_idxs;
+  const vector<int> & identities;
+  const matrix <double> & basis_prototypes;
+
+  const vector<double> & coef_means;
+  const vector<double> & coef_vars;
+  double obs_noise;
+  double bias;
+
+
 };
 
 
@@ -96,3 +105,7 @@ public:
   void init_priors(StateSpaceModel &ssm);
 
 };
+
+double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk);
+void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k);
+double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z);

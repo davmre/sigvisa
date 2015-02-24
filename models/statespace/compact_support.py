@@ -53,6 +53,7 @@ class CompactSupportSSM(StateSpaceModel):
         for i, idx in enumerate(active):
             prev_idx = self.active_indices[idx, k-1]
             x_new[i] = 0 if prev_idx < 1 else x[prev_idx-1]
+            #print "transition k %d i %d idx %d prev_idx %d x[prev_idx] %.4f" % (k, i, idx, prev_idx, x_new[i])
         return len(active)
 
     def transition_matrix_debug(self, k):
@@ -205,12 +206,13 @@ class ImplicitCompactSupportSSM(CompactSupportSSM):
 
         #print "time", k, "active", active
         #for basis_idx in active:
-            #print " basis", basis_idx, "identity", self.identities[basis_idx], "st", self.start_idxs[basis_idx], "adjusted", k-self.start_idxs[basis_idx],
-            #ident = self.identities[basis_idx]
-            #pt = self.basis_prototypes[ident]
-            #print " pt len", len(pt),
-            #print " et", self.end_idxs[basis_idx],
-            #print "obs", pt[k-self.start_idxs[basis_idx]]
+        #    print " basis", basis_idx, "identity", self.identities[basis_idx], "st", self.start_idxs[basis_idx], "adjusted", k-self.start_idxs[basis_idx],
+        #    ident = self.identities[basis_idx]
+        #    pt = self.basis_prototypes[ident]
+        #    print " pt len", len(pt),
+        #    print " et", self.end_idxs[basis_idx],
+        #    print "obs", pt[k-self.start_idxs[basis_idx]]
+
         obs = [self.basis_prototypes[self.identities[basis_idx]][k-self.start_idxs[basis_idx]] for basis_idx in active]
 
         if len(x.shape)==1:

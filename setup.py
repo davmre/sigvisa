@@ -47,7 +47,7 @@ print sys_libraries
 extra_compile_args = ['-std=c99', '-g', '-O0']
 #extra_compile_args = ['-std=c99','-O3']
 #extra_link_args = ['-Wl,--strip-all']
-extra_link_args = ['-lrt',]
+extra_link_args = ['-lrt', ]
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c',
@@ -72,7 +72,7 @@ sigvisa_module = Extension('sigvisa_c',
                            )
 
 
-ssm_sources = ['statespace.cc', 'compact_support.cc']
+ssm_sources = ['statespace.cc', 'compact_support.cc', 'python_wrappers.cc']
 from imp import find_module
 f, pathname, descr = find_module("pyublas")
 CTREE_INCLUDE_DIRS = [os.path.join(pathname, "include"),]
