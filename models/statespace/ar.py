@@ -7,7 +7,10 @@ class ARSSM(StateSpaceModel):
 
     def __init__(self, params, error_var, mean=0.0):
         self.params = np.asarray(params) # [a1, a2, ..., an] where a1 is the first-order param
+
+        assert(error_var > 0)
         self.error_var = error_var
+
         self.max_dimension = len(params)
         self.mean = mean
 

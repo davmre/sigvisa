@@ -60,38 +60,30 @@ private:
 };
 
 
-class TestPyCSSSM {
+class PyARSSM {
 public:
 
-  TestPyCSSSM(const pyublas::numpy_vector<int> & start_idxs) {
-    return;
+  PyARSSM(const pyublas::numpy_vector<double> & params, double error_var,
+	  const double obs_noise, const double bias) {
+
+    p.resize(params.size());
+    p.assign(params);
+
+    this->ssm = new ARSSM(p, error_var, obs_noise, bias);
   };
 
-  ~TestPyCSSSM() {
-    return;
+  ~PyARSSM() {
+    delete this->ssm;
   };
 
   double run_filter(pyublas::numpy_vector<double> z) {
-    return 1.0;
+    return filter_likelihood(*(this->ssm), z);
   };
 
-};
+private:
+  ARSSM * ssm;
 
-class TDPyCSSSM {
-public:
-
-  TDPyCSSSM(const double x) {
-    return;
-  };
-
-  ~TDPyCSSSM() {
-    return;
-  };
-
-  double run_filter(double b) {
-    return b;
-  };
-
+  vector<double> p;
 
 };
 
@@ -106,12 +98,9 @@ BOOST_PYTHON_MODULE(ssms_c) {
 	  double const , double const>())
     .def("run_filter", &PyCSSSM::run_filter);
 
-  bp::class_<TestPyCSSSM>("TestCompactSupportSSM", bp::init< \
-	  pyublas::numpy_vector<int> const &>())
-    .def("run_filter", &TestPyCSSSM::run_filter);
-
-  bp::class_<TDPyCSSSM>("TDCompactSupportSSM", bp::init< \
-	  double const &>())
-    .def("run_filter", &TDPyCSSSM::run_filter);
+  bp::class_<PyARSSM>("ARSSM", bp::init< \
+		      pyublas::numpy_vector<double> const &,  double const,
+		      double const , double const>())
+    .def("run_filter", &PyARSSM::run_filter);
 
 }

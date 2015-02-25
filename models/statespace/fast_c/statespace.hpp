@@ -75,6 +75,29 @@ dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  > 
 
 };
 
+class ARSSM : public StateSpaceModel {
+public:
+  ARSSM(const vector<double> & params, double error_var,
+	  double obs_noise, double bias);
+  ~ARSSM();
+
+  int apply_transition_matrix (const vector<double> &x, int k, vector<double> &result);
+  void transition_bias (int k, vector<double> & result) ;
+  void transition_noise_diag(int k, vector<double> & result);
+  double apply_observation_matrix(const vector<double> &x, int k);
+  void apply_observation_matrix(const matrix<double> &X, int k, vector<double> &result, int n);
+  double observation_bias(int k);
+  double observation_noise(int k);
+  int prior_mean(vector<double> &result);
+  int prior_vars(vector<double> &result);
+  bool stationary(int k);
+
+private:
+  const vector<double> & params;
+  const double error_var;
+  const double obs_noise;
+  const double bias;
+};
 
 class FilterState {
 public:

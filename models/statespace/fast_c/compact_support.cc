@@ -1,6 +1,3 @@
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
-#include <pyublas/numpy.hpp>
 #include <boost/numeric/ublas/matrix_proxy.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
 
@@ -11,6 +8,7 @@
 #include <algorithm>
 #include <utility>
 #include <iterator>
+
 #include "statespace.hpp"
 
 using namespace boost::numeric::ublas;
