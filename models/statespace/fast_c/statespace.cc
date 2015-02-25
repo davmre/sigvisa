@@ -49,6 +49,9 @@ void udu(matrix<double> &M, matrix<double> &U, vector<double> &d, int state_size
     double beta = 0.0;
     if (d(j - 1) > 0) {
       alpha = 1.0 / d(j - 1);
+    } else {
+      d(j-1) = 0.0;
+      alpha = 0.0;
     }
     for (int k=1; k < j; ++k) {
       beta = M(k - 1, j - 1);
@@ -163,8 +166,11 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 
 
     alpha = r + v(0)*f(0);
-    if (alpha > 1e-30) {
+    if (alpha > 1e-20) {
        d(0) = d_old(0) * r/alpha;
+    } else {
+      d(0) = d_old(0);
+      alpha = 1e-20;
     }
     // printf("   alpha C: %f\n", alpha);
     K(0)=v(0);
@@ -174,11 +180,11 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
       double old_alpha = alpha;
       alpha += v(j)*f(j);
       // printf("   alpha C %d: %f\n", j, alpha);
-      if (alpha > 1e-30) {
+      if (alpha > 1e-20) {
          d(j) = d_old(j) * old_alpha/alpha;
-      }
-      if (old_alpha < 1e-30) {
-	old_alpha = 1e-30;
+      } else {
+	d(j) = d_old(j);
+	alpha = 1e-20;
       }
 
       for (int i=0; i < state_size; ++i) {
@@ -202,7 +208,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   // also compute log marginal likelihood for this observation
   double step_ell = -.5 * log(2*PI*alpha) - .5 * yk*yk / alpha;
 
-  //printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
+  // printf("step %d (C) bias %.4f pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", ssm.observation_bias(k), k, pred_z, alpha, zk, yk, step_ell);
 
   return step_ell;
 }
@@ -245,7 +251,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
   subrange(d_tmp, 0, state_size) = subrange(d_old, 0, state_size);
   for (int i=prev_state_size; i < state_size; ++i) {
     d_tmp(i) = 0;
-    for (int j=0; j < state_size; ++i) {
+    for (int j=0; j < state_size; ++j) {
       U_tmp(j, i) = 0;
     }
   }

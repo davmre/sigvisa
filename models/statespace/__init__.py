@@ -27,6 +27,9 @@ def udu(M):
         if d[j - 1] > 0:
             alpha = 1.0 / d[j - 1]
         else:
+            if np.abs(d[j-1]) > 1e-5:
+                print "WARNING: nonpositive d[%d] %f in udu decomp"  % (j-1, d[j-1])
+            d[j-1] = 0
             alpha = 0.0
         for k in range(1, j):
             beta = M[k - 1, j - 1]
@@ -375,21 +378,26 @@ class StateSpaceModel(object):
                 raise Exception("v is %s" % v)
             alpha = r + v[0]*f[0]
             # print "   alpha", alpha
-            if alpha > 1e-30:
+            assert(alpha >= 0)
+            if alpha > 1e-20:
                 d[0] *= r/alpha
+            else:
+                alpha = 1e-20
 
             K[0] = v[0]
             u_tmp = np.empty((state_size,))
             for j in range(1, state_size):
                 old_alpha = alpha
-                alpha += v[j]*f[j]
+                incr = v[j]*f[j]
+                assert(incr >= 0)
+                alpha += incr
                 # print "   alpha", j, alpha
-                assert(alpha > 0)
-                if alpha > 1e-30:
+                assert(alpha >= 0)
+                if alpha > 1e-20:
                     d[j] *= old_alpha/alpha
+                else:
+                    alpha = 1e-20
                 u_tmp[:] = U[:state_size,j]
-                if old_alpha < 1e-30:
-                    old_alpha = 1e-30
                 U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
                 K += v[j]*u_tmp
 
