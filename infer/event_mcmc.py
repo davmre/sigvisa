@@ -822,10 +822,15 @@ def swap_params(t1nodes, t2nodes):
 
 def swap_association_move(sg, wave_node, repropose_events=False, debug_probs=False, stas=None):
 
-    # sample from all pairs of adjacent templates in which not both are uatemplates
+    # sample from all pairs of adjacent templates
     arr1, arr2, pair_prob = sample_uniform_pair_to_swap(sg, wave_node)
     if arr1 is None:
         return False
+
+    # don't bother "swapping" uatemplates
+    if arr1[2]=="UA" and arr2[2] == "UA":
+        return False
+
 
     # get all relevant nodes for the arrivals we sampled
     t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
