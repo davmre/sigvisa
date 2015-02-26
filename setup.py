@@ -72,7 +72,8 @@ sigvisa_module = Extension('sigvisa_c',
                            )
 
 
-ssm_sources = ['statespace.cc', 'compact_support.cc', 'python_wrappers.cc', 'autoregression.cc']
+ssm_sources = [ 'transient_combined.cc', 'statespace.cc', 'compact_support.cc', 'python_wrappers.cc',
+               'autoregression.cc']
 from imp import find_module
 f, pathname, descr = find_module("pyublas")
 CTREE_INCLUDE_DIRS = [os.path.join(pathname, "include"),]

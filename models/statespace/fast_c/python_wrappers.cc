@@ -87,6 +87,38 @@ private:
 
 };
 
+class PyTSSM {
+public:
+
+  PyTSSM(const pyublas::numpy_vector<double> & params, double error_var,
+	 const double obs_noise, const double bias) {
+
+    p.resize(params.size());
+    p.assign(params);
+
+    this->ssm = new TransientCombinedSSM(p, error_var, obs_noise, bias);
+  };
+
+  ~PyARSSM() {
+    delete this->ssm;
+  };
+
+  double run_filter(pyublas::numpy_vector<double> z) {
+    return filter_likelihood(*(this->ssm), z);
+  };
+
+private:
+  TransientCombinedSSM * ssm;
+
+  vector<double> p;
+
+  std::vector<StateSpaceModel *> ssms;
+  vector<int> start_idxs;
+  vector<int> & end_idxs;
+  std::vector<vector<double> * > scales;
+
+};
+
 
 
 namespace bp = boost::python;

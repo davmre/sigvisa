@@ -13,9 +13,6 @@
 
 using namespace boost::numeric::ublas;
 
-double gdb_get( matrix<double> & m, int i, int j) {
-  return m(i,j);
-}
 
 CompactSupportSSM::CompactSupportSSM(\
        const vector<int> & start_idxs, const vector <int > & end_idxs,
@@ -25,6 +22,7 @@ CompactSupportSSM::CompactSupportSSM(\
 					identities(identities), basis_prototypes(basis_prototypes),
 					coef_means(coef_means), coef_vars(coef_vars),
 					obs_noise(obs_noise), bias(bias) {
+
   this->n_basis = start_idxs.size();
   this->n_steps = *(std::max_element(end_idxs.begin(), end_idxs.end()));
 
@@ -72,7 +70,7 @@ CompactSupportSSM::~CompactSupportSSM() {
   return;
 };
 
-int CompactSupportSSM::apply_transition_matrix(const vector<double> &x, int k, vector<double> &result){
+int CompactSupportSSM::apply_transition_matrix( const double * x, int k, double * result) {
   /* compute F_k*x for the given x, where
      F_k is the transition matrix from time
      k-1 to k. The result is stored in
@@ -86,26 +84,23 @@ int CompactSupportSSM::apply_transition_matrix(const vector<double> &x, int k, v
   for (i=0, idx = active.begin();
        idx < active.end() && *idx >= 0;
        ++i, ++idx) {
-
-
-
     // if this basis is new at this timestep, initialize to zero.
     // otherwise, use its previous value.
     std::pair<int,int> key = std::make_pair(int(*idx), k-1);
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
-      result(i) = 0;
+      result[i] = 0;
       // printf("transition k %d i %d idx %d prev_idx %d x_new[i] %.4f\n", k, i, *idx, -1, 0.0);
     } else {
       int prev_idx = this->active_indices[key];
-      result(i) =x(prev_idx);
+      result[i] =x[prev_idx];
       // printf("transition k %d i %d idx %d prev_idx %d x_new[i] %.4f\n", k, i, *idx, prev_idx, x(prev_idx));
     }
   }
   return i;
 }
 
-void CompactSupportSSM::transition_bias(int k, vector<double> &result) {
+void CompactSupportSSM::transition_bias(int k, double * result) {
 
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
@@ -119,14 +114,14 @@ void CompactSupportSSM::transition_bias(int k, vector<double> &result) {
     std::pair<int,int> key = std::make_pair(*idx, k-1);
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
-      result(i) += this->coef_means(*idx);
+      result[i] += this->coef_means(*idx);
     }
   }
 }
 
 
-void CompactSupportSSM::transition_noise_diag(int k, vector<double> &result) {
-  result.clear();
+void CompactSupportSSM::transition_noise_diag(int k, double * result) {
+  //result.clear();
 
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
@@ -135,19 +130,17 @@ void CompactSupportSSM::transition_noise_diag(int k, vector<double> &result) {
        idx < active.end() && *idx >= 0;
        ++i, ++idx) {
 
-    // if this basis is new at this timestep, initialize to zero.
-    // otherwise, use its previous value.
     std::pair<int,int> key = std::make_pair(*idx, k-1);
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
-      result(i) = this->coef_vars(*idx);
+      result[i] = this->coef_vars(*idx);
     } else {
-      result(i) = 0.0;
+      result[i] = 0.0;
     }
   }
 }
 
-double CompactSupportSSM::apply_observation_matrix(const vector<double> &x, int k) {
+double CompactSupportSSM::apply_observation_matrix(const double * x, int k) {
   // const matrix_row< matrix<int> > active = row(this->active_basis, k);
 
   double result = 0;
@@ -161,16 +154,22 @@ double CompactSupportSSM::apply_observation_matrix(const vector<double> &x, int 
     int st = (this->start_idxs)(basis);
     int et = this->end_idxs(basis);
 
-    result += x(i) * (this->basis_prototypes)(prototype, k-st);
+    result += x[i] * (this->basis_prototypes)(prototype, k-st);
   }
   return result;
 }
 
-void CompactSupportSSM::apply_observation_matrix(const matrix<double> &X, int k, vector<double> &result, int n) {
+void CompactSupportSSM::apply_observation_matrix(const matrix<double,column_major> &X,
+						 int row_offset, int k,
+						 double *result, double *result_tmp, int n) {
   //const matrix_row< matrix<int> > active = row(this->active_basis, k);
   //matrix_row< matrix<int> >::const_iterator idx;
   int i = 0;
-  result.clear();
+
+  for (int j=0; j < n; ++j) {
+    result[j] = 0;
+  }
+
   for (i=0; i < this->active_basis.size2() && this->active_basis(k, i) >= 0; ++i) {
     int basis = this->active_basis(k, i);
 
@@ -179,7 +178,7 @@ void CompactSupportSSM::apply_observation_matrix(const matrix<double> &X, int k,
     int et = this->end_idxs(basis);
 
     for (int j=0; j < n; ++j) {
-      result(j) += X(i,j) * this->basis_prototypes(prototype, k-st);
+      result[j] += X(row_offset+i,j) * this->basis_prototypes(prototype, k-st);
     }
   }
 }
@@ -197,7 +196,7 @@ bool CompactSupportSSM::stationary(int k) {
   return false;
 }
 
-int CompactSupportSSM::prior_mean(vector<double> &result) {
+int CompactSupportSSM::prior_mean(double *result) {
   const matrix_row< matrix<int> > active = row(this->active_basis, 0);
   matrix_row< matrix<int> >::const_iterator idx;
   int i = 0;
@@ -209,19 +208,19 @@ int CompactSupportSSM::prior_mean(vector<double> &result) {
        ++i, ++idx) {
     int d1 = std::distance(idx, active.end());
     // printf("prior mean i %d *idx %d coef_mean %f distance %d %d\n", i, *idx, this->coef_means(*idx), d, d1);
-    result(i) = this->coef_means(*idx);
+    result[i] = this->coef_means(*idx);
   }
   return i;
 }
 
-int CompactSupportSSM::prior_vars(vector<double> &result) {
+int CompactSupportSSM::prior_vars(double *result) {
   const matrix_row< matrix<int> > active = row(this->active_basis, 0);
   matrix_row< matrix<int> >::const_iterator idx;
   int i = 0;
   for (i=0, idx = active.begin();
        idx < active.end() && *idx >= 0;
        ++i, ++idx) {
-    result(i) = this->coef_vars(*idx);
+    result[i] = this->coef_vars(*idx);
   }
   return i;
 }

@@ -1,6 +1,5 @@
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
-#include <pyublas/numpy.hpp>
+#include <boost/numeric/ublas/vector.hpp>
+#include <boost/numeric/ublas/vector_proxy.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
 using namespace boost::numeric::ublas;
 
@@ -11,20 +10,28 @@ using google::dense_hash_map;
 //typedef matrix_range< matrix<double> > mr;
 //typedef vector_range< vector <double> > vr;
 
-#define PI 3.14159265
+#define PI 3.14159265359
+
+//double gdb_get( matrix<double> & m, int i, int j) {
+//  return m(i,j);
+//}
+
 
 class StateSpaceModel {
 
 public:
-  virtual int apply_transition_matrix(const vector<double> &x, int k, vector<double> &result) = 0;
-  virtual void transition_bias(int k, vector<double> & result) = 0;
-  virtual void transition_noise_diag(int k, vector<double> & result) = 0;
-  virtual double apply_observation_matrix(const vector<double> &x, int k) = 0;
-  virtual void apply_observation_matrix(const matrix<double> &X, int k, vector<double> &result, int n) = 0;
+  virtual int apply_transition_matrix(const double * x,
+					int k, double * result) = 0;
+
+  virtual void transition_bias(int k, double * result) = 0;
+  virtual void transition_noise_diag(int k, double * result) = 0;
+  virtual double apply_observation_matrix(const  double * x, int k) = 0;
+
+  virtual void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n) = 0;
   virtual double observation_bias(int k) = 0;
   virtual double observation_noise(int k) = 0;
-  virtual int prior_mean(vector<double> &result) = 0;
-  virtual int prior_vars(vector<double> &result) = 0;
+  virtual int prior_mean(double * result) = 0;
+  virtual int prior_vars(double * result) = 0;
   virtual bool stationary(int k) = 0;
 
   virtual ~StateSpaceModel() { return; };
@@ -47,15 +54,15 @@ public:
 
   ~CompactSupportSSM();
 
-  int apply_transition_matrix (const vector<double> &x, int k, vector<double> &result);
-  void transition_bias (int k, vector<double> & result) ;
-  void transition_noise_diag(int k, vector<double> & result);
-  double apply_observation_matrix(const vector<double> &x, int k);
-  void apply_observation_matrix(const matrix<double> &X, int k, vector<double> &result, int n);
+  int apply_transition_matrix(const double *x, int k, double * result);
+  void transition_bias (int k, double * result) ;
+  void transition_noise_diag(int k, double * result);
+  double apply_observation_matrix(const double * x, int k);
+  void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n);
   double observation_bias(int k);
   double observation_noise(int k);
-  int prior_mean(vector<double> &result);
-  int prior_vars(vector<double> &result);
+  int prior_mean(double * result);
+  int prior_vars(double * result);
   bool stationary(int k);
 
 private:
@@ -81,15 +88,15 @@ public:
 	  double obs_noise, double bias);
   ~ARSSM();
 
-  int apply_transition_matrix (const vector<double> &x, int k, vector<double> &result);
-  void transition_bias (int k, vector<double> & result) ;
-  void transition_noise_diag(int k, vector<double> & result);
-  double apply_observation_matrix(const vector<double> &x, int k);
-  void apply_observation_matrix(const matrix<double> &X, int k, vector<double> &result, int n);
+  int apply_transition_matrix(const double *x, int k, double * result);
+  void transition_bias (int k, double * result) ;
+  void transition_noise_diag(int k, double * result);
+  double apply_observation_matrix(const double * x, int k);
+  void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n);
   double observation_bias(int k);
   double observation_noise(int k);
-  int prior_mean(vector<double> &result);
-  int prior_vars(vector<double> &result);
+  int prior_mean(double * result);
+  int prior_vars(double * result);
   bool stationary(int k);
 
 private:
@@ -97,6 +104,48 @@ private:
   const double error_var;
   const double obs_noise;
   const double bias;
+};
+
+class TransientCombinedSSM : public StateSpaceModel {
+public:
+TransientCombinedSSM(std::vector<StateSpaceModel *> ssms, const vector<int> start_idxs,
+			 const vector<int> & end_idxs, const std::vector<vector<double> * > scales,
+			 double obs_noise);
+~TransientCombinedSSM();
+
+  int apply_transition_matrix(const double *x, int k, double * result);
+  void transition_bias (int k, double * result) ;
+  void transition_noise_diag(int k, double * result);
+  double apply_observation_matrix(const double * x, int k);
+  void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n);
+  double observation_bias(int k);
+  double observation_noise(int k);
+  int prior_mean(double * result);
+  int prior_vars(double * result);
+  bool stationary(int k);
+
+private:
+  std::vector<StateSpaceModel *> ssms;
+  const vector<int> start_idxs;
+  const vector<int> end_idxs;
+  const std::vector<vector<double> * > scales;
+
+  const double obs_noise;
+  const int n_ssms;
+  int n_steps;
+
+  int active_ssm_cache1_k;
+  int active_ssm_cache1_v;
+  int active_ssm_cache2_k;
+  int active_ssm_cache2_v;
+
+  vector<int> ssms_tmp;
+  std::vector<int> changepoints;
+
+  matrix<int> active_sets;
+
+  int active_set_idx(int k);
+
 };
 
 class FilterState {
@@ -107,14 +156,14 @@ public:
   bool wasnan;
   bool at_fixed_point;
   double alpha;
-  matrix<double> obs_U;
+  matrix<double,column_major> obs_U;
   vector<double> obs_d;
   vector<double> gain;
-  matrix<double> pred_U;
+  matrix<double,column_major> pred_U;
   vector<double> pred_d;
 
-  matrix<double> tmp_U1;
-  matrix<double> tmp_U2;
+  matrix<double,column_major> tmp_U1;
+  matrix<double,column_major> tmp_U2;
   matrix<double> P;
 
   vector<double> f;

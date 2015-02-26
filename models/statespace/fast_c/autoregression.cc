@@ -24,30 +24,40 @@ ARSSM::~ARSSM() {
   return;
 };
 
-int ARSSM::apply_transition_matrix(const vector<double> &x, int k, vector<double> &result){
-  result(0) = inner_prod(x, this->params);
+
+int ARSSM::apply_transition_matrix(const double * x, int k, double * result) {
+  double ip = 0;
+  for (unsigned i=0; i < this->params.size(); ++i) {
+    ip += x[i] * this->params(i);
+  }
+  result[0] = ip;
   for (int i=1; i < this->max_dimension; ++i) {
     result[i] = x[i-1];
   }
   return this->max_dimension;
 }
 
-void ARSSM::transition_bias(int k, vector<double> &result) {
+void ARSSM::transition_bias(int k, double *result) {
   return;
 }
 
-
-void ARSSM::transition_noise_diag(int k, vector<double> &result) {
-  result.clear();
+void ARSSM::transition_noise_diag(int k, double *result) {
   result[0] = this->error_var;
+  for (int i=1; i < this->max_dimension; ++i) {
+    result[i] = 0.0;
+  }
 }
 
-double ARSSM::apply_observation_matrix(const vector<double> &x, int k) {
-  return x(0);
+double ARSSM::apply_observation_matrix(const double *x, int k) {
+  return x[0];
 }
 
-void ARSSM::apply_observation_matrix(const matrix<double> &X, int k, vector<double> &result, int n) {
-  noalias(result) = row(X, 0);
+void ARSSM::apply_observation_matrix(const matrix <double,column_major> &X,
+				     int row_offset, int k,
+				     double *result, double * result_tmp, int n) {
+  for (unsigned i=0; i < n; ++i) {
+    result[i] = X(row_offset, i);
+  }
 }
 
 
@@ -63,12 +73,14 @@ bool ARSSM::stationary(int k) {
   return true;
 }
 
-int ARSSM::prior_mean(vector<double> &result) {
-  result.clear();
+int ARSSM::prior_mean(double *result) {
+  for (int i=0; i < this->max_dimension; ++i) {
+    result[i] = 0;
+  }
   return this->max_dimension;
 }
 
-int ARSSM::prior_vars(vector<double> &result) {
+int ARSSM::prior_vars(double *result) {
   for(int i=0; i < this->max_dimension; ++i) {
     result[i] = this->error_var;
   }

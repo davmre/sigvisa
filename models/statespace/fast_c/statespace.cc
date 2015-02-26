@@ -13,7 +13,7 @@
 
 using namespace boost::numeric::ublas;
 
-void udu(matrix<double> &M, matrix<double> &U, vector<double> &d, int state_size) {
+void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, int state_size) {
   // this method stolen from pykalman.sqrt.bierman by Daniel Duckworth (BSD license)
   /*Construct the UDU' decomposition of a positive, semidefinite matrix M
 
@@ -72,10 +72,10 @@ FilterState::FilterState(int max_dimension, double eps_stationary) {
   this->alpha = 0;
   this->wasnan = false;
 
-  this->obs_U = matrix<double>(max_dimension, max_dimension);
-  this->pred_U = matrix<double>(max_dimension, max_dimension);
-  this->tmp_U1 = matrix<double>(max_dimension, max_dimension);
-  this->tmp_U2 = matrix<double>(max_dimension, max_dimension);
+  this->obs_U = matrix<double,column_major>(max_dimension, max_dimension);
+  this->pred_U = matrix<double,column_major>(max_dimension, max_dimension);
+  this->tmp_U1 = matrix<double,column_major>(max_dimension, max_dimension);
+  this->tmp_U2 = matrix<double,column_major>(max_dimension, max_dimension);
   this->P = matrix<double>(max_dimension, max_dimension);
 
   this->obs_d = vector<double>(max_dimension);
@@ -89,8 +89,8 @@ FilterState::FilterState(int max_dimension, double eps_stationary) {
 
 
 void FilterState::init_priors(StateSpaceModel &ssm) {
-  this->state_size = ssm.prior_mean(this->xk);
-  this->state_size = ssm.prior_vars(this->pred_d);
+  this->state_size = ssm.prior_mean(&(this->xk(0)));
+  this->state_size = ssm.prior_vars(&(this->pred_d(0)));
 
   this->pred_U.clear();
   for (int i=0; i < ssm.max_dimension; ++i) {
@@ -138,10 +138,10 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   if (!cache.at_fixed_point || !ssm.stationary(k)) {
     cache.at_fixed_point = false;
 
-    matrix<double> &U_old = cache.pred_U;
+    matrix<double,column_major> &U_old = cache.pred_U;
     vector<double> &d_old = cache.pred_d;
 
-    matrix<double> &U = cache.obs_U;
+    matrix<double,column_major> &U = cache.obs_U;
     vector<double> &d = cache.obs_d;
     vector<double> &K = cache.gain;
     vector<double> &f = cache.f;
@@ -154,7 +154,8 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     //printf("initial U ");
     // print_mat(U_old);
 
-    ssm.apply_observation_matrix(U_old, k, f, state_size);
+    ssm.apply_observation_matrix(U_old, 0,
+				 k, &(f(0)), &(v(0)), state_size);
     for (int i=0; i < state_size; ++i) {
       v(i) = d_old(i)*f(i);
     }
@@ -199,7 +200,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   // given the Kalman gain from the covariance update, compute
   // the updated mean vector.
   vector<double> &xk = cache.xk;
-  double pred_z = ssm.apply_observation_matrix(xk, k) + ssm.observation_bias(k);
+  double pred_z = ssm.apply_observation_matrix(&(xk(0)), k) + ssm.observation_bias(k);
   double yk = zk - pred_z;
   for (int i=0; i < state_size; ++i) {
     xk(i) += cache.gain(i) * yk/alpha;
@@ -218,10 +219,12 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
   int prev_state_size = cache.state_size;
 
   vector<double> &tmp = cache.f;
-  int state_size = ssm.apply_transition_matrix(cache.xk, k, tmp);
+
+  int state_size = ssm.apply_transition_matrix( &(cache.xk(0)), k,  &(tmp(0)));
+
   vector<double> &xk = cache.xk;
   subrange(xk, 0, state_size) = subrange(tmp, 0, state_size);
-  ssm.transition_bias(k, xk);
+  ssm.transition_bias(k, &(xk(0)));
 
   if (cache.at_fixed_point and ssm.stationary(k)) {
     return;
@@ -229,14 +232,14 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
 
   cache.at_fixed_point = false;
 
-  matrix<double> &U_old = cache.obs_U;
+  matrix<double,column_major> &U_old = cache.obs_U;
   vector<double> &d_old = cache.obs_d;
 
-  matrix<double> &U_tmp = cache.tmp_U1;
+  matrix<double,column_major> &U_tmp = cache.tmp_U1;
   vector<double> &d_tmp = cache.v;
 
   // get transition noise into temporary storage
-  ssm.transition_noise_diag(k, tmp);
+  ssm.transition_noise_diag(k, &(tmp(0)));
 
   /* pushing the covariance P through the transition model F yields
      FPF'. In a factored representation, this is FUDU'F', so we just need
@@ -244,8 +247,10 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
   int min_size = std::min(prev_state_size, state_size);
 
   for (int i=0; i < min_size; ++i) {
-    ssm.apply_transition_matrix(column(U_old, i), k, d_tmp);
-    column(U_tmp, i) = d_tmp;
+
+    // THIS ONLY WORKS IF U_old is in column-major order
+    ssm.apply_transition_matrix(&(column(U_old, i)(0) ), k, &(d_tmp(0)) );
+    noalias(column(U_tmp, i)) = d_tmp;
   }
 
   subrange(d_tmp, 0, state_size) = subrange(d_old, 0, state_size);
@@ -259,7 +264,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
   // if there is transition noise, do the expensive reconstruction/factoring step
   if (norm_2(tmp) > 0) {
 
-    matrix<double> &mtmp = cache.tmp_U2;
+    matrix<double,column_major> &mtmp = cache.tmp_U2;
     matrix<double> &P = cache.P;
 
     // construct the cov matrix
@@ -282,7 +287,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
 
   // if our factored representation is (almost) the same as the previous invocation,
   // we've reached a stationary state
-  matrix<double> &U_cached = cache.pred_U;
+  matrix<double,column_major> &U_cached = cache.pred_U;
   vector<double> &d_cached = cache.pred_d;
   if (ssm.stationary(k)) {
     if (k > 0 && ssm.stationary(k-1)) {
