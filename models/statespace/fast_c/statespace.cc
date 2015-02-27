@@ -76,6 +76,11 @@ FilterState::FilterState(int max_dimension, double eps_stationary) {
   this->pred_U = matrix<double,column_major>(max_dimension, max_dimension);
   this->tmp_U1 = matrix<double,column_major>(max_dimension, max_dimension);
   this->tmp_U2 = matrix<double,column_major>(max_dimension, max_dimension);
+
+  // we only ever write to the upper triangle of this matrix, so
+  // zeroing the full matrix now guarantees that it will always be zero.
+  this->obs_U.clear();
+
   this->P = matrix<double>(max_dimension, max_dimension);
 
   this->obs_d = vector<double>(max_dimension);
@@ -85,18 +90,6 @@ FilterState::FilterState(int max_dimension, double eps_stationary) {
   this->v = vector<double>(max_dimension);
 
   this->xk = vector<double>(max_dimension);
-}
-
-
-void FilterState::init_priors(StateSpaceModel &ssm) {
-  this->state_size = ssm.prior_mean(&(this->xk(0)));
-  this->state_size = ssm.prior_vars(&(this->pred_d(0)));
-
-  this->pred_U.clear();
-  for (int i=0; i < ssm.max_dimension; ++i) {
-    this->pred_U(i,i) = 1;
-  }
-  return;
 }
 
 void print_vec(const vector<double> & v) {
@@ -114,6 +107,33 @@ void print_mat(const matrix<double> & m) {
     printf("\n");
   }
   printf("\n");
+}
+
+void print_mat_col(const matrix<double,column_major> & m) {
+  for(int i=0; i < m.size1(); ++i) {
+    for(int j=0; j < m.size2(); ++j) {
+      printf("%.3f ", m(i,j));
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
+
+
+void FilterState::init_priors(StateSpaceModel &ssm) {
+  this->pred_d.clear();
+  this->xk.clear();
+
+  this->state_size = ssm.prior_mean(&(this->xk(0)));
+  this->state_size = ssm.prior_vars(&(this->pred_d(0)));
+
+  this->pred_U.clear();
+  for (int i=0; i < ssm.max_dimension; ++i) {
+    this->pred_U(i,i) = 1;
+  }
+
+  return;
 }
 
 
@@ -149,22 +169,20 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     double r = ssm.observation_noise(k);
 
     K.clear();
-    f.clear();
-
-    //printf("initial U ");
-    // print_mat(U_old);
 
     ssm.apply_observation_matrix(U_old, 0,
 				 k, &(f(0)), &(v(0)), state_size);
+
+
     for (int i=0; i < state_size; ++i) {
       v(i) = d_old(i)*f(i);
     }
+
     //printf("predicted obs ");
     //print_vec(f);
 
     // printf("got v ");
     // print_vec(v);
-
 
     alpha = r + v(0)*f(0);
     if (alpha > 1e-20) {
@@ -246,6 +264,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
      to compute FU. */
   int min_size = std::min(prev_state_size, state_size);
 
+
   for (int i=0; i < min_size; ++i) {
 
     // THIS ONLY WORKS IF U_old is in column-major order
@@ -261,8 +280,9 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
     }
   }
 
+
   // if there is transition noise, do the expensive reconstruction/factoring step
-  if (norm_2(tmp) > 0) {
+  if (norm_2(subrange(tmp, 0, state_size)) > 0) {
 
     matrix<double,column_major> &mtmp = cache.tmp_U2;
     matrix<double> &P = cache.P;
