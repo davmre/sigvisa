@@ -44,7 +44,7 @@ else:
 print sys_includes
 print sys_libraries
 
-extra_compile_args = ['-std=c99', '-g', '-O3']
+extra_compile_args = ['-std=c99', '-g', '-O0']
 #extra_compile_args = ['-std=c99','-O3']
 #extra_link_args = ['-Wl,--strip-all']
 extra_link_args = ['-lrt', ]
@@ -72,7 +72,8 @@ sigvisa_module = Extension('sigvisa_c',
                            )
 
 
-ssm_sources = [ 'transient_combined.cc', 'statespace.cc', 'compact_support.cc', 'python_wrappers.cc',
+ssm_sources = ['python_wrappers.cc', 'transient_combined.cc',
+               'statespace.cc', 'compact_support.cc',
                'autoregression.cc']
 from imp import find_module
 f, pathname, descr = find_module("pyublas")

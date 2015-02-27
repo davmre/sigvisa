@@ -1,12 +1,17 @@
 #include <boost/python/module.hpp>
 #include <boost/python/def.hpp>
+#include <boost/python/tuple.hpp>
+#include <boost/python/list.hpp>
+
+
 #include <pyublas/numpy.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
 using namespace boost::numeric::ublas;
 
 #include "statespace.hpp"
 
-class PyCSSSM {
+
+class PyCSSSM  {
 public:
 
   PyCSSSM(const pyublas::numpy_vector<int> & start_idxs, const pyublas::numpy_vector<int> & end_idxs,
@@ -47,8 +52,9 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
+
+  StateSpaceModel *ssm;
 private:
-  CompactSupportSSM * ssm;
 
   vector<int> sidx;
   vector<int> eidx;
@@ -58,7 +64,6 @@ private:
   vector<double> cv;
 
 };
-
 
 class PyARSSM {
 public:
@@ -80,42 +85,89 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
+
+  StateSpaceModel *ssm;
 private:
-  ARSSM * ssm;
 
   vector<double> p;
 
 };
 
-class PyTSSM {
+class PyTSSM  {
 public:
 
-  PyTSSM(const pyublas::numpy_vector<double> & params, double error_var,
-	 const double obs_noise, const double bias) {
+  PyTSSM(const boost::python::list & components, double obs_noise) {
 
-    p.resize(params.size());
-    p.assign(params);
+    /* TODO: figure out how to unpack components */
+    /* also remember potential memory manegement issues with passed-in SSMs */
 
-    this->ssm = new TransientCombinedSSM(p, error_var, obs_noise, bias);
+    // this->ssm = new TransientCombinedSSM(obs_noise);
+
+    int n_components = boost::python::len(components);
+    this->start_idxs.resize(n_components);
+    this->end_idxs.resize(n_components);
+
+    /* loop over the Python list of components, to build up the
+     * C++ structures needed to initialize the TSSM */
+    for (int i=0; i < n_components; ++i) {
+      const boost::python::tuple & t = boost::python::extract<boost::python::tuple>(components[i]);
+
+      /* If SSM is None, push a null pointer onto the list
+       * of SSMs, otherwise, push an SSM pointer. */
+      if (t[0]==boost::python::api::object()) {
+	this->ssms.push_back(NULL);
+      } else {
+	boost::python::extract<PyARSSM> get_ar(t[0]);
+	boost::python::extract<PyCSSSM> get_cs(t[0]);
+
+	StateSpaceModel *ssm;
+	if (get_ar.check()) {
+	  ssm = get_ar().ssm;
+	} else if (get_cs.check()) {
+	  ssm = get_cs().ssm;
+	} else {
+	  printf("ERROR: could not convert passed object to a known StateSpaceModel\n");
+	  exit(-1);
+	}
+	this->ssms.push_back(ssm);
+      }
+
+      /* the start_idx and npts integer components are easy to handle */
+      int start_idx = boost::python::extract<int>(t[1]);
+      int npts = boost::python::extract<int>(t[2]);
+      this->start_idxs[i] = start_idx;
+      this->end_idxs[i] = start_idx+npts;
+
+      /* I hate C++ types enough that we're just going to represent the scaling vector as a (double *),
+       * or NULL if we were apssed a Python None. */
+      if (t[3]==boost::python::api::object()) {
+	this->scales.push_back(NULL);
+      } else {
+	const pyublas::numpy_vector<double> & scale_vec = boost::python::extract<pyublas::numpy_vector<double> >(t[3]);
+	const double * scale_ptr = &(scale_vec(0));
+	this->scales.push_back(scale_ptr);
+      }
+    }
+
+    this->ssm = new TransientCombinedSSM(this->ssms, this->start_idxs, this->end_idxs, this->scales, obs_noise);
   };
 
-  ~PyARSSM() {
-    delete this->ssm;
+  ~PyTSSM() {
+    // delete this->ssm;
   };
 
   double run_filter(pyublas::numpy_vector<double> z) {
     return filter_likelihood(*(this->ssm), z);
   };
 
+  StateSpaceModel *ssm;
 private:
-  TransientCombinedSSM * ssm;
-
   vector<double> p;
 
   std::vector<StateSpaceModel *> ssms;
   vector<int> start_idxs;
-  vector<int> & end_idxs;
-  std::vector<vector<double> * > scales;
+  vector<int> end_idxs;
+  std::vector<const double * > scales;
 
 };
 
@@ -123,6 +175,8 @@ private:
 
 namespace bp = boost::python;
 BOOST_PYTHON_MODULE(ssms_c) {
+
+
   bp::class_<PyCSSSM>("CompactSupportSSM", bp::init< \
 	  pyublas::numpy_vector<int> const &,  pyublas::numpy_vector<int> const &,
 	  pyublas::numpy_vector<int> const &,  pyublas::numpy_matrix<double> const &,
@@ -130,9 +184,15 @@ BOOST_PYTHON_MODULE(ssms_c) {
 	  double const , double const>())
     .def("run_filter", &PyCSSSM::run_filter);
 
+
+
   bp::class_<PyARSSM>("ARSSM", bp::init< \
 		      pyublas::numpy_vector<double> const &,  double const,
 		      double const , double const>())
+    .def("run_filter", &PyARSSM::run_filter);
+
+  bp::class_<PyTSSM>("TransientCombinedSSM", bp::init<boost::python::list const &,
+		     double >())
     .def("run_filter", &PyARSSM::run_filter);
 
 }
