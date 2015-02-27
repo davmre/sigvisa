@@ -1,6 +1,3 @@
-#include <boost/python/module.hpp>
-#include <boost/python/def.hpp>
-#include <pyublas/numpy.hpp>
 #include <boost/numeric/ublas/matrix_proxy.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
 
@@ -13,7 +10,7 @@
 
 using namespace boost::numeric::ublas;
 
-void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, int state_size) {
+void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, unsigned int state_size) {
   // this method stolen from pykalman.sqrt.bierman by Daniel Duckworth (BSD license)
   /*Construct the UDU' decomposition of a positive, semidefinite matrix M
 
@@ -28,22 +25,22 @@ void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, i
         UDU' representation of M
   */
 
-  int n = state_size;
+  unsigned int n = state_size;
 
   // make M upper triangular: not sure if this is necessary?
-  for (int i=0; i < n; ++i) {
-    for (int j=0; j < i; ++j) {
+  for (unsigned i=0; i < n; ++i) {
+    for (unsigned j=0; j < i; ++j) {
       M(i,j) = 0;
     }
   }
 
   d.clear();
   U.clear();
-  for (int i=0; i < n; ++i) {
+  for (unsigned i=0; i < n; ++i) {
     U(i,i) = 1;
   }
 
-  for (int j=n; j >= 2; --j) {
+  for (unsigned j=n; j >= 2; --j) {
     d(j - 1) = M(j - 1, j - 1);
     double alpha = 0.0;
     double beta = 0.0;
@@ -53,17 +50,23 @@ void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, i
       d(j-1) = 0.0;
       alpha = 0.0;
     }
-    for (int k=1; k < j; ++k) {
+    for (unsigned k=1; k < j; ++k) {
       beta = M(k - 1, j - 1);
       U(k - 1, j - 1) = alpha * beta;
 
       // M[0:k, k - 1] = M[0:k, k - 1] - beta * U[0:k, j - 1]
-      for (int kk=0; kk < k; ++kk) {
+      for (unsigned kk=0; kk < k; ++kk) {
 	M(kk, k - 1) = M(kk, k - 1) - beta * U(kk, j - 1);
       }
     }
   }
   d(0) = M(0, 0);
+
+  if (d(0) < 0) {
+    printf("ERROR: udu decomposition on non-posdef matrix with M(0,0)=%f\n", M(0,0));
+    exit(-1);
+  }
+
 }
 
 FilterState::FilterState(int max_dimension, double eps_stationary) {
@@ -80,11 +83,17 @@ FilterState::FilterState(int max_dimension, double eps_stationary) {
   // we only ever write to the upper triangle of this matrix, so
   // zeroing the full matrix now guarantees that it will always be zero.
   this->obs_U.clear();
+  this->pred_U.clear();
+  this->tmp_U1.clear();
+  this->tmp_U2.clear();
 
   this->P = matrix<double>(max_dimension, max_dimension);
 
   this->obs_d = vector<double>(max_dimension);
   this->pred_d = vector<double>(max_dimension);
+  this->obs_d.clear();
+  this->pred_d.clear();
+
   this->gain = vector<double>(max_dimension);
   this->f = vector<double>(max_dimension);
   this->v = vector<double>(max_dimension);
@@ -93,15 +102,15 @@ FilterState::FilterState(int max_dimension, double eps_stationary) {
 }
 
 void print_vec(const vector<double> & v) {
-  for(int i=0; i < v.size(); ++i) {
+  for(unsigned i=0; i < v.size(); ++i) {
     printf("%.3f ", v(i));
   }
   printf("\n");
 }
 
 void print_mat(const matrix<double> & m) {
-  for(int i=0; i < m.size1(); ++i) {
-    for(int j=0; j < m.size2(); ++j) {
+  for(unsigned i=0; i < m.size1(); ++i) {
+    for(unsigned j=0; j < m.size2(); ++j) {
       printf("%.3f ", m(i,j));
     }
     printf("\n");
@@ -110,8 +119,8 @@ void print_mat(const matrix<double> & m) {
 }
 
 void print_mat_col(const matrix<double,column_major> & m) {
-  for(int i=0; i < m.size1(); ++i) {
-    for(int j=0; j < m.size2(); ++j) {
+  for(unsigned i=0; i < m.size1(); ++i) {
+    for(unsigned j=0; j < m.size2(); ++j) {
       printf("%.3f ", m(i,j));
     }
     printf("\n");
@@ -129,7 +138,7 @@ void FilterState::init_priors(StateSpaceModel &ssm) {
   this->state_size = ssm.prior_vars(&(this->pred_d(0)));
 
   this->pred_U.clear();
-  for (int i=0; i < ssm.max_dimension; ++i) {
+  for (unsigned i=0; i < ssm.max_dimension; ++i) {
     this->pred_U(i,i) = 1;
   }
 
@@ -154,7 +163,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   }
 
   double alpha = cache.alpha;
-  int state_size = cache.state_size;
+  unsigned int state_size = cache.state_size;
   if (!cache.at_fixed_point || !ssm.stationary(k)) {
     cache.at_fixed_point = false;
 
@@ -174,7 +183,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 				 k, &(f(0)), &(v(0)), state_size);
 
 
-    for (int i=0; i < state_size; ++i) {
+    for (unsigned i=0; i < state_size; ++i) {
       v(i) = d_old(i)*f(i);
     }
 
@@ -195,7 +204,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     K(0)=v(0);
 
     U(0, 0) = U_old(0,0);
-    for (int j=1; j < state_size; ++j) {
+    for (unsigned j=1; j < state_size; ++j) {
       double old_alpha = alpha;
       alpha += v(j)*f(j);
       // printf("   alpha C %d: %f\n", j, alpha);
@@ -206,7 +215,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 	alpha = 1e-20;
       }
 
-      for (int i=0; i < state_size; ++i) {
+      for (unsigned i=0; i < state_size; ++i) {
 	U(i, j) = U_old(i,j) - f(j)/old_alpha*K(i);
         K(i) += v(j) * U_old(i,j);
       }
@@ -220,25 +229,25 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   vector<double> &xk = cache.xk;
   double pred_z = ssm.apply_observation_matrix(&(xk(0)), k) + ssm.observation_bias(k);
   double yk = zk - pred_z;
-  for (int i=0; i < state_size; ++i) {
+  for (unsigned i=0; i < state_size; ++i) {
     xk(i) += cache.gain(i) * yk/alpha;
   }
 
   // also compute log marginal likelihood for this observation
   double step_ell = -.5 * log(2*PI*alpha) - .5 * yk*yk / alpha;
 
-  // printf("step %d (C) bias %.4f pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", ssm.observation_bias(k), k, pred_z, alpha, zk, yk, step_ell);
+  //printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
 
   return step_ell;
 }
 
 void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
 
-  int prev_state_size = cache.state_size;
+  unsigned int prev_state_size = cache.state_size;
 
   vector<double> &tmp = cache.f;
 
-  int state_size = ssm.apply_transition_matrix( &(cache.xk(0)), k,  &(tmp(0)));
+  unsigned int state_size = ssm.apply_transition_matrix( &(cache.xk(0)), k,  &(tmp(0)));
 
   vector<double> &xk = cache.xk;
   subrange(xk, 0, state_size) = subrange(tmp, 0, state_size);
@@ -262,24 +271,25 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
   /* pushing the covariance P through the transition model F yields
      FPF'. In a factored representation, this is FUDU'F', so we just need
      to compute FU. */
-  int min_size = std::min(prev_state_size, state_size);
+  unsigned int min_size = std::min(prev_state_size, state_size);
 
 
-  for (int i=0; i < min_size; ++i) {
-
+  // COMMENTED OUT: this loop is equivalent to the matrix-valued transition call
+  // directly below. I'm leaving it in for debugging and to run speed comparisons.
+  /*for (int i=0; i < min_size; ++i) {
     // THIS ONLY WORKS IF U_old is in column-major order
     ssm.apply_transition_matrix(&(column(U_old, i)(0) ), k, &(d_tmp(0)) );
     noalias(column(U_tmp, i)) = d_tmp;
-  }
+    }*/
+  ssm.apply_transition_matrix(U_old, 0, k, U_tmp, 0, min_size);
 
   subrange(d_tmp, 0, state_size) = subrange(d_old, 0, state_size);
-  for (int i=prev_state_size; i < state_size; ++i) {
+  for (unsigned i=prev_state_size; i < state_size; ++i) {
     d_tmp(i) = 0;
-    for (int j=0; j < state_size; ++j) {
+    for (unsigned j=0; j < state_size; ++j) {
       U_tmp(j, i) = 0;
     }
   }
-
 
   // if there is transition noise, do the expensive reconstruction/factoring step
   if (norm_2(subrange(tmp, 0, state_size)) > 0) {
@@ -288,7 +298,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
     matrix<double> &P = cache.P;
 
     // construct the cov matrix
-    for (int i=0; i < state_size; ++i) {
+    for (unsigned i=0; i < state_size; ++i) {
       subrange(mtmp, 0, state_size, i, i+1) = subrange(U_tmp, 0, state_size, i, i+1);
       subrange(mtmp, 0, state_size, i, i+1) *= d_tmp(i);
     }
@@ -297,7 +307,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
 	     trans(subrange(U_tmp, 0, state_size, 0, state_size)));
 
     // add transition noise
-    for (int i=0; i < state_size; ++i) {
+    for (unsigned i=0; i < state_size; ++i) {
       P(i,i) += tmp(i);
     }
 
@@ -312,12 +322,12 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
   if (ssm.stationary(k)) {
     if (k > 0 && ssm.stationary(k-1)) {
       bool potential_fixed_point = true;
-      for (int i=0; i < state_size; ++i) {
+      for (unsigned i=0; i < state_size; ++i) {
 	if (std::abs(d_tmp(i) - d_cached(i)) > cache.eps_stationary) {
 	  potential_fixed_point=false;
 	  break;
 	}
-	for (int j=0; j < state_size; ++j) {
+	for (unsigned j=0; j < state_size; ++j) {
 	  if (std::abs(U_tmp(i,j) - U_cached(i,j)) > cache.eps_stationary) {
 	    potential_fixed_point=false;
 	    break;
@@ -342,7 +352,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);
-  int N = z.size();
+  unsigned int N = z.size();
   double ell = 0;
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
 
@@ -351,14 +361,15 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   printf("post observe(0) obs_d ");
   print_vec(cache.obs_d);*/
 
-  for (int k=1; k < N; ++k) {
+  for (unsigned k=1; k < N; ++k) {
 
 
     kalman_predict_sqrt(ssm, cache, k);
 
-    /*printf("post pred(%d) obs_U ", k);
-  print_mat(cache.pred_U);
-  printf("post pred(%d) obs_d ", k);
+    /*printf("post pred(%d) U ", k);
+      print_mat(cache.pred_U);
+
+  printf("post pred(%d) d ", k);
   print_vec(cache.pred_d);
 
   printf("post pred(%d) xk ", k);
@@ -366,9 +377,9 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
 
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
 
-    /*printf("post observe(%d) obs_U ", k);
-  print_mat(cache.obs_U);
-  printf("post observe(%d) obs_d ", k);
+    /*printf("post observe(%d) U ", k);
+      print_mat(cache.obs_U);
+  printf("post obs(%d) d ", k);
   print_vec(cache.obs_d);
 
   printf("post obs(%d) xk ", k);

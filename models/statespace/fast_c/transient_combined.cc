@@ -67,7 +67,7 @@ TransientCombinedSSM::TransientCombinedSSM(\
    * occurs (and secondarily, with deactivation events at
    * a timestep before activation events). */
   std::vector<ChangeEvent> events(start_idxs.size() + end_idxs.size());
-  for (int i=0; i < n_ssms; ++i) {
+  for (unsigned i=0; i < n_ssms; ++i) {
     events[2*i].t = start_idxs[i];
     events[2*i].i_ssm = i;
     events[2*i].is_start = true;
@@ -86,8 +86,8 @@ TransientCombinedSSM::TransientCombinedSSM(\
    */
   // allocate the active_sets matrix by first computing the largest number of
   // SSMs that might be active at one time
-  int n_active = 0;
-  int max_active = 0;
+  unsigned int n_active = 0;
+  unsigned int max_active = 0;
   for(std::vector<ChangeEvent>::const_iterator idx = events.begin(); idx < events.end(); ++idx) {
     if (idx->is_start) n_active++; else n_active--;
     if (n_active > max_active) max_active = n_active;
@@ -95,28 +95,40 @@ TransientCombinedSSM::TransientCombinedSSM(\
   active_sets.resize(2*n_ssms, max_active);
 
   vector<int> active_set(max_active);
-  for (int i=0; i < max_active; ++i) active_set(i) = -1;
+  for (unsigned i=0; i < max_active; ++i) active_set(i) = -1;
   int t_prev = 0, max_dimension = 0, i=0;
   std::vector<ChangeEvent>::const_iterator idx;
   for(i=0, idx = events.begin();
-      idx < events.end(); ++i, ++idx) {
+      idx < events.end(); ++idx) {
+
+    // printf("event t %d i_ssm %d start %s\n", idx->t, idx->i_ssm, idx->is_start ? "true" : "false");
 
     // if this represents a change, add a new changepoint
     if (idx->t != t_prev) {
       changepoints.push_back(t_prev);
 
+      // printf(" change detected (t_prev %d), copying to active_set %d\n", t_prev, i);
+
       // copy the current active set of SSMs
       // into the active_sets matrix (terminated with -1)
-      for (int k=0, j=0; k < max_active; ++k) {
+      for (unsigned k=0, j=0; k < max_active; ++k) {
 	if (active_set(k) >= 0) {
-	  ++j;
-	  active_sets(i, j) = active_set(k);
+	  active_sets(i, j++) = active_set(k);
 	}
-	if (j+1 < max_active) {
-	  active_sets(i, j+1) = -1;
+	if (j < max_active) {
+	  active_sets(i, j) = -1;
 	}
       }
+
+      /*printf("matr active set(%d, ...) is", i);
+      for(int tmpi=0; tmpi < max_active; ++tmpi) {
+	printf(" %d", active_sets(i, tmpi));
+      }
+      printf("\n");*/
+
+
       t_prev = idx->t;
+      i++;
 
       int current_dim = active_set_dimension(this->ssms, active_set);
       if (current_dim > max_dimension) max_dimension = current_dim;
@@ -143,6 +155,8 @@ TransientCombinedSSM::TransientCombinedSSM(\
 	*it = -1;
       }
     }
+
+
   }
 
   this->max_dimension = max_dimension;
@@ -160,7 +174,13 @@ int TransientCombinedSSM::active_set_idx(int k) {
     return this->active_ssm_cache2_v;
 
   std::vector<int>::iterator it = std::upper_bound(this->changepoints.begin(), this->changepoints.end(), k);
-  int i = it - this->changepoints.begin();
+  int i = it - this->changepoints.begin() - 1;
+
+  /*printf("active set at time k=%d is %d, changepoints %d %d %d %d\n", k, i,
+	 i-1 >= 0 ? this->changepoints[i-1] : -1,
+	 i >= 0 ? this->changepoints[i] : -1,
+	 i+1 < this->changepoints.size() ? this->changepoints[i+1] : -1,
+	 i+2 < this->changepoints.size() ? this->changepoints[i+2] : -1);*/
 
   this->active_ssm_cache2_k = this->active_ssm_cache1_k;
   this->active_ssm_cache2_v = this->active_ssm_cache1_v;
@@ -175,23 +195,29 @@ int TransientCombinedSSM::apply_transition_matrix(const double * x, int k, doubl
   // timestep in order to cache the location of each
   // ssm in the previous state space.
   int j = 0;
-  int asidx = this->active_set_idx(k-1);
-  matrix_row < matrix<int> > old_ssm_indices = row(this->active_sets, asidx);
-  for (matrix_row < matrix<int> >::const_iterator it = old_ssm_indices.begin();
-       it < old_ssm_indices.end() && *it >= 0; ++it) {
+  int asidx_prev = this->active_set_idx(k-1);
+  int asidx = this->active_set_idx(k);
+  bool same_active_set = (asidx==asidx_prev);
 
-    // skip any null SSMs
-    int i_ssm = *it;
-    StateSpaceModel * ssm = this->ssms[i_ssm];
-    if (!ssm) continue;
+  if (!same_active_set) {
+    matrix_row < matrix<int> > old_ssm_indices = row(this->active_sets, asidx_prev);
+    for (matrix_row < matrix<int> >::const_iterator it = old_ssm_indices.begin();
+	 it < old_ssm_indices.end() && *it >= 0; ++it) {
 
-    this->ssms_tmp[i_ssm] = j;
-    j += ssm->max_dimension;
+      // skip any null SSMs
+      int i_ssm = *it;
+      StateSpaceModel * ssm = this->ssms[i_ssm];
+      if (!ssm) continue;
+
+      this->ssms_tmp[i_ssm] = j;
+      j += ssm->max_dimension;
+    }
   }
+
+  //printf("transition to time %d (asidx %d, %d):\n",  k, asidx_prev, asidx);
 
   // now apply the transition to the current time
   int i=0;
-  asidx = this->active_set_idx(k-1);
   matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -201,26 +227,83 @@ int TransientCombinedSSM::apply_transition_matrix(const double * x, int k, doubl
     StateSpaceModel * ssm = this->ssms[i_ssm];
     if (!ssm) continue;
 
-    int state_size = ssm->max_dimension;
+    unsigned int state_size = ssm->max_dimension;
     if (this->start_idxs[i_ssm] == k) {
       /* new ssms just get filled in as zero
          (prior means will be added by the
          transition_bias operator) */
-      for (int j=i; j < i+state_size; ++j) {
+      for (unsigned j=i; j < i+state_size; ++j) {
 	result[j] = 0;
       }
+      //printf("   new ssm %d active from %d to %d\n", i_ssm, i, i+state_size);
+
     } else {
       /* this ssm is persisting from the
        * previous timestep, so just run the
        * transition */
-      int j = this->ssms_tmp[i_ssm];
+      unsigned int j = same_active_set ? i : this->ssms_tmp[i_ssm];
 
-      ssm->apply_transition_matrix(x+j, k-this->start_idxs[i_ssm], result+j);
+      ssm->apply_transition_matrix(x+j, k-this->start_idxs[i_ssm], result+i);
+      //printf("   transitioning ssm %d, prev %d, in state %d to %d (sidx %d eidx %d)\n", i_ssm, j, i, i+state_size, this->start_idxs[i_ssm], this->end_idxs[i_ssm]);
     }
     i += state_size;
   }
   return i;
 }
+
+int TransientCombinedSSM::apply_transition_matrix( const matrix<double,column_major> &X,
+						   unsigned int x_row_offset,
+						   int k,
+						   matrix<double,column_major> &result,
+						   unsigned int r_row_offset,
+						   unsigned int n) {
+  int j = x_row_offset;
+  int asidx_prev = this->active_set_idx(k-1);
+  int asidx = this->active_set_idx(k);
+  bool same_active_set = (asidx==asidx_prev);
+
+  if (!same_active_set) {
+    matrix_row < matrix<int> > old_ssm_indices = row(this->active_sets, asidx_prev);
+    for (matrix_row < matrix<int> >::const_iterator it = old_ssm_indices.begin();
+	 it < old_ssm_indices.end() && *it >= 0; ++it) {
+
+      // skip any null SSMs
+      int i_ssm = *it;
+      StateSpaceModel * ssm = this->ssms[i_ssm];
+      if (!ssm) continue;
+
+      this->ssms_tmp[i_ssm] = j;
+      j += ssm->max_dimension;
+    }
+  }
+
+  int i=x_row_offset;
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
+  for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
+       it < ssm_indices.end() && *it >= 0; ++it) {
+
+    int i_ssm = *it;
+    StateSpaceModel * ssm = this->ssms[i_ssm];
+    if (!ssm) continue;
+
+    unsigned int state_size = ssm->max_dimension;
+    if (this->start_idxs[i_ssm] == k) {
+      /* new ssms just get filled in as zero
+         (prior means will be added by the
+         transition_bias operator) */
+      for (unsigned j=i; j < i+state_size; ++j) {
+	for (unsigned jj=0; jj < n; ++jj) result(j, jj) = 0;
+      }
+    } else {
+      unsigned int j = same_active_set ? i : this->ssms_tmp[i_ssm];
+      //printf("MATR transitioning ssm %d, prev %d, in state %d to %d (sidx %d eidx %d)\n", i_ssm, j, i, i+state_size, this->start_idxs[i_ssm], this->end_idxs[i_ssm]);
+      ssm->apply_transition_matrix(X, j, k-this->start_idxs[i_ssm], result, i, n);
+    }
+    i += state_size;
+  }
+  return i-x_row_offset;
+}
+
 
 void TransientCombinedSSM::transition_bias(int k, double *result) {
 
@@ -286,11 +369,12 @@ double TransientCombinedSSM::apply_observation_matrix(const double *x, int k) {
 }
 
 void TransientCombinedSSM::apply_observation_matrix(const matrix<double,column_major> &X,
-						    int row_offset, int k,
-						    double *result, double *result_tmp, int n) {
+						    unsigned int row_offset, int k,
+						    double *result, double *result_tmp, unsigned int n) {
 
-  for (int i=0; i < n; ++i) {
+  for (unsigned i=0; i < n; ++i) {
     result[i] = 0;
+    result_tmp[i] = 0;
   }
 
   int asidx = this->active_set_idx(k);
@@ -302,21 +386,24 @@ void TransientCombinedSSM::apply_observation_matrix(const matrix<double,column_m
     if (!ssm) continue;
     const double * scale = this->scales[j];
 
-    int state_size = ssm->max_dimension;
+    unsigned int state_size = ssm->max_dimension;
     ssm->apply_observation_matrix(X, row_offset,
 				  k-this->start_idxs[j],
 				  result_tmp, NULL, n);
+    //printf("TSSM step %d applying obs matrix on ssm %d at row_offset %d n %d\n", k, j, row_offset, n);
     if (scale) {
-      for (int ii=0; ii < n; ++ii) {
-	result[ii] += scale[ii] * result_tmp[ii];
+      for (unsigned ii=0; ii < n; ++ii) {
+	result[ii] += scale[k-this->start_idxs[j]] * result_tmp[ii];
       }
     } else {
-      for (int ii=0; ii < n; ++ii) {
+      for (unsigned ii=0; ii < n; ++ii) {
 	result[ii] += result_tmp[ii];
       }
     }
     row_offset += state_size;
   }
+
+
 }
 
 double TransientCombinedSSM::observation_bias(int k) {
@@ -331,10 +418,9 @@ double TransientCombinedSSM::observation_bias(int k) {
     int j = *it;
     StateSpaceModel * ssm = this->ssms[j];
     const double * scale = this->scales[j];
-    if (!ssm) continue;
-
     int kk = k - this->start_idxs[j];
-    double b = ssm->observation_bias(kk);
+
+    double b = ssm ? ssm->observation_bias(kk) : 1.0;
     if (scale) b *= scale[kk];
     bias += b;
   }
@@ -350,7 +436,7 @@ bool TransientCombinedSSM::stationary(int k) {
   matrix_row < matrix<int> > s1 = row(this->active_sets, this->active_set_idx(k));
   if (k > 0) {
     matrix_row < matrix<int> > s2 = row(this->active_sets, this->active_set_idx(k-1));
-    for (int i=0; i < s1.size() && !(s1(i) == -1 && s2(i) == -1); ++i) {
+    for (unsigned i=0; i < s1.size() && !(s1(i) == -1 && s2(i) == -1); ++i) {
       if (s1(i) != s2(i)) return false;
     }
   }

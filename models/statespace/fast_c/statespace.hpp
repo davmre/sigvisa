@@ -22,12 +22,17 @@ class StateSpaceModel {
 public:
   virtual int apply_transition_matrix(const double * x,
 					int k, double * result) = 0;
-
+  virtual int apply_transition_matrix( const matrix<double,column_major> &X,
+					 unsigned int x_row_offset,
+					 int k,
+					 matrix<double,column_major> &result,
+					 unsigned int r_row_offset,
+					 unsigned int n)  = 0;
   virtual void transition_bias(int k, double * result) = 0;
   virtual void transition_noise_diag(int k, double * result) = 0;
   virtual double apply_observation_matrix(const  double * x, int k) = 0;
 
-  virtual void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n) = 0;
+  virtual void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n) = 0;
   virtual double observation_bias(int k) = 0;
   virtual double observation_noise(int k) = 0;
   virtual int prior_mean(double * result) = 0;
@@ -36,14 +41,14 @@ public:
 
   virtual ~StateSpaceModel() { return; };
 
-  int max_dimension;
+  unsigned int max_dimension;
 };
 
 
 class CompactSupportSSM : public StateSpaceModel {
 public:
-  int n_basis;
-  int n_steps;
+  unsigned int n_basis;
+  unsigned int n_steps;
 
 
 
@@ -55,10 +60,16 @@ public:
   ~CompactSupportSSM();
 
   int apply_transition_matrix(const double *x, int k, double * result);
+  int apply_transition_matrix( const matrix<double,column_major> &X,
+				 unsigned int x_row_offset,
+				 int k,
+				 matrix<double,column_major> &result,
+				 unsigned int r_row_offset,
+				 unsigned int n) ;
   void transition_bias (int k, double * result) ;
   void transition_noise_diag(int k, double * result);
   double apply_observation_matrix(const double * x, int k);
-  void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n);
+  void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
   double observation_bias(int k);
   double observation_noise(int k);
   int prior_mean(double * result);
@@ -89,10 +100,16 @@ public:
   ~ARSSM();
 
   int apply_transition_matrix(const double *x, int k, double * result);
+  int apply_transition_matrix( const matrix<double,column_major> &X,
+				 unsigned int x_row_offset,
+				 int k,
+				 matrix<double,column_major> &result,
+				 unsigned int r_row_offset,
+				 unsigned int n) ;
   void transition_bias (int k, double * result) ;
   void transition_noise_diag(int k, double * result);
   double apply_observation_matrix(const double * x, int k);
-  void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n);
+  void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
   double observation_bias(int k);
   double observation_noise(int k);
   int prior_mean(double * result);
@@ -108,16 +125,23 @@ private:
 
 class TransientCombinedSSM : public StateSpaceModel {
 public:
-TransientCombinedSSM(std::vector<StateSpaceModel *> ssms, const vector<int> start_idxs,
-			 const vector<int> & end_idxs, const std::vector<vector<double> * > scales,
+TransientCombinedSSM(std::vector<StateSpaceModel *> & ssms, const vector<int> & start_idxs,
+			 const vector<int> & end_idxs, const std::vector<const double * > & scales,
 			 double obs_noise);
 ~TransientCombinedSSM();
 
   int apply_transition_matrix(const double *x, int k, double * result);
+  int apply_transition_matrix( const matrix<double,column_major> &X,
+				 unsigned int x_row_offset,
+				 int k,
+				 matrix<double,column_major> &result,
+				 unsigned int r_row_offset,
+				 unsigned int n) ;
+
   void transition_bias (int k, double * result) ;
   void transition_noise_diag(int k, double * result);
   double apply_observation_matrix(const double * x, int k);
-  void apply_observation_matrix(const matrix<double,column_major> &X, int row_offset, int k, double * result, double *result_tmp, int n);
+  void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
   double observation_bias(int k);
   double observation_noise(int k);
   int prior_mean(double * result);
@@ -128,18 +152,18 @@ private:
   std::vector<StateSpaceModel *> ssms;
   const vector<int> start_idxs;
   const vector<int> end_idxs;
-  const std::vector<vector<double> * > scales;
+  const std::vector<const double * > scales;
 
   const double obs_noise;
-  const int n_ssms;
-  int n_steps;
+  const unsigned int n_ssms;
+  unsigned int n_steps;
 
   int active_ssm_cache1_k;
   int active_ssm_cache1_v;
   int active_ssm_cache2_k;
   int active_ssm_cache2_v;
 
-  vector<int> ssms_tmp;
+  vector<unsigned int> ssms_tmp;
   std::vector<int> changepoints;
 
   matrix<int> active_sets;
@@ -151,7 +175,7 @@ private:
 class FilterState {
 public:
 
-  int state_size;
+  unsigned int state_size;
 
   bool wasnan;
   bool at_fixed_point;

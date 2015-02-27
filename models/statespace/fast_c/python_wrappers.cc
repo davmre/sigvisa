@@ -3,13 +3,11 @@
 #include <boost/python/tuple.hpp>
 #include <boost/python/list.hpp>
 
-
 #include <pyublas/numpy.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
 using namespace boost::numeric::ublas;
 
 #include "statespace.hpp"
-
 
 class PyCSSSM  {
 public:
@@ -117,6 +115,7 @@ public:
       if (t[0]==boost::python::api::object()) {
 	this->ssms.push_back(NULL);
       } else {
+
 	boost::python::extract<PyARSSM> get_ar(t[0]);
 	boost::python::extract<PyCSSSM> get_cs(t[0]);
 
@@ -126,9 +125,17 @@ public:
 	} else if (get_cs.check()) {
 	  ssm = get_cs().ssm;
 	} else {
-	  printf("ERROR: could not convert passed object to a known StateSpaceModel\n");
-	  exit(-1);
+	  PyErr_SetString(PyExc_RuntimeError, "scale array is not long enough to cover life of SSM component");
 	}
+
+	// increase the Python refcount on the SSM object, so that our
+	// pointer to its internal C++ SSM will remain valid as long
+	// as this TSSM is active (even if the SSM otherwise goes out
+	// of scope in the Python code).
+	PyObject * pyssm = boost::python::object(t[0]).ptr();
+	Py_INCREF(pyssm);
+	this->obj_refs.push_back(pyssm);
+
 	this->ssms.push_back(ssm);
       }
 
@@ -142,10 +149,26 @@ public:
        * or NULL if we were apssed a Python None. */
       if (t[3]==boost::python::api::object()) {
 	this->scales.push_back(NULL);
+
       } else {
+
 	const pyublas::numpy_vector<double> & scale_vec = boost::python::extract<pyublas::numpy_vector<double> >(t[3]);
+
+	if (scale_vec.size() < npts) {
+	  PyErr_SetString(PyExc_RuntimeError, "scale array is not long enough to cover life of SSM component");
+	}
+
+
 	const double * scale_ptr = &(scale_vec(0));
 	this->scales.push_back(scale_ptr);
+
+
+
+	// Keep a reference to the Numpy array object to prevent it
+	// getting garbage collected.
+	PyObject * pyvec = boost::python::object(t[3]).ptr();
+	Py_INCREF(pyvec);
+	this->obj_refs.push_back(pyvec);
       }
     }
 
@@ -153,7 +176,13 @@ public:
   };
 
   ~PyTSSM() {
-    // delete this->ssm;
+
+    // release all the Python references we've been holding
+    // (SSM objects and scale vectors)
+    std::vector<PyObject *>::iterator it;
+    for (it = obj_refs.begin(); it < obj_refs.end(); ++it) {
+      Py_DECREF(*it);
+    }
   };
 
   double run_filter(pyublas::numpy_vector<double> z) {
@@ -164,14 +193,16 @@ public:
 private:
   vector<double> p;
 
+  // keep references to the Python objects whose internal states we depend on,
+  // to prevent the Python garbage collector from killing them.
+  std::vector<PyObject *> obj_refs;
+
   std::vector<StateSpaceModel *> ssms;
   vector<int> start_idxs;
   vector<int> end_idxs;
   std::vector<const double * > scales;
 
 };
-
-
 
 namespace bp = boost::python;
 BOOST_PYTHON_MODULE(ssms_c) {
@@ -193,6 +224,6 @@ BOOST_PYTHON_MODULE(ssms_c) {
 
   bp::class_<PyTSSM>("TransientCombinedSSM", bp::init<boost::python::list const &,
 		     double >())
-    .def("run_filter", &PyARSSM::run_filter);
+    .def("run_filter", &PyTSSM::run_filter);
 
 }

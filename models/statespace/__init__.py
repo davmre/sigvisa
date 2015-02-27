@@ -303,13 +303,25 @@ class StateSpaceModel(object):
 
         #print "post observe(0)", U, d
 
+
+
         xk1 = xk.copy() # temp variable
         for k in range(1, N):
 
             # run the transition model to get the state estimate for the current timestep
             U, d, state_size = self.kalman_predict_sqrt(k, xk1, U, d, xk, state_size)
 
-            #print "post pred(%d)" % k, U, d, xk
+            """
+            print "post pred(%d) d" % k,
+            for dd in d:
+                print "%.3f" % dd,
+            print
+
+            print "post pred(%d) xk" % k,
+            for xx in xk:
+                print "%.3f" % xx,
+            print
+"""
 
             # if there is an observation at this timestep, update the state estimate
             # accordingly. (and do some bookkeeping for the covariance cache)
@@ -324,8 +336,16 @@ class StateSpaceModel(object):
 
                 ell += self.kalman_observe_sqrt(k, z[k], xk, U, d, state_size)
 
-            #print "post obs(%d)" % k, U, d, xk
-
+                """
+            print "post obs(%d) d" % k,
+            for dd in d:
+                print "%.3f" % dd,
+            print
+            print "post obs(%d) xk" % k,
+            for xx in xk:
+                print "%.3f" % xx,
+            print
+                """
             yield xk, U, d
 
             xk, xk1 = xk1, xk
@@ -424,7 +444,7 @@ class StateSpaceModel(object):
         # also compute log marginal likelihood for this observation
         step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
 
-        # print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
+        #print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
 
         assert(not np.isnan(step_ell))
 
