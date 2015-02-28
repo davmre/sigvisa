@@ -5,6 +5,8 @@
 #include <memory>
 #include <vector>
 #include <limits>
+#include <random>
+#include <cmath>
 
 #include "statespace.hpp"
 
@@ -128,6 +130,23 @@ void print_mat_col(const matrix<double,column_major> & m) {
   printf("\n");
 }
 
+void compute_explicit_cov(FilterState &cache,
+			  matrix<double,column_major> &U_tmp,
+			  vector<double> &d_tmp) {
+  matrix<double,column_major> &mtmp = cache.tmp_U2;
+  matrix<double> &P = cache.P;
+  unsigned state_size = cache.state_size;
+
+  // construct the cov matrix
+  for (unsigned i=0; i < state_size; ++i) {
+    subrange(mtmp, 0, state_size, i, i+1) = subrange(U_tmp, 0, state_size, i, i+1);
+    subrange(mtmp, 0, state_size, i, i+1) *= d_tmp(i);
+  }
+  noalias(subrange(P, 0, state_size, 0, state_size))		\
+    = prod(subrange(mtmp, 0, state_size, 0, state_size),
+	   trans(subrange(U_tmp, 0, state_size, 0, state_size)));
+}
+
 
 
 void FilterState::init_priors(StateSpaceModel &ssm) {
@@ -241,13 +260,14 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   return step_ell;
 }
 
-void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
+void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool force_P) {
 
   unsigned int prev_state_size = cache.state_size;
 
   vector<double> &tmp = cache.f;
 
   unsigned int state_size = ssm.apply_transition_matrix( &(cache.xk(0)), k,  &(tmp(0)));
+  cache.state_size = state_size;
 
   vector<double> &xk = cache.xk;
   subrange(xk, 0, state_size) = subrange(tmp, 0, state_size);
@@ -292,19 +312,10 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
   }
 
   // if there is transition noise, do the expensive reconstruction/factoring step
-  if (norm_2(subrange(tmp, 0, state_size)) > 0) {
-
-    matrix<double,column_major> &mtmp = cache.tmp_U2;
+  if (force_P || norm_2(subrange(tmp, 0, state_size)) > 0) {
     matrix<double> &P = cache.P;
 
-    // construct the cov matrix
-    for (unsigned i=0; i < state_size; ++i) {
-      subrange(mtmp, 0, state_size, i, i+1) = subrange(U_tmp, 0, state_size, i, i+1);
-      subrange(mtmp, 0, state_size, i, i+1) *= d_tmp(i);
-    }
-    noalias(subrange(P, 0, state_size, 0, state_size)) \
-      = prod(subrange(mtmp, 0, state_size, 0, state_size),
-	     trans(subrange(U_tmp, 0, state_size, 0, state_size)));
+    compute_explicit_cov(cache, U_tmp, d_tmp);
 
     // add transition noise
     for (unsigned i=0; i < state_size; ++i) {
@@ -346,7 +357,6 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k) {
     subrange(U_cached, 0, state_size, 0, state_size) = subrange(U_tmp, 0, state_size, 0, state_size);
     subrange(d_cached, 0, state_size) = subrange(d_tmp, 0, state_size);
   }
-  cache.state_size = state_size;
 }
 
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
@@ -364,7 +374,7 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   for (unsigned k=1; k < N; ++k) {
 
 
-    kalman_predict_sqrt(ssm, cache, k);
+    kalman_predict_sqrt(ssm, cache, k, false);
 
     /*printf("post pred(%d) U ", k);
       print_mat(cache.pred_U);
@@ -388,4 +398,113 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
 
   }
   return ell;
+}
+
+void mean_obs(StateSpaceModel &ssm, vector<double> & result) {
+  vector<double> x(ssm.max_dimension);
+  vector<double> x2(ssm.max_dimension);
+  x.clear();
+  x2.clear();
+
+  ssm.prior_mean(&(x(0)));
+
+  for (unsigned k = 0; k < result.size(); ++k) {
+    result[k] = ssm.apply_observation_matrix(&(x(0)), k);
+    result[k] += ssm.observation_bias(k);
+
+    if (k+1 < result.size()) {
+      ssm.apply_transition_matrix(&(x(0)), k+1, &(x2(0)));
+    }
+    x = x2; // this copy is unnecessary, we could swap
+            // pointers instead, but it doesn't
+            // matter cause this method is never the
+            // performance bottleneck.
+  }
+}
+
+
+
+void resample_state(FilterState &cache) {
+  /* Given a cache representing a mean state and covariance matrix at
+   * time k, replace the state xk with a sample from N(mean, cov).
+   * That is, suppose we have already pushed the previous state through
+   * the transition model to get an expected state at the current
+   * timestep; this method samples the new, random state.*/
+
+  vector<double> &x = cache.xk;
+  vector<double> &d = cache.pred_d;
+  vector<double> &tmp = cache.f;
+  matrix<double,column_major> &U = cache.pred_U;
+
+  // we have P = UDU'
+  // so U*sqrt(d) is a matrix square root of P
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::normal_distribution<double> randn(0,1);
+
+  for (unsigned i=0; i < tmp.size(); ++i) {
+    tmp(i) = randn(rd) * sqrt(d(i));
+  }
+  tmp = prod(U, tmp);
+  x += tmp;
+
+}
+
+void prior_sample(StateSpaceModel &ssm, vector<double> & result) {
+  FilterState cache(ssm.max_dimension, 1e-10);
+  cache.init_priors(ssm);
+
+  for (unsigned k = 0; k < result.size(); ++k) {
+    resample_state(cache);
+    result(k) = ssm.apply_observation_matrix(&(cache.xk(0)), k);
+    result(k) += ssm.observation_bias(k);
+    if (k+1 < result.size()) {
+      kalman_predict_sqrt(ssm, cache, k+1, true);
+    }
+  }
+}
+
+
+void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
+				      const vector<double> &z,
+				      std::vector<vector<double> > & cmeans,
+				      std::vector<vector<double> > & cvars) {
+  FilterState cache(ssm.max_dimension, 1e-10);
+  cache.init_priors(ssm);
+  ssm.init_coef_priors(cmeans, cvars);
+
+  unsigned int N = z.size();
+  double ell = 0;
+  ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
+  ssm.extract_all_coefs(cache, 0, cmeans, cvars);
+  for (unsigned k=1; k < N; ++k) {
+    kalman_predict_sqrt(ssm, cache, k, false);
+    ell += kalman_observe_sqrt(ssm, cache, k, z(k));
+
+    compute_explicit_cov(cache, cache.obs_U, cache.obs_d);
+    ssm.extract_all_coefs(cache, k, cmeans, cvars);
+  }
+}
+
+void tssm_component_means(TransientCombinedSSM &ssm,
+			  const vector<double> &z,
+			  std::vector<vector<double> > & means) {
+
+  if (means.size() != ssm.n_ssms) {
+    printf("component_means() needs exactly one vector for each component SSM\n");
+    exit(-1);
+  }
+
+  FilterState cache(ssm.max_dimension, 1e-10);
+  cache.init_priors(ssm);
+
+  unsigned int N = z.size();
+  double ell = 0;
+  ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
+  ssm.extract_component_means(&(cache.xk(0)), 0, means);
+  for (unsigned k=1; k < N; ++k) {
+    kalman_predict_sqrt(ssm, cache, k, false);
+    ell += kalman_observe_sqrt(ssm, cache, k, z(k));
+    ssm.extract_component_means(&(cache.xk(0)), k, means);
+  }
 }

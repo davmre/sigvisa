@@ -199,6 +199,11 @@ int TransientCombinedSSM::apply_transition_matrix(const double * x, int k, doubl
   int asidx = this->active_set_idx(k);
   bool same_active_set = (asidx==asidx_prev);
 
+  if (k == 0) {
+    printf("ERROR: requested transition INTO timestep 0 (invalid)!");
+    exit(-1);
+  }
+
   if (!same_active_set) {
     matrix_row < matrix<int> > old_ssm_indices = row(this->active_sets, asidx_prev);
     for (matrix_row < matrix<int> >::const_iterator it = old_ssm_indices.begin();
@@ -492,4 +497,65 @@ int TransientCombinedSSM::prior_vars(double *result) {
     result += ssm->max_dimension;
   }
   return result-r1;
+}
+
+void TransientCombinedSSM::init_coef_priors(std::vector<vector<double> > & cmeans,
+					    std::vector<vector<double> > & cvars) {
+  for (unsigned j=0; j < this->n_ssms; ++j) {
+    StateSpaceModel * ssm = this->ssms[j];
+    if (ssm && ssm->is_cssm) {
+      CompactSupportSSM *cssm = (CompactSupportSSM *) ssm;
+      vector<double> mean(cssm->coef_means);
+      vector<double> var(cssm->coef_vars);
+      cmeans.push_back(mean);
+      cvars.push_back(var);
+    } else {
+      vector<double> mean;
+      vector<double> var;
+      cmeans.push_back(mean);
+      cvars.push_back(var);
+    }
+
+  }
+}
+
+
+void TransientCombinedSSM::extract_all_coefs(FilterState &cache, int k,
+					     std::vector<vector<double> > & cmeans,
+					     std::vector<vector<double> > & cvars) {
+  /*
+    Assumes cache has a valid, current P matrix.
+   */
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(k));
+  unsigned int state_offset = 0;
+  for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
+       it < ssm_indices.end() && *it >= 0; ++it) {
+
+    int j = *it;
+    StateSpaceModel * ssm = this->ssms[j];
+    if (!ssm) continue;
+    if (ssm->is_cssm) {
+      CompactSupportSSM *cssm = (CompactSupportSSM *) ssm;
+      cssm->extract_coefs(cache.xk, cache.P,
+			 state_offset, k - this->start_idxs[j],
+			 cmeans[j],
+			 cvars[j]);
+    }
+    state_offset += ssm->max_dimension;
+  }
+}
+
+void TransientCombinedSSM::extract_component_means(double *xk, int k,
+						   std::vector<vector<double> > & means) {
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(k));
+  unsigned int state_offset = 0;
+  for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
+       it < ssm_indices.end() && *it >= 0; ++it) {
+
+    int j = *it;
+    StateSpaceModel * ssm = this->ssms[j];
+    int kk = k - this->start_idxs[j];
+    means[j](kk) = ssm ? ssm->apply_observation_matrix(xk + state_offset, kk) : 1.0;
+    if (ssm) state_offset += ssm->max_dimension;
+  }
 }

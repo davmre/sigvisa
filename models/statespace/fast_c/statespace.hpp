@@ -17,6 +17,7 @@ using google::dense_hash_map;
 //}
 
 
+
 class StateSpaceModel {
 
 public:
@@ -42,6 +43,37 @@ public:
   virtual ~StateSpaceModel() { return; };
 
   unsigned int max_dimension;
+  bool is_cssm;
+};
+
+class FilterState {
+public:
+
+  unsigned int state_size;
+
+  bool wasnan;
+  bool at_fixed_point;
+  double alpha;
+  matrix<double,column_major> obs_U;
+  vector<double> obs_d;
+  vector<double> gain;
+  matrix<double,column_major> pred_U;
+  vector<double> pred_d;
+
+  matrix<double,column_major> tmp_U1;
+  matrix<double,column_major> tmp_U2;
+  matrix<double> P;
+
+  vector<double> f;
+  vector<double> v;
+
+  vector<double> xk;
+
+  double eps_stationary;
+
+  FilterState (int max_dimension, double eps_stationary);
+  void init_priors(StateSpaceModel &ssm);
+
 };
 
 
@@ -49,7 +81,9 @@ class CompactSupportSSM : public StateSpaceModel {
 public:
   unsigned int n_basis;
   unsigned int n_steps;
-
+  bool is_cssm = true;
+  const vector<double> & coef_means;
+  const vector<double> & coef_vars;
 
 
   CompactSupportSSM(const vector<int> & start_idxs, const vector<int> & end_idxs,
@@ -75,6 +109,12 @@ public:
   int prior_mean(double * result);
   int prior_vars(double * result);
   bool stationary(int k);
+  void extract_coefs(const vector<double> &x,
+		     const matrix<double> &P,
+		     unsigned int state_offset,
+		     int k,
+		     vector<double> & coef_means,
+		     vector<double> & coef_vars);
 
 private:
 dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  > active_indices;
@@ -85,8 +125,6 @@ dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  > 
   const vector<int> & identities;
   const matrix <double> & basis_prototypes;
 
-  const vector<double> & coef_means;
-  const vector<double> & coef_vars;
   double obs_noise;
   double bias;
 
@@ -98,6 +136,8 @@ public:
   ARSSM(const vector<double> & params, double error_var,
 	  double obs_noise, double bias);
   ~ARSSM();
+
+  bool is_cssm = false;
 
   int apply_transition_matrix(const double *x, int k, double * result);
   int apply_transition_matrix( const matrix<double,column_major> &X,
@@ -148,6 +188,17 @@ TransientCombinedSSM(std::vector<StateSpaceModel *> & ssms, const vector<int> & 
   int prior_vars(double * result);
   bool stationary(int k);
 
+  void init_coef_priors(std::vector<vector<double> > & cmeans,
+			std::vector<vector<double> > & cvars);
+
+  void extract_all_coefs(FilterState &cache, int k,
+			 std::vector<vector<double> > & cmeans,
+			 std::vector<vector<double> > & cvars);
+  void extract_component_means(double *xk, int k,
+			       std::vector<vector<double> > & means);
+
+  const unsigned int n_ssms;
+  bool is_cssm = false;
 private:
   std::vector<StateSpaceModel *> ssms;
   const vector<int> start_idxs;
@@ -155,7 +206,6 @@ private:
   const std::vector<const double * > scales;
 
   const double obs_noise;
-  const unsigned int n_ssms;
   unsigned int n_steps;
 
   int active_ssm_cache1_k;
@@ -172,36 +222,17 @@ private:
 
 };
 
-class FilterState {
-public:
-
-  unsigned int state_size;
-
-  bool wasnan;
-  bool at_fixed_point;
-  double alpha;
-  matrix<double,column_major> obs_U;
-  vector<double> obs_d;
-  vector<double> gain;
-  matrix<double,column_major> pred_U;
-  vector<double> pred_d;
-
-  matrix<double,column_major> tmp_U1;
-  matrix<double,column_major> tmp_U2;
-  matrix<double> P;
-
-  vector<double> f;
-  vector<double> v;
-
-  vector<double> xk;
-
-  double eps_stationary;
-
-  FilterState (int max_dimension, double eps_stationary);
-  void init_priors(StateSpaceModel &ssm);
-
-};
 
 double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk);
 void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k);
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z);
+void mean_obs(StateSpaceModel &ssm, vector<double> & result);
+void prior_sample(StateSpaceModel &ssm, vector<double> & result);
+
+void tssm_component_means(TransientCombinedSSM &tssm,
+			  const vector<double> &z,
+			  std::vector<vector<double> > & means);
+void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
+				      const vector<double> &z,
+				      std::vector<vector<double> > & cmeans,
+				      std::vector<vector<double> > & cvars);

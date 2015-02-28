@@ -279,27 +279,36 @@ int CompactSupportSSM::prior_vars(double *result) {
   return i;
 }
 
-/*
-    def extract_coefs(self, x, P, k, coef_means, coef_vars):
-        # given a state estimate at some time k, extract marginals for
-        # whatever coefficients we can reasonably do so for at the
-        # current time. Earlier estimates will always be overwritten
-        # by later ones.
-        for i, basis_idx in enumerate(self.active_basis[k]):
-            state_idx = self.active_indices[basis_idx, k]
-            coef_means[basis_idx] = x[state_idx-1]
-            coef_vars[basis_idx] = P[state_idx-1,state_idx-1]
 
-    def filtered_coef_marginals(self, z):
-        coef_means = np.empty((self.n_basis,))
-        coef_vars = np.empty((self.n_basis,))
+void CompactSupportSSM::extract_coefs(const vector<double> &x,
+				      const matrix<double> &P,
+				      unsigned int state_offset,
+				      int k,
+				      vector<double> & coef_means,
+				      vector<double> & coef_vars) {
+  /* given a state estimate at some time k, extract marginals for
+   * whatever coefficients we can reasonably do so for at the
+   * current time. Earlier estimates will always be overwritten
+   * by later ones. */
+  const matrix_row< matrix<int> > active = row(this->active_basis, k);
+  matrix_row< matrix<int> >::const_iterator idx;
+  unsigned int i;
 
 
-        for k, (x, U, d) in enumerate(self.filtered_states(z)):
-            P = np.dot(d*U, U.T)
-            self.extract_coefs(x, P, k, coef_means, coef_vars)
-            if k % 100 == 0:
-                print "filtering step", k
+  for (i=0, idx = active.begin();
+       idx < active.end() && *idx >= 0;
+       ++i, ++idx) {
+    int basis_idx = *idx;
+    std::pair<int,int> key = std::make_pair(basis_idx, k);
 
-        return coef_means, coef_vars
-*/
+    dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
+    if (contains == this->active_indices.end()) {
+      printf("\nWAAT, no key found for basis %d\n", basis_idx);
+      exit(-1);
+    } else {
+      int state_idx = this->active_indices[key] + state_offset;
+      coef_means(basis_idx) = x(state_idx);
+      coef_vars(basis_idx) = P(state_idx,state_idx);
+    }
+  }
+}

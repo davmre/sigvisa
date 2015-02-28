@@ -50,6 +50,11 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
+  pyublas::numpy_vector<double> py_mean_obs(int n) {
+    vector<double> result(n);
+    mean_obs(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
 
   StateSpaceModel *ssm;
 private:
@@ -83,6 +88,11 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
+  pyublas::numpy_vector<double> py_mean_obs(int n) {
+    vector<double> result(n);
+    mean_obs(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
 
   StateSpaceModel *ssm;
 private:
@@ -141,7 +151,7 @@ public:
 
       /* the start_idx and npts integer components are easy to handle */
       int start_idx = boost::python::extract<int>(t[1]);
-      int npts = boost::python::extract<int>(t[2]);
+      unsigned int npts = boost::python::extract<int>(t[2]);
       this->start_idxs[i] = start_idx;
       this->end_idxs[i] = start_idx+npts;
 
@@ -189,7 +199,54 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
-  StateSpaceModel *ssm;
+  pyublas::numpy_vector<double> py_mean_obs(int n) {
+    vector<double> result(n);
+    mean_obs(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
+
+  pyublas::numpy_vector<double> py_prior_sample(int n) {
+    vector<double> result(n);
+    prior_sample(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
+
+
+  boost::python::list component_means(const pyublas::numpy_vector<double> z) {
+    std::vector<vector<double> > means(this->ssms.size());
+    for (unsigned i=0; i < means.size(); ++i) {
+      int st = this->start_idxs[i];
+      int et = this->end_idxs[i];
+      int npts = et-st;
+      means[i].resize(npts);
+      means[i].clear();
+    }
+    tssm_component_means(*(this->ssm), z, means);
+
+    boost::python::list l;
+    for(unsigned i=0; i < means.size(); ++i) {
+      pyublas::numpy_vector<double> v(means[i]);
+      l.append(v);
+    }
+    return l;
+  }
+
+  boost::python::list marginals(const pyublas::numpy_vector<double> z) {
+    std::vector<vector<double> > cmeans;
+    std::vector<vector<double> > cvars;
+    all_filtered_cssm_coef_marginals(*(this->ssm), z, cmeans, cvars);
+
+    boost::python::list l;
+    for(unsigned i=0; i < cmeans.size(); ++i) {
+      pyublas::numpy_vector<double> m(cmeans[i]);
+      pyublas::numpy_vector<double> v(cvars[i]);
+      l.append( boost::python::make_tuple(m,v) );
+    }
+    return l;
+
+  }
+
+  TransientCombinedSSM *ssm;
 private:
   vector<double> p;
 
@@ -213,17 +270,22 @@ BOOST_PYTHON_MODULE(ssms_c) {
 	  pyublas::numpy_vector<int> const &,  pyublas::numpy_matrix<double> const &,
 	  pyublas::numpy_vector<double> const & ,  pyublas::numpy_vector<double> const &,
 	  double const , double const>())
-    .def("run_filter", &PyCSSSM::run_filter);
+    .def("run_filter", &PyCSSSM::run_filter)
+    .def("mean_obs", &PyCSSSM::py_mean_obs);
 
 
 
   bp::class_<PyARSSM>("ARSSM", bp::init< \
 		      pyublas::numpy_vector<double> const &,  double const,
 		      double const , double const>())
-    .def("run_filter", &PyARSSM::run_filter);
+    .def("run_filter", &PyARSSM::run_filter)
+    .def("mean_obs", &PyARSSM::py_mean_obs);
 
   bp::class_<PyTSSM>("TransientCombinedSSM", bp::init<boost::python::list const &,
 		     double >())
-    .def("run_filter", &PyTSSM::run_filter);
-
+    .def("run_filter", &PyTSSM::run_filter)
+    .def("mean_obs", &PyTSSM::py_mean_obs)
+    .def("prior_sample", &PyTSSM::py_prior_sample)
+    .def("component_means", &PyTSSM::component_means)
+    .def("all_filtered_cssm_coef_marginals", &PyTSSM::marginals);
 }
