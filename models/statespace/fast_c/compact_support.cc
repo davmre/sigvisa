@@ -23,6 +23,7 @@ CompactSupportSSM::CompactSupportSSM(\
 					coef_means(coef_means), coef_vars(coef_vars),
 					obs_noise(obs_noise), bias(bias) {
 
+  this->is_cssm = true;
   this->n_basis = start_idxs.size();
   this->n_steps = *(std::max_element(end_idxs.begin(), end_idxs.end()));
 

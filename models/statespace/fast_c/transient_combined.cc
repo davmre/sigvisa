@@ -160,7 +160,7 @@ TransientCombinedSSM::TransientCombinedSSM(\
   }
 
   this->max_dimension = max_dimension;
-
+  this->is_cssm = false;
 }
 
 TransientCombinedSSM::~TransientCombinedSSM() {

@@ -81,7 +81,6 @@ class CompactSupportSSM : public StateSpaceModel {
 public:
   unsigned int n_basis;
   unsigned int n_steps;
-  bool is_cssm = true;
   const vector<double> & coef_means;
   const vector<double> & coef_vars;
 
@@ -136,8 +135,6 @@ public:
   ARSSM(const vector<double> & params, double error_var,
 	  double obs_noise, double bias);
   ~ARSSM();
-
-  bool is_cssm = false;
 
   int apply_transition_matrix(const double *x, int k, double * result);
   int apply_transition_matrix( const matrix<double,column_major> &X,
@@ -198,8 +195,8 @@ TransientCombinedSSM(std::vector<StateSpaceModel *> & ssms, const vector<int> & 
 			       std::vector<vector<double> > & means);
 
   const unsigned int n_ssms;
-  bool is_cssm = false;
 private:
+
   std::vector<StateSpaceModel *> ssms;
   const vector<int> start_idxs;
   const vector<int> end_idxs;

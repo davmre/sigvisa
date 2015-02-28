@@ -17,6 +17,7 @@ ARSSM::ARSSM(const vector<double> & params, double error_var,
 	     double obs_noise, double bias) : params(params), error_var(error_var),
 					      obs_noise(obs_noise), bias(bias) {
 
+  this->is_cssm = false;
   this->max_dimension = params.size();
 }
 
