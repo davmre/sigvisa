@@ -16,10 +16,11 @@ from sigvisa.signals.common import Waveform
 from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.noise.noise_model import NoiseModel
 
-from sigvisa.models.statespace.transient import TransientCombinedSSM
-from sigvisa.models.statespace.ar import ARSSM
-from sigvisa.models.statespace.dummy import DummySSM
-from sigvisa.models.statespace.compact_support import CompactSupportSSM
+#from sigvisa.models.statespace.transient import TransientCombinedSSM
+#from sigvisa.models.statespace.ar import ARSSM
+#from sigvisa.models.statespace.dummy import DummySSM
+#from sigvisa.models.statespace.compact_support import CompactSupportSSM
+from sigvisa.ssms_c import TransientCombinedSSM, ARSSM, CompactSupportSSM
 
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import get_parent_value, create_key
@@ -27,6 +28,8 @@ from sigvisa.plotting.plot import subplot_waveform
 
 import scipy.weave as weave
 from scipy.weave import converters
+
+TSSM_NOISE_PADDING=1e-6
 
 def extract_arrival_from_key(k, r):
     m = r.match(k)
@@ -85,12 +88,13 @@ class ObservedSignalNode(Node):
 
         # maintain the invariant that masked data is always NaN
         wave_data = model_waveform.data
-        d = wave_data.data
+        d = np.array(wave_data.data, dtype=np.float64)
         m = wave_data.mask
         if isinstance(m, np.ndarray):
             d[m] = np.nan
+        wd = ma.masked_array(d, m)
 
-        super(ObservedSignalNode, self).__init__(model=None, initial_value=wave_data, keys=[key,], fixed=observed, **kwargs)
+        super(ObservedSignalNode, self).__init__(model=None, initial_value=wd, keys=[key,], fixed=observed, **kwargs)
 
         self.mw = model_waveform
         self.filter_str = model_waveform['filter_str']
@@ -124,7 +128,7 @@ class ObservedSignalNode(Node):
         self.gps_by_phase = dict()
 
 
-        self.tssm = TransientCombinedSSM(((self.noise_arssm, 0, self.npts, None),))
+        self.tssm = TransientCombinedSSM([(self.noise_arssm, 0, self.npts, None),], TSSM_NOISE_PADDING)
 
         self.wavelet_basis = wavelet_basis
         self.wavelet_param_models = wavelet_param_models
@@ -140,12 +144,13 @@ class ObservedSignalNode(Node):
         assert(len(value) == len(self.get_value(self.single_key)))
 
         # represent missing data as NaN for easy processing
-        d = value.data
+        d = np.array(value.data, dtype=np.float64)
         m = value.mask
         if isinstance(m, np.ndarray):
             d[m] = np.nan
+        v = ma.masked_array(d, m)
 
-        super(ObservedSignalNode, self).set_value(value=value, key=self.single_key)
+        super(ObservedSignalNode, self).set_value(value=v, key=self.single_key)
 
     def get_wave(self):
         return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
@@ -160,7 +165,7 @@ class ObservedSignalNode(Node):
             self.nm_type = self.nm.noise_model_type()
 
         assert(self.nm_type=="ar")
-        self.noise_arssm = ARSSM(params=self.nm.params, error_var = self.nm.em.std**2, mean=self.nm.c)
+        self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
 
     def arrival_start_idx(self, eid, phase, skip_pv_call=False):
         if not skip_pv_call:
@@ -335,10 +340,11 @@ class ObservedSignalNode(Node):
 
     def arrival_ssm(self, eid, phase):
 
-        basis = self.wavelet_basis
-
-        if basis is None:
+        if self.wavelet_basis is None:
             return None
+
+        (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+        n_basis = len(start_idxs)
 
         if phase in self.wavelet_param_models:
             evdict = self._ev_params[eid]
@@ -346,10 +352,10 @@ class ObservedSignalNode(Node):
             prior_means = [gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]]
             prior_vars = [gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]]
         else:
-            prior_means = np.zeros((len(basis),))
-            prior_vars = np.ones((len(basis),))
+            prior_means = np.zeros((n_basis,))
+            prior_vars = np.ones((n_basis,))
 
-        return CompactSupportSSM(basis, prior_means, prior_vars)
+        return CompactSupportSSM(start_idxs, end_idxs, identities, basis_prototypes, prior_means, prior_vars, 0.0, 0.0)
 
     def transient_ssm(self, arrivals=None, parent_values=None):
 
@@ -363,6 +369,9 @@ class ObservedSignalNode(Node):
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
         envs = [None] * n
+
+        (start_idxs, end_idxs, identities, prototypes, n_steps) = self.wavelet_basis
+        n_basis = len(start_idxs)
 
         components = [(self.noise_arssm, 0, self.npts, None)]
 
@@ -383,14 +392,13 @@ class ObservedSignalNode(Node):
 
             wssm = self.arrival_ssms[(eid, phase)]
             if wssm is not None:
-                npts = min(len(env), wssm.basis.shape[1])
+                npts = min(len(env), n_steps)
                 components.append((wssm, start_idx, npts, env))
                 self.tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
-            dssm = DummySSM(bias=1.0)
-            components.append((dssm, start_idx, len(env), env))
+            components.append((None, start_idx, len(env), env))
             self.tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
 
-        return TransientCombinedSSM(components)
+        return TransientCombinedSSM(components, TSSM_NOISE_PADDING)
 
     def arrivals(self):
         self._parent_values()
@@ -399,6 +407,7 @@ class ObservedSignalNode(Node):
     def parent_predict(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
         v = self.tssm.mean_obs(self.npts)
+
         self.set_value(ma.masked_array(data=v, mask=self.get_value().mask, copy=False))
         for child in self.children:
             child.parent_keys_changed.add(self.single_key)
@@ -413,8 +422,8 @@ class ObservedSignalNode(Node):
     def log_p(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
         d = self.get_value().data
-        return self.tssm.run_filter(d)
-
+        lp = self.tssm.run_filter(d)
+        return lp
 
     def ___log_p_old(self, parent_values=None, return_grad=False, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
@@ -685,3 +694,14 @@ signal_diff(i) =value(i) - pred_signal(i);
             return dlpw
         proxy_lps = {self.label: (lpw, deriv_lp_w)}
         return proxy_lps
+
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        del d['tssm']
+        del d['arrival_ssms']
+
+    def __setstate__(self, d):
+        self.__dict__ = d
+        for (eid, phase) in self.arrivals():
+            self.arrival_ssms[(eid, phase)] = arrival_ssm(eid, phase)
+        self.tssm = self.transient_ssm()

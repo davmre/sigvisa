@@ -5,6 +5,7 @@ import time
 import traceback
 import numpy as np
 import numpy.ma as ma
+import pyublas
 import scipy
 import uuid
 from collections import defaultdict
@@ -13,7 +14,6 @@ from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.database import db
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 from sigvisa.infer.run_mcmc import run_open_world_MH, MCMCLogger
 from sigvisa.models.signal_model import update_arrivals
 
@@ -158,9 +158,13 @@ def compute_wavelet_messages(sg, wn):
     marginals = wn.tssm.all_filtered_cssm_coef_marginals(wn.get_value().data)
 
     for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(wn.tssm_components):
-        if i not in marginals: continue
-        prior_means, prior_vars = wn.tssm.ssms[i].coef_means.copy(), wn.tssm.ssms[i].coef_vars.copy()
+
         posterior_means, posterior_vars = marginals[i]
+        if len(posterior_means)==0:
+            continue
+
+        ssm = wn.tssm.get_component(i)
+        prior_means, prior_vars = ssm.get_coef_prior()
 
         message_means = posterior_means.copy()
         message_vars = posterior_vars.copy()

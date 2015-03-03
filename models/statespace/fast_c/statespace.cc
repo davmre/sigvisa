@@ -1,6 +1,8 @@
 #include <boost/numeric/ublas/matrix_proxy.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
 
+#include <stdio.h>
+
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -49,6 +51,10 @@ void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, u
     if (d(j - 1) > 0) {
       alpha = 1.0 / d(j - 1);
     } else {
+      if (fabs(d(j-1) > 1e-5) ) {
+	printf("WARNING: nonpositive d[%d] %f in udu decomp\n", j-1, d(j-1));
+	exit(-1);
+      }
       d(j-1) = 0.0;
       alpha = 0.0;
     }
@@ -120,6 +126,27 @@ void print_mat(const matrix<double> & m) {
   printf("\n");
 }
 
+void write_mat_col(const char *fname, const matrix<double,column_major> & m) {
+
+  FILE *f = fopen(fname, "w");
+  if (f == NULL)
+    {
+      printf("Error opening file!\n");
+      exit(1);
+    }
+
+  for(unsigned i=0; i < m.size1(); ++i) {
+    for(unsigned j=0; j < m.size2(); ++j) {
+      fprintf(f, "%f ", m(i,j));
+    }
+    fprintf(f, "\n");
+  }
+  fprintf(f, "\n");
+
+  fclose(f);
+
+}
+
 void print_mat_col(const matrix<double,column_major> & m) {
   for(unsigned i=0; i < m.size1(); ++i) {
     for(unsigned j=0; j < m.size2(); ++j) {
@@ -145,6 +172,10 @@ void compute_explicit_cov(FilterState &cache,
   noalias(subrange(P, 0, state_size, 0, state_size))		\
     = prod(subrange(mtmp, 0, state_size, 0, state_size),
 	   trans(subrange(U_tmp, 0, state_size, 0, state_size)));
+
+
+
+
 }
 
 
@@ -169,13 +200,19 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 
   // if needed, use this for isnan: #include <boost/math/special_functions/fpclassify.hpp>
   if (isnan(zk)) {
-    if (cache.at_fixed_point && !cache.wasnan) {
+    // printf("declaring nan at timestep %d, val %f\n", k, zk);
+    if (!cache.wasnan && cache.at_fixed_point) {
        cache.at_fixed_point = false;
     }
     cache.wasnan = true;
+
+    // no observation, so the predicted state becomes the "observed" state
+    cache.obs_d = cache.pred_d;
+    cache.obs_U = cache.pred_U;
+
     return 0;
   } else {
-    if (cache.at_fixed_point && cache.wasnan) {
+    if (cache.wasnan && cache.at_fixed_point) {
        cache.at_fixed_point = false;
     }
     cache.wasnan = false;
@@ -255,7 +292,15 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   // also compute log marginal likelihood for this observation
   double step_ell = -.5 * log(2*PI*alpha) - .5 * yk*yk / alpha;
 
-  //printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
+  // printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
+
+  if (isnan(step_ell)) {
+    printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
+    print_vec(cache.obs_d);
+    printf("\n");
+    print_vec(cache.xk);
+    exit(-1);
+  }
 
   return step_ell;
 }
@@ -301,7 +346,6 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     ssm.apply_transition_matrix(&(column(U_old, i)(0) ), k, &(d_tmp(0)) );
     noalias(column(U_tmp, i)) = d_tmp;
     }*/
-  ssm.apply_transition_matrix(U_old, 0, k, U_tmp, 0, min_size);
 
   subrange(d_tmp, 0, state_size) = subrange(d_old, 0, state_size);
   for (unsigned i=prev_state_size; i < state_size; ++i) {
@@ -313,17 +357,50 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
 
   // if there is transition noise, do the expensive reconstruction/factoring step
   if (force_P || norm_2(subrange(tmp, 0, state_size)) > 0) {
-    matrix<double> &P = cache.P;
 
     compute_explicit_cov(cache, U_tmp, d_tmp);
-
     // add transition noise
+    matrix<double> &P = cache.P;
+
+    //snprintf(fname, 100, "matrices/P_c_prenoise_%d.txt", k);
+    //write_mat_col(fname, P);
+
+
     for (unsigned i=0; i < state_size; ++i) {
       P(i,i) += tmp(i);
+    }
+    //printf("noise at time %d ", k);
+    //print_vec(tmp);
+
+
+
+    /*
+    char fname[100];
+    snprintf(fname, 100, "matrices/P_c_%d.txt", k);
+    write_mat_col(fname, P);
+
+    snprintf(fname, 100, "matrices/U_c_%d.txt", k);
+    write_mat_col(fname, U_tmp);
+    */
+    // printf("step %d state size %d\n", k, state_size);
+
+    // udu overwrites the cov matrix, so we need to
+    // save it if we're going to explicitly use it
+    // later on.
+    matrix<double, column_major> & mtmp = cache.tmp_U2;
+    if (force_P) {
+      mtmp = P;
     }
 
     // get the new factored representation
     udu(P, U_tmp, d_tmp, state_size);
+
+    if (force_P) {
+      P = mtmp;
+    }
+
+
+
   }
 
   // if our factored representation is (almost) the same as the previous invocation,
@@ -377,22 +454,22 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
     kalman_predict_sqrt(ssm, cache, k, false);
 
     /*printf("post pred(%d) U ", k);
-      print_mat(cache.pred_U);
+      print_mat(cache.pred_U);*/
 
-  printf("post pred(%d) d ", k);
-  print_vec(cache.pred_d);
+    /*printf("post pred(%d) d ", k);
+      print_vec(cache.pred_d);*/
 
-  printf("post pred(%d) xk ", k);
-  print_vec(cache.xk);*/
+  /*printf("post pred(%d) xk ", k);
+    print_vec(cache.xk);*/
 
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
 
     /*printf("post observe(%d) U ", k);
-      print_mat(cache.obs_U);
-  printf("post obs(%d) d ", k);
-  print_vec(cache.obs_d);
+      print_mat(cache.obs_U);*/
+    /*printf("post obs(%d) d ", k);
+      print_vec(cache.obs_d);*/
 
-  printf("post obs(%d) xk ", k);
+  /*printf("post obs(%d) xk ", k);
   print_vec(cache.xk);*/
 
 
@@ -414,6 +491,7 @@ void mean_obs(StateSpaceModel &ssm, vector<double> & result) {
 
     if (k+1 < result.size()) {
       ssm.apply_transition_matrix(&(x(0)), k+1, &(x2(0)));
+      ssm.transition_bias(k+1, &(x2(0)));
     }
     x = x2; // this copy is unnecessary, we could swap
             // pointers instead, but it doesn't
@@ -422,6 +500,32 @@ void mean_obs(StateSpaceModel &ssm, vector<double> & result) {
   }
 }
 
+void obs_var(StateSpaceModel &ssm, vector<double> & result) {
+  FilterState cache(ssm.max_dimension, 1e-10);
+  cache.init_priors(ssm);
+  compute_explicit_cov(cache, cache.pred_U, cache.pred_d);
+
+  matrix<double, column_major> P = cache.P;
+
+  for (unsigned k = 0; k < result.size(); ++k) {
+    ssm.apply_observation_matrix(P, 0,
+    				 k, &(cache.f(0)), &(cache.v(0)), cache.f.size());
+    result(k) = ssm.apply_observation_matrix(&(cache.f(0)), k);
+    result(k) += ssm.observation_noise(k);
+    if (k+1 < result.size()) {
+
+      ssm.apply_transition_matrix(P, 0, k+1, cache.obs_U, 0, ssm.max_dimension);
+      cache.obs_U = trans(cache.obs_U);
+      ssm.apply_transition_matrix(cache.obs_U, 0, k+1, P, 0, ssm.max_dimension);
+
+      vector<double> &tmp = cache.f;
+      ssm.transition_noise_diag(k+1, &(tmp(0)));
+      for (unsigned i=0; i < ssm.max_dimension; ++i) {
+	P(i,i) += tmp(i);
+      }
+    }
+  }
+}
 
 
 void resample_state(FilterState &cache) {
@@ -454,15 +558,44 @@ void prior_sample(StateSpaceModel &ssm, vector<double> & result) {
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);
 
-  for (unsigned k = 0; k < result.size(); ++k) {
-    resample_state(cache);
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::normal_distribution<double> randn(0,1);
+
+  // sample initial state from the prior
+  vector<double> &d = cache.pred_d;
+  for (unsigned i=0; i < ssm.max_dimension; ++i) {
+    cache.xk(i) += randn(rd) * sqrt(d(i));
+  }
+
+
+  unsigned k = 0;
+  result(k) = ssm.apply_observation_matrix(&(cache.xk(0)), k);
+  result(k) += ssm.observation_bias(k);
+
+  for (k=1; k < result.size(); ++k) {
+    cache.obs_d = cache.pred_d;
+    cache.obs_U = cache.pred_U;
+
+    vector<double> &tmp = cache.f;
+    unsigned int state_size = ssm.apply_transition_matrix( &(cache.xk(0)), k,  &(tmp(0)));
+    vector<double> &xk = cache.xk;
+    subrange(xk, 0, state_size) = subrange(tmp, 0, state_size);
+    ssm.transition_bias(k, &(xk(0)));
+
+    ssm.transition_noise_diag(k, &(tmp(0)));
+    for (unsigned i=0; i < state_size; ++i) {
+      cache.xk(i) += randn(rd) * sqrt(tmp(i));
+    }
+
     result(k) = ssm.apply_observation_matrix(&(cache.xk(0)), k);
     result(k) += ssm.observation_bias(k);
-    if (k+1 < result.size()) {
-      kalman_predict_sqrt(ssm, cache, k+1, true);
-    }
+
+
   }
 }
+
+
 
 
 void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,

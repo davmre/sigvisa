@@ -556,6 +556,7 @@ void TransientCombinedSSM::extract_component_means(double *xk, int k,
     StateSpaceModel * ssm = this->ssms[j];
     int kk = k - this->start_idxs[j];
     means[j](kk) = ssm ? ssm->apply_observation_matrix(xk + state_offset, kk) : 1.0;
+    means[j](kk) += ssm ? ssm->observation_bias(kk) : 0.0;
     if (ssm) state_offset += ssm->max_dimension;
   }
 }

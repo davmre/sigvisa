@@ -56,15 +56,43 @@ public:
     return pyublas::numpy_vector<double>(result);
   };
 
+  pyublas::numpy_vector<double> py_obs_var(int n) {
+    vector<double> result(n);
+    obs_var(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
+
+  pyublas::numpy_vector<double> py_prior_sample(int n) {
+    vector<double> result(n);
+    prior_sample(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
+
+
+  void set_coef_prior(const pyublas::numpy_vector<double> & cmeans,
+		      const pyublas::numpy_vector<double> & cvars) {
+    cm.assign(cmeans);
+    cv.assign(cvars);
+  }
+
+  boost::python::tuple get_coef_prior() {
+    pyublas::numpy_vector<double> m(cm.size());
+    pyublas::numpy_vector<double> v(cv.size());
+    m.assign(cm);
+    v.assign(cv);
+    return boost::python::make_tuple(m,v);
+  }
+
   StateSpaceModel *ssm;
+  vector<double> cm;
+  vector<double> cv;
+
 private:
 
   vector<int> sidx;
   vector<int> eidx;
   vector<int> ids;
   matrix<double> bp;
-  vector<double> cm;
-  vector<double> cv;
 
 };
 
@@ -93,6 +121,19 @@ public:
     mean_obs(*(this->ssm), result);
     return pyublas::numpy_vector<double>(result);
   };
+
+  pyublas::numpy_vector<double> py_obs_var(int n) {
+    vector<double> result(n);
+    obs_var(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
+
+  pyublas::numpy_vector<double> py_prior_sample(int n) {
+    vector<double> result(n);
+    prior_sample(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
+
 
   StateSpaceModel *ssm;
 private:
@@ -124,6 +165,7 @@ public:
        * of SSMs, otherwise, push an SSM pointer. */
       if (t[0]==boost::python::api::object()) {
 	this->ssms.push_back(NULL);
+	this->pyssms.push_back(NULL);
       } else {
 
 	boost::python::extract<PyARSSM> get_ar(t[0]);
@@ -144,7 +186,7 @@ public:
 	// of scope in the Python code).
 	PyObject * pyssm = boost::python::object(t[0]).ptr();
 	Py_INCREF(pyssm);
-	this->obj_refs.push_back(pyssm);
+	this->pyssms.push_back(pyssm);
 
 	this->ssms.push_back(ssm);
       }
@@ -168,17 +210,14 @@ public:
 	  PyErr_SetString(PyExc_RuntimeError, "scale array is not long enough to cover life of SSM component");
 	}
 
-
 	const double * scale_ptr = &(scale_vec(0));
 	this->scales.push_back(scale_ptr);
-
-
 
 	// Keep a reference to the Numpy array object to prevent it
 	// getting garbage collected.
 	PyObject * pyvec = boost::python::object(t[3]).ptr();
 	Py_INCREF(pyvec);
-	this->obj_refs.push_back(pyvec);
+	this->vec_refs.push_back(pyvec);
       }
     }
 
@@ -190,7 +229,10 @@ public:
     // release all the Python references we've been holding
     // (SSM objects and scale vectors)
     std::vector<PyObject *>::iterator it;
-    for (it = obj_refs.begin(); it < obj_refs.end(); ++it) {
+    for (it = pyssms.begin(); it < pyssms.end(); ++it) {
+      if (*it != NULL) Py_DECREF(*it);
+    }
+    for (it = vec_refs.begin(); it < vec_refs.end(); ++it) {
       Py_DECREF(*it);
     }
   };
@@ -208,6 +250,12 @@ public:
   pyublas::numpy_vector<double> py_prior_sample(int n) {
     vector<double> result(n);
     prior_sample(*(this->ssm), result);
+    return pyublas::numpy_vector<double>(result);
+  };
+
+  pyublas::numpy_vector<double> py_obs_var(int n) {
+    vector<double> result(n);
+    obs_var(*(this->ssm), result);
     return pyublas::numpy_vector<double>(result);
   };
 
@@ -246,13 +294,40 @@ public:
 
   }
 
+  /*
+
+  int get_n_coefs(int i) {
+    if (!this->ssms[i]) {
+      printf("ERROR: trying to set means for a NULL ssm.\n");
+      exit(-1);
+    }
+    if (!this->ssms[i]->is_cssm) {
+      printf("ERROR: trying to set means for a non-CSSM ssm.\n");
+      exit(-1);
+    }
+    CompactSupportSSM *ssm = (CompactSupportSSM *) (this->ssms[i]);
+    return ssm->n_basis;
+  }
+  */
+
+  boost::python::object get_component(int i) {
+    if (this->pyssms[i]) {
+      boost::python::handle<> h(this->pyssms[i]);
+      return boost::python::object(h);
+    } else {
+      return boost::python::object();
+    }
+  }
+
+
   TransientCombinedSSM *ssm;
 private:
   vector<double> p;
 
   // keep references to the Python objects whose internal states we depend on,
   // to prevent the Python garbage collector from killing them.
-  std::vector<PyObject *> obj_refs;
+  std::vector<PyObject *> pyssms;
+  std::vector<PyObject *> vec_refs;
 
   std::vector<StateSpaceModel *> ssms;
   vector<int> start_idxs;
@@ -271,21 +346,30 @@ BOOST_PYTHON_MODULE(ssms_c) {
 	  pyublas::numpy_vector<double> const & ,  pyublas::numpy_vector<double> const &,
 	  double const , double const>())
     .def("run_filter", &PyCSSSM::run_filter)
-    .def("mean_obs", &PyCSSSM::py_mean_obs);
-
+    .def("mean_obs", &PyCSSSM::py_mean_obs)
+    .def("prior_sample", &PyCSSSM::py_prior_sample)
+    .def("obs_var", &PyCSSSM::py_obs_var)
+    .def("set_coef_prior", &PyCSSSM::set_coef_prior)
+    .def("get_coef_prior", &PyCSSSM::get_coef_prior)
+     ;
 
 
   bp::class_<PyARSSM>("ARSSM", bp::init< \
 		      pyublas::numpy_vector<double> const &,  double const,
 		      double const , double const>())
     .def("run_filter", &PyARSSM::run_filter)
-    .def("mean_obs", &PyARSSM::py_mean_obs);
+    .def("mean_obs", &PyARSSM::py_mean_obs)
+    .def("prior_sample", &PyARSSM::py_prior_sample)
+    .def("obs_var", &PyARSSM::py_obs_var);
 
   bp::class_<PyTSSM>("TransientCombinedSSM", bp::init<boost::python::list const &,
 		     double >())
     .def("run_filter", &PyTSSM::run_filter)
     .def("mean_obs", &PyTSSM::py_mean_obs)
     .def("prior_sample", &PyTSSM::py_prior_sample)
+    .def("obs_var", &PyTSSM::py_obs_var)
     .def("component_means", &PyTSSM::component_means)
-    .def("all_filtered_cssm_coef_marginals", &PyTSSM::marginals);
+    .def("all_filtered_cssm_coef_marginals", &PyTSSM::marginals)
+    //.def("get_n_coefs", &PyTSSM::get_n_coefs)
+    .def("get_component", &PyTSSM::get_component);
 }

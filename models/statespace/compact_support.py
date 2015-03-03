@@ -50,6 +50,7 @@ class CompactSupportSSM(StateSpaceModel):
         assert(k>0)
         active = self.active_basis[k]
 
+        x_new[:] = 0
         for i, idx in enumerate(active):
             prev_idx = self.active_indices[idx, k-1]
             x_new[i] = 0 if prev_idx < 1 else x[prev_idx-1]
@@ -81,6 +82,8 @@ class CompactSupportSSM(StateSpaceModel):
         for i, idx in enumerate(self.active_basis[k]):
             prev_idx = self.active_indices[idx, k-1]
             noise[i] = self.coef_vars[idx] if prev_idx < 1 else 0.0
+            #if prev_idx < 1:
+            #    print "time %d instantiating coef %d into state %d with noise variance %f" % (k, idx, i, noise[i])
 
     def apply_observation_matrix(self, x, k, result=None):
         active = self.active_basis[k]
@@ -131,6 +134,7 @@ class CompactSupportSSM(StateSpaceModel):
             state_idx = self.active_indices[basis_idx, k]
             coef_means[basis_idx] = x[state_idx-1]
             coef_vars[basis_idx] = P[state_idx-1,state_idx-1]
+
 
     def filtered_coef_marginals(self, z):
         coef_means = np.empty((self.n_basis,))

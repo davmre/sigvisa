@@ -93,6 +93,10 @@ int CompactSupportSSM::apply_transition_matrix( const double * x, int k, double 
     exit(-1);
   }
 
+  for (int i=0; i < this->max_dimension; ++i) {
+    result[i] = 0;
+  }
+
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
   int i = 0;
@@ -105,11 +109,11 @@ int CompactSupportSSM::apply_transition_matrix( const double * x, int k, double 
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
       result[i] = 0;
-      // printf("transition k %d i %d idx %d prev_idx %d x_new[i] %.4f\n", k, i, *idx, -1, 0.0);
+      // printf("transition k %d basis %d idx %d prev_idx %d x_new[i] %.4f\n", k, *idx, i, -1, 0.0);
     } else {
       int prev_idx = this->active_indices[key];
       result[i] =x[prev_idx];
-      // printf("transition k %d i %d idx %d prev_idx %d x_new[i] %.4f\n", k, i, *idx, prev_idx, x(prev_idx));
+      // printf("transition k %d basis %d idx %d prev_idx %d x_new[i] %.4f\n", k, *idx, i, prev_idx, x[prev_idx]);
     }
   }
   return i;
@@ -127,9 +131,22 @@ int CompactSupportSSM::apply_transition_matrix( const matrix<double,column_major
     exit(-1);
   }
 
+
+  for (int i=r_row_offset; i < r_row_offset+this->max_dimension; ++i) {
+    for (int j =0; j < n; ++j) {
+      result(i,j) = 0;
+    }
+  }
+
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
   unsigned i = r_row_offset;
+
+  int dummy= 0 ;
+  if (k == 4) {
+    dummy +=1 ;
+  }
+
   for (i=r_row_offset, idx = active.begin();
        idx < active.end() && *idx >= 0;
        ++i, ++idx) {
@@ -141,9 +158,11 @@ int CompactSupportSSM::apply_transition_matrix( const matrix<double,column_major
 
     if (contains == this->active_indices.end()) {
       for (unsigned j=0; j < n; ++j) result(i, j) = 0;
+      // printf("MATR0 transition k %d i %d idx %d prev_idx %d x_new[i,i] %.4f\n", k, i, *idx, -1, 0.0);
     } else {
       int prev_idx = this->active_indices[key] + x_row_offset;
       for (unsigned j=0; j < n; ++j) result(i, j) = X(prev_idx, j);
+      //printf("MATR1 transition k %d i %d idx %d prev_idx %d x_new[i, i] %.4f\n", k, i, *idx, prev_idx, X(prev_idx, prev_idx));
     }
   }
   return i-r_row_offset;
@@ -173,23 +192,25 @@ void CompactSupportSSM::transition_bias(int k, double * result) {
 void CompactSupportSSM::transition_noise_diag(int k, double * result) {
   //result.clear();
 
+  unsigned int i = 0;
+  for (i; i < this->max_dimension; ++i) {
+    result[i] = 0.0;
+  }
+
+
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
-  unsigned int i = 0;
   for (i=0, idx = active.begin();
        idx < active.end() && *idx >= 0;
        ++i, ++idx) {
-
     std::pair<int,int> key = std::make_pair(*idx, k-1);
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
       result[i] = this->coef_vars(*idx);
+      // printf("time %d instantiating coef %d into state %d with noise variance %f\n", k, *idx, i, result[i]);
     } else {
       result[i] = 0.0;
     }
-  }
-  for (; i < this->max_dimension; ++i) {
-    result[i] = 0.0;
   }
 }
 

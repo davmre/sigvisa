@@ -224,6 +224,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k);
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z);
 void mean_obs(StateSpaceModel &ssm, vector<double> & result);
+void obs_var(StateSpaceModel &ssm, vector<double> & result);
 void prior_sample(StateSpaceModel &ssm, vector<double> & result);
 
 void tssm_component_means(TransientCombinedSSM &tssm,

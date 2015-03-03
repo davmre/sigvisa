@@ -29,6 +29,7 @@ def udu(M):
         else:
             if np.abs(d[j-1]) > 1e-5:
                 print "WARNING: nonpositive d[%d] %f in udu decomp"  % (j-1, d[j-1])
+                import pdb; pdb.set_trace()
             d[j-1] = 0
             alpha = 0.0
         for k in range(1, j):
@@ -185,9 +186,10 @@ class StateSpaceModel(object):
                 self.apply_transition_matrix(P[:,i], k, TP[:,i])
             for i in range(state_size):
                 self.apply_transition_matrix(TP[i,:], k, P[i,:])
-
             self.transition_noise_diag(k, noise)
             np.fill_diagonal(P, np.diag(P)[:state_size] + noise[:state_size])
+            np.savetxt("matrices/P_py_%d.txt" % k, P)
+
 
             self.apply_observation_matrix(P, k, result=noise)
             pred_var = self.apply_observation_matrix(noise[:state_size], k)
@@ -318,16 +320,17 @@ class StateSpaceModel(object):
             print
 
             print "post pred(%d) xk" % k,
-            for xx in xk:
+            for xx in xk[:state_size]:
                 print "%.3f" % xx,
-            print
-"""
+            print"""
+
 
             # if there is an observation at this timestep, update the state estimate
             # accordingly. (and do some bookkeeping for the covariance cache)
             if np.isnan(z[k]):
                 if self.at_fixed_point and not self.wasnan:
                     self.at_fixed_point = False
+
                 self.wasnan = True
             else:
                 if self.at_fixed_point and self.wasnan:
@@ -336,16 +339,18 @@ class StateSpaceModel(object):
 
                 ell += self.kalman_observe_sqrt(k, z[k], xk, U, d, state_size)
 
-                """
+            """
             print "post obs(%d) d" % k,
             for dd in d:
                 print "%.3f" % dd,
             print
+
+
             print "post obs(%d) xk" % k,
             for xx in xk:
                 print "%.3f" % xx,
-            print
-                """
+            print"""
+
             yield xk, U, d
 
             xk, xk1 = xk1, xk
@@ -444,7 +449,7 @@ class StateSpaceModel(object):
         # also compute log marginal likelihood for this observation
         step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
 
-        #print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
+        # print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
 
         assert(not np.isnan(step_ell))
 
@@ -464,12 +469,15 @@ class StateSpaceModel(object):
         self.transition_bias(k, xk)
 
         if self.at_fixed_point and self.stationary(k):
-            return self.cached_pred_U, self.cached_pred_d, prev_state_size
+            U[:state_size,:state_size] = self.cached_pred_U[:state_size,:state_size]
+            d[:state_size] = self.cached_pred_d[:state_size]
+            return U.copy(), d.copy(), prev_state_size
         else:
             self.at_fixed_point = False
 
             # use xk1 as temp space to store the transition noise
             self.transition_noise_diag(k, xk1)
+
 
             # pushing the covariance P through the
             # transition model F yields FPF'. In a factored
@@ -477,8 +485,10 @@ class StateSpaceModel(object):
             # need to compute FU.
             U1 = U.copy() # temp space, could be more efficient here
             min_size = min(prev_state_size, state_size)
+
             for i in range(min_size):
                 self.apply_transition_matrix(U[:,i], k, U1[:,i])
+
             if prev_state_size < state_size:
                 for i in range(prev_state_size, state_size):
                     U1[:, i] = 0
@@ -491,6 +501,10 @@ class StateSpaceModel(object):
 
                 # add transition noise
                 np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
+
+
+                #np.savetxt("matrices/P_py_%d.txt" % k, P)
+                #np.savetxt("matrices/U_py_%d.txt" % k, U1)
 
                 # get the new factored representation
                 U1[:state_size,:state_size], d[:state_size] = udu(P)

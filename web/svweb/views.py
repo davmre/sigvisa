@@ -305,13 +305,23 @@ def FitImageView(request, fitid):
             for i, (eid, phase, env, start_idx, npts, component_type) in enumerate(wave_node.tssm_components):
                 if phase != fphase.phase: continue
                 if component_type != "wavelet": continue
+                cssm = wave_node.tssm.get_component(i)
 
                 if wiggle:
                     messages = read_messages(fphase.message_fname, fit.runid.runid)
                     pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
-                    wave_node.tssm.ssms[i].coef_means[:] = pmeans
+                    print "pmeans", pmeans
+                    cssm.set_coef_prior(pmeans, pvars)
+                    pm, pv = cssm.get_coef_prior();
+                    print "pm", pm
+                    #wave_node.tssm.ssms[i].coef_means[:] = pmeans
                 else:
-                    wave_node.tssm.ssms[i].coef_means[:] = 0
+                    pm, pv = cssm.get_coef_prior();
+                    n_coefs = len(pm)
+                    fakemeans = np.zeros((n_coefs,))
+                    fakevars = np.ones((n_coefs,))
+                    cssm.set_coef_prior(fakemeans, fakevars)
+
                 v = wave_node.tssm.mean_obs(wave_node.npts)
 
         wave_node.parent_predict()
