@@ -126,6 +126,22 @@ void print_mat(const matrix<double> & m) {
   printf("\n");
 }
 
+void write_vec(const char *fname, const vector<double> & v) {
+  FILE *f = fopen(fname, "w");
+  if (f == NULL)
+    {
+      printf("Error opening file!\n");
+      exit(1);
+    }
+  for(unsigned i=0; i < v.size(); ++i) {
+    fprintf(f, "%.12f ", v(i));
+  }
+  fprintf(f, "\n");
+  fclose(f);
+
+}
+
+
 void write_mat_col(const char *fname, const matrix<double,column_major> & m) {
 
   FILE *f = fopen(fname, "w");
@@ -137,15 +153,27 @@ void write_mat_col(const char *fname, const matrix<double,column_major> & m) {
 
   for(unsigned i=0; i < m.size1(); ++i) {
     for(unsigned j=0; j < m.size2(); ++j) {
-      fprintf(f, "%f ", m(i,j));
+      fprintf(f, "%.12f ", m(i,j));
     }
     fprintf(f, "\n");
   }
   fprintf(f, "\n");
 
   fclose(f);
-
 }
+
+void write_stuff(const char *item, unsigned int k, const vector<double> & v) {
+  char fname[100];
+  snprintf(fname, 100, "matrices/%s_c_%d.txt", item, k);
+  write_vec(fname, v);
+}
+
+void write_stuff(const char *item, unsigned int k, const matrix<double, column_major> & m) {
+  char fname[100];
+  snprintf(fname, 100, "matrices/%s_c_%d.txt", item, k);
+  write_mat_col(fname, m);
+}
+
 
 void print_mat_col(const matrix<double,column_major> & m) {
   for(unsigned i=0; i < m.size1(); ++i) {
@@ -239,15 +267,16 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 				 k, &(f(0)), &(v(0)), state_size);
 
 
+
     for (unsigned i=0; i < state_size; ++i) {
       v(i) = d_old(i)*f(i);
     }
 
-    //printf("predicted obs ");
-    //print_vec(f);
 
-    // printf("got v ");
-    // print_vec(v);
+    D(write_stuff("U_obs_old", k, U_old);)
+      D(write_stuff("d_obs_old", k, d_old);)
+      D(write_stuff("f", k, f);)
+      D(write_stuff("v", k, v);)
 
     alpha = r + v(0)*f(0);
     if (alpha > 1e-20) {
@@ -278,6 +307,10 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 
     }
     cache.alpha = alpha;
+
+      D(write_stuff("U_obs", k, U);)
+      D(write_stuff("d_obs", k, d);)
+
   }
 
   // given the Kalman gain from the covariance update, compute
@@ -292,7 +325,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   // also compute log marginal likelihood for this observation
   double step_ell = -.5 * log(2*PI*alpha) - .5 * yk*yk / alpha;
 
-  // printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
+  //printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
 
   if (isnan(step_ell)) {
     printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
@@ -339,21 +372,30 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
   unsigned int min_size = std::min(prev_state_size, state_size);
 
 
+
+  D(write_stuff("U_pretransit", k, U_old);)
+
+
   // COMMENTED OUT: this loop is equivalent to the matrix-valued transition call
   // directly below. I'm leaving it in for debugging and to run speed comparisons.
-  /*for (int i=0; i < min_size; ++i) {
+
+    /*
+  for (int i=0; i < min_size; ++i) {
     // THIS ONLY WORKS IF U_old is in column-major order
     ssm.apply_transition_matrix(&(column(U_old, i)(0) ), k, &(d_tmp(0)) );
     noalias(column(U_tmp, i)) = d_tmp;
     }*/
-
   subrange(d_tmp, 0, state_size) = subrange(d_old, 0, state_size);
+  ssm.apply_transition_matrix(U_old, 0, k, U_tmp, 0, min_size);
   for (unsigned i=prev_state_size; i < state_size; ++i) {
     d_tmp(i) = 0;
     for (unsigned j=0; j < state_size; ++j) {
       U_tmp(j, i) = 0;
     }
   }
+
+    D(write_stuff("d_posttransit", k, d_tmp);)
+    D(write_stuff("U_posttransit", k, U_tmp);)
 
   // if there is transition noise, do the expensive reconstruction/factoring step
   if (force_P || norm_2(subrange(tmp, 0, state_size)) > 0) {
@@ -362,8 +404,8 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     // add transition noise
     matrix<double> &P = cache.P;
 
-    //snprintf(fname, 100, "matrices/P_c_prenoise_%d.txt", k);
-    //write_mat_col(fname, P);
+
+    D(write_stuff("P_prenoise", k, P);)
 
 
     for (unsigned i=0; i < state_size; ++i) {
@@ -373,15 +415,9 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     //print_vec(tmp);
 
 
+      D(write_stuff("P", k, P);)
 
-    /*
-    char fname[100];
-    snprintf(fname, 100, "matrices/P_c_%d.txt", k);
-    write_mat_col(fname, P);
 
-    snprintf(fname, 100, "matrices/U_c_%d.txt", k);
-    write_mat_col(fname, U_tmp);
-    */
     // printf("step %d state size %d\n", k, state_size);
 
     // udu overwrites the cov matrix, so we need to
@@ -395,11 +431,12 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     // get the new factored representation
     udu(P, U_tmp, d_tmp, state_size);
 
+      D(write_stuff("d_decomp", k, d_tmp);)
+      D(write_stuff("U_decomp", k, U_tmp);)
+
     if (force_P) {
       P = mtmp;
     }
-
-
 
   }
 
@@ -443,34 +480,24 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   double ell = 0;
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
 
-  /*printf("post observe(0) obs_U ");
-  print_mat(cache.obs_U);
-  printf("post observe(0) obs_d ");
-  print_vec(cache.obs_d);*/
+  D(write_stuff("U_post_obs", 0, cache.obs_U);)
+    D(write_stuff("d_post_obs", 0, cache.obs_d);)
+    D(write_stuff("xk_post_obs", 0, cache.xk);)
 
   for (unsigned k=1; k < N; ++k) {
-
-
     kalman_predict_sqrt(ssm, cache, k, false);
 
-    /*printf("post pred(%d) U ", k);
-      print_mat(cache.pred_U);*/
-
-    /*printf("post pred(%d) d ", k);
-      print_vec(cache.pred_d);*/
-
-  /*printf("post pred(%d) xk ", k);
-    print_vec(cache.xk);*/
+    D(write_stuff("U_post_predict", k, cache.pred_U);)
+      D(write_stuff("d_post_predict", k, cache.pred_d);)
+      D(write_stuff("xk_post_predict", k, cache.xk);)
 
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
 
-    /*printf("post observe(%d) U ", k);
-      print_mat(cache.obs_U);*/
-    /*printf("post obs(%d) d ", k);
-      print_vec(cache.obs_d);*/
 
-  /*printf("post obs(%d) xk ", k);
-  print_vec(cache.xk);*/
+      D(write_stuff("U_post_obs", k, cache.obs_U);)
+      D(write_stuff("d_post_obs", k, cache.obs_d);)
+      D(write_stuff("xk_post_obs", k, cache.xk);)
+
 
 
   }

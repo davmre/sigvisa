@@ -20,13 +20,13 @@ def cssm(N=64, run_test=True):
     cmeans = np.zeros((n,), dtype=np.float64)
     cvars = np.ones((n,), dtype=np.float64)
 
-    cvars = np.abs(np.random.randn(n))
+    #cvars = np.abs(np.random.randn(n))
 
     np.random.seed(0)
     z = np.array(np.random.randn(112))
 
     z[1:4] = np.nan
-    z[100:110] = np.nan
+    #z[100:110] = np.nan
 
 
     from sigvisa.models.statespace.compact_support import ImplicitCompactSupportSSM
@@ -34,7 +34,8 @@ def cssm(N=64, run_test=True):
     ic = ImplicitCompactSupportSSM(start_times, end_times, identities, prototypes, cmeans, cvars, 0.0, 0.01)
     t1 = time.time()
     if run_test:
-        ll2 = 1.0 #ic.run_filter(z)
+        ll2 = ic.run_filter(z)
+        #ll2 = 1.0
         t2 = time.time()
 
 
@@ -49,12 +50,12 @@ def cssm(N=64, run_test=True):
                           idarray, m, cmeans, cvars, 0.01, 0.0)
     t4 = time.time()
     if run_test:
-        ll = 1.0 #c.run_filter(z)
+        ll = c.run_filter(z)
         t5 = time.time()
 
         print "python", t1-t0, t2-t1, "ll", ll2
         print "C", t4-t3, t5-t4, "ll", ll
-
+        return
         ov_py = ic.obs_var(N)
         ov_c = c.obs_var(N)
         assert( (np.abs(ov_py - ov_c) < 1e-8).all())
@@ -214,7 +215,7 @@ def tssm_memory_test():
 
 if __name__ == "__main__":
     try:
-        cssm()
+        tssm()
     except KeyboardInterrupt:
         raise
     except Exception as e:

@@ -82,7 +82,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, **kwargs):
+    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, uatemplate_wiggle_var=1.0, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -132,6 +132,8 @@ class ObservedSignalNode(Node):
 
         self.wavelet_basis = wavelet_basis
         self.wavelet_param_models = wavelet_param_models
+        self.uatemplate_wiggle_var = uatemplate_wiggle_var
+
 
     def __str__(self):
         try:
@@ -318,6 +320,14 @@ class ObservedSignalNode(Node):
             except KeyError:
                 continue
 
+
+        # if we're recovering from an unpickling,
+        # we'll need to regenerate all the SSMs.
+        if not self.arrival_ssms:
+            self.arrival_ssms = dict()
+            for (eid, phase) in self._arrivals:
+                new_arrivals.add((eid, phase))
+
         # recompute priors for new arrivals, or
         # arrivals whose event location has changed.
         for (eid, phase) in new_arrivals:
@@ -353,9 +363,14 @@ class ObservedSignalNode(Node):
             prior_vars = [gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]]
         else:
             prior_means = np.zeros((n_basis,))
-            prior_vars = np.ones((n_basis,))
+            prior_vars = np.ones((n_basis,)) * self.uatemplate_wiggle_var
 
-        return CompactSupportSSM(start_idxs, end_idxs, identities, basis_prototypes, prior_means, prior_vars, 0.0, 0.0)
+        if (eid, phase) in self.arrival_ssms:
+            cssm = self.arrival_ssms[(eid, phase)]
+            cssm.set_coef_prior(prior_means, prior_vars)
+        else:
+            cssm = CompactSupportSSM(start_idxs, end_idxs, identities, basis_prototypes, prior_means, prior_vars, 0.0, 0.0)
+        return cssm
 
     def transient_ssm(self, arrivals=None, parent_values=None):
 
@@ -377,6 +392,9 @@ class ObservedSignalNode(Node):
 
         self.tssm_components = [(None, None, None, 0, self.npts, "noise"),]
 
+        # TODO: can be smarter about this, and only regenerate the TSSM when arrival_time changes.
+        # Any other template param change can be implemented by just updating the scale vector in
+        # the current TSSM to the new envelope.
         for (i, (eid, phase)) in enumerate(arrivals):
             v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase, parent_values=parent_values)
             start = (v['arrival_time'] - self.st) * self.srate
@@ -699,9 +717,18 @@ signal_diff(i) =value(i) - pred_signal(i);
         d = self.__dict__.copy()
         del d['tssm']
         del d['arrival_ssms']
+        del d['noise_arssm']
+        return d
 
     def __setstate__(self, d):
         self.__dict__ = d
-        for (eid, phase) in self.arrivals():
-            self.arrival_ssms[(eid, phase)] = arrival_ssm(eid, phase)
-        self.tssm = self.transient_ssm()
+        if "uatemplate_wiggle_var" not in d:
+            self.uatemplate_wiggle_var = 1.0
+            self.graph.uatemplate_wiggle_var = self.uatemplate_wiggle_var
+
+        self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
+        # don't try to regenerate other SSMs here because we might still be in
+        # the middle of the unpickling process and can't depend on other program
+        # components (e.g. self.graph.template_generator()) being functional.
+        # We'll do this instead when parent_values is called.
+        self.arrival_ssms = dict()

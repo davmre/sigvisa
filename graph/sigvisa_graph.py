@@ -116,6 +116,7 @@ class SigvisaGraph(DirectedGraphModel):
                  arrays_joint=False, gpmodel_build_trees=False,
                  absorb_n_phases=False, hack_param_constraint=False,
                  uatemplate_rate=1e-3,
+                 uatemplate_wiggle_var = 1.0,
                  fixed_arrival_npts=None):
         """
 
@@ -187,6 +188,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.next_uatemplateid = 1
         self.uatemplate_rate = uatemplate_rate
+        self.uatemplate_wiggle_var = uatemplate_wiggle_var
         self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
 
@@ -987,7 +989,7 @@ class SigvisaGraph(DirectedGraphModel):
                     model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
                     param_models[phase].append(model)
 
-        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models)
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, uatemplate_wiggle_var=self.uatemplate_wiggle_var)
 
         s = Sigvisa()
         sta = wave['sta']

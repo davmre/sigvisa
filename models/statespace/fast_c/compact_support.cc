@@ -109,11 +109,11 @@ int CompactSupportSSM::apply_transition_matrix( const double * x, int k, double 
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
       result[i] = 0;
-      // printf("transition k %d basis %d idx %d prev_idx %d x_new[i] %.4f\n", k, *idx, i, -1, 0.0);
+      D(printf("transition k %d basis %d idx %d prev_idx %d x_new[i] %.4f\n", k, *idx, i, -1, 0.0);)
     } else {
       int prev_idx = this->active_indices[key];
       result[i] =x[prev_idx];
-      // printf("transition k %d basis %d idx %d prev_idx %d x_new[i] %.4f\n", k, *idx, i, prev_idx, x[prev_idx]);
+      D(printf("transition k %d basis %d idx %d prev_idx %d x_new[i] %.4f\n", k, *idx, i, prev_idx, x[prev_idx]);)
     }
   }
   return i;
@@ -207,7 +207,7 @@ void CompactSupportSSM::transition_noise_diag(int k, double * result) {
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
       result[i] = this->coef_vars(*idx);
-      // printf("time %d instantiating coef %d into state %d with noise variance %f\n", k, *idx, i, result[i]);
+      D(printf("time %d instantiating coef %d into state %d with noise variance %f\n", k, *idx, i, result[i]);)
     } else {
       result[i] = 0.0;
     }

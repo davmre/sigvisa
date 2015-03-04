@@ -72,8 +72,8 @@ sigvisa_module = Extension('sigvisa_c',
                            )
 
 
-ssm_sources = ['python_wrappers.cc', 'transient_combined.cc',
-               'statespace.cc', 'compact_support.cc',
+ssm_sources = ['statespace.cc', 'python_wrappers.cc', 'transient_combined.cc',
+               'compact_support.cc',
                'autoregression.cc']
 from imp import find_module
 f, pathname, descr = find_module("pyublas")

@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.stats
 
-from sigvisa.models.statespace import StateSpaceModel
+from sigvisa.models.statespace import StateSpaceModel, DEBUG_SSM
 
 
 class CompactSupportSSM(StateSpaceModel):
@@ -54,7 +54,9 @@ class CompactSupportSSM(StateSpaceModel):
         for i, idx in enumerate(active):
             prev_idx = self.active_indices[idx, k-1]
             x_new[i] = 0 if prev_idx < 1 else x[prev_idx-1]
-            #print "transition k %d i %d idx %d prev_idx %d x[prev_idx] %.4f" % (k, i, idx, prev_idx, x_new[i])
+
+            if DEBUG_SSM:
+                print "transition k %d basis %d idx %d prev_idx %d x_new[i] %.4f" % (k, idx, i, prev_idx-1, x_new[i])
         return len(active)
 
     def transition_matrix_debug(self, k):
@@ -82,8 +84,8 @@ class CompactSupportSSM(StateSpaceModel):
         for i, idx in enumerate(self.active_basis[k]):
             prev_idx = self.active_indices[idx, k-1]
             noise[i] = self.coef_vars[idx] if prev_idx < 1 else 0.0
-            #if prev_idx < 1:
-            #    print "time %d instantiating coef %d into state %d with noise variance %f" % (k, idx, i, noise[i])
+            if DEBUG_SSM and prev_idx < 1:
+                print "time %d instantiating coef %d into state %d with noise variance %f" % (k, idx, i, noise[i])
 
     def apply_observation_matrix(self, x, k, result=None):
         active = self.active_basis[k]

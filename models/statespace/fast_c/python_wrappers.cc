@@ -68,6 +68,10 @@ public:
     return pyublas::numpy_vector<double>(result);
   };
 
+  int py_max_dimension() {
+    return ssm->max_dimension;
+  };
+
 
   void set_coef_prior(const pyublas::numpy_vector<double> & cmeans,
 		      const pyublas::numpy_vector<double> & cvars) {
@@ -351,6 +355,7 @@ BOOST_PYTHON_MODULE(ssms_c) {
     .def("obs_var", &PyCSSSM::py_obs_var)
     .def("set_coef_prior", &PyCSSSM::set_coef_prior)
     .def("get_coef_prior", &PyCSSSM::get_coef_prior)
+    .def("max_dimension", &PyCSSSM::py_max_dimension)
      ;
 
 

@@ -89,10 +89,10 @@ def FitWiggleView(request, fpid):
     import sigvisa.models.statespace.compact_support as cs
     from sigvisa.models.wiggles.wavelets import construct_implicit_basis
 
-    stspm, etsp, idsp, ptsp, Np = construct_implicit_basis(srate, fphase.wiggle_family, sort=False)
-    ic = cs.ImplicitCompactSupportSSM(stspm, etsp, idsp, ptsp, pmeans, pvars, bias=1.0, obs_noise=0.0)
-    wm = ic.mean_obs(N)
-    wv = ic.obs_var(N)
+    #stspm, etsp, idsp, ptsp, Np = construct_implicit_basis(srate, fphase.wiggle_family, sort=False)
+    #ic = cs.ImplicitCompactSupportSSM(stspm, etsp, idsp, ptsp, pmeans, pvars, bias=1.0, obs_noise=0.0)
+    #wm = ic.mean_obs(N)
+    #wv = ic.obs_var(N)
     #samples = [ic.prior_sample(N) for i in range(n_samples)]
 
     #wiggle_mean = wm

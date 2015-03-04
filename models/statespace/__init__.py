@@ -40,6 +40,24 @@ def udu(M):
     d[0] = M[0, 0]
     return U, d
 
+DEBUG_SSM = False
+def check_C_mat(item, k, M, size, threshold=1e-8):
+    if (not DEBUG_SSM) or k==0:
+        return
+    try:
+        C_item = np.loadtxt("matrices/%s_c_%d.txt" % (item, k))
+    except IOError as e:
+        print e
+        return
+
+    if len(C_item.shape)==1:
+        diff = np.abs(M[:size] - C_item[:size])
+    else:
+        diff = np.abs(M[:size,:size] - C_item[:size,:size])
+    assert(  np.max(diff) < threshold )
+    print "passed check for", item, "at step", k
+
+
 class StateSpaceModel(object):
 
     # general notation:
@@ -303,27 +321,20 @@ class StateSpaceModel(object):
             ell = self.kalman_observe_sqrt(0, z[0], xk, U, d, state_size)
         yield xk, U, d
 
-        #print "post observe(0)", U, d
 
-
+        check_C_mat("U_post_obs", 0, U, state_size)
+        check_C_mat("d_post_obs", 0, d, state_size)
+        check_C_mat("xk_post_obs", 0, xk, state_size)
 
         xk1 = xk.copy() # temp variable
         for k in range(1, N):
 
             # run the transition model to get the state estimate for the current timestep
-            U, d, state_size = self.kalman_predict_sqrt(k, xk1, U, d, xk, state_size)
+            U, d, state_size = self.kalman_predict_sqrt(k, xk1, U, d, xk, state_size, force_P=False)
 
-            """
-            print "post pred(%d) d" % k,
-            for dd in d:
-                print "%.3f" % dd,
-            print
-
-            print "post pred(%d) xk" % k,
-            for xx in xk[:state_size]:
-                print "%.3f" % xx,
-            print"""
-
+            check_C_mat("U_post_predict", k, U, state_size)
+            check_C_mat("d_post_predict", k, d, state_size)
+            check_C_mat("xk_post_predict", k, xk, state_size)
 
             # if there is an observation at this timestep, update the state estimate
             # accordingly. (and do some bookkeeping for the covariance cache)
@@ -339,17 +350,9 @@ class StateSpaceModel(object):
 
                 ell += self.kalman_observe_sqrt(k, z[k], xk, U, d, state_size)
 
-            """
-            print "post obs(%d) d" % k,
-            for dd in d:
-                print "%.3f" % dd,
-            print
-
-
-            print "post obs(%d) xk" % k,
-            for xx in xk:
-                print "%.3f" % xx,
-            print"""
+                check_C_mat("U_post_obs", k, U, state_size)
+                check_C_mat("d_post_obs", k, d, state_size)
+                check_C_mat("xk_post_obs", k, xk, state_size)
 
             yield xk, U, d
 
@@ -401,6 +404,13 @@ class StateSpaceModel(object):
             # print "got v", v
             if np.isnan(v).any():
                 raise Exception("v is %s" % v)
+
+
+            check_C_mat("U_obs_old", k, U, state_size)
+            check_C_mat("d_obs_old", k, d, state_size)
+            check_C_mat("v", k, v, state_size)
+            check_C_mat("f", k, f, state_size)
+
             alpha = r + v[0]*f[0]
             # print "   alpha", alpha
             assert(alpha >= 0)
@@ -426,6 +436,10 @@ class StateSpaceModel(object):
                 U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
                 K += v[j]*u_tmp
 
+            check_C_mat("U_obs", k, U, state_size)
+            check_C_mat("d_obs", k, d, state_size)
+
+
             # don't bother checking to see if we've reached a
             # fixed point: if we have, we'll realize it when we
             # run the prediction step. Instead, just assume we
@@ -449,13 +463,13 @@ class StateSpaceModel(object):
         # also compute log marginal likelihood for this observation
         step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
 
-        # print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
+        #print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
 
         assert(not np.isnan(step_ell))
 
         return step_ell
 
-    def kalman_predict_sqrt(self, k, xk1, U, d, xk, prev_state_size):
+    def kalman_predict_sqrt(self, k, xk1, U, d, xk, prev_state_size, force_P=False):
         # here we do the *very* lazy thing of constructing the
         # full cov, adding noise, and then re-factoring it.
         # this is super-expensive compared to the noiseless case
@@ -486,6 +500,8 @@ class StateSpaceModel(object):
             U1 = U.copy() # temp space, could be more efficient here
             min_size = min(prev_state_size, state_size)
 
+            check_C_mat("U_pretransit", k, U1, state_size)
+
             for i in range(min_size):
                 self.apply_transition_matrix(U[:,i], k, U1[:,i])
 
@@ -494,20 +510,30 @@ class StateSpaceModel(object):
                     U1[:, i] = 0
                     d[i] = 0
 
+            check_C_mat("U_posttransit", k, U1, state_size)
+            check_C_mat("d_posttransit", k, d, state_size)
+
             # if there is transition noise, do the expensive reconstruction/factoring step
-            if np.sum(xk1!= 0) != 0:
+            if force_P or np.sum(xk1!= 0) != 0:
                 # construct the cov matrix
                 P = np.dot(d[:state_size]*U1[:state_size,:state_size], U1[:state_size,:state_size].T)
+
+                check_C_mat("P_prenoise", k, P, state_size)
 
                 # add transition noise
                 np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
 
+                check_C_mat("P", k, P, state_size)
 
                 #np.savetxt("matrices/P_py_%d.txt" % k, P)
                 #np.savetxt("matrices/U_py_%d.txt" % k, U1)
 
                 # get the new factored representation
                 U1[:state_size,:state_size], d[:state_size] = udu(P)
+
+
+                check_C_mat("U_decomp", k, U1, state_size)
+                check_C_mat("d_decomp", k, d, state_size)
 
 
             assert(not np.isnan(U1[:state_size,:state_size]).any())
