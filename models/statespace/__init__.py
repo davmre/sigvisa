@@ -18,6 +18,8 @@ def udu(M):
     assert np.allclose(M, M.T), 'M must be symmetric, positive semidefinite'
     n = M.shape[0]
 
+    oldM = M.copy()
+
     # perform Bierman's COV2UD subroutine (fucking inclusive indices)
     M = np.triu(M)
     U = np.eye(n)
@@ -27,7 +29,7 @@ def udu(M):
         if d[j - 1] > 0:
             alpha = 1.0 / d[j - 1]
         else:
-            if np.abs(d[j-1]) > 1e-5:
+            if np.abs(d[j-1]) > 1e-8:
                 print "WARNING: nonpositive d[%d] %f in udu decomp"  % (j-1, d[j-1])
                 import pdb; pdb.set_trace()
             d[j-1] = 0
@@ -38,14 +40,27 @@ def udu(M):
             M[0:k, k - 1] = M[0:k, k - 1] - beta * U[0:k, j - 1]
 
     d[0] = M[0, 0]
+    if d[0] < 0:
+        if np.abs(d[0]) > 1e-8:
+            print "WARNING: nonpositive d[%d] %f in udu decomp"  % (0, d[0])
+            import pdb; pdb.set_trace()
+        d[0] = 0
+
+    if DEBUG_SSM:
+        newM = np.dot(d*U, U.T)
+        diffM = np.abs(newM-oldM)
+        assert (np.max(diffM) < 1e-10)
+
+
     return U, d
 
 DEBUG_SSM = False
-def check_C_mat(item, k, M, size, threshold=1e-8):
-    if (not DEBUG_SSM) or k==0:
+COMPARE_LANGS = ()
+def check_C_mat(item, k, M, size, lang="c", threshold=1e-8):
+    if lang not in COMPARE_LANGS or k==0:
         return
     try:
-        C_item = np.loadtxt("matrices/%s_c_%d.txt" % (item, k))
+        C_item = np.loadtxt("matrices/%s_%s_%d.txt" % (item, lang, k))
     except IOError as e:
         print e
         return
@@ -120,13 +135,6 @@ class StateSpaceModel(object):
         Return a scalar bias term for the observation.
         """
         return 0.0
-
-    def observation_variance(self, P, k):
-        # P: state covariance at time k
-        # returns the (scalar) variance of the (noiseless) observation at time k,
-        # given by H_k*P*H_k'
-        Hx = lambda x, r=None: self.apply_observation_matrix(x, k, r)
-        return conjugate_scalar(P, Hx)
 
     def observation_noise(k):
         # return the (scalar) observation noise variance at time k
@@ -336,6 +344,10 @@ class StateSpaceModel(object):
             check_C_mat("d_post_predict", k, d, state_size)
             check_C_mat("xk_post_predict", k, xk, state_size)
 
+            P = np.dot(d[:state_size]*U[:state_size,:state_size], U[:state_size,:state_size].T)
+            check_C_mat("P_pred", k, P, state_size, lang="naive")
+            check_C_mat("x_pred", k, xk, state_size, lang="naive")
+
             # if there is an observation at this timestep, update the state estimate
             # accordingly. (and do some bookkeeping for the covariance cache)
             if np.isnan(z[k]):
@@ -353,6 +365,10 @@ class StateSpaceModel(object):
                 check_C_mat("U_post_obs", k, U, state_size)
                 check_C_mat("d_post_obs", k, d, state_size)
                 check_C_mat("xk_post_obs", k, xk, state_size)
+
+                P = np.dot(d[:state_size]*U[:state_size,:state_size], U[:state_size,:state_size].T)
+                check_C_mat("P_obs", k, P, state_size, lang="naive")
+                check_C_mat("x_obs", k, xk, state_size, lang="naive")
 
             yield xk, U, d
 
@@ -397,9 +413,9 @@ class StateSpaceModel(object):
             # Another reference is Bruce Gibbs, "Advanced Kalman
             # Filtering, Least-Squares, and Modeling" (2011).
 
-            # print "initial U", U
+            #print "initial U", U
             self.apply_observation_matrix(U[:state_size,:state_size], k, f)
-            # print "predicted obs", f
+            #print "predicted obs", f
             v = d[:state_size] * f
             # print "got v", v
             if np.isnan(v).any():
@@ -463,11 +479,21 @@ class StateSpaceModel(object):
         # also compute log marginal likelihood for this observation
         step_ell = -.5 * np.log(2*np.pi*alpha) - .5 * (yk)**2 / alpha
 
-        #print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %.4f" % (k, pred_z, alpha, zk, yk, step_ell)
+        # print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %f" % (k, pred_z, alpha, zk, yk, step_ell)
 
         assert(not np.isnan(step_ell))
 
         return step_ell
+
+
+    def check_P(self, U, d, k, P=None):
+        state_size = len(self.active_basis[k])
+        if P is None:
+            P = np.dot(d[:state_size]*U[:state_size,:state_size], U[:state_size,:state_size].T)
+        H = self.obs_vector_debug(k)[:state_size]
+        obs_var = np.dot(H, np.dot(P, H.T))
+        assert (np.abs(obs_var-1) < 1e-8)
+
 
     def kalman_predict_sqrt(self, k, xk1, U, d, xk, prev_state_size, force_P=False):
         # here we do the *very* lazy thing of constructing the
@@ -492,7 +518,6 @@ class StateSpaceModel(object):
             # use xk1 as temp space to store the transition noise
             self.transition_noise_diag(k, xk1)
 
-
             # pushing the covariance P through the
             # transition model F yields FPF'. In a factored
             # representation, this is FUDU'F', so we just
@@ -502,7 +527,8 @@ class StateSpaceModel(object):
 
             check_C_mat("U_pretransit", k, U1, state_size)
 
-            for i in range(min_size):
+
+            for i in range(prev_state_size):
                 self.apply_transition_matrix(U[:,i], k, U1[:,i])
 
             if prev_state_size < state_size:
@@ -513,12 +539,14 @@ class StateSpaceModel(object):
             check_C_mat("U_posttransit", k, U1, state_size)
             check_C_mat("d_posttransit", k, d, state_size)
 
+
             # if there is transition noise, do the expensive reconstruction/factoring step
-            if force_P or np.sum(xk1!= 0) != 0:
+            if force_P or state_size != prev_state_size or  np.sum(xk1!= 0) != 0:
                 # construct the cov matrix
-                P = np.dot(d[:state_size]*U1[:state_size,:state_size], U1[:state_size,:state_size].T)
+                P = np.dot(d[:prev_state_size]*U1[:state_size,:prev_state_size], U1[:state_size,:prev_state_size].T)
 
                 check_C_mat("P_prenoise", k, P, state_size)
+                check_C_mat("P_prenoise", k, P, state_size, lang="naive")
 
                 # add transition noise
                 np.fill_diagonal(P, np.diag(P) + xk1[:state_size])
@@ -531,10 +559,11 @@ class StateSpaceModel(object):
                 # get the new factored representation
                 U1[:state_size,:state_size], d[:state_size] = udu(P)
 
-
                 check_C_mat("U_decomp", k, U1, state_size)
                 check_C_mat("d_decomp", k, d, state_size)
 
+                #PP = np.dot(d[:state_size]*U1[:, :state_size], U1[:,:state_size].T)
+                #assert (np.max(np.abs(PP[:state_size,:state_size]-P)) < 1e-8)
 
             assert(not np.isnan(U1[:state_size,:state_size]).any())
             assert(not np.isnan(d[:state_size]).any())
@@ -555,3 +584,96 @@ class StateSpaceModel(object):
 
 
             return U1, d, state_size
+
+    def kalman_predict(self, k, xk1, Pk1, xk, Pk):
+        # xk1, Pk1: mean and covariance for the state at time k-1
+        # xk, Pk: empty vector/matrix in which the mean and covariance
+        #         at time k will be stored
+
+        # return values are stored in xk and Pk
+        state_size = self.apply_transition_matrix(xk1, k, xk)
+        self.transition_bias(k, xk)
+
+        # can use xk1 as temporary storage now since we've
+        # already computed the state transition
+        self.transition_covariance(Pk1, k, Pk)
+        np.savetxt("matrices/P_prenoise_naive_%d.txt" % k, Pk)
+        self.transition_noise_diag(k, xk1)
+        np.fill_diagonal(Pk, np.diag(Pk) + xk1)
+        return state_size
+
+    def kalman_observe(self, k, zk, xk, Pk, KkT, state_size):
+
+        # zk: (scalar) observation at time k
+        # xk, Pk: mean and covariance of the predicted state
+        #         at time k. These are overwritten with
+        #         updated state estimate.
+        # KkT: temporary vector of length len(xk)
+        #
+        # returns:
+        #    step_ell: likelihood of this observation, given the
+        #              filtered state estimate.
+        #    (implicitly) xk, Pk: the updated state estimate
+
+        pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
+        yk = zk - pred_z
+
+        H = self.obs_vector_debug(k)
+        Sk = np.dot(H, np.dot(Pk, H.T))
+        assert(Sk > 0)
+        Sk += self.observation_noise(k)
+
+        self.apply_observation_matrix(Pk.T, k, KkT)
+
+        xk[:state_size] += KkT[:state_size] * yk / Sk
+        Pk[:state_size, :state_size] -= np.outer(KkT[:state_size], KkT[:state_size]/Sk)
+
+        # update log likelihood
+        step_ell= scipy.stats.norm.logpdf(yk, loc=0, scale=np.sqrt(Sk))
+        assert(not np.isnan(step_ell))
+
+        print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %f" % (k, pred_z, Sk, zk, yk, step_ell)
+
+        return step_ell
+
+    def run_filter_naive(self, z, likelihood_only=True):
+        N = len(z)
+        ell = 0
+
+        xk = np.empty((self.max_dimension,))
+        mean = self.prior_mean()
+        state_size = len(mean)
+        xk[:state_size] = self.prior_mean()
+        print "k=0, state size", state_size
+
+        Pk = np.empty((self.max_dimension, self.max_dimension))
+        Pk[:state_size, :state_size] = np.diag(self.prior_vars())
+
+        tmp = np.empty((self.max_dimension,))
+        ell = self.kalman_observe(0, z[0], xk, Pk, tmp, state_size)
+        if not likelihood_only:
+            x = np.empty((self.max_dimension, N))
+            x[:len(xk), 0:1] = xk
+
+        # create temporary variables
+        xk1 = xk.copy()
+        Pk1 = Pk.copy()
+        for k in range(1, N):
+            state_size = self.kalman_predict(k, xk1, Pk1, xk, Pk)
+
+            np.savetxt("matrices/P_pred_naive_%d.txt" % k, Pk)
+            np.savetxt("matrices/x_pred_naive_%d.txt" % k, xk)
+
+            if not np.isnan(z[k]):
+                ell += self.kalman_observe(k, z[k], xk, Pk, tmp, state_size)
+
+            np.savetxt("matrices/P_obs_naive_%d.txt" % k, Pk)
+            np.savetxt("matrices/x_obs_naive_%d.txt" % k, xk)
+
+            # the result of the filtering update, stored in xk, Pk,
+            # now becomes the new "previous" version (xk1, Pk1) for
+            # the next round.
+            xk1, xk = xk, xk1
+            Pk1, Pk = Pk, Pk1
+
+        return ell

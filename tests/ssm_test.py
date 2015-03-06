@@ -20,24 +20,29 @@ def cssm(N=64, run_test=True):
     cmeans = np.zeros((n,), dtype=np.float64)
     cvars = np.ones((n,), dtype=np.float64)
 
-    #cvars = np.abs(np.random.randn(n))
+    cvars = np.abs(np.random.randn(n))
 
     np.random.seed(0)
-    z = np.array(np.random.randn(112))
+    z = np.array(np.random.randn(64))
 
     z[1:4] = np.nan
-    #z[100:110] = np.nan
+    z[100:110] = np.nan
 
 
-    from sigvisa.models.statespace.compact_support import ImplicitCompactSupportSSM
+    import sigvisa.models.statespace.compact_support as cs
     t0 = time.time()
-    ic = ImplicitCompactSupportSSM(start_times, end_times, identities, prototypes, cmeans, cvars, 0.0, 0.01)
+    ic = cs.ImplicitCompactSupportSSM(start_times, end_times, identities, prototypes, cmeans, cvars, 0.0, 0.01)
     t1 = time.time()
     if run_test:
         ll2 = ic.run_filter(z)
-        #ll2 = 1.0
         t2 = time.time()
 
+        """
+        basis = construct_basis_simple(N, "db4", "zpd")
+        pyc = cs.CompactSupportSSM(basis, cmeans, cvars, obs_noise=0.01)
+        ll3 = pyc.run_filter(z)
+        assert( np.abs(ll2-ll3) < 1e-8 )
+        """
 
     pyublas.set_trace(True)
 
@@ -213,9 +218,53 @@ def tssm_memory_test():
     ll2 = tssm_c.run_filter(z)
     print ll2
 
+
+def cssm_vs_true_test():
+    from sigvisa.models.wiggles.wavelets import construct_wavelet_basis
+    import sigvisa.models.statespace.compact_support as cs
+    import scipy.stats
+
+    basis = construct_wavelet_basis(2.0, "db2_1.0_99_30", sort=True)
+
+    cssm = cs.CompactSupportSSM(basis, obs_noise=1.0)
+
+    input_N = basis.shape[1]
+    tmp_basis = basis[:, :input_N]
+    np.random.seed(0)
+
+    z = np.random.randn(input_N)
+    ll1 = cssm.run_filter_naive(z)
+    ll2 = cssm.run_filter(z)
+
+    m = np.zeros(input_N)
+    C = np.dot(tmp_basis.T, tmp_basis) + np.eye(input_N)
+    rv = scipy.stats.multivariate_normal(mean=m, cov=C)
+    ll3 = rv.logpdf(z)
+    print "python sqrt filter", ll2
+    print "python naive filter", ll1
+    print "full Gaussian", ll3
+    assert( np.max(np.abs(ll1-ll2) )< 1e-8 )
+    assert( np.max(np.abs(ll1-ll3) )< 1e-8 )
+
+
+def true_gaussian_filtering(z, m, C):
+    n = len(z)
+    ells = []
+    for i in range(n):
+        Kstar = C[i, :i]
+        Kinv = np.linalg.inv(C[:i,:i])
+
+        pred_m = np.dot(Kstar, np.dot(Kinv, z[:i]))
+        pred_v = C[i,i] - np.dot(Kstar, np.dot(Kinv, Kstar))
+        ell = scipy.stats.norm(loc=pred_m, scale=np.sqrt(pred_v)).logpdf(z[i])
+        print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %f" % (i, pred_m, pred_v, z[i], z[i]-pred_m, ell)
+        ells.append(ell)
+    return np.sum(ells)
+
+
 if __name__ == "__main__":
     try:
-        tssm()
+        cssm()
     except KeyboardInterrupt:
         raise
     except Exception as e:

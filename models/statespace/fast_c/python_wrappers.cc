@@ -50,6 +50,15 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
+  boost::python::tuple py_step_obs_likelihoods(pyublas::numpy_vector<double> z) {
+    vector<double> ells(z.size());
+    vector<double> preds(z.size());
+    vector<double> alphas(z.size());
+    step_obs_likelihoods(*(this->ssm), z, ells, preds, alphas);
+    return boost::python::make_tuple(pyublas::numpy_vector<double>(ells), pyublas::numpy_vector<double>(preds), pyublas::numpy_vector<double>(alphas));
+  };
+
+
   pyublas::numpy_vector<double> py_mean_obs(int n) {
     vector<double> result(n);
     mean_obs(*(this->ssm), result);
@@ -245,6 +254,15 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
+  boost::python::tuple py_step_obs_likelihoods(pyublas::numpy_vector<double> z) {
+    vector<double> ells(z.size());
+    vector<double> preds(z.size());
+    vector<double> alphas(z.size());
+    step_obs_likelihoods(*(this->ssm), z, ells, preds, alphas);
+    return boost::python::make_tuple(pyublas::numpy_vector<double>(ells), pyublas::numpy_vector<double>(preds), pyublas::numpy_vector<double>(alphas));
+  };
+
+
   pyublas::numpy_vector<double> py_mean_obs(int n) {
     vector<double> result(n);
     mean_obs(*(this->ssm), result);
@@ -350,6 +368,7 @@ BOOST_PYTHON_MODULE(ssms_c) {
 	  pyublas::numpy_vector<double> const & ,  pyublas::numpy_vector<double> const &,
 	  double const , double const>())
     .def("run_filter", &PyCSSSM::run_filter)
+    .def("step_obs_likelihoods", &PyCSSSM::py_step_obs_likelihoods)
     .def("mean_obs", &PyCSSSM::py_mean_obs)
     .def("prior_sample", &PyCSSSM::py_prior_sample)
     .def("obs_var", &PyCSSSM::py_obs_var)
@@ -370,6 +389,7 @@ BOOST_PYTHON_MODULE(ssms_c) {
   bp::class_<PyTSSM>("TransientCombinedSSM", bp::init<boost::python::list const &,
 		     double >())
     .def("run_filter", &PyTSSM::run_filter)
+    .def("step_obs_likelihoods", &PyTSSM::py_step_obs_likelihoods)
     .def("mean_obs", &PyTSSM::py_mean_obs)
     .def("prior_sample", &PyTSSM::py_prior_sample)
     .def("obs_var", &PyTSSM::py_obs_var)

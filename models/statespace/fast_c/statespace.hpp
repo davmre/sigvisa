@@ -58,6 +58,7 @@ public:
   bool wasnan;
   bool at_fixed_point;
   double alpha;
+  double pred_z;
   matrix<double,column_major> obs_U;
   vector<double> obs_d;
   vector<double> gain;
@@ -238,3 +239,7 @@ void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 				      const vector<double> &z,
 				      std::vector<vector<double> > & cmeans,
 				      std::vector<vector<double> > & cvars);
+  void step_obs_likelihoods(StateSpaceModel &ssm, const vector<double> &z,
+			    vector<double> & ells,
+			    vector<double> & preds,
+			    vector<double> & alphas);

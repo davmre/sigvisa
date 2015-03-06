@@ -187,23 +187,24 @@ void print_mat_col(const matrix<double,column_major> & m) {
 
 void compute_explicit_cov(FilterState &cache,
 			  matrix<double,column_major> &U_tmp,
-			  vector<double> &d_tmp) {
+			  vector<double> &d_tmp,
+			  int prev_state_size) {
   matrix<double,column_major> &mtmp = cache.tmp_U2;
   matrix<double> &P = cache.P;
   unsigned state_size = cache.state_size;
 
+  if (prev_state_size == -1) {
+    prev_state_size = state_size;
+  }
+
   // construct the cov matrix
-  for (unsigned i=0; i < state_size; ++i) {
+  for (unsigned i=0; i < prev_state_size; ++i) {
     subrange(mtmp, 0, state_size, i, i+1) = subrange(U_tmp, 0, state_size, i, i+1);
     subrange(mtmp, 0, state_size, i, i+1) *= d_tmp(i);
   }
   noalias(subrange(P, 0, state_size, 0, state_size))		\
-    = prod(subrange(mtmp, 0, state_size, 0, state_size),
-	   trans(subrange(U_tmp, 0, state_size, 0, state_size)));
-
-
-
-
+    = prod(subrange(mtmp, 0, state_size, 0, prev_state_size),
+	   trans(subrange(U_tmp, 0, state_size, 0, prev_state_size)));
 }
 
 
@@ -317,6 +318,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   // the updated mean vector.
   vector<double> &xk = cache.xk;
   double pred_z = ssm.apply_observation_matrix(&(xk(0)), k) + ssm.observation_bias(k);
+  cache.pred_z = pred_z;
   double yk = zk - pred_z;
   for (unsigned i=0; i < state_size; ++i) {
     xk(i) += cache.gain(i) * yk/alpha;
@@ -385,8 +387,8 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     ssm.apply_transition_matrix(&(column(U_old, i)(0) ), k, &(d_tmp(0)) );
     noalias(column(U_tmp, i)) = d_tmp;
     }*/
-  subrange(d_tmp, 0, state_size) = subrange(d_old, 0, state_size);
-  ssm.apply_transition_matrix(U_old, 0, k, U_tmp, 0, min_size);
+  subrange(d_tmp, 0, prev_state_size) = subrange(d_old, 0, prev_state_size);
+  ssm.apply_transition_matrix(U_old, 0, k, U_tmp, 0, prev_state_size);
   for (unsigned i=prev_state_size; i < state_size; ++i) {
     d_tmp(i) = 0;
     for (unsigned j=0; j < state_size; ++j) {
@@ -398,9 +400,9 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     D(write_stuff("U_posttransit", k, U_tmp);)
 
   // if there is transition noise, do the expensive reconstruction/factoring step
-  if (force_P || norm_2(subrange(tmp, 0, state_size)) > 0) {
+  if (force_P || state_size != prev_state_size || norm_2(subrange(tmp, 0, state_size)) > 0) {
 
-    compute_explicit_cov(cache, U_tmp, d_tmp);
+    compute_explicit_cov(cache, U_tmp, d_tmp, prev_state_size);
     // add transition noise
     matrix<double> &P = cache.P;
 
@@ -480,6 +482,8 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   double ell = 0;
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
 
+
+
   D(write_stuff("U_post_obs", 0, cache.obs_U);)
     D(write_stuff("d_post_obs", 0, cache.obs_d);)
     D(write_stuff("xk_post_obs", 0, cache.xk);)
@@ -503,6 +507,28 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   }
   return ell;
 }
+
+
+void step_obs_likelihoods(StateSpaceModel &ssm, const vector<double> &z,
+			  vector<double> & ells,
+			  vector<double> & preds,
+			  vector<double> & alphas) {
+  FilterState cache(ssm.max_dimension, 1e-10);
+  cache.init_priors(ssm);
+  unsigned int N = z.size();
+  double ell = 0;
+  ells(0) = kalman_observe_sqrt(ssm, cache, 0, z(0));
+  preds(0) = cache.pred_z;
+  alphas(0) = cache.alpha;
+  for (unsigned k=1; k < N; ++k) {
+    kalman_predict_sqrt(ssm, cache, k, false);
+    ells(k) = kalman_observe_sqrt(ssm, cache, k, z(k));
+    preds(k) = cache.pred_z;
+    alphas(k) = cache.alpha;
+    printf("got ell %f at step %d\n", ells(k), k);
+  }
+}
+
 
 void mean_obs(StateSpaceModel &ssm, vector<double> & result) {
   vector<double> x(ssm.max_dimension);
@@ -530,7 +556,7 @@ void mean_obs(StateSpaceModel &ssm, vector<double> & result) {
 void obs_var(StateSpaceModel &ssm, vector<double> & result) {
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);
-  compute_explicit_cov(cache, cache.pred_U, cache.pred_d);
+  compute_explicit_cov(cache, cache.pred_U, cache.pred_d, -1);
 
   matrix<double, column_major> P = cache.P;
 
@@ -641,7 +667,7 @@ void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
     kalman_predict_sqrt(ssm, cache, k, false);
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
 
-    compute_explicit_cov(cache, cache.obs_U, cache.obs_d);
+    compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
     ssm.extract_all_coefs(cache, k, cmeans, cvars);
   }
 }
