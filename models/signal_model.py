@@ -82,7 +82,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, uatemplate_wiggle_var=1.0, **kwargs):
+    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -127,12 +127,11 @@ class ObservedSignalNode(Node):
 
         self.gps_by_phase = dict()
 
-
+        self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)
         self.tssm = TransientCombinedSSM([(self.noise_arssm, 0, self.npts, None),], TSSM_NOISE_PADDING)
 
         self.wavelet_basis = wavelet_basis
         self.wavelet_param_models = wavelet_param_models
-        self.uatemplate_wiggle_var = uatemplate_wiggle_var
 
 
     def __str__(self):
@@ -353,7 +352,7 @@ class ObservedSignalNode(Node):
         if self.wavelet_basis is None:
             return None
 
-        (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+        (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
         n_basis = len(start_idxs)
 
         if phase in self.wavelet_param_models:
@@ -363,7 +362,7 @@ class ObservedSignalNode(Node):
             prior_vars = [gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]]
         else:
             prior_means = np.zeros((n_basis,))
-            prior_vars = np.ones((n_basis,)) * self.uatemplate_wiggle_var
+            prior_vars = np.ones((n_basis,)) * target_coef_var
 
         if (eid, phase) in self.arrival_ssms:
             cssm = self.arrival_ssms[(eid, phase)]
@@ -385,7 +384,7 @@ class ObservedSignalNode(Node):
         sidxs = np.empty((n,), dtype=int)
         envs = [None] * n
 
-        (start_idxs, end_idxs, identities, prototypes, n_steps) = self.wavelet_basis
+        (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
         n_basis = len(start_idxs)
 
         components = [(self.noise_arssm, 0, self.npts, None)]
@@ -409,10 +408,18 @@ class ObservedSignalNode(Node):
                 continue
 
             wssm = self.arrival_ssms[(eid, phase)]
+            mn_len = min(len(iid_std), len(env))
+            mn_scale = env[:mn_len]*iid_std[:mn_len]
             if wssm is not None:
-                npts = min(len(env), n_steps)
+                npts = min(len(env), n_steps*2)
                 components.append((wssm, start_idx, npts, env))
                 self.tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
+                components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
+                self.tssm_components.append((eid, phase, env, start_idx, mn_len, "multnoise"))
+            else:
+                components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
+                self.tssm_components.append((eid, phase, env, start_idx, mn_len, "multnoise"))
+
             components.append((None, start_idx, len(env), env))
             self.tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
 
@@ -718,15 +725,17 @@ signal_diff(i) =value(i) - pred_signal(i);
         del d['tssm']
         del d['arrival_ssms']
         del d['noise_arssm']
+        del d['iid_arssm']
         return d
 
     def __setstate__(self, d):
         self.__dict__ = d
-        if "uatemplate_wiggle_var" not in d:
-            self.uatemplate_wiggle_var = 1.0
-            self.graph.uatemplate_wiggle_var = self.uatemplate_wiggle_var
+        #if "uatemplate_wiggle_var" not in d:
+        #    self.uatemplate_wiggle_var = 1.0
+        #    self.graph.uatemplate_wiggle_var = self.uatemplate_wiggle_var
 
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
+        self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)
         # don't try to regenerate other SSMs here because we might still be in
         # the middle of the unpickling process and can't depend on other program
         # components (e.g. self.graph.template_generator()) being functional.

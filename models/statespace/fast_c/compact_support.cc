@@ -88,9 +88,12 @@ int CompactSupportSSM::apply_transition_matrix( const double * x, int k, double 
      has extra dimensions, they are not
      touched (so may still contain garbage).*/
 
-  if (k <= 0 || k >= this->n_steps) {
+  if (k <= 0) {
     printf("error: applying CSSM transition at invalid index %d.\n", k);
     exit(-1);
+  }
+  if (k >= this->n_steps) {
+    return 0;
   }
 
   for (int i=0; i < this->max_dimension; ++i) {
@@ -126,9 +129,12 @@ int CompactSupportSSM::apply_transition_matrix( const matrix<double,column_major
 						matrix<double,column_major> &result,
 						unsigned int r_row_offset,
 						unsigned int n) {
-  if (k <= 0 || k >= this->n_steps) {
+  if (k <= 0) {
     printf("error: applying CSSM transition at invalid index %d.\n", k);
     exit(-1);
+  }
+  if (k >= this->n_steps) {
+    return 0;
   }
 
 
@@ -170,6 +176,9 @@ int CompactSupportSSM::apply_transition_matrix( const matrix<double,column_major
 
 
 void CompactSupportSSM::transition_bias(int k, double * result) {
+  if (k >= this->n_steps) {
+    return;
+  }
 
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
@@ -190,7 +199,9 @@ void CompactSupportSSM::transition_bias(int k, double * result) {
 
 
 void CompactSupportSSM::transition_noise_diag(int k, double * result) {
-  //result.clear();
+  if (k >= this->n_steps) {
+    return;
+  }
 
   unsigned int i = 0;
   for (i; i < this->max_dimension; ++i) {
@@ -219,6 +230,11 @@ double CompactSupportSSM::apply_observation_matrix(const double * x, int k) {
 
   double result = 0;
 
+  if (k >= this->n_steps) {
+    return 0;
+  }
+
+
   matrix_row< matrix<int> >::const_iterator idx;
   unsigned int i = 0;
   for (i=0; i < this->active_basis.size2() && this->active_basis(k, i) >= 0; ++i) {
@@ -238,12 +254,17 @@ void CompactSupportSSM::apply_observation_matrix(const matrix<double,column_majo
 						 double *result, double *result_tmp, unsigned int n) {
   //const matrix_row< matrix<int> > active = row(this->active_basis, k);
   //matrix_row< matrix<int> >::const_iterator idx;
-  unsigned int i = 0;
+
 
   for (unsigned j=0; j < n; ++j) {
     result[j] = 0;
   }
 
+  if (k >= this->n_steps) {
+    return;
+  }
+
+  unsigned int i = 0;
   for (i=0; i < this->active_basis.size2() && this->active_basis(k, i) >= 0; ++i) {
     int basis = this->active_basis(k, i);
 
@@ -266,7 +287,7 @@ double CompactSupportSSM::observation_noise(int k) {
 }
 
 bool CompactSupportSSM::stationary(int k) {
-  return false;
+  return k >= this->n_steps;
 }
 
 int CompactSupportSSM::prior_mean(double *result) {
@@ -308,6 +329,12 @@ void CompactSupportSSM::extract_coefs(const vector<double> &x,
 				      int k,
 				      vector<double> & coef_means,
 				      vector<double> & coef_vars) {
+
+  if (k >= this->n_steps) {
+    return;
+  }
+
+
   /* given a state estimate at some time k, extract marginals for
    * whatever coefficients we can reasonably do so for at the
    * current time. Earlier estimates will always be overwritten
@@ -315,7 +342,6 @@ void CompactSupportSSM::extract_coefs(const vector<double> &x,
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
   unsigned int i;
-
 
   for (i=0, idx = active.begin();
        idx < active.end() && *idx >= 0;

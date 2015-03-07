@@ -264,7 +264,7 @@ def true_gaussian_filtering(z, m, C):
 
 if __name__ == "__main__":
     try:
-        cssm()
+        tssm()
     except KeyboardInterrupt:
         raise
     except Exception as e:

@@ -25,7 +25,7 @@ from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.database.signal_data import execute_and_return_id
-from sigvisa.models.wiggles.wavelets import construct_implicit_basis_C, parse_wavelet_basis_str
+from sigvisa.models.wiggles.wavelets import construct_padded_implicit_basis
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
 
@@ -215,7 +215,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         if srate not in self.wavelet_basis_cache:
             self.wavelet_basis_cache[srate] = \
-                construct_implicit_basis_C(srate, wavelet_str=self.wiggle_family)
+                construct_padded_implicit_basis(srate=srate, wavelet_str=self.wiggle_family)
         return self.wavelet_basis_cache[srate]
 
     def get_template_nodes(self, eid, sta, phase, band, chan):
@@ -989,7 +989,7 @@ class SigvisaGraph(DirectedGraphModel):
                     model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
                     param_models[phase].append(model)
 
-        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, uatemplate_wiggle_var=self.uatemplate_wiggle_var)
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models)
 
         s = Sigvisa()
         sta = wave['sta']

@@ -214,7 +214,7 @@ class StateSpaceModel(object):
                 self.apply_transition_matrix(TP[i,:], k, P[i,:])
             self.transition_noise_diag(k, noise)
             np.fill_diagonal(P, np.diag(P)[:state_size] + noise[:state_size])
-            np.savetxt("matrices/P_py_%d.txt" % k, P)
+            #np.savetxt("matrices/P_py_%d.txt" % k, P)
 
 
             self.apply_observation_matrix(P, k, result=noise)

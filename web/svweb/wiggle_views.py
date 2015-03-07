@@ -49,6 +49,9 @@ def wiggle_detail_view(request, fpid):
     pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
     print "posterior vars", pvars
 
+    xmin = fphase.arrival_time - 10
+    xmax = fphase.arrival_time + len_s + 20
+
     return render_to_response('svweb/wiggle.html', {
                               #        'wiggle': wiggle,
                               'messages': messages,
@@ -57,6 +60,8 @@ def wiggle_detail_view(request, fpid):
                               'pvars': pvars,
                               'n_coefs': len(pmeans),
                               'fphase': fphase,
+                               'xmin': xmin,
+                               'xmax': xmax,
                               }, context_instance=RequestContext(request))
 
 
@@ -65,7 +70,7 @@ def FitWiggleView(request, fpid):
     # (mean plus samples?)
     # also show the wiggle coefs
 
-    n_samples = int(request.GET.get("samples", "20"))
+    n_samples = int(request.GET.get("samples", "2"))
     srate = float(request.GET.get("srate", "-1"))
 
     fphase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)

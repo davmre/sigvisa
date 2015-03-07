@@ -580,33 +580,6 @@ void obs_var(StateSpaceModel &ssm, vector<double> & result) {
   }
 }
 
-
-void resample_state(FilterState &cache) {
-  /* Given a cache representing a mean state and covariance matrix at
-   * time k, replace the state xk with a sample from N(mean, cov).
-   * That is, suppose we have already pushed the previous state through
-   * the transition model to get an expected state at the current
-   * timestep; this method samples the new, random state.*/
-
-  vector<double> &x = cache.xk;
-  vector<double> &d = cache.pred_d;
-  vector<double> &tmp = cache.f;
-  matrix<double,column_major> &U = cache.pred_U;
-
-  // we have P = UDU'
-  // so U*sqrt(d) is a matrix square root of P
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::normal_distribution<double> randn(0,1);
-
-  for (unsigned i=0; i < tmp.size(); ++i) {
-    tmp(i) = randn(rd) * sqrt(d(i));
-  }
-  tmp = prod(U, tmp);
-  x += tmp;
-
-}
-
 void prior_sample(StateSpaceModel &ssm, vector<double> & result) {
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);

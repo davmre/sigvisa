@@ -279,9 +279,11 @@ def FitImageView(request, fitid):
     logscale = request.GET.get("logscale", "False").lower().startswith('t')
     smoothing = int(request.GET.get("smooth", "0"))
     wiggle = request.GET.get("wiggle", "False").lower().startswith('t')
+    components = request.GET.get("components", None)
     noise = request.GET.get("noise", "False").lower().startswith('t')
     saveprefs = request.GET.get("saveprefs", "False").lower().startswith('t')
-
+    only_eid = int(request.GET.get("eid", -9999))
+    only_phase = request.GET.get("phase", None)
     template_only = request.GET.get("template_only", "False").lower().startswith('t')
 
     if saveprefs:
@@ -300,6 +302,23 @@ def FitImageView(request, fitid):
         means = wave_node.tssm.component_means(wave_node.get_value().data)
         pred_wave = Waveform(means[0], segment_stats=wave_node.mw.segment_stats.copy(), my_stats=wave_node.mw.my_stats.copy())
         pred_wave.data.mask = obs_wave.data.mask
+    elif components is not None:
+        components = components.split(",")
+        means = wave_node.tssm.component_means(wave_node.get_value().data)
+        pred_wave = np.zeros((wave_node.npts,))
+        for i, (eid, phase, env, start_idx, npts, component_type) in enumerate(wave_node.tssm_components):
+            if phase is None: continue
+            if only_eid > -9999 and eid != only_eid: continue
+            if only_phase is not None and phase != only_phase: continue
+            if component_type not in components: continue
+
+            from sigvisa.utils.array import array_overlap
+            a, b = array_overlap(pred_wave, means[i]*env[:len(means[i])], start_idx)
+            a += b
+        pred_wave += wave_node.nm.c
+        pred_wave = Waveform(pred_wave, segment_stats=wave_node.mw.segment_stats.copy(), my_stats=wave_node.mw.my_stats.copy())
+        pred_wave.data.mask = obs_wave.data.mask
+
     else:
         for fphase in fit.sigvisacodafitphase_set.all():
             for i, (eid, phase, env, start_idx, npts, component_type) in enumerate(wave_node.tssm_components):

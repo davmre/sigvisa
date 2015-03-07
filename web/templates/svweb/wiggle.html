@@ -11,7 +11,8 @@
 
 
 <table>
-<tr><td width=50%><img src="{% url fit_wiggle_view fpid=fphase.fpid %}" width=600></td><td width=50%><img src="{% url visual fitid=fphase.fitid.fitid %}?wiggle=True;smooth=0" width=600></td></tr>
+<tr><td><img src="{% url fit_wiggle_view fpid=fphase.fpid %}" width=450 ></td><td><img src="{% url visual fitid=fphase.fitid.fitid %}?components=template,wavelet;smooth=0;phase={{ fphase.phase }};xmin={{ xmin }};xmax={{ xmax }}" width=450></td><td><img src="{% url visual fitid=fphase.fitid.fitid %}?components=template,multnoise;smooth=0;phase={{ fphase.phase }};xmin={{ xmin }};xmax={{ xmax }}" width=450></td></tr>
+<tr style="text-align: center"><td>Repeatable wiggle</td><td>Repeatable wiggle (scaled)</td><td>Nonrepeatable wiggle (scaled)</td></tr>
 </table>
 
 
