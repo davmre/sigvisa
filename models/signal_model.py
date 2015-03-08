@@ -133,6 +133,7 @@ class ObservedSignalNode(Node):
         self.wavelet_basis = wavelet_basis
         self.wavelet_param_models = wavelet_param_models
 
+        self.cached_logp = None
 
     def __str__(self):
         try:
@@ -150,7 +151,7 @@ class ObservedSignalNode(Node):
         if isinstance(m, np.ndarray):
             d[m] = np.nan
         v = ma.masked_array(d, m)
-
+        self.cached_logp = None
         super(ObservedSignalNode, self).set_value(value=v, key=self.single_key)
 
     def get_wave(self):
@@ -267,6 +268,7 @@ class ObservedSignalNode(Node):
         parent_keys_removed = self.parent_keys_removed
         parent_keys_changed = self.parent_keys_changed
         parent_nodes_added = self.parent_nodes_added
+
         pv = super(ObservedSignalNode, self)._parent_values()
 
         new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
@@ -340,6 +342,7 @@ class ObservedSignalNode(Node):
         # if any arrival times or templates might have changed, recompute the tssm
         if len(new_arrivals) > 0 or len(removed_arrivals) > 0 or len(parent_keys_changed) > 0:
             self.tssm = self.transient_ssm(arrivals=self._arrivals, parent_values=pv)
+            self.cached_logp = None
 
         del parent_keys_removed
         del parent_keys_changed
@@ -446,8 +449,16 @@ class ObservedSignalNode(Node):
 
     def log_p(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
+
+        if self.cached_logp is not None:
+            return self.cached_logp
         d = self.get_value().data
+        #t0 = time.time()
         lp = self.tssm.run_filter(d)
+        #t1 = time.time()
+
+        #print "logp", lp, "for", self.sta, "signal npts", self.npts, "arrivals", len(self.arrivals()), "in", t1-t0
+        self.cached_logp = lp
         return lp
 
     def ___log_p_old(self, parent_values=None, return_grad=False, **kwargs):
@@ -736,6 +747,7 @@ signal_diff(i) =value(i) - pred_signal(i);
 
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)
+        self.cached_logp = None
         # don't try to regenerate other SSMs here because we might still be in
         # the middle of the unpickling process and can't depend on other program
         # components (e.g. self.graph.template_generator()) being functional.
