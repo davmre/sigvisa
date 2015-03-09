@@ -92,13 +92,15 @@ int CompactSupportSSM::apply_transition_matrix( const double * x, int k, double 
     printf("error: applying CSSM transition at invalid index %d.\n", k);
     exit(-1);
   }
-  if (k >= this->n_steps) {
-    return 0;
-  }
 
   for (int i=0; i < this->max_dimension; ++i) {
     result[i] = 0;
   }
+
+  if (k >= this->n_steps) {
+    return 0;
+  }
+
 
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
@@ -133,10 +135,6 @@ int CompactSupportSSM::apply_transition_matrix( const matrix<double,column_major
     printf("error: applying CSSM transition at invalid index %d.\n", k);
     exit(-1);
   }
-  if (k >= this->n_steps) {
-    return 0;
-  }
-
 
   for (int i=r_row_offset; i < r_row_offset+this->max_dimension; ++i) {
     for (int j =0; j < n; ++j) {
@@ -144,14 +142,15 @@ int CompactSupportSSM::apply_transition_matrix( const matrix<double,column_major
     }
   }
 
+  if (k >= this->n_steps) {
+    return 0;
+  }
+
+
+
   const matrix_row< matrix<int> > active = row(this->active_basis, k);
   matrix_row< matrix<int> >::const_iterator idx;
   unsigned i = r_row_offset;
-
-  int dummy= 0 ;
-  if (k == 4) {
-    dummy +=1 ;
-  }
 
   for (i=r_row_offset, idx = active.begin();
        idx < active.end() && *idx >= 0;
@@ -218,7 +217,7 @@ void CompactSupportSSM::transition_noise_diag(int k, double * result) {
     dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  >::iterator contains = this->active_indices.find(key);
     if (contains == this->active_indices.end()) {
       result[i] = this->coef_vars(*idx);
-      D(printf("time %d instantiating coef %d into state %d with noise variance %f\n", k, *idx, i, result[i]);)
+      //D(printf("time %d instantiating coef %d into state %d with noise variance %f\n", k, *idx, i, result[i]);)
     } else {
       result[i] = 0.0;
     }

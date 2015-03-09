@@ -341,6 +341,10 @@ public:
     }
   }
 
+  int max_dimension() {
+    return this->ssm->max_dimension;
+  }
+
 
   TransientCombinedSSM *ssm;
 private:
@@ -396,5 +400,6 @@ BOOST_PYTHON_MODULE(ssms_c) {
     .def("component_means", &PyTSSM::component_means)
     .def("all_filtered_cssm_coef_marginals", &PyTSSM::marginals)
     //.def("get_n_coefs", &PyTSSM::get_n_coefs)
-    .def("get_component", &PyTSSM::get_component);
+    .def("get_component", &PyTSSM::get_component)
+    .def("max_dimension", &PyTSSM::max_dimension);
 }

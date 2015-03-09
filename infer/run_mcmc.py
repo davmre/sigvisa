@@ -225,8 +225,7 @@ def run_open_world_MH(sg, steps=10000,
                 continue
 
     stds = global_stds
-    tmpl_openworld_move_probability = 0.05
-    ev_openworld_move_probability = .05
+    ev_openworld_move_probability = 1.0
 
     move_probs = defaultdict(lambda : 0.05)
     move_probs["swap_association"] = 0.2

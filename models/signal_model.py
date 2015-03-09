@@ -1,4 +1,4 @@
-
+import cPickle as pickle
 import os
 import errno
 import sys
@@ -418,10 +418,10 @@ class ObservedSignalNode(Node):
                 components.append((wssm, start_idx, npts, env))
                 self.tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
                 components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
-                self.tssm_components.append((eid, phase, env, start_idx, mn_len, "multnoise"))
+                self.tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
             else:
                 components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
-                self.tssm_components.append((eid, phase, env, start_idx, mn_len, "multnoise"))
+                self.tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
 
             components.append((None, start_idx, len(env), env))
             self.tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
@@ -449,15 +449,31 @@ class ObservedSignalNode(Node):
 
     def log_p(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
-
         if self.cached_logp is not None:
             return self.cached_logp
-        d = self.get_value().data
-        #t0 = time.time()
-        lp = self.tssm.run_filter(d)
-        #t1 = time.time()
 
-        #print "logp", lp, "for", self.sta, "signal npts", self.npts, "arrivals", len(self.arrivals()), "in", t1-t0
+        """
+        try:
+            #print self.tssm_components[1][-3], self.tssm_components[1][-2]
+            #
+            if self.tssm_components[1][-3] == -424:
+                print "dumping", self.tssm_components
+                print "parent_values", parent_values
+                with open("wn_debug.pkl", 'wb') as f:
+                    pickle.dump(self, f)
+            import sys
+            sys.stdout.flush()
+        except Exception as e:
+            print e
+        """
+
+        d = self.get_value().data
+        t0 = time.time()
+        lp = self.tssm.run_filter(d)
+        t1 = time.time()
+
+        #print "logp", lp, "for", self.sta, "signal npts", self.npts, "arrivals", len(self.arrivals()), "in", t1-t0, "max dimension", self.tssm.max_dimension()
+
         self.cached_logp = lp
         return lp
 

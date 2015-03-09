@@ -6,7 +6,7 @@ import time
 from sigvisa.models.wiggles.wavelets import construct_implicit_basis_simple, construct_basis_simple
 
 def cssm(N=64, run_test=True):
-    start_times, end_times, identities, prototypes = construct_implicit_basis_simple(N, "db4", "zpd")
+    start_times, end_times, identities, prototypes, N = construct_implicit_basis_simple(N, "db4", "zpd")
 
     n1 = len(prototypes)
     n2 = np.max([len(l) for l in prototypes])

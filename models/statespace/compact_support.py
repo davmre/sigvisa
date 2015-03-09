@@ -48,9 +48,10 @@ class CompactSupportSSM(StateSpaceModel):
         # touched (so may still contain garbage).
 
         assert(k>0)
+        x_new[:] = 0
+        if k >= len(self.active_basis): return 0 # no bases are active
         active = self.active_basis[k]
 
-        x_new[:] = 0
         for i, idx in enumerate(active):
             prev_idx = self.active_indices[idx, k-1]
             x_new[i] = 0 if prev_idx < 1 else x[prev_idx-1]
@@ -73,6 +74,7 @@ class CompactSupportSSM(StateSpaceModel):
         in general this will be the prior means of the new coefs.
         for now we assume these are all zero.
         """
+        if k >= len(self.active_basis): return
         for i, idx in enumerate(self.active_basis[k]):
             prev_idx = self.active_indices[idx, k-1]
             if prev_idx < 1:
@@ -81,6 +83,7 @@ class CompactSupportSSM(StateSpaceModel):
 
     def transition_noise_diag(self, k, noise):
         noise[:] = 0
+        if k >= len(self.active_basis): return
         for i, idx in enumerate(self.active_basis[k]):
             prev_idx = self.active_indices[idx, k-1]
             noise[i] = self.coef_vars[idx] if prev_idx < 1 else 0.0
@@ -88,6 +91,11 @@ class CompactSupportSSM(StateSpaceModel):
                 print "time %d instantiating coef %d into state %d with noise variance %f" % (k, idx, i, noise[i])
 
     def apply_observation_matrix(self, x, k, result=None):
+        if k >= len(self.active_basis):
+            if result is not None:
+                result[:] = 0
+            return 0
+
         active = self.active_basis[k]
         obs = self.basis[active, k]
 
@@ -207,6 +215,8 @@ class ImplicitCompactSupportSSM(CompactSupportSSM):
             self.coef_vars = coef_prior_vars
 
     def apply_observation_matrix(self, x, k, result=None):
+
+
         active = self.active_basis[k]
 
 

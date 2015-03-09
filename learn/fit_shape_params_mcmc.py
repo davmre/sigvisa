@@ -336,6 +336,8 @@ def main():
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
+    parser.add_option("--seed", dest="seed", default=0, type="int",
+                      help="ranom seed for MCMC (0)")
     parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true", help="")
 
 
@@ -370,6 +372,9 @@ def main():
                                 fit_hz=options.hz, nm_type=options.nm_type,
                                 init_run_name = options.run_name, init_iteration = options.run_iteration-1,
                                 absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth)
+
+    if options.seed >= 0:
+        np.random.seed(options.seed)
 
     fitid = run_fit(sigvisa_graph,  fit_hz = options.hz,
                     tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),

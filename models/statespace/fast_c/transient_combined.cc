@@ -4,6 +4,7 @@
 #include <boost/numeric/ublas/vector_proxy.hpp>
 
 #include <cmath>
+#include <cstring>
 #include <memory>
 #include <vector>
 #include <limits>
@@ -96,7 +97,7 @@ TransientCombinedSSM::TransientCombinedSSM(\
 
   vector<int> active_set(max_active);
   for (unsigned i=0; i < max_active; ++i) active_set(i) = -1;
-  int t_prev = 0, max_dimension = 0, i=0;
+  int t_prev = events[0].t, max_dimension = 0, i=0;
   std::vector<ChangeEvent>::const_iterator idx;
   for(i=0, idx = events.begin();
       idx < events.end(); ++idx) {
@@ -395,7 +396,7 @@ void TransientCombinedSSM::apply_observation_matrix(const matrix<double,column_m
     ssm->apply_observation_matrix(X, row_offset,
 				  k-this->start_idxs[j],
 				  result_tmp, NULL, n);
-    //printf("TSSM step %d applying obs matrix on ssm %d at row_offset %d n %d\n", k, j, row_offset, n);
+    // printf("TSSM step %d applying obs matrix on ssm %d state_size %d start_idx %d at row_offset %d n %d scale[%d] %f result[0] %f\n", k, j, state_size, this->start_idxs[j], row_offset, n, k-this->start_idxs[j], scale? scale[k-this->start_idxs[j]] : 1.0, result_tmp[0]);
     if (scale) {
       for (unsigned ii=0; ii < n; ++ii) {
 	result[ii] += scale[k-this->start_idxs[j]] * result_tmp[ii];
@@ -478,6 +479,24 @@ int TransientCombinedSSM::prior_mean(double *result) {
       result[i] = 0;
     }
     ssm->prior_mean(result);
+
+    /* if this component starts at a negative time, push the
+     * prior through the transition model to get the induced
+     * distribution at time zero */
+    if (this->start_idxs[j] < 0) {
+      double * tmp_result = (double *) malloc(sizeof(double) * ssm->max_dimension);
+      if (tmp_result==NULL) {
+	printf("memory error, malloc failed!\n");
+	exit(-1);
+      }
+      for (unsigned k=1; k <= -this->start_idxs[j]; ++k) {
+	ssm->apply_transition_matrix(result, k, tmp_result);
+	ssm->transition_bias(k, tmp_result);
+	memcpy(result, tmp_result, ssm->max_dimension);
+      }
+      free(tmp_result);
+    }
+
     result += state_size;
   }
   return result-r1;
@@ -492,8 +511,27 @@ int TransientCombinedSSM::prior_vars(double *result) {
     int j = *it;
     StateSpaceModel * ssm = this->ssms[j];
     if (!ssm) continue;
-
     ssm->prior_vars(result);
+
+    if (this->start_idxs[j] < 0) {
+      matrix<double,column_major> P (ssm->max_dimension, ssm->max_dimension);
+      matrix<double,column_major> P2 (ssm->max_dimension, ssm->max_dimension);
+      P.clear();
+      for (int i=0; i < ssm->max_dimension; ++i) {
+	P(i,i) = result[i];
+      }
+
+      for (unsigned k=1; k <= -this->start_idxs[j]; ++k) {
+	ssm->apply_transition_matrix(P, 0, k, P2, 0, ssm->max_dimension); // P2 = FP
+	noalias(P) = trans(P2); // P = PF'
+	ssm->apply_transition_matrix(P, 0, k, P2, 0, ssm->max_dimension); // P2 = FPF'
+	P = P2;
+	ssm->transition_noise_diag(k, result);
+	for (int i=0; i < ssm->max_dimension; ++i) P(i,i) += result[i];
+      }
+      for (int i=0; i < ssm->max_dimension; ++i) result[i] = P(i,i);
+    }
+
     result += ssm->max_dimension;
   }
   return result-r1;

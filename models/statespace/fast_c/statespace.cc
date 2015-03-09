@@ -353,6 +353,8 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
   subrange(xk, 0, state_size) = subrange(tmp, 0, state_size);
   ssm.transition_bias(k, &(xk(0)));
 
+  D(write_stuff("xk_posttransit", k, xk);)
+
   if (cache.at_fixed_point and ssm.stationary(k)) {
     return;
   }
@@ -480,6 +482,12 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   cache.init_priors(ssm);
   unsigned int N = z.size();
   double ell = 0;
+
+  D(write_stuff("U_prior", 0, cache.pred_U);)
+  D(write_stuff("d_prior", 0, cache.pred_d);)
+  D(write_stuff("xk_prior", 0, cache.xk);)
+
+
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
 
 

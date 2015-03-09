@@ -57,7 +57,7 @@ def udu(M):
 DEBUG_SSM = False
 COMPARE_LANGS = ()
 def check_C_mat(item, k, M, size, lang="c", threshold=1e-8):
-    if lang not in COMPARE_LANGS or k==0:
+    if lang not in COMPARE_LANGS :
         return
     try:
         C_item = np.loadtxt("matrices/%s_%s_%d.txt" % (item, lang, k))
@@ -319,6 +319,10 @@ class StateSpaceModel(object):
         U = np.zeros((self.max_dimension,self.max_dimension))
         U[:state_size,:state_size] = np.eye(state_size)
 
+        check_C_mat("U_prior", 0, U, state_size)
+        check_C_mat("d_prior", 0, d, state_size)
+        check_C_mat("xk_prior", 0, xk, state_size)
+
         # update the state from the observation at the first timestep
 
         if np.isnan(z[0]):
@@ -424,8 +428,9 @@ class StateSpaceModel(object):
 
             check_C_mat("U_obs_old", k, U, state_size)
             check_C_mat("d_obs_old", k, d, state_size)
-            check_C_mat("v", k, v, state_size)
             check_C_mat("f", k, f, state_size)
+            check_C_mat("v", k, v, state_size)
+
 
             alpha = r + v[0]*f[0]
             # print "   alpha", alpha
@@ -507,6 +512,7 @@ class StateSpaceModel(object):
         # first push the mean through the transition model
         state_size = self.apply_transition_matrix(xk1, k, xk)
         self.transition_bias(k, xk)
+        check_C_mat("xk_posttransit", k, xk, state_size)
 
         if self.at_fixed_point and self.stationary(k):
             U[:state_size,:state_size] = self.cached_pred_U[:state_size,:state_size]

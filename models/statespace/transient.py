@@ -44,7 +44,7 @@ class TransientCombinedSSM(StateSpaceModel):
         ends = [(et, i, False) for (i, et) in enumerate(self.ssm_ends)]
         events = sorted(starts+ends)
         active_set = [ ]
-        t_prev = 0
+        t_prev = events[0][0]
         for (t, i_ssm, start) in events:
             if t != t_prev:
                 self.changepoints.append(t_prev)
@@ -124,12 +124,14 @@ class TransientCombinedSSM(StateSpaceModel):
                 # (prior means will be added by the
                 #  transition_bias operator)
                 x_new[i:i+state_size] = 0.0
+                #print "   new ssm %d active from %d to %d" % (i_ssm, i, i+state_size)
             else:
                 # this ssm is persisting from the
                 # previous timestep, so just run the
                 # transition
                 j = self.ssm_tmp[i_ssm]
                 ssm.apply_transition_matrix(x[j:j+state_size], k-self.ssm_starts[i_ssm], x_new[i:i+state_size])
+                #print "   transitioning ssm %d, prev %d, in state %d to %d (sidx %d eidx %d)" % (i_ssm, j, i, i+state_size, self.ssm_starts[i_ssm], self.ssm_ends[i_ssm])
             i += state_size
         return i
 
@@ -195,6 +197,7 @@ class TransientCombinedSSM(StateSpaceModel):
                 ssm, scale = self.ssms[j], self.scales[j]
                 state_size = ssm.max_dimension
                 ssm.apply_observation_matrix(x[i:i+state_size,:], k-self.ssm_starts[j], rr)
+                #print "TSSM step %d applying obs matrix on ssm %d state_size %d n %d scale %f result[0] %f\n" % (k, j, state_size, len(result), scale[k-self.ssm_starts[j]] if scale is not None else 1.0, rr[0])
                 if scale is not None:
                     rr *= scale[k-self.ssm_starts[j]]
                 result += rr
