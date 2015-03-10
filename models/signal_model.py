@@ -386,6 +386,7 @@ class ObservedSignalNode(Node):
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
         envs = [None] * n
+        min_logenv = max(-7.0, np.log(self.nm.c)-2)
 
         (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
         n_basis = len(start_idxs)
@@ -406,7 +407,7 @@ class ObservedSignalNode(Node):
                 continue
 
             offset = float(start - start_idx)
-            env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
+            env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate, min_logenv=min_logenv))
             if start_idx + len(env) < 0:
                 continue
 
@@ -431,6 +432,61 @@ class ObservedSignalNode(Node):
     def arrivals(self):
         self._parent_values()
         return self._arrivals
+
+    def indep_block_bounds(self, target_eid, target_phase):
+        """
+        Return the start and end indices of an *independent signal block*
+        containing the given arrival. This is defined as a block of signal such that
+        the probability of arrivals outside the block are independent of the probability
+        of arrivals inside the block, given the observed signal itself.
+        In practice what this means is that the block is bookended by sections of noise,
+        each long enough to be fully observed.
+        """
+
+        pv = self._parent_values()
+
+        """ First get a list of non-noise blocks, and extract the block corresponding to the given event. """
+        blocks = [(sidx, sidx+npts, eid, phase) for (eid, phase, scale, sidx, npts, label) in self.tssm_components if label=="template"]
+        target_sidx = None
+        for (sidx, eidx, eid, phase) in blocks:
+            if eid==target_eid and phase==target_phase:
+                target_sidx = sidx
+                target_eidx = eidx
+                break
+        assert(target_sidx is not None)
+
+        #Start with the hypothesis that the p steps after target_eidx are clear.
+        p = self.nm.p
+        block_eidx = target_eidx+p
+
+        # then loop through all blocks ending after target_eidx,
+        # (these are the only ones that could interfere with the training noise)
+        # in order of their start time
+        sorted_forward = sorted([(sidx, eidx) for (sidx, eidx, eid, phase) in blocks if eidx > target_eidx])
+        for (sidx, eidx) in sorted_forward:
+            if sidx > block_eidx:
+                # at this point all remaining blocks will start after
+                # our current safe period, so we are done.
+                break
+            if eidx > block_eidx-p:
+                # if this block ends after the start of the safe
+                # period (and by loop invariant, starts *before* the
+                # end of the safe period), we need to extend the safe
+                # period.
+                block_eidx = eidx+p
+        block_eidx = min(block_eidx,self.npts)
+
+        # now do the reverse procedure to understand the beginning of the signal
+        sorted_backward = sorted([(sidx, eidx) for (sidx, eidx, eid, phase) in blocks if sidx < target_sidx], reverse=True)
+        block_sidx = target_sidx-p
+        for (sidx, eidx) in sorted_backward:
+            if eidx < block_sidx:
+                break
+            if sidx > block_sidx:
+                block_sidx = sidx-p
+        block_sidx = max(block_sidx,0)
+
+        return (block_sidx, block_eidx)
 
     def parent_predict(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()

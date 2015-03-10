@@ -283,6 +283,14 @@ def read_event_detections(cursor, evid, stations=None, evtype="leb", min_snr=0):
 
     return np.array(detections)
 
+def read_misc_assocs_at_station(cursor, sta, start_time, end_time, primary_evid):
+    s = Sigvisa()
+
+    site = s.get_array_site(sta)
+
+    sql_query = "select l.time, lebo.evid from leb_origin lebo, leb_arrival l, leb_assoc leba where l.time between %f and %f and l.arid=leba.arid and leba.orid=lebo.orid and (l.sta='%s' or l.sta='%s') and lebo.evid!=%d" % (start_time, end_time, sta, site, primary_evid)
+    cursor.execute(sql_query)
+    return np.array(cursor.fetchall(), dtype=np.float)
 
 def read_station_detections(cursor, sta, start_time, end_time, arrival_table="idcx_arrival"):
 

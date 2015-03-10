@@ -226,7 +226,7 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
 def custom_wave_plus_template_view(evid, sta, chan, band, smooth, hz, fit_params, nmid, tmshape, **kwargs):
 
     cursor = Sigvisa().dbconn.cursor()
-    wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor).filter(str(band) + ";env;smooth_%d;hz_%d" % (smooth, hz))
+    wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor, exclude_other_evs=True).filter(str(band) + ";env;smooth_%d;hz_%d" % (smooth, hz))
     cursor.close()
 
     sg = setup_sigvisa_graph(evid=evid, tmshape=tmshape, wave=wave, fit_params=fit_params)
@@ -265,7 +265,7 @@ def phases_from_fit(fit):
 
 def wave_from_fit(fit):
     cursor = Sigvisa().dbconn.cursor()
-    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
+    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor, exclude_other_evs=True).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
     cursor.close()
     return wave
 

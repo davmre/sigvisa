@@ -24,7 +24,7 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
     def __init__(self, *args, **kwargs):
         super(LinPolyExpTemplateGenerator, self).__init__(*args, **kwargs)
 
-        self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
+        self.uamodels = {"peak_offset": TruncatedGaussian(.3, 1.1, b=4.0),
                          "peak_decay": Gaussian(-2.5, 1.),
                          "coda_height": Gaussian(0.5, 3),
                          "coda_decay": Gaussian(-2.5, 1.5),}

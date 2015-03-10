@@ -50,7 +50,7 @@ def setup_graph(event, sta, chan, band,
                       runids = runids,
                       absorb_n_phases=absorb_n_phases)
 
-    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
+    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True).filter("%s;env" % band)
     cursor.close()
     if smoothing > 0:
         wave = wave.filter('smooth_%d' % smoothing)

@@ -267,7 +267,7 @@ def construct_padded_implicit_basis(*args, **kwargs):
     var_scale, target_coef_var = implicit_basis_variance_padding(basis_C, n_pad=N*10, cutoff=N*2)
     return basis_C, var_scale, target_coef_var
 
-def implicit_basis_variance_padding(basis, n_pad, target_var=1.5, repeatability=.75, cutoff=None):
+def implicit_basis_variance_padding(basis, n_pad, target_var=1.0, repeatability=.9, cutoff=None):
     from sigvisa.ssms_c import CompactSupportSSM
     import pyublas
     sts, ets, ids, m, N = basis

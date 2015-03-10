@@ -33,26 +33,41 @@ class MissingWaveform(Exception):
 class EventNotDetected(Exception):
     pass
 
-def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None, pre_s = 10, post_s=200):
+class ConflictingEvent(Exception):
+    pass
+
+def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
+                            pre_s = 10, post_s=200, exclude_other_evs=False):
     close_cursor = False
     if cursor is None:
         cursor = Sigvisa().dbconn.cursor()
         close_cursor = True
 
+    try:
+        arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
+        if len(arrivals) == 0:
+            raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
+        arrival_times = arrivals[:, DET_TIME_COL]
 
-    arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
-    if len(arrivals) == 0:
-        raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
-    arrival_times = arrivals[:, DET_TIME_COL]
+        st = np.min(arrival_times) - pre_s
+        et = np.max(arrival_times) + post_s
 
-    wave = fetch_waveform(sta, chan, np.min(arrival_times) - pre_s, np.max(arrival_times) + post_s)
-    wave.segment_stats['evid'] = evid
-    wave.segment_stats['event_arrivals'] = arrivals
+        if exclude_other_evs:
+            other_assocs = read_misc_assocs_at_station(cursor, sta, st, et, evid)
+            for (other_t, other_evid) in other_assocs:
+                if other_t < np.max(arrival_times) + 5.0:
+                    raise ConflictingEvent("impossible to fit all phases of event %d at %s, detected at time %.1f-%.1f, due to evid %d arrival at %.1f." % (evid, sta, np.min(arrival_times), np.max(arrival_times), other_evid, other_t))
+                else:
+                    print "reducing signal window by %.1fs to avoid conflict with %d arrival at %.1f" % (et-other_t+5.0, other_evid, other_t)
+                    et = min(et, other_t-5.0)
+        print st, et
+        wave = fetch_waveform(sta, chan, st, et)
+        wave.segment_stats['evid'] = evid
+        wave.segment_stats['event_arrivals'] = arrivals
 
-
-
-    if close_cursor:
-        cursor.close()
+    finally:
+        if close_cursor:
+            cursor.close()
 
     return wave
 
