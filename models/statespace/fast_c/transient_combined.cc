@@ -257,10 +257,10 @@ int TransientCombinedSSM::apply_transition_matrix(const double * x, int k, doubl
   return i;
 }
 
-int TransientCombinedSSM::apply_transition_matrix( const matrix<double,column_major> &X,
+int TransientCombinedSSM::apply_transition_matrix( const matrix<double> &X,
 						   unsigned int x_row_offset,
 						   int k,
-						   matrix<double,column_major> &result,
+						   matrix<double> &result,
 						   unsigned int r_row_offset,
 						   unsigned int n) {
   int j = x_row_offset;
@@ -374,7 +374,7 @@ double TransientCombinedSSM::apply_observation_matrix(const double *x, int k) {
   return r;
 }
 
-void TransientCombinedSSM::apply_observation_matrix(const matrix<double,column_major> &X,
+void TransientCombinedSSM::apply_observation_matrix(const matrix<double> &X,
 						    unsigned int row_offset, int k,
 						    double *result, double *result_tmp, unsigned int n) {
 
@@ -514,8 +514,8 @@ int TransientCombinedSSM::prior_vars(double *result) {
     ssm->prior_vars(result);
 
     if (this->start_idxs[j] < 0) {
-      matrix<double,column_major> P (ssm->max_dimension, ssm->max_dimension);
-      matrix<double,column_major> P2 (ssm->max_dimension, ssm->max_dimension);
+      matrix<double> P (ssm->max_dimension, ssm->max_dimension);
+      matrix<double> P2 (ssm->max_dimension, ssm->max_dimension);
       P.clear();
       for (int i=0; i < ssm->max_dimension; ++i) {
 	P(i,i) = result[i];

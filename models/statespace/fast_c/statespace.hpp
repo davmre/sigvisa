@@ -28,17 +28,17 @@ class StateSpaceModel {
 public:
   virtual int apply_transition_matrix(const double * x,
 					int k, double * result) = 0;
-  virtual int apply_transition_matrix( const matrix<double,column_major> &X,
+  virtual int apply_transition_matrix( const matrix<double> &X,
 					 unsigned int x_row_offset,
 					 int k,
-					 matrix<double,column_major> &result,
+					 matrix<double> &result,
 					 unsigned int r_row_offset,
 					 unsigned int n)  = 0;
   virtual void transition_bias(int k, double * result) = 0;
   virtual void transition_noise_diag(int k, double * result) = 0;
   virtual double apply_observation_matrix(const  double * x, int k) = 0;
 
-  virtual void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n) = 0;
+  virtual void apply_observation_matrix(const matrix<double> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n) = 0;
   virtual double observation_bias(int k) = 0;
   virtual double observation_noise(int k) = 0;
   virtual int prior_mean(double * result) = 0;
@@ -60,14 +60,14 @@ public:
   bool at_fixed_point;
   double alpha;
   double pred_z;
-  matrix<double,column_major> obs_U;
+  matrix<double> obs_U;
   vector<double> obs_d;
   vector<double> gain;
-  matrix<double,column_major> pred_U;
+  matrix<double> pred_U;
   vector<double> pred_d;
 
-  matrix<double,column_major> tmp_U1;
-  matrix<double,column_major> tmp_U2;
+  matrix<double> tmp_U1;
+  matrix<double> tmp_U2;
   matrix<double> P;
 
   vector<double> f;
@@ -99,16 +99,16 @@ public:
   ~CompactSupportSSM();
 
   int apply_transition_matrix(const double *x, int k, double * result);
-  int apply_transition_matrix( const matrix<double,column_major> &X,
+  int apply_transition_matrix( const matrix<double> &X,
 				 unsigned int x_row_offset,
 				 int k,
-				 matrix<double,column_major> &result,
+				 matrix<double> &result,
 				 unsigned int r_row_offset,
 				 unsigned int n) ;
   void transition_bias (int k, double * result) ;
   void transition_noise_diag(int k, double * result);
   double apply_observation_matrix(const double * x, int k);
-  void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
+  void apply_observation_matrix(const matrix<double> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
   double observation_bias(int k);
   double observation_noise(int k);
   int prior_mean(double * result);
@@ -143,16 +143,16 @@ public:
   ~ARSSM();
 
   int apply_transition_matrix(const double *x, int k, double * result);
-  int apply_transition_matrix( const matrix<double,column_major> &X,
+  int apply_transition_matrix( const matrix<double> &X,
 				 unsigned int x_row_offset,
 				 int k,
-				 matrix<double,column_major> &result,
+				 matrix<double> &result,
 				 unsigned int r_row_offset,
 				 unsigned int n) ;
   void transition_bias (int k, double * result) ;
   void transition_noise_diag(int k, double * result);
   double apply_observation_matrix(const double * x, int k);
-  void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
+  void apply_observation_matrix(const matrix<double> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
   double observation_bias(int k);
   double observation_noise(int k);
   int prior_mean(double * result);
@@ -174,17 +174,17 @@ TransientCombinedSSM(std::vector<StateSpaceModel *> & ssms, const vector<int> & 
 ~TransientCombinedSSM();
 
   int apply_transition_matrix(const double *x, int k, double * result);
-  int apply_transition_matrix( const matrix<double,column_major> &X,
+  int apply_transition_matrix( const matrix<double> &X,
 				 unsigned int x_row_offset,
 				 int k,
-				 matrix<double,column_major> &result,
+				 matrix<double> &result,
 				 unsigned int r_row_offset,
 				 unsigned int n) ;
 
   void transition_bias (int k, double * result) ;
   void transition_noise_diag(int k, double * result);
   double apply_observation_matrix(const double * x, int k);
-  void apply_observation_matrix(const matrix<double,column_major> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
+  void apply_observation_matrix(const matrix<double> &X, unsigned int row_offset, int k, double * result, double *result_tmp, unsigned int n);
   double observation_bias(int k);
   double observation_noise(int k);
   int prior_mean(double * result);

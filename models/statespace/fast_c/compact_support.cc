@@ -125,10 +125,10 @@ int CompactSupportSSM::apply_transition_matrix( const double * x, int k, double 
 }
 
 /* Each column of the input X gives a column of the result matrix */
-int CompactSupportSSM::apply_transition_matrix( const matrix<double,column_major> &X,
+int CompactSupportSSM::apply_transition_matrix( const matrix<double> &X,
 						unsigned int x_row_offset,
 						int k,
-						matrix<double,column_major> &result,
+						matrix<double> &result,
 						unsigned int r_row_offset,
 						unsigned int n) {
   if (k <= 0) {
@@ -248,7 +248,7 @@ double CompactSupportSSM::apply_observation_matrix(const double * x, int k) {
   return result;
 }
 
-void CompactSupportSSM::apply_observation_matrix(const matrix<double,column_major> &X,
+void CompactSupportSSM::apply_observation_matrix(const matrix<double> &X,
 						 unsigned int row_offset, int k,
 						 double *result, double *result_tmp, unsigned int n) {
   //const matrix_row< matrix<int> > active = row(this->active_basis, k);

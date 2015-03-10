@@ -14,7 +14,14 @@
 
 using namespace boost::numeric::ublas;
 
-void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, unsigned int state_size) {
+
+void udu(matrix<double> &M_mat, matrix<double> &U_mat, vector<double> &d_vec, unsigned int state_size) {
+
+  unsigned int n = M_mat.size1();
+  double *M = &(M_mat(0,0));
+  double *U = &(U_mat(0,0));
+  double *d = &(d_vec(0));
+
   // this method stolen from pykalman.sqrt.bierman by Daniel Duckworth (BSD license)
   /*Construct the UDU' decomposition of a positive, semidefinite matrix M
 
@@ -29,53 +36,55 @@ void udu(matrix<double> &M, matrix<double,column_major> &U, vector<double> &d, u
         UDU' representation of M
   */
 
-  unsigned int n = state_size;
 
-  // make M upper triangular: not sure if this is necessary?
-  for (unsigned i=0; i < n; ++i) {
-    for (unsigned j=0; j < i; ++j) {
-      M(i,j) = 0;
+
+  // make M upper triangular
+  for (unsigned i=0; i < state_size; ++i) {
+    for (unsigned idx=i*n; idx < i*n+i; ++idx) {
+      M[idx] = 0;
     }
   }
 
-  d.clear();
-  U.clear();
-  for (unsigned i=0; i < n; ++i) {
-    U(i,i) = 1;
+  // initialize U as the identity
+  for (unsigned i=0; i < state_size; ++i) {
+    for (unsigned idx=i*n; idx < i*n+state_size; ++idx) {
+      U[idx] = 0;
+    }
+  }
+  for (unsigned i=0; i < state_size; ++i) {
+    U[i*n+i] = 1;
   }
 
-  for (unsigned j=n; j >= 2; --j) {
-    d(j - 1) = M(j - 1, j - 1);
+  for (unsigned j=state_size-1; j >= 1; --j) {
+    d[j] = M[j*n+j];
     double alpha = 0.0;
     double beta = 0.0;
-    if (d(j - 1) > 0) {
-      alpha = 1.0 / d(j - 1);
+    if (d[j] > 0) {
+      alpha = 1.0 / d[j];
     } else {
-      if (fabs(d(j-1) > 1e-5) ) {
-	printf("WARNING: nonpositive d[%d] %f in udu decomp\n", j-1, d(j-1));
+      if (fabs(d[j] > 1e-5) ) {
+	printf("WARNING: nonpositive d[%d] %f in udu decomp\n", j, d[j]);
 	exit(-1);
       }
-      d(j-1) = 0.0;
+      d[j] = 0.0;
       alpha = 0.0;
     }
-    for (unsigned k=1; k < j; ++k) {
-      beta = M(k - 1, j - 1);
-      U(k - 1, j - 1) = alpha * beta;
-
-      // M[0:k, k - 1] = M[0:k, k - 1] - beta * U[0:k, j - 1]
-      for (unsigned kk=0; kk < k; ++kk) {
-	M(kk, k - 1) = M(kk, k - 1) - beta * U(kk, j - 1);
+    for (unsigned k=0; k < j; ++k) {
+      beta = M[k*n+ j ];
+      U[k*n+ j] = alpha * beta;
+      for (unsigned kk=0; kk <= k; ++kk) {
+	M[kk*n+ k] = M[kk*n+k] - beta * U[kk*n+j];
       }
     }
   }
-  d(0) = M(0, 0);
+  d[0] = M[0];
 
-  if (d(0) < 0) {
-    printf("ERROR: udu decomposition on non-posdef matrix with M(0,0)=%f\n", M(0,0));
+  if (d[0] < 0) {
+    printf("ERROR: udu decomposition on non-posdef matrix with M(0,0)=%f\n", M[0]);
     exit(-1);
   }
-
 }
+
 
 FilterState::FilterState(int max_dimension, double eps_stationary) {
   this->eps_stationary = eps_stationary;
@@ -83,10 +92,10 @@ FilterState::FilterState(int max_dimension, double eps_stationary) {
   this->alpha = 0;
   this->wasnan = false;
 
-  this->obs_U = matrix<double,column_major>(max_dimension, max_dimension);
-  this->pred_U = matrix<double,column_major>(max_dimension, max_dimension);
-  this->tmp_U1 = matrix<double,column_major>(max_dimension, max_dimension);
-  this->tmp_U2 = matrix<double,column_major>(max_dimension, max_dimension);
+  this->obs_U = matrix<double>(max_dimension, max_dimension);
+  this->pred_U = matrix<double>(max_dimension, max_dimension);
+  this->tmp_U1 = matrix<double>(max_dimension, max_dimension);
+  this->tmp_U2 = matrix<double>(max_dimension, max_dimension);
 
   // we only ever write to the upper triangle of this matrix, so
   // zeroing the full matrix now guarantees that it will always be zero.
@@ -142,7 +151,7 @@ void write_vec(const char *fname, const vector<double> & v) {
 }
 
 
-void write_mat_col(const char *fname, const matrix<double,column_major> & m) {
+void write_mat_col(const char *fname, const matrix<double> & m) {
 
   FILE *f = fopen(fname, "w");
   if (f == NULL)
@@ -168,14 +177,14 @@ void write_stuff(const char *item, unsigned int k, const vector<double> & v) {
   write_vec(fname, v);
 }
 
-void write_stuff(const char *item, unsigned int k, const matrix<double, column_major> & m) {
+void write_stuff(const char *item, unsigned int k, const matrix<double> & m) {
   char fname[100];
   snprintf(fname, 100, "matrices/%s_c_%d.txt", item, k);
   write_mat_col(fname, m);
 }
 
 
-void print_mat_col(const matrix<double,column_major> & m) {
+void print_mat_col(const matrix<double> & m) {
   for(unsigned i=0; i < m.size1(); ++i) {
     for(unsigned j=0; j < m.size2(); ++j) {
       printf("%.3f ", m(i,j));
@@ -185,11 +194,39 @@ void print_mat_col(const matrix<double,column_major> & m) {
   printf("\n");
 }
 
+
+#include <cblas.h>
+void compute_explicit_cov_atlas(FilterState &cache,
+				matrix<double> &U,
+				vector<double> &d,
+				int prev_state_size) {
+
+  matrix<double> &mtmp = cache.tmp_U2;
+  matrix<double> &P = cache.P;
+  unsigned state_size = cache.state_size;
+
+  // U has dimension (ss x pss)
+  for (unsigned i=0; i < state_size; ++i) {
+    for (unsigned j=0; j < prev_state_size; ++j) {
+      mtmp(i,j) = U(i,j) * d(j);
+    }
+  }
+
+  cblas_dgemm(CblasRowMajor,
+	      CblasNoTrans,
+	      CblasTrans,
+	      state_size,  state_size, prev_state_size, 1.0,
+	      &(mtmp(0,0)), mtmp.size2(),
+	      &(U(0,0)), U.size2(),
+	      0.0, &(P(0,0)), P.size2());
+
+}
+
 void compute_explicit_cov(FilterState &cache,
-			  matrix<double,column_major> &U_tmp,
+			  matrix<double> &U_tmp,
 			  vector<double> &d_tmp,
 			  int prev_state_size) {
-  matrix<double,column_major> &mtmp = cache.tmp_U2;
+  matrix<double> &mtmp = cache.tmp_U2;
   matrix<double> &P = cache.P;
   unsigned state_size = cache.state_size;
 
@@ -252,10 +289,10 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   if (!cache.at_fixed_point || !ssm.stationary(k)) {
     cache.at_fixed_point = false;
 
-    matrix<double,column_major> &U_old = cache.pred_U;
+    matrix<double> &U_old = cache.pred_U;
     vector<double> &d_old = cache.pred_d;
 
-    matrix<double,column_major> &U = cache.obs_U;
+    matrix<double> &U = cache.obs_U;
     vector<double> &d = cache.obs_d;
     vector<double> &K = cache.gain;
     vector<double> &f = cache.f;
@@ -361,10 +398,10 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
 
   cache.at_fixed_point = false;
 
-  matrix<double,column_major> &U_old = cache.obs_U;
+  matrix<double> &U_old = cache.obs_U;
   vector<double> &d_old = cache.obs_d;
 
-  matrix<double,column_major> &U_tmp = cache.tmp_U1;
+  matrix<double> &U_tmp = cache.tmp_U1;
   vector<double> &d_tmp = cache.v;
 
   // get transition noise into temporary storage
@@ -404,7 +441,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
   // if there is transition noise, do the expensive reconstruction/factoring step
   if (force_P || state_size != prev_state_size || norm_2(subrange(tmp, 0, state_size)) > 0) {
 
-    compute_explicit_cov(cache, U_tmp, d_tmp, prev_state_size);
+    compute_explicit_cov_atlas(cache, U_tmp, d_tmp, prev_state_size);
     // add transition noise
     matrix<double> &P = cache.P;
 
@@ -427,7 +464,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     // udu overwrites the cov matrix, so we need to
     // save it if we're going to explicitly use it
     // later on.
-    matrix<double, column_major> & mtmp = cache.tmp_U2;
+    matrix<double> & mtmp = cache.tmp_U2;
     if (force_P) {
       mtmp = P;
     }
@@ -446,7 +483,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
 
   // if our factored representation is (almost) the same as the previous invocation,
   // we've reached a stationary state
-  matrix<double,column_major> &U_cached = cache.pred_U;
+  matrix<double> &U_cached = cache.pred_U;
   vector<double> &d_cached = cache.pred_d;
   if (ssm.stationary(k)) {
     if (k > 0 && ssm.stationary(k-1)) {
@@ -566,7 +603,7 @@ void obs_var(StateSpaceModel &ssm, vector<double> & result) {
   cache.init_priors(ssm);
   compute_explicit_cov(cache, cache.pred_U, cache.pred_d, -1);
 
-  matrix<double, column_major> P = cache.P;
+  matrix<double> P = cache.P;
 
   for (unsigned k = 0; k < result.size(); ++k) {
     ssm.apply_observation_matrix(P, 0,

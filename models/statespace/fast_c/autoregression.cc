@@ -38,9 +38,9 @@ int ARSSM::apply_transition_matrix(const double * x, int k, double * result) {
   return this->max_dimension;
 }
 
-int ARSSM::apply_transition_matrix(const matrix <double,column_major> &X,
+int ARSSM::apply_transition_matrix(const matrix <double> &X,
 				    unsigned int x_row_offset, int k,
-				    matrix <double,column_major> &result,
+				    matrix <double> &result,
 				    unsigned int r_row_offset,
 				    unsigned int n) {
   for (unsigned j=0; j < n; ++j) {
@@ -72,7 +72,7 @@ double ARSSM::apply_observation_matrix(const double *x, int k) {
   return x[0];
 }
 
-void ARSSM::apply_observation_matrix(const matrix <double,column_major> &X,
+void ARSSM::apply_observation_matrix(const matrix <double> &X,
 				     unsigned int row_offset, int k,
 				     double *result, double * result_tmp, unsigned int n) {
   for (unsigned i=0; i < n; ++i) {
