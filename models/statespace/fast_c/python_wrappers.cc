@@ -148,6 +148,15 @@ public:
   };
 
 
+  void set_process(const pyublas::numpy_vector<double> & params, double error_var,
+		   const double obs_noise, const double bias) {
+    ARSSM * arssm = (ARSSM *)this->ssm;
+    arssm->params.assign(params);
+    arssm->error_var = error_var;
+    arssm->obs_noise = obs_noise;
+    arssm->bias = bias;
+  }
+
   StateSpaceModel *ssm;
 private:
 
@@ -301,6 +310,25 @@ public:
     return l;
   }
 
+  boost::python::list component_vars(const pyublas::numpy_vector<double> z) {
+    std::vector<vector<double> > vars(this->ssms.size());
+    for (unsigned i=0; i < vars.size(); ++i) {
+      int st = this->start_idxs[i];
+      int et = this->end_idxs[i];
+      int npts = et-st;
+      vars[i].resize(npts);
+      vars[i].clear();
+    }
+    tssm_component_vars(*(this->ssm), z, vars);
+
+    boost::python::list l;
+    for(unsigned i=0; i < vars.size(); ++i) {
+      pyublas::numpy_vector<double> v(vars[i]);
+      l.append(v);
+    }
+    return l;
+  }
+
   boost::python::list marginals(const pyublas::numpy_vector<double> z) {
     std::vector<vector<double> > cmeans;
     std::vector<vector<double> > cvars;
@@ -388,7 +416,8 @@ BOOST_PYTHON_MODULE(ssms_c) {
     .def("run_filter", &PyARSSM::run_filter)
     .def("mean_obs", &PyARSSM::py_mean_obs)
     .def("prior_sample", &PyARSSM::py_prior_sample)
-    .def("obs_var", &PyARSSM::py_obs_var);
+    .def("obs_var", &PyARSSM::py_obs_var)
+    .def("set_process", &PyARSSM::set_process);
 
   bp::class_<PyTSSM>("TransientCombinedSSM", bp::init<boost::python::list const &,
 		     double >())
@@ -398,6 +427,7 @@ BOOST_PYTHON_MODULE(ssms_c) {
     .def("prior_sample", &PyTSSM::py_prior_sample)
     .def("obs_var", &PyTSSM::py_obs_var)
     .def("component_means", &PyTSSM::component_means)
+    .def("component_vars", &PyTSSM::component_vars)
     .def("all_filtered_cssm_coef_marginals", &PyTSSM::marginals)
     //.def("get_n_coefs", &PyTSSM::get_n_coefs)
     .def("get_component", &PyTSSM::get_component)

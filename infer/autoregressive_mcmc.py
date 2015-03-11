@@ -73,12 +73,15 @@ def noise_param_step(wn):
         return False
 """
 
+def ar_param_posterior(signal, signal_vars, armodel, prior_mean, prior_cov):
+    # warning: this method has accumulated hacks, I don't think I have a good
+    # probabilistic story for what it's doing, though hopefully one exists.
 
-def ar_param_posterior(signal, armodel, prior_mean, prior_cov):
     n = len(signal)
     n_p = len(prior_mean)
     em_var = armodel.em.std**2
-    zeroed_signal = signal - armodel.c
+    # HACK: rescale each signal by the observation noise stddev, ignoring correlations
+    zeroed_signal = (signal - armodel.c)/np.sqrt(signal_vars + em_var)
     try:
         prior_mean[2]
     except:
@@ -92,8 +95,8 @@ def ar_param_posterior(signal, armodel, prior_mean, prior_cov):
             phi_squared[j, j+i] = offset_i_val
             phi_squared[j+i, j] = offset_i_val
     prior_precision = np.linalg.inv(prior_cov)
-    C = np.linalg.inv(prior_precision * np.eye(n_p) + 1.0/em_var * phi_squared)
-    c = np.dot(C, (np.dot(prior_precision, prior_mean) + params_hat/em_var))
+    C = np.linalg.inv(prior_precision + phi_squared)
+    c = np.dot(C, (np.dot(prior_precision, prior_mean) + params_hat))
     return c, C
 
 def ar_var_posterior(signal, arm, prior_alpha, prior_beta):
@@ -121,21 +124,23 @@ def ar_var_posterior(signal, arm, prior_alpha, prior_beta):
     posterior_beta = prior_beta + sum_sqerrs/2.0
     return posterior_alpha, posterior_beta
 
-def ar_mean_posterior(signal, arm, prior_mu, prior_sigma2):
+def ar_mean_posterior(signal, signal_vars, arm, prior_mu, prior_sigma2):
     n = len(signal)
     n_p = arm.p
     params = np.array(arm.params, copy=True)
     mu = prior_mu
     sigma2 = prior_sigma2
-    em_var  = arm.em.std**2
-    sum_alpha_m1 = np.sum(params)-1
-    w = float(sum_alpha_m1*sum_alpha_m1/em_var)
-    p = float(sum_alpha_m1/em_var)
+    em_var  = float(arm.em.std**2)
+    sum_alpha_m1 = float(np.sum(params)-1)
 
     returns = np.zeros((2,))
     code = """
     for (int i=n_p; i < n; ++i) {
         double err = -signal(i);
+        double obs_v = em_var + signal_vars(i);
+        double w = sum_alpha_m1*sum_alpha_m1/obs_v;
+        double p = sum_alpha_m1/obs_v;
+
         for (int j = 0; j < n_p; ++j) {
             err += signal(i-n_p+j) * params(n_p-1-j);
         }
@@ -146,66 +151,80 @@ def ar_mean_posterior(signal, arm, prior_mu, prior_sigma2):
     returns(0) = mu;
     returns(1) = sigma2;
     """
-    weave.inline(code, ['n', 'n_p', 'params', 'signal',
-                                     'w', 'p', 'mu',
+    weave.inline(code, ['n', 'n_p', 'params', 'signal', 'signal_vars', 'em_var',
+                                     'sum_alpha_m1', 'mu',
                                      'sigma2', 'returns'],
                      type_converters=converters.blitz,
                      compiler='gcc')
     mu, sigma2 = returns
     return mu, sigma2
 
-def latent_wiggle_param_gibbs(sg, wave_node, tmnodes):
-    k_latent, n_latent = tmnodes['latent_arrival']
 
-    gibbs_update_wiggle_params(n_latent)
-
-    return True
-
-
-def gibbs_update_wiggle_params(n_latent):
-    prior_alpha = 1000.0
-    prior_beta = 1000.0
-
-    wiggle, shape, rw = n_latent.get_signal_components()
-
-    wiggle_def = wiggle[np.isfinite(wiggle)]
-
-    posterior_alpha, posterior_beta = ar_var_posterior(wiggle_def, n_latent.arwm, prior_alpha, prior_beta)
-    print posterior_alpha, posterior_beta
-    new_var = InvGamma(posterior_alpha, posterior_beta).sample()
-    print "resampled std", np.sqrt(new_var), ", previous", n_latent.arwm.em.std
-    n_latent.arwm.em.std = float(np.sqrt(new_var))
-
-    # Gibbs sample new AR params. Here the prior is a multivariate
-    # Gaussian, truncated to the stationary region. We enforce this
-    # through rejection sampling: sample new params from the Gaussian
-    # posterior (i.e., the posterior that we'd get from a
-    # non-truncated Gaussian prior) repeatedly until we happen to
-    # sample a valid set of stationary params.
-    prior_param_mean = np.zeros((3,))
-    prior_param_cov = np.eye(3) * 0.01
+def sample_ar_params_from_truncated_gaussian(param_mean, param_cov, arm, max_tries=10):
     stationary = False
-    max_tries = 10
     tries = 0
-    orig_params = np.copy(n_latent.arwm.params)
     while not stationary and tries < max_tries:
-        param_mean, param_cov = ar_param_posterior(wiggle_def, n_latent.arwm, prior_param_mean, prior_param_cov)
-
-        try:
-            new_params = np.random.multivariate_normal(mean=param_mean, cov=param_cov, size=1).flatten()
-        except Exception as e:
-            print e
-            import pdb; pdb.set_trace()
-        n_latent.arwm.params = new_params
-        n_latent.arwm.p = len(new_params)
-        stationary = n_latent.arwm.stationary()
+        new_params = np.random.multivariate_normal(mean=param_mean, cov=param_cov, size=1).flatten()
+        arm.params = new_params
+        stationary = arm.stationary()
         tries += 1
     if not stationary:
-        print "WARNING: Gibbs sampling new AR coefficients failed at %s; each of %d samples returned nonstationary params. Reverting to old params." % (n_latent.label, tries)
-        n_latent.arwm.params = orig_params
-    else:
-        print "resample params", new_params, "previous", orig_params
+        raise Exception("Gibbs sampling new AR coefficients failed")
+    return new_params
 
 
-    if np.isnan(n_latent.log_p()):
-        import pdb; pdb.set_trace()
+def sample_posterior_armodel_from_signal(signal_mean, signal_var, arm_prior, arm_old=None):
+    arm = arm_prior.copy()
+
+    # sample a new process mean
+    prior_mu = arm.c
+    prior_sigma2 = prior_mu/100.0
+    posterior_mu, posterior_s2 =  ar_mean_posterior(signal_mean, signal_var, arm, prior_mu, prior_sigma2)
+    c_dist = Gaussian(posterior_mu, std=np.sqrt(posterior_s2))
+    new_c = c_dist.sample()
+    arm.c = float(new_c)
+
+
+    # sample a new noise variance (IGNORING signal obs variance because I
+    # haven't worked out how to handle it...)
+    prior_alpha = 100
+    prior_mean = arm.em.std**2
+    prior_beta = prior_mean * (prior_alpha-1)
+    posterior_alpha, posterior_beta = ar_var_posterior(signal_mean, arm, prior_alpha, prior_beta)
+    var_dist = InvGamma(posterior_alpha, posterior_beta)
+    new_var = var_dist.sample()
+    arm.em.std = float(np.sqrt(new_var))
+
+    # sample new params
+    prior_param_mean = arm.params
+    prior_param_cov = np.eye(3) * 0.01
+    param_mean, param_cov = ar_param_posterior(signal_mean, signal_var, arm, prior_param_mean, prior_param_cov)
+    new_params = sample_ar_params_from_truncated_gaussian(param_mean, param_cov, arm)
+    arm.params = new_params
+
+
+    #lp_qforward =
+    #lp_qbackward = 0.0
+
+    return arm
+
+def arnoise_gibbs_move(sg, wave_node):
+
+    means = wave_node.signal_component_means()
+    noise_mean = means['noise']
+    noise_var = wave_node.signal_component_means(return_stds_instead=True)['noise']**2
+
+    arm = sample_posterior_armodel_from_signal(noise_mean, noise_var, wave_node.prior_nm)
+
+    # TODO: should really do a MH step here because the noise model we sample
+    # isn't really a Gibbs move.
+    # (though need to be careful: the prior on noise models is not currently
+    # part of the graph logp. really the noise model should be its owave_node
+    # separate node...)
+
+    #lp1 = wave_node.log_p()
+    wave_node.set_noise_model(arm)
+    wave_node.cached_logp = None
+    #lp2 = wave_node.log_p()
+
+    return True

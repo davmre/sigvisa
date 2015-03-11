@@ -15,8 +15,9 @@ from sigvisa.database.signal_data import *
 from sigvisa.database import db
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.run_mcmc import run_open_world_MH, MCMCLogger
+from sigvisa.infer.autoregressive_mcmc import sample_posterior_armodel_from_signal
 from sigvisa.models.signal_model import update_arrivals
-
+from sigvisa.models.noise.noise_util import model_path
 import sigvisa.utils.geog
 import obspy.signal.util
 
@@ -65,31 +66,42 @@ def setup_graph(event, sta, chan, band,
     return sg
 
 
-def optimize_template_params(sigvisa_graph,  tmpl_optim_params):
+def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
+
+    nm1 = wn.prior_nm.copy(), wn.prior_nmid
+    #means = wn.signal_component_means()
+    #noise_mean = means['noise']
+    #noise_var = wn.signal_component_means(return_stds_instead=True)['noise']**2
+    #nm2 = sample_posterior_armodel_from_signal(noise_mean, noise_var, wn.prior_nm), None
 
     if sigvisa_graph.template_shape=="lin_polyexp":
         nphases = int(len(sigvisa_graph.template_nodes)/5) # HACK
 
         v1 = np.array([ 0., 2.0, -0.5, -4, -3] * nphases)
         v2 = np.array([ 2., -1, -1.5, -4, -1.5] * nphases)
-        v3 = np.array([ -3., 1.5, 0.5, -4, -3] * nphases)
-        init_vs = [v1, v2, v3]
+        v3 = np.array([ -3., 2.3, 0.5, -4, -3] * nphases)
+        init_vs = [(v1, nm1), (v2, nm1), (v3, nm1)]
     else:
         raise Exception("don't know how to initialize params for template shape %s" % sigvisa_graph.template_shape)
 
-    v_results = []
-    v_ps = []
-    for v in init_vs:
+    best_vals = None
+    best_prob = -np.inf
+    best_nm = nm1
+    for v, (nm, nmid) in init_vs:
+        #wn.set_noise_model(nm, nmid)
         sigvisa_graph.set_all(values=v, node_list=sigvisa_graph.template_nodes)
         sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
         v_result = sigvisa_graph.get_all(sigvisa_graph.template_nodes)
         v_p = sigvisa_graph.current_log_p()
-        v_results.append(v_result)
-        v_ps.append(v_p)
 
-    best_v = np.argmax(v_ps)
-    sigvisa_graph.set_all(values=v_results[best_v], node_list=sigvisa_graph.template_nodes)
+        if v_p > best_prob:
+            best_prob = v_p
+            best_vals = v_result
+            best_nm = (nm, nmid)
 
+    #nm, nmid = best_nm
+    #wn.set_noise_model(nm, nmid)
+    sigvisa_graph.set_all(values=best_vals, node_list=sigvisa_graph.template_nodes)
 
 def multiply_scalar_gaussian(m1, v1, m2, v2):
     """
@@ -193,7 +205,8 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_it
     cursor.close()
 
     # initialize the MCMC by finding a good set of template params
-    optimize_template_params(sigvisa_graph, tmpl_optim_params)
+    wn = sigvisa_graph.station_waves.values()[0][0]
+    optimize_template_params(sigvisa_graph, wn, tmpl_optim_params)
 
 
     # run MCMC to sample from the posterior on template params
@@ -204,7 +217,6 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_it
     et = time.time()
 
     # compute template posterior, and set the graph state to the best template params
-    wn = sigvisa_graph.station_waves.values()[0][0]
     messages, best_tmvals = compute_template_messages(sigvisa_graph, wn, logger)
     for (vals, nodes) in best_tmvals.values():
         for (v, n) in zip(vals, nodes):
@@ -264,6 +276,17 @@ def save_template_params(sg, tmpl_optim_param_str,
         tmpl_optim_param_str = tmpl_optim_param_str.replace("'", "''")
         wiggle_optim_param_str = wiggle_optim_param_str.replace("'", "''")
         optim_log = wiggle_optim_param_str.replace("\n", "\\\\n")
+
+        if wave_node.nmid is None:
+            nm_fname = model_path(sta, chan, wave['filter_str'], wave_node.srate, wave_node.nm.p, window_stime=wave_node.st, model_type="ar") + "_inferred"
+            full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
+            ensure_dir_exists(os.path.dirname(full_fname))
+            wave_node.nm.dump_to_file(full_fname)
+            wave_node.nmid = wave_node.nm.save_to_db(dbconn=s.dbconn, sta=wave_node.sta, chan=wave_node.chan,
+                                                     band=wave_node.band, hz=wave_node.srate, env=True, smooth=smooth,
+                                                     window_stime=wave_node.st, window_len=wave_node.et-wave_node.st,
+                                                     fname=nm_fname, hour=-1)
+            print "saving inferred noise model as nmid", wave_node.nmid
 
         sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, sg.optim_log, 1 if wave_node.nm_type != 'ar' else 0, st, et, hz, sg.current_log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
 

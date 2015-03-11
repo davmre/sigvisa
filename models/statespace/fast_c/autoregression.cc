@@ -13,7 +13,7 @@
 using namespace boost::numeric::ublas;
 
 
-ARSSM::ARSSM(const vector<double> & params, double error_var,
+ARSSM::ARSSM(vector<double> & params, double error_var,
 	     double obs_noise, double bias) : params(params), error_var(error_var),
 					      obs_noise(obs_noise), bias(bias) {
 

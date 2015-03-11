@@ -226,6 +226,10 @@ void compute_explicit_cov(FilterState &cache,
 			  matrix<double> &U_tmp,
 			  vector<double> &d_tmp,
 			  int prev_state_size) {
+
+  /* this is the original version of this function in ublas.
+     it's slow and superceded by the atlas version above. */
+
   matrix<double> &mtmp = cache.tmp_U2;
   matrix<double> &P = cache.P;
   unsigned state_size = cache.state_size;
@@ -710,5 +714,32 @@ void tssm_component_means(TransientCombinedSSM &ssm,
     kalman_predict_sqrt(ssm, cache, k, false);
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
     ssm.extract_component_means(&(cache.xk(0)), k, means);
+  }
+}
+
+
+void tssm_component_vars(TransientCombinedSSM &ssm,
+			  const vector<double> &z,
+			  std::vector<vector<double> > & vars) {
+
+  if (vars.size() != ssm.n_ssms) {
+    printf("component_vars() needs exactly one vector for each component SSM\n");
+    exit(-1);
+  }
+
+  FilterState cache(ssm.max_dimension, 1e-10);
+  cache.init_priors(ssm);
+  compute_explicit_cov(cache, cache.pred_U, cache.pred_d, -1);
+
+  unsigned int N = z.size();
+  double ell = 0;
+  ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
+  compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
+  ssm.extract_component_vars(cache.P, cache.tmp_U2, 0, vars);
+  for (unsigned k=1; k < N; ++k) {
+    kalman_predict_sqrt(ssm, cache, k, false);
+    ell += kalman_observe_sqrt(ssm, cache, k, z(k));
+    compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
+    ssm.extract_component_vars(cache.P, cache.tmp_U2, k, vars);
   }
 }

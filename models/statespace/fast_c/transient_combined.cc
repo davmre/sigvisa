@@ -598,3 +598,39 @@ void TransientCombinedSSM::extract_component_means(double *xk, int k,
     if (ssm) state_offset += ssm->max_dimension;
   }
 }
+
+void TransientCombinedSSM::extract_component_vars(matrix<double> &P, matrix<double> &P_tmp, int k,
+						  std::vector<vector<double> > & vars) {
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(k));
+  unsigned int state_offset = 0;
+
+  double * v_tmp = (double *) malloc(sizeof(double) * P.size1());
+  double * v_tmp2 = (double *) malloc(sizeof(double) * P.size1());
+  if (!v_tmp || !v_tmp2) {
+    printf("memory allocation error in extract_component_vars!");
+    exit(-1);
+  }
+
+
+  for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
+       it < ssm_indices.end() && *it >= 0; ++it) {
+
+    int j = *it;
+    StateSpaceModel * ssm = this->ssms[j];
+    int kk = k - this->start_idxs[j];
+
+    if (ssm) {
+      // just be lazy and copy the submatrix for this component into its own matrix.
+      subrange(P_tmp, 0, ssm->max_dimension, 0, ssm->max_dimension) = subrange(P, state_offset, state_offset+ssm->max_dimension, state_offset, state_offset+ssm->max_dimension);
+      ssm->apply_observation_matrix(P_tmp, 0, kk, v_tmp, v_tmp2, ssm->max_dimension);
+      vars[j](kk) = ssm->apply_observation_matrix(v_tmp, kk);
+      state_offset += ssm->max_dimension;
+      //printf("%d: set var at ssm %d kk %d = %f\n", k, j, kk, vars[j](kk));
+    } else {
+      vars[j](kk) = 0.0;
+    }
+  }
+
+  free(v_tmp);
+  free(v_tmp2);
+}

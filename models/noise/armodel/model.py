@@ -28,6 +28,11 @@ class ARModel(NoiseModel):
 
         self.nomask = np.array([False,] * 5000, dtype=bool)
 
+    def copy(self):
+        em = ErrorModel(self.em.mean, self.em.std)
+        arm  = ARModel(np.array(self.params, copy=True), em, self.c, self.sf)
+        return arm
+
     # samples based on the defined AR Model
     def sample(self, n):
         data = np.zeros(n + self.p)

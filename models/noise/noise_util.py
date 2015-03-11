@@ -221,6 +221,7 @@ def block_waveform_exists(sta, chan, stime, etime):
 
     return model_wave['fraction_valid'] > 0.4
 
+
 def get_recent_safe_block(time, sta, chan, margin_seconds=10, preferred_len_seconds=120, min_len_seconds=60, arrival_window_seconds=1200):
     """ Get a block of time preceding the specified time, and ending at least margin_seconds before that time, for which waveform data exists, and during which there are no recorded arrivals at the station."""
 

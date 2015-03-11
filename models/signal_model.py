@@ -111,7 +111,7 @@ class ObservedSignalNode(Node):
         self.signal_diff = np.empty((self.npts,))
         self.pred_signal = np.empty((self.npts,))
 
-        self.set_noise_model(nm_type=nm_type, nmid=nmid)
+        self.init_noise_model(nm_type=nm_type, nmid=nmid)
 
         self._tmpl_params = dict()
         self._ev_params = dict()
@@ -157,17 +157,41 @@ class ObservedSignalNode(Node):
     def get_wave(self):
         return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
 
-    def set_noise_model(self, nm_type="ar", nmid=None):
+    def init_noise_model(self, nm_type="ar", nmid=None):
         if nmid is None:
             self.nm_type = nm_type
-            self.nm, self.nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
+            self.prior_nm, self.prior_nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
         else:
-            self.nmid = nmid
-            self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
-            self.nm_type = self.nm.noise_model_type()
+            self.prior_nmid = nmid
+            self.prior_nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.prior_nmid)
+            self.nm_type = self.prior_nm.noise_model_type()
 
         assert(self.nm_type=="ar")
-        self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
+        self.noise_arssm = ARSSM(np.array(self.prior_nm.params, dtype=np.float), self.prior_nm.em.std**2, 0.0, self.prior_nm.c)
+        self.nm = self.prior_nm.copy()
+        self.nmid = self.prior_nmid
+
+        ten_seconds = int(self.srate * 10.0)
+        d = self.get_value().data
+        for i in np.arange(0, self.npts, ten_seconds):
+            window_max_10s = np.max(d[i:i+ten_seconds])
+            window_sum_10s = np.sum(d[i:i+ten_seconds])
+            if np.isfinite(window_sum_10s) and window_max_10s < self.nm.c:
+                raise Exception("signal max of %.3f between %d,%d is less than noise mean %.3f! Noise model is probably wrong." % (window_max_10s, i, i+ten_seconds, self.nm.c))
+
+
+
+    def set_noise_model(self, arm, nmid=None):
+        import pdb; pdb.set_trace()
+        self.nm.params = arm.params
+        self.nm.c = arm.c
+        self.nm.sf = arm.sf
+        self.nm.p = arm.p
+        self.nm.em = arm.em
+
+        self.noise_arssm.set_process(arm.params, arm.em.std**2, 0.0, arm.c)
+        self.nmid = nmid
+
 
     def arrival_start_idx(self, eid, phase, skip_pv_call=False):
         if not skip_pv_call:
@@ -583,12 +607,15 @@ signal_diff(i) =value(i) - pred_signal(i);
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg
 
-    def signal_component_means(self):
+    def signal_component_means(self, return_stds_instead=False):
         self.tssm = self.transient_ssm()
 
         d = self.get_value().data
 
-        means = self.tssm.component_means(d)
+        if return_stds_instead:
+            means = [np.sqrt(z) for z in self.tssm.component_vars(d)]
+        else:
+            means = self.tssm.component_means(d)
         noise_mean = means[0]
         signal_mean = np.zeros((self.npts,))
         arrival_info = collections.defaultdict(dict)
@@ -604,7 +631,7 @@ signal_diff(i) =value(i) - pred_signal(i);
             end_idx = min(sidx+npts, self.npts)
 
             src = arrival_info[(eid, phase)][component_type]
-            signal_mean[start_idx:end_idx] += src[start_idx-sidx:end_idx-start_idx]
+            signal_mean[start_idx:end_idx] += src[start_idx-sidx:end_idx-sidx]
 
         for k in arrival_info.keys():
 
@@ -620,6 +647,7 @@ signal_diff(i) =value(i) - pred_signal(i);
         arrival_info["signal"] = signal_mean
 
         return arrival_info
+
 
     def cache_latent_signal_for_template_optimization(self, eid, phase, force_bounds=True, return_llgrad=False):
 

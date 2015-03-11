@@ -187,6 +187,8 @@ class TruncatedGaussian(Distribution):
             sample = self.mean + np.random.randn() * self.std
         return sample
 
+    def variance(self, **kwargs):
+        return self.std**2
 
 class MultiGaussian(Distribution):
     def __init__(self, mean, cov, pre_inv=False):

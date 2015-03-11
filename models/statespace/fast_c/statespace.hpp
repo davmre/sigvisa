@@ -138,7 +138,7 @@ dense_hash_map< std::pair<int, int>, int, boost::hash< std::pair< int,int> >  > 
 
 class ARSSM : public StateSpaceModel {
 public:
-  ARSSM(const vector<double> & params, double error_var,
+  ARSSM(vector<double> & params, double error_var,
 	  double obs_noise, double bias);
   ~ARSSM();
 
@@ -159,11 +159,12 @@ public:
   int prior_vars(double * result);
   bool stationary(int k);
 
-private:
-  const vector<double> & params;
-  const double error_var;
-  const double obs_noise;
-  const double bias;
+  vector<double> & params;
+  double error_var;
+  double obs_noise;
+  double bias;
+
+
 };
 
 class TransientCombinedSSM : public StateSpaceModel {
@@ -199,6 +200,8 @@ TransientCombinedSSM(std::vector<StateSpaceModel *> & ssms, const vector<int> & 
 			 std::vector<vector<double> > & cvars);
   void extract_component_means(double *xk, int k,
 			       std::vector<vector<double> > & means);
+  void extract_component_vars(matrix<double> &P, matrix<double> &P_tmp, int k,
+			       std::vector<vector<double> > & vars);
 
   const unsigned int n_ssms;
 private:
@@ -236,6 +239,9 @@ void prior_sample(StateSpaceModel &ssm, vector<double> & result);
 void tssm_component_means(TransientCombinedSSM &tssm,
 			  const vector<double> &z,
 			  std::vector<vector<double> > & means);
+void tssm_component_vars(TransientCombinedSSM &tssm,
+			  const vector<double> &z,
+			  std::vector<vector<double> > & vars);
 void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 				      const vector<double> &z,
 				      std::vector<vector<double> > & cmeans,

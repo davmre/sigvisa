@@ -14,12 +14,13 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-    fit_sql_query = "select f.runid, f.evid, f.sta, f.chan, f.band, f.hz, f.smooth, f.stime, f.etime, nm.model_type from sigvisa_coda_fit f, sigvisa_noise_model nm where f.fitid=%d and f.nmid=nm.nmid" % (fitid)
+    fit_sql_query = "select f.runid, f.evid, f.sta, f.chan, f.band, f.hz, f.smooth, f.stime, f.etime, nm.model_type, nm.nmid from sigvisa_coda_fit f, sigvisa_noise_model nm where f.fitid=%d and f.nmid=nm.nmid" % (fitid)
     cursor.execute(fit_sql_query)
     fit = cursor.fetchone()
     ev = get_event(evid=fit[1])
     wave = load_event_station_chan(fit[1], fit[2], fit[3], cursor=cursor, exclude_other_evs=True).filter('%s;env;smooth_%d;hz_%.2f' % (fit[4], fit[6], fit[5]))
     nm_type = fit[9]
+    nmid = int(fit[10])
     runid = fit[0]
 
     phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, peak_decay, coda_decay, wiggle_family from sigvisa_coda_fit_phase where fitid=%d" % fitid
@@ -47,7 +48,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
                       template_shape=tmshapes, wiggle_family=wiggle_family,
                       nm_type = nm_type, runids=(runid,), phases=phases,
                       base_srate=wave['srate'])
-    wave_node = sg.add_wave(wave)
+    wave_node = sg.add_wave(wave, nmid=nmid)
     sg.add_event(ev)
 
     for uaparams in uatemplates:

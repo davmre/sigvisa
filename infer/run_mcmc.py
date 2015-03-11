@@ -12,6 +12,7 @@ from optparse import OptionParser
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
+from sigvisa.infer.autoregressive_mcmc import arnoise_gibbs_move
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_lstsqr, swap_threeway_lstsqr
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options
@@ -205,9 +206,11 @@ def run_open_world_MH(sg, steps=10000,
                          'tmpl_death': death_move_for_optimizing_birth,
                          'tmpl_split': split_move,
                          'tmpl_merge': merge_move,
-                         'swap_association': swap_association_move}
+                         'swap_association': swap_association_move,
+                         'arnoise_gibbs': arnoise_gibbs_move}
         else:
             sta_moves = {'swap_association': swap_association_move}
+            sta_moves = {'arnoise_gibbs': arnoise_gibbs_move}
 
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move_gaussian,
@@ -229,6 +232,7 @@ def run_open_world_MH(sg, steps=10000,
 
     move_probs = defaultdict(lambda : 0.05)
     move_probs["swap_association"] = 0.2
+    move_probs["arnoise_gibbs"] = 0.0
 
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
@@ -269,12 +273,13 @@ def run_open_world_MH(sg, steps=10000,
                 assert(len(sg.station_waves[sta]) == 1)
                 wn = list(sg.station_waves[sta])[0]
 
+
                 # moves to birth/death/split/merge new unassociated templates
                 for (move_name, fn) in sta_moves.items():
                     move_prob = move_probs[move_name]
                     run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                              n_accepted=n_accepted, move_times=move_times,
-                             move_prob=move_probs, cyclic=cyclic_template_moves,
+                             move_prob=move_prob, cyclic=cyclic_template_moves,
                              sg=sg, wave_node=wn)
 
                 # moves to adjust existing unass. templates
