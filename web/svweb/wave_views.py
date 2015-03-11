@@ -25,7 +25,19 @@ from sigvisa.plotting.plot import bounds_without_outliers
 
 # detail view for a particular fit
 def WaveSelectView(request):
-    return render_to_response('svweb/select_wave.html', {}, context_instance=RequestContext(request))
+    sta = request.GET.get("sta", "")
+    chan = request.GET.get("chan", "BHZ")
+    stime = float(request.GET.get("stime", "0"))
+    etime = float(request.GET.get("etime", "0"))
+    filter_str = request.GET.get("filter_str", "freq_0.8_4.5;env")
+
+    return render_to_response('svweb/select_wave.html', \
+                              {'sta': sta, \
+                               'chan': chan, \
+                               'stime': stime, \
+                               'etime': etime, \
+                               'filter_str': filter_str}, \
+                              context_instance=RequestContext(request))
 
 
 @cache_page(60*60*24*365)

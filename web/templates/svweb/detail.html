@@ -48,7 +48,7 @@ document.getElementById('loading').style.visibility = 'hidden';
     </table>
   </td>
   <td valign=top rowspan=1>
-    <b>Waveform</b>
+    <b>Waveform</b> (<a href="{% url wave_select %}?sta={{ wave.sta }};chan={{ wave.chan }};stime={{ wave.stime }};etime={{ wave.etime }};filter_str={{ wave.filter_str|urlencode }};logscale=false">view</a>)
     <table>
       <tr><td>sta</td><td><a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a></td></tr>
       <tr><td>npts</td><td>{{ wave.npts }}</td></tr>
