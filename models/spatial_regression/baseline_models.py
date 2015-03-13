@@ -189,6 +189,10 @@ class ConstGaussianModel(ParamModel):
 
         return deriv
 
+    def variance(self, cond):
+        return self.std**2
+
+
 class ConstLaplacianModel(ParamModel):
 
     def __init__(self, X=None, y=None, yvars=None, sta=None, fname=None, center=None, scale=None):
@@ -257,3 +261,6 @@ class ConstLaplacianModel(ParamModel):
         else:
             deriv = np.sum( [ 0.0 if z ==self.center else float(np.sign(self.center - z))/ self.scale for z in x ] )
         return deriv
+
+    def variance(self, cond):
+        return 2 * self.scale**2

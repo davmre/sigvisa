@@ -50,7 +50,6 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
         splits = target.split("_")
         param_num = int(splits[-1])
         target = "_".join(splits[:-1])
-
     try:
         if param_num is None:
             ymeans, yvars = zip(*[fit.messages[target] for fit in fits])
@@ -61,6 +60,8 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
         print "warning: could not load messages for target", target
         ymeans = [fit.__dict__[target] for fit in fits ]
         yvars = np.ones( (len(ymeans),)) * 1e-10
+
+
     ymeans = np.asarray(ymeans, dtype=np.float64)
     yvars = np.asarray(yvars, dtype=np.float64)
 
@@ -278,7 +279,7 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                 distfn = model_type[3:]
                 st = time.time()
                 try:
-                    print "training mode for target", target
+                    print "training model for target", target
                     model = learn_model(X, y,  model_type, yvars=yvars, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=subsample, bounds=bounds, param_var=prior_var, optimize=optimize)
                 except Exception as e:
                     raise
@@ -286,10 +287,13 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     continue
 
                 et = time.time()
-
-                if np.isnan(model.log_likelihood()):
+                ll = model.log_likelihood()
+                if np.isnan(ll):
                     print "error training model for %s %s %s, likelihood is nan! skipping.." % (site, target, phase)
                     continue
+                if ll < -1e6:
+                    print "warning, model (%s %s %s) is *very* unlikely: %f" % (site, target, phase, ll)
+
 
                 model.save_trained_model(model_fname)
                 template_options = {'template_shape': template_shape, }

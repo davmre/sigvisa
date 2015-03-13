@@ -223,10 +223,10 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
     canvas.print_png(response)
     return response
 
-def custom_wave_plus_template_view(evid, sta, chan, band, smooth, hz, fit_params, nmid, tmshape, **kwargs):
+def custom_wave_plus_template_view(sta, st, et, chan, band, smooth, hz, fit_params, nmid, tmshape, **kwargs):
 
     cursor = Sigvisa().dbconn.cursor()
-    wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor, exclude_other_evs=True).filter(str(band) + ";env;smooth_%d;hz_%d" % (smooth, hz))
+    wave = fetch_waveform(str(sta), str(chan), float(st), float(et), cursor=cursor).filter(str(band) + ";env;smooth_%d;hz_%d" % (smooth, hz))
     cursor.close()
 
     sg = setup_sigvisa_graph(evid=evid, tmshape=tmshape, wave=wave, fit_params=fit_params)
@@ -265,10 +265,9 @@ def phases_from_fit(fit):
 
 def wave_from_fit(fit):
     cursor = Sigvisa().dbconn.cursor()
-    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor, exclude_other_evs=True).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
+    wave = fetch_waveform(str(fit.sta), str(fit.chan), float(fit.stime), float(fit.etime), cursor=cursor).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
     cursor.close()
     return wave
-
 
 
 @cache_page(60 * 60)
@@ -406,7 +405,8 @@ def custom_template_view(request, fitid):
 
     tmshape = tmshape_from_fit(fit)
 
-    return custom_wave_plus_template_view(sta=fit.sta, evid=fit.evid, chan=fit.chan, band=fit.band,
+    return custom_wave_plus_template_view(sta=fit.sta, st=fit.stime, et=fit.etime,
+                                          chan=fit.chan, band=fit.band,
                                           smooth=fit.smooth, hz=fit.hz,
                                    nmid=fit.nmid.nmid, fit_params=fit_params, tmshape=tmshape,
                                    logscale=logscale, smoothing=smoothing,

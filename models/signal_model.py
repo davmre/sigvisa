@@ -385,8 +385,8 @@ class ObservedSignalNode(Node):
         if phase in self.wavelet_param_models:
             evdict = self._ev_params[eid]
             # TODO: this will actually have to change a lot since we'll want to share covariance matrices
-            prior_means = [gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]]
-            prior_vars = [gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]]
+            prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
+            prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
         else:
             prior_means = np.zeros((n_basis,))
             prior_vars = np.ones((n_basis,)) * target_coef_var
@@ -581,8 +581,6 @@ signal_diff(i) =value(i) - pred_signal(i);
             return lp
 
     def deriv_log_p(self, parent_key=None, lp0=None, eps=1e-4):
-
-
         parent_values = self._parent_values()
         lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
         parent_values[parent_key] += eps
@@ -593,10 +591,16 @@ signal_diff(i) =value(i) - pred_signal(i);
             return 0.0
         if not is_tmpl:
             raise Exception("don't know how to take signal probability derivatives wrt non-template parameters!")
+        cache = self.cached_logp
+        self.cached_logp = None
+        old_tssm = self.tssm
         self._tmpl_params[(eid, phase)][p] += eps
+        self.tssm = self.transient_ssm()
         deriv = ( self.log_p() - lp0 ) / eps
         parent_values[parent_key] -= eps
         self._tmpl_params[(eid, phase)][p] -= eps
+        self.tssm = old_tssm
+        self.cached_logp = cache
         return deriv
 
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):

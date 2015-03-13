@@ -44,7 +44,8 @@ class NoiseModel(TimeSeriesDist):
         if len(models) > 1:  # we're confused which model to load
             print "multiple noise models", models
             print "from query", sql_query
-            raise AssertionError("len(models) <= 1")
+            #raise AssertionError("len(models) <= 1")
+
 
         if len(models) == 0:
             model = None

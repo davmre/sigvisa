@@ -8,7 +8,7 @@ from sigvisa.database.signal_data import read_fitting_run_iterations
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, get_param_model_id, ModelNotFoundError
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.source.event import get_event
-from sigvisa.signals.io import load_event_station_chan, load_segments
+from sigvisa.signals.io import load_event_station_chan, load_segments, fetch_waveform
 
 def load_sg_from_db_fit(fitid, load_wiggles=True):
 
@@ -18,7 +18,9 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     cursor.execute(fit_sql_query)
     fit = cursor.fetchone()
     ev = get_event(evid=fit[1])
-    wave = load_event_station_chan(fit[1], fit[2], fit[3], cursor=cursor, exclude_other_evs=True).filter('%s;env;smooth_%d;hz_%.2f' % (fit[4], fit[6], fit[5]))
+
+    wave = fetch_waveform(fit[2], fit[3], fit[7], fit[8]).filter('%s;env;smooth_%d;hz_%.2f' % (fit[4], fit[6], fit[5]))
+    #wave = load_event_station_chan(fit[1], fit[2], fit[3], cursor=cursor, exclude_other_evs=True).filter('%s;env;smooth_%d;hz_%.2f' % (fit[4], fit[6], fit[5]))
     nm_type = fit[9]
     nmid = int(fit[10])
     runid = fit[0]

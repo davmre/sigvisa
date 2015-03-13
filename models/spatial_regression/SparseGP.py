@@ -32,9 +32,11 @@ default_phase_params = (1.0, InvGamma(beta=1.0, alpha=1),
               wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
               dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
-default_wavelet_params = (.1, InvGamma(beta=1.0, alpha=1),
-        GPCov([1.0,], [ 40.0, 20.0], dfn_str="lld",
-              wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
+# wavelets should have almost no obs noise because that's already implicit in the kalman
+# filter posterior uncertainty
+default_wavelet_params = (.0001, InvGamma(beta=0.001, alpha=10.0),
+        GPCov([0.265,], [ 11.0, 5.0], dfn_str="lld",
+              wfn_priors=[InvGamma(beta=1.0, alpha=3.0),],
               wfn_str="se",
               dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
@@ -45,7 +47,7 @@ start_params_lld = {"coda_decay": default_other_params,
                     "tt_residual": default_other_params,
                     "amp": default_amp_params,
                     "phase": default_phase_params,
-                    "db4_0.5_99_30": default_wavelet_params,
+                    "db4_2.0_3_30": default_wavelet_params,
                     }
 
 

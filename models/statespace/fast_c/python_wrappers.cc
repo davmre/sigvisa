@@ -223,7 +223,7 @@ public:
        * or NULL if we were apssed a Python None. */
       if (t[3]==boost::python::api::object()) {
 	this->scales.push_back(NULL);
-
+	this->vec_refs.push_back(NULL);
       } else {
 
 	const pyublas::numpy_vector<double> & scale_vec = boost::python::extract<pyublas::numpy_vector<double> >(t[3]);
@@ -255,6 +255,7 @@ public:
       if (*it != NULL) Py_DECREF(*it);
     }
     for (it = vec_refs.begin(); it < vec_refs.end(); ++it) {
+      if (*it == NULL) continue;
       Py_DECREF(*it);
     }
   };

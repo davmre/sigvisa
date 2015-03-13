@@ -155,17 +155,19 @@ class Gaussian(Distribution):
         return "Gaussian(mean=%f, std=%f)" % (self.mean, self.std)
 
 class TruncatedGaussian(Distribution):
-    def __init__(self, mean, std, a=-np.inf, b=np.inf):
+    def __init__(self, mean, std, a=-np.inf, b=np.inf, eps=1e-2):
         self.mean = mean
         self.std = std
         self.a=a
         self.b=b
+        self.eps = eps
 
         self.Z = .5 * (erf((self.b-mean)/(std*np.sqrt(2))) -  erf((self.a-mean)/(std*np.sqrt(2))))
         self.logZ = np.log(self.Z)
 
     def log_p(self, x,  **kwargs):
-        if x < self.a or x > self.b:
+        eps = self.eps
+        if x <= self.a-eps or x >= self.b +eps:
             return -np.inf
 
         mu = self.mean
@@ -173,7 +175,48 @@ class TruncatedGaussian(Distribution):
         lp = -.5 * np.log(2*np.pi*sigma*sigma) - .5 * (x - mu)**2 / sigma**2 - self.logZ
         if np.isnan(lp):
             lp = np.float("-inf")
+
+        if x < self.a:
+
+            d = ( (self.a-x)/eps ) ** (1/1024.0)
+            penalty =  d / (1 - d )
+            return lp - penalty
+        elif x > self.b:
+            # at x=b, we have 0
+            # at x=b+eps
+            d = ( (x-self.b)/eps ) ** (1/1024.0)
+            penalty =  d / (1 - d )
+            return lp - penalty
+
+
         return lp
+
+    def deriv_log_p(self, x, **kwargs):
+        eps=self.eps
+        if x <= self.a-eps or x >= self.b +eps:
+            return 0.0
+
+        d_lp = -(x - self.mean)/(self.std**2)
+
+        if x < self.a:
+            d = ( (self.a-x)/eps ) ** (1/1024.0)
+            dd_dx = (1/1024.0) * ( (self.a-x)/eps )**(1/1024.0 - 1.0) * -1.0/eps
+            penalty =  d / (1 - d )
+            dpenalty_dd = 1.0/(1-d)**2
+            dpenalty_dx = dpenalty_dd * dd_dx
+            return d_lp - dpenalty_dx
+        elif x > self.b:
+            # at x=b, we have 0
+            # at x=b+eps
+            d = ( (x-self.b)/eps ) ** (1/1024.0)
+            dd_dx = (1/1024.0) * ( (x-self.b)/eps )**(1/1024.0 - 1.0) * 1.0/eps
+            penalty =  d / (1 - d )
+            dpenalty_dd = 1.0/(1-d)**2
+            dpenalty_dx = dpenalty_dd * dd_dx
+            return d_lp - dpenalty_dx
+
+
+        return d_lp
 
     def predict(self, **kwargs):
         return self.mean

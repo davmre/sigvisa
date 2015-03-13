@@ -60,6 +60,8 @@ def model_params(model, model_type):
 def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, optimize=True, **kwargs):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
+        if "param_var" in kwargs:
+            del kwargs['param_var']
         kernel_str = s[1]
         basisfn_str = s[2]
         model = learn_gp(X=X, y=y, y_obs_variances=yvars, sta=sta,

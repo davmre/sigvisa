@@ -15,7 +15,7 @@ from sigvisa.source.event import get_event
 from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential
+from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
@@ -71,11 +71,11 @@ def get_param_model_id(runids, sta, phase, model_type, param,
 
 def dummyPriorModel(param):
     if "tt_residual" in param:
-        model = Gaussian(mean=0.0, std=1.0)
+        model = TruncatedGaussian(mean=0.0, std=1.0, a=-15.0, b=15.0)
     elif "amp_transfer" in param:
         model = Gaussian(mean=0.0, std=2.0)
     elif "peak_offset" in param:
-        model = Gaussian(mean=-0.5, std=1.0)
+        model = TruncatedGaussian(mean=-0.5, std=1.0, b=4.0)
     elif "decay" in param:
         model = Gaussian(mean=0.0, std=1.0)
     else:
@@ -971,19 +971,20 @@ class SigvisaGraph(DirectedGraphModel):
         """
 
         basis = self.wavelet_basis(wave['srate'])
+        n_params = len(basis[0][0])
 
         param_models = {}
         if self.wiggle_model_type != "dummy":
             for phase in self.phases:
                 param_models[phase] = []
-                for param in [self.wiggle_family + "_%d" % i for i in range(basis.shape[0])]:
-                    try:
-                        modelid = get_param_model_id(runids=self.runids, sta=wave['sta'],
-                                                     phase=phase, model_type=self.wiggle_model_type,
-                                                     param=param, template_shape=self.template_shape,
-                                                     chan=wave['chan'], band=wave['band'])
-                    except ModelNotFoundError:
-                        continue
+                for param in [self.wiggle_family + "_%d" % i for i in range(n_params)]:
+                    modelid = get_param_model_id(runids=self.runids, sta=wave['sta'],
+                                                 phase=phase, model_type=self.wiggle_model_type,
+                                                 param=param, template_shape=self.template_shape,
+                                                 chan=wave['chan'], band=wave['band'])
+                    #except ModelNotFoundError as e:
+                    #    print e
+                    #    continue
                     model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
                     param_models[phase].append(model)
 

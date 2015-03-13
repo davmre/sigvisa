@@ -3,10 +3,18 @@ import pyublas
 import numpy as np
 import time
 
-from sigvisa.models.wiggles.wavelets import construct_implicit_basis_simple, construct_basis_simple
+from sigvisa.models.wiggles.wavelets import construct_implicit_basis_simple, construct_basis_simple, construct_implicit_basis_C
 
 def cssm(N=64, run_test=True):
+
+    #starray, etarray, idarray, m, N = construct_implicit_basis_C(5.0, "db4_2.0_3_30")
+
+
+
     start_times, end_times, identities, prototypes, N = construct_implicit_basis_simple(N, "db4", "zpd")
+    starray = np.array(start_times, dtype=np.int32)
+    etarray = np.array(end_times, dtype=np.int32)
+    idarray = np.array(identities, dtype=np.int32)
 
     n1 = len(prototypes)
     n2 = np.max([len(l) for l in prototypes])
@@ -16,14 +24,13 @@ def cssm(N=64, run_test=True):
     for i, p in enumerate(prototypes):
         m[i,:len(p)] = p
 
-    n = len(start_times)
+    n = len(starray)
     cmeans = np.zeros((n,), dtype=np.float64)
     cvars = np.ones((n,), dtype=np.float64)
 
-    cvars = np.abs(np.random.randn(n))
-
     np.random.seed(0)
-    z = np.array(np.random.randn(64))
+    cvars = np.abs(np.random.randn(n))
+    z = np.array(np.random.randn(110))
 
     z[1:4] = np.nan
     z[100:110] = np.nan
@@ -37,7 +44,7 @@ def cssm(N=64, run_test=True):
         ll2 = ic.run_filter(z)
         t2 = time.time()
 
-        """
+    """
         basis = construct_basis_simple(N, "db4", "zpd")
         pyc = cs.CompactSupportSSM(basis, cmeans, cvars, obs_noise=0.01)
         ll3 = pyc.run_filter(z)
@@ -46,9 +53,6 @@ def cssm(N=64, run_test=True):
 
     pyublas.set_trace(True)
 
-    starray = np.array(start_times, dtype=np.int32)
-    etarray = np.array(end_times, dtype=np.int32)
-    idarray = np.array(identities, dtype=np.int32)
 
     t3 = time.time()
     c = CompactSupportSSM(starray, etarray,
@@ -264,7 +268,7 @@ def true_gaussian_filtering(z, m, C):
 
 if __name__ == "__main__":
     try:
-        tssm()
+        cssm()
     except KeyboardInterrupt:
         raise
     except Exception as e:

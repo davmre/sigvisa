@@ -51,7 +51,7 @@ def setup_graph(event, sta, chan, band,
                       runids = runids,
                       absorb_n_phases=absorb_n_phases)
 
-    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True).filter("%s;env" % band)
+    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True, phases=None if phases=="leb" else phases).filter("%s;env" % band)
     cursor.close()
     if smoothing > 0:
         wave = wave.filter('smooth_%d' % smoothing)
@@ -344,6 +344,9 @@ def main():
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run name")
     parser.add_option("-i", "--run_iteration", dest="run_iteration", default=None, type="int",
                       help="run iteration (default is to use the next iteration)")
+    parser.add_option("--init_run_name", dest="init_run_name", default=None, type="str", help="run name")
+    parser.add_option("--init_run_iteration", dest="init_run_iteration", default=None, type="int",
+                      help="run iteration ")
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
     parser.add_option("--template_shape", dest="template_shape", default="lin_polyexp", type="str",
@@ -388,12 +391,23 @@ def main():
     else:
         raise ValueError("Must specify event id (evid) or origin id (orid) to fit.")
 
+    init_run_name = options.run_name
+    init_iteration = options.run_iteration - 1
+    if options.init_run_name is not None:
+        init_run_name = options.init_run_name
+        init_iteration = options.init_run_iteration
+
+    if options.template_model == "hack26":
+        init_run_name = "multiphase26_linpolyexp"
+        init_iteration = 1
+        template_model = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb'}
+
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
                                 wm_family=options.wiggle_family, wm_type=options.wiggle_model,
                                 phases=phases,
                                 fit_hz=options.hz, nm_type=options.nm_type,
-                                init_run_name = options.run_name, init_iteration = options.run_iteration-1,
+                                init_run_name = init_run_name, init_iteration = init_iteration,
                                 absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth)
 
     if options.seed >= 0:

@@ -37,7 +37,7 @@ class ConflictingEvent(Exception):
     pass
 
 def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
-                            pre_s = 10, post_s=200, exclude_other_evs=False):
+                            pre_s = 10, post_s=200, exclude_other_evs=False, phases=None):
     close_cursor = False
     if cursor is None:
         cursor = Sigvisa().dbconn.cursor()
@@ -47,7 +47,13 @@ def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
         arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
         if len(arrivals) == 0:
             raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
-        arrival_times = arrivals[:, DET_TIME_COL]
+        if phases is None:
+            arrival_times = arrivals[:, DET_TIME_COL]
+        else:
+            from sigvisa.source.event import get_event
+            from sigvisa.models.ttime import tt_predict
+            ev = get_event(evid)
+            arrival_times = np.array([ev.time + tt_predict(ev, sta, phase) for phase in phases])
 
         st = np.min(arrival_times) - pre_s
         et = np.max(arrival_times) + post_s
@@ -60,6 +66,9 @@ def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
                 else:
                     print "reducing signal window by %.1fs to avoid conflict with %d arrival at %.1f" % (et-other_t+5.0, other_evid, other_t)
                     et = min(et, other_t-5.0)
+
+
+
         print st, et
         wave = fetch_waveform(sta, chan, st, et)
         wave.segment_stats['evid'] = evid

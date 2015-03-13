@@ -118,6 +118,7 @@ class MCMCLogger(object):
         if step > 0 and ((step % self.print_interval == 0) or (step < 5)):
             s = self.acceptance_string(sg, lp, step, n_accepted, n_attempted)
             print s
+
             if "acceptance_rates" not in self.log_handles:
                 self.log_handles["acceptance_rates"] = open(os.path.join(self.run_dir, 'acceptance_rates.txt'), 'a')
             self.log_handles["acceptance_rates"].write(s + "\n\n")
