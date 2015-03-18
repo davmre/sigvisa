@@ -159,6 +159,8 @@ def plot_with_fit_shapes(fname, wn, title="",
                          axes=None,
                          plot_dets="leb",
                          plot_wave=True,
+                         plot_pred=False,
+                         plot_stddev=False,
                          shape_colors=None,
                          alpha=1.0,
                          **kwargs):
@@ -205,6 +207,7 @@ def plot_with_fit_shapes(fname, wn, title="",
 
     if plot_wave:
         subplot_waveform(wave, axes, color='black', linewidth=1.5, plot_dets=plot_dets, **kwargs)
+
 
     if model_lw is not None:
 

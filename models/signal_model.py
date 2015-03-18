@@ -176,8 +176,8 @@ class ObservedSignalNode(Node):
         for i in np.arange(0, self.npts, ten_seconds):
             window_max_10s = np.max(d[i:i+ten_seconds])
             window_sum_10s = np.sum(d[i:i+ten_seconds])
-            if np.isfinite(window_sum_10s) and window_max_10s < self.nm.c:
-                raise Exception("signal max of %.3f between %d,%d is less than noise mean %.3f! Noise model is probably wrong." % (window_max_10s, i, i+ten_seconds, self.nm.c))
+            #if np.isfinite(window_sum_10s) and window_max_10s < self.nm.c:
+            #    raise Exception("signal max of %.3f between %d,%d is less than noise mean %.3f! Noise model is probably wrong." % (window_max_10s, i, i+ten_seconds, self.nm.c))
 
 
 
@@ -398,7 +398,7 @@ class ObservedSignalNode(Node):
             cssm = CompactSupportSSM(start_idxs, end_idxs, identities, basis_prototypes, prior_means, prior_vars, 0.0, 0.0)
         return cssm
 
-    def transient_ssm(self, arrivals=None, parent_values=None):
+    def transient_ssm(self, arrivals=None, parent_values=None, save_components=True):
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
@@ -417,7 +417,7 @@ class ObservedSignalNode(Node):
 
         components = [(self.noise_arssm, 0, self.npts, None)]
 
-        self.tssm_components = [(None, None, None, 0, self.npts, "noise"),]
+        tssm_components = [(None, None, None, 0, self.npts, "noise"),]
 
         # TODO: can be smarter about this, and only regenerate the TSSM when arrival_time changes.
         # Any other template param change can be implemented by just updating the scale vector in
@@ -441,16 +441,18 @@ class ObservedSignalNode(Node):
             if wssm is not None:
                 npts = min(len(env), n_steps*2)
                 components.append((wssm, start_idx, npts, env))
-                self.tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
+                tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
                 components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
-                self.tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
+                tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
             else:
                 components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
-                self.tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
+                tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
 
             components.append((None, start_idx, len(env), env))
-            self.tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
+            tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
 
+        if save_components:
+            self.tssm_components=tssm_components
         return TransientCombinedSSM(components, TSSM_NOISE_PADDING)
 
     def arrivals(self):
@@ -527,9 +529,10 @@ class ObservedSignalNode(Node):
         for child in self.children:
             child.parent_keys_changed.add((self.single_key), self)
 
-    def log_p(self, parent_values=None, **kwargs):
+    def log_p(self, parent_values=None, arrivals=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
-        if self.cached_logp is not None:
+
+        if arrivals is None and self.cached_logp is not None:
             return self.cached_logp
 
         """
@@ -547,14 +550,21 @@ class ObservedSignalNode(Node):
             print e
         """
 
+        if arrivals is None:
+            tssm = self.tssm
+        else:
+            tssm = self.transient_ssm(arrivals=arrivals, save_components=False)
+
         d = self.get_value().data
         t0 = time.time()
-        lp = self.tssm.run_filter(d)
+        lp = tssm.run_filter(d)
         t1 = time.time()
 
         #print "logp", lp, "for", self.sta, "signal npts", self.npts, "arrivals", len(self.arrivals()), "in", t1-t0, "max dimension", self.tssm.max_dimension()
 
-        self.cached_logp = lp
+        if arrivals is None:
+            self.cached_logp = lp
+
         return lp
 
     def ___log_p_old(self, parent_values=None, return_grad=False, **kwargs):

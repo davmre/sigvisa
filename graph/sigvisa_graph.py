@@ -12,7 +12,7 @@ from sigvisa import Sigvisa
 from sigvisa.database.signal_data import get_fitting_runid, ensure_dir_exists, RunNotFoundException
 
 from sigvisa.source.event import get_event
-from sigvisa.learn.train_param_common import load_modelid
+from sigvisa.learn.train_param_common import load_modelid as tpc_load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian
@@ -69,18 +69,12 @@ def get_param_model_id(runids, sta, phase, model_type, param,
 
 
 
-def dummyPriorModel(param):
-    if "tt_residual" in param:
-        model = TruncatedGaussian(mean=0.0, std=1.0, a=-15.0, b=15.0)
-    elif "amp_transfer" in param:
-        model = Gaussian(mean=0.0, std=2.0)
-    elif "peak_offset" in param:
-        model = TruncatedGaussian(mean=-0.5, std=1.0, b=4.0)
-    elif "decay" in param:
-        model = Gaussian(mean=0.0, std=1.0)
-    else:
-        model = DummyModel(default_value=initial_value)
-    return model
+dummyPriorModel = {
+"tt_residual": TruncatedGaussian(mean=0.0, std=1.0, a=-15.0, b=15.0),
+"amp_transfer": Gaussian(mean=0.0, std=2.0),
+"peak_offset": TruncatedGaussian(mean=-0.5, std=1.0, b=4.0),
+"decay": Gaussian(mean=0.0, std=1.0)
+}
 
 class SigvisaGraph(DirectedGraphModel):
 
@@ -116,7 +110,8 @@ class SigvisaGraph(DirectedGraphModel):
                  arrays_joint=False, gpmodel_build_trees=False,
                  absorb_n_phases=False, hack_param_constraint=False,
                  uatemplate_rate=1e-3,
-                 fixed_arrival_npts=None):
+                 fixed_arrival_npts=None,
+                 dummy_prior=None):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -150,6 +145,8 @@ class SigvisaGraph(DirectedGraphModel):
 
 
         self.dummy_fallback = dummy_fallback
+
+        self.dummy_prior = dummy_prior if dummy_prior is not None else dummyPriorModel
 
         self.nm_type = nm_type
         self.phases = phases
@@ -735,14 +732,24 @@ class SigvisaGraph(DirectedGraphModel):
             self._gc_topo_sorted_nodes()
         return nodes
 
+    """
+    The following definitions are just here to allow the model-loading machinery to be
+    monkeypatched if we need to (e.g. when using synthetic data).
+    """
+    def load_modelid(self, modelid, **kwargs):
+        return tpc_load_modelid(modelid, **kwargs)
+
+    def get_param_model_id(self, *args, **kwargs):
+        return get_param_model_id(*args, **kwargs)
+
     def load_node_from_modelid(self, modelid, label, **kwargs):
-        model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+        model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
         node = Node(model=model, label=label, **kwargs)
         node.modelid = modelid
         return node
 
     def load_array_node_from_modelid(self, modelid, label, **kwargs):
-        model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+        model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
         node = ArrayNode(model=model, label=label, st=self.start_time, **kwargs)
         node.modelid = modelid
         return node
@@ -761,7 +768,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         if not model_type.startswith("dummy") and modelid is None:
             try:
-                modelid = get_param_model_id(runids=self.runids, sta=site,
+                modelid = self.get_param_model_id(runids=self.runids, sta=site,
                                              phase=phase, model_type=model_type,
                                              param=param, template_shape=self.template_shape,
                                              chan=chan, band=band)
@@ -802,10 +809,10 @@ class SigvisaGraph(DirectedGraphModel):
         for sta in self.site_elements[site]:
             if not model_type.startswith("dummy") and modelid is None:
                 try:
-                    modelid = get_param_model_id(runids=self.runids, sta=sta,
-                                                 phase=phase, model_type=model_type,
-                                                 param=param, template_shape=self.template_shape,
-                                                 chan=chan, band=band)
+                    modelid = self.get_param_model_id(runids=self.runids, sta=sta,
+                                                      phase=phase, model_type=model_type,
+                                                      param=param, template_shape=self.template_shape,
+                                                      chan=chan, band=band)
                 except ModelNotFoundError:
                     if self.dummy_fallback:
                         print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
@@ -818,7 +825,7 @@ class SigvisaGraph(DirectedGraphModel):
             my_children = [wn for wn in children if wn.sta==sta]
             if model_type.startswith("dummy"):
                 if model_type=="dummyPrior":
-                    model = dummyPriorModel(param)
+                    model = self.dummy_prior[param]
                 else:
                     if "tt_residual" in label:
                         model = Gaussian(mean=0.0, std=10.0)
@@ -978,14 +985,14 @@ class SigvisaGraph(DirectedGraphModel):
             for phase in self.phases:
                 param_models[phase] = []
                 for param in [self.wiggle_family + "_%d" % i for i in range(n_params)]:
-                    modelid = get_param_model_id(runids=self.runids, sta=wave['sta'],
-                                                 phase=phase, model_type=self.wiggle_model_type,
-                                                 param=param, template_shape=self.template_shape,
-                                                 chan=wave['chan'], band=wave['band'])
+                    modelid = self.get_param_model_id(runids=self.runids, sta=wave['sta'],
+                                                      phase=phase, model_type=self.wiggle_model_type,
+                                                      param=param, template_shape=self.template_shape,
+                                                      chan=wave['chan'], band=wave['band'])
                     #except ModelNotFoundError as e:
                     #    print e
                     #    continue
-                    model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+                    model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
                     param_models[phase].append(model)
 
         wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, **kwargs)

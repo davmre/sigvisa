@@ -357,9 +357,14 @@ def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, mi
 
     # choose several random evaluation sets
     eval_pairs = []
-    for i in range(n_eval_pairs):
+    eval_pair_tries = 0
+    while len(eval_pairs) < n_eval_pairs and eval_pair_tries < 10:
         station_idxs = np.random.choice(len(have_uatemplates), size=2, replace=False)
-        eval_pairs.append([have_uatemplates[i] for i in station_idxs])
+        eval_pair_tries += 1
+        p1, p2 = [have_uatemplates[i] for i in station_idxs]
+        if p1 in stations or p2 in stations: continue
+        eval_pairs.append((p1, p2))
+
     t2 = time.time()
 
     # evaluate each proposed location by computing the tt residuals
@@ -375,7 +380,6 @@ def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, mi
         best_added_stas = None
         best_added_tmids = None
         for a1, a2 in eval_pairs:
-            if a1 in stations or a2 in stations: continue
             sta1, chan1, band1 = a1
             sta2, chan2, band2 = a2
             tmids1 = list(sg.uatemplate_ids[a1])
@@ -396,7 +400,6 @@ def overpropose_new_locations(sg, n_locations=40, n_eval_pairs=5, n_refine=5, mi
             full_stations = stations + best_added_stas
             full_tmids = tmids + best_added_tmids
             scored_proposals.append((best_residual, z, full_stations, full_tmids))
-
     t3 = time.time()
 
     # refine the highest-scoring proposals using all five stations

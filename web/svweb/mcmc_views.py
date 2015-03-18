@@ -23,6 +23,7 @@ from sigvisa.models.ttime import tt_predict
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.heatmap import event_bounds, find_center
+from sigvisa.signals.io import Waveform
 from sigvisa import *
 
 from matplotlib.figure import Figure
@@ -188,6 +189,7 @@ def mcmc_event_posterior(request, dirname):
     bottom_lat = float(request.GET.get('bottom_lat', '-90'))
     burnin = int(request.GET.get('burnin', '100'))
     plot_true = request.GET.get('plot_true', 't').lower().startswith('t')
+    plot_train = request.GET.get('plot_train', 't').lower().startswith('t')
     plot_mean = request.GET.get('plot_mean', 't').lower().startswith('t')
 
     horiz_deg = right_lon-left_lon
@@ -248,6 +250,19 @@ def mcmc_event_posterior(request, dirname):
         for ev in true_evs:
             loc = np.array(((ev.lon, ev.lat), ))
             hm.plot_locations(loc,  labels=None, marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
+
+    if plot_train:
+        try:
+            with open(os.path.join(mcmc_run_dir, 'train_events.pkl'), 'rb') as evfile:
+                train_evs = pickle.load(evfile)
+        except Exception as e:
+            print e
+            train_evs = []
+        if train_evs is None:
+            train_evs = []
+        for ev in train_evs:
+            loc = np.array(((ev.lon, ev.lat), ))
+            hm.plot_locations(loc,  labels=None, marker="*", ms=8, mfc="none", mec="#448844", mew=2, alpha=1)
 
 
 
@@ -332,11 +347,12 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
     canvas.print_png(response)
     return response
 
-
 def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
     vzoom = float(request.GET.get("vzoom", '1'))
+    pred_signal = request.GET.get("pred_signal", 'false').lower().startswith('t')
+    pred_signal_var = request.GET.get("pred_signal_var", 'false').lower().startswith('t')
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_dets = request.GET.get("plot_dets", 'leb')
     plot_template_arrivals = request.GET.get("plot_templates", 'true').lower().startswith('t')
@@ -368,12 +384,27 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
     subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=None)
-    shape_colors = None
+
+    import matplotlib.cm as cm
+    shape_colors = dict([(eid, cm.get_cmap('jet')(np.random.rand()*.5)) for (eid, phase) in wn.arrivals()])
     steps = sgs.keys()
     alpha = 1.0/len(steps)
     for step in steps:
         wn = sgs[step].all_nodes[wn_label]
-        shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha)
+
+        if pred_signal:
+            wn._parent_values()
+            pred_signal = wn.tssm.mean_obs(wn.npts)
+            w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+            subplot_waveform(w, axes, color='green', linewidth=2.5)
+            if pred_signal_var:
+                signal_var = wn.tssm.obs_var(wn.npts)
+                w1 = Waveform(pred_signal+2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+                subplot_waveform(w1, axes, color='red', linewidth=1.0)
+                w2 = Waveform(pred_signal-2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+                subplot_waveform(w2, axes, color='red', linewidth=1.0)
+        else:
+            shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha)
 
         if plot_predictions:
             predictions = []
