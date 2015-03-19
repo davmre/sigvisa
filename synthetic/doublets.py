@@ -149,6 +149,8 @@ class SampledWorld(object):
         """
         dump sampled waveforms...
         """
+        mkdir_p(wave_dir)
+
         waves = self.waves
         for i in waves.keys():
             for sta in waves[i].keys():

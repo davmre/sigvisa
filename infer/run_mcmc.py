@@ -268,64 +268,47 @@ def run_open_world_MH(sg, steps=10000,
                          sg=sg, eid=eid)
 
         for (site, elements) in sg.site_elements.items():
-
             for sta in elements:
-                assert(len(sg.station_waves[sta]) == 1)
-                wn = list(sg.station_waves[sta])[0]
+                for wn in sg.station_waves[sta]:
 
-
-                # moves to birth/death/split/merge new unassociated templates
-                for (move_name, fn) in sta_moves.items():
-                    move_prob = move_probs[move_name]
-                    run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
-                             n_accepted=n_accepted, move_times=move_times,
-                             move_prob=move_prob, cyclic=cyclic_template_moves,
-                             sg=sg, wave_node=wn)
-
-                # moves to adjust existing unass. templates
-                tg = sg.template_generator('UA')
-                for tmid in sg.uatemplate_ids[(sta, wn.chan, wn.band)]:
-                    tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
-
-                    window_lps = None
-                    if use_proxy_lp:
-                        window_lps = wn.cache_latent_signal_for_template_optimization(-tmid, "UA", force_bounds=False)
-
-                    # special template moves
-                    for (move_name, fn) in template_moves_special.iteritems():
+                    # moves to birth/death/split/merge new unassociated templates
+                    for (move_name, fn) in sta_moves.items():
+                        move_prob = move_probs[move_name]
                         run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                  n_accepted=n_accepted, move_times=move_times,
-                                 sg=sg, wave_node=wn, tmnodes=tmnodes,
-                                 std=stds[move_name] if move_name in stds else None,
-                                 window_lps = window_lps)
+                                 move_prob=move_prob, cyclic=cyclic_template_moves,
+                                 sg=sg, wave_node=wn)
 
-
-                    # also do basic wiggling-around of all template params
-                    if enable_template_moves and template_move_type in ("rw", "both"):
-
-                        proxy_lps = None
-                        if use_proxy_lp:
-                            proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
-
-                        do_template_moves(sg, wn, tmnodes, tg, stds,
-                                          n_attempted, n_accepted, move_times, step,
-                                          proxy_lps=proxy_lps)
-
-                # also adjust every event arrival at this station
-                for (eid,evnodes) in sg.evnodes.iteritems():
-
-                    nodes_by_phase = sg.get_template_nodes_byphase(eid, sta, wn.band, wn.chan)
-                    for (phase, tmnodes) in nodes_by_phase.items():
+                    for (eid, phase) in wn.arrivals():
                         tg = sg.template_generator(phase)
+                        if eid < 0:
+                            tmid = -eid
+                            tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
+                        else:
+                            tmnodes = sg.get_template_nodes(eid, sta, phase, wn.band, wn.chan)
 
+                        window_lps = None
+                        if use_proxy_lp:
+                            window_lps = wn.cache_latent_signal_for_template_optimization(eid, phase, force_bounds=False)
+
+                        # special template moves
                         for (move_name, fn) in template_moves_special.iteritems():
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                      n_accepted=n_accepted, move_times=move_times,
-                                     sg=sg, wave_node=wn, tmnodes=tmnodes)
+                                     sg=sg, wave_node=wn, tmnodes=tmnodes,
+                                     std=stds[move_name] if move_name in stds else None,
+                                     window_lps = window_lps)
 
+                        # also do basic wiggling-around of all template params
                         if enable_template_moves and template_move_type in ("rw", "both"):
+
+                            proxy_lps = None
+                            if use_proxy_lp:
+                                proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
+
                             do_template_moves(sg, wn, tmnodes, tg, stds,
-                                              n_attempted, n_accepted, move_times, step)
+                                              n_attempted, n_accepted, move_times, step,
+                                              proxy_lps=proxy_lps)
 
         for (move, fn) in global_moves.items():
 

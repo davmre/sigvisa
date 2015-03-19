@@ -25,6 +25,8 @@ EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURC
 def trace_stats(trace, true_evs):
     mean_lon, mean_lat = find_center(trace[:, 0:2])
 
+    mean_time = np.mean(trace[:,3])
+
     # hack: if location is near international date line, rotate
     # coordinates so we get a reasonable stddev calculation.  (note
     # this doesn't affect the mean calculation above since that's
@@ -55,6 +57,7 @@ def trace_stats(trace, true_evs):
     true_evs = true_evs if true_evs is not None else []
     for ev in true_evs:
         dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
+        dist += np.abs(ev.time - mean_time) * 5 # equate one second of error with 5km
         if dist < best_distance:
             best_distance = dist
             true_ev = ev

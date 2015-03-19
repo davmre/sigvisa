@@ -262,6 +262,7 @@ def unassociate_template(sg, sta, eid, phase, tmid=None, remove_event_phase=Fals
     chan = list(sg.site_chans[site])[0]
     ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
 
+    assert(len(sg.station_waves[sta]) == 1)
     wave_node = sg.station_waves[sta][0]
     atime = ev_tmvals['arrival_time']
     tmnodes = sg.create_unassociated_template(wave_node, atime, nosort=True,
@@ -301,6 +302,7 @@ def deassociation_logprob(sg, sta, eid, phase, deletion_prob=False, min_logprob=
 
     deassociation_ratio_log = unass_lp + ntemplates_ratio_log
 
+    assert(len(sg.station_waves[sta]) == 1)
     wave_node = sg.station_waves[sta][0]
     signal_lp_with_template = wave_node.log_p()
     arrivals = copy.copy(wave_node.arrivals())

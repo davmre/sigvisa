@@ -16,6 +16,7 @@ from sigvisa.learn.train_param_common import load_modelid as tpc_load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian
+from sigvisa.models.conditional import ConditionalGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
@@ -73,7 +74,8 @@ dummyPriorModel = {
 "tt_residual": TruncatedGaussian(mean=0.0, std=1.0, a=-15.0, b=15.0),
 "amp_transfer": Gaussian(mean=0.0, std=2.0),
 "peak_offset": TruncatedGaussian(mean=-0.5, std=1.0, b=4.0),
-"decay": Gaussian(mean=0.0, std=1.0)
+"coda_decay": Gaussian(mean=0.0, std=1.0),
+"peak_decay": Gaussian(mean=0.0, std=1.0)
 }
 
 class SigvisaGraph(DirectedGraphModel):
@@ -153,7 +155,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.phases_used = set()
 
-        self.runids = runids
+        self.runids = runids if runids is not None else ()
         if run_name is not None and iteration is not None:
             cursor = Sigvisa().dbconn.cursor()
             try:
@@ -168,7 +170,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_nodes = []
 
 
-        self.station_waves = dict() # (sta) -> list of ObservedSignalNodes
+        self.station_waves = defaultdict(list) # (sta) -> list of ObservedSignalNodes
         self.site_elements = dict() # site (str) -> set of elements (strs)
         self.site_bands = dict()
         self.site_chans = dict()
@@ -340,8 +342,10 @@ class SigvisaGraph(DirectedGraphModel):
 
             n = len(self.uatemplate_ids[(sta, chan, band)])
 
-        assert(len(self.station_waves[sta]) == 1)
-        wn  = self.station_waves[sta][0]
+
+        valid_len = 0
+        for wn in self.station_waves[sta]:
+            valid_len += wn.valid_len
 
         #n_template_dist = Poisson(self.uatemplate_rate * wn.valid_len)
         #poisson_lp = n_template_dist.log_p(n)
@@ -357,7 +361,7 @@ class SigvisaGraph(DirectedGraphModel):
         #      = n log RT - RT - n log T
         #      = n log R + (n log T - n log T) - RT
         #      = n log R - RT
-        lp = n * np.log(self.uatemplate_rate) - (self.uatemplate_rate * wn.valid_len)
+        lp = n * np.log(self.uatemplate_rate) - (self.uatemplate_rate * valid_len)
 
         return lp
 
@@ -380,6 +384,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
         ev_prior_lp = 0.0
+        ev_obs_lp = 0.0
         ev_tt_lp = 0.0
         ev_amp_transfer_lp = 0.0
         ev_peak_offset_lp = 0.0
@@ -405,6 +410,8 @@ class SigvisaGraph(DirectedGraphModel):
                     ev_peak_decay_lp += node.log_p()
                 elif  "peak_offset" in node.label:
                     ev_peak_offset_lp += node.log_p()
+                elif "obs" in node.label:
+                    ev_obs_lp += node.log_p()
                 else:
                     raise Exception('unexpected node %s' % node.label)
 
@@ -417,6 +424,7 @@ class SigvisaGraph(DirectedGraphModel):
         print "n_uatemplate: %.1f" % nt_lp
         print "n_event: %.1f" % ne_lp
         print "ev priors: ev %.1f" % (ev_prior_lp)
+        print "ev observations: ev %.1f" % (ev_obs_lp)
         print "tt_residual: ev %.1f" % (ev_tt_lp)
         print "ev global cost (n + priors + tt): %.1f" % (ev_prior_lp + ev_tt_lp + ne_lp,)
         print "coda_decay: ev %.1f ua %.1f total %.1f" % (ev_coda_decay_lp, ua_coda_decay_lp, ev_coda_decay_lp+ua_coda_decay_lp)
@@ -426,7 +434,7 @@ class SigvisaGraph(DirectedGraphModel):
         ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp
         ua_total = ua_coda_decay_lp + ua_peak_decay_lp + ua_peak_offset_lp + ua_coda_height_lp
         print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
-        ev_total += ev_prior_lp + ev_tt_lp + ne_lp
+        ev_total += ev_prior_lp + ev_obs_lp + ev_tt_lp + ne_lp
         ua_total += nt_lp
         print "priors+params: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total + ua_total)
         print "station noise (observed signals): %.1f" % (signal_lp)
@@ -620,7 +628,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self._topo_sort()
 
-    def add_event(self, ev, tmshapes=None, sample_templates=False, fixed=False, eid=None):
+    def add_event(self, ev, tmshapes=None, sample_templates=False, fixed=False, eid=None,
+                  observed=False, stddevs=None):
         """
 
         Add an event node to the graph and connect it to all waves
@@ -654,9 +663,31 @@ class SigvisaGraph(DirectedGraphModel):
                 tg = self.template_generator(phase)
                 self.add_event_site_phase(tg, site, phase, evnodes, sample_templates=sample_templates)
 
+        if observed != False:
+            if observed == True:
+                observed_ev = ev
+            else:
+                observed_ev = observed
+            self.observe_event(eid, observed_ev, stddevs=stddevs)
 
         self._topo_sort()
         return evnodes
+
+    def observe_event(self, eid, ev, stddevs=None):
+        if stddevs is None:
+            stddevs = {"lon": 0.2, "lat": 0.2, "depth": 20.0, "time": 3.0, "mb": 0.3}
+
+        evnodes = self.evnodes[eid]
+        obs_dict = ev.to_dict()
+        for n in set(evnodes.itervalues()):
+            for k in n.keys():
+                k_local = k.split(";")[1]
+                if k_local not in stddevs: continue
+
+                n_obs = Node(label=k+"_obs", model=ConditionalGaussian(k, stddevs[k_local]), parents=(n,), fixed=True, initial_value=obs_dict[k_local])
+                self.extended_evnodes[eid].append(n_obs)
+                self.add_node(n_obs)
+
 
     def destroy_unassociated_template(self, nodes=None, tmid=None, nosort=False):
         if tmid is not None:
@@ -893,8 +924,13 @@ class SigvisaGraph(DirectedGraphModel):
         eid = evnodes['mb'].eid
 
         child_wave_nodes = set()
+
+        ev_time = evnodes['time'].get_value()
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
+                if wave_node.st > ev_time + MAX_TRAVEL_TIME: continue
+                if wave_node.et < ev_time: continue
+
                 child_wave_nodes.add(wave_node)
 
                 # wave nodes depend directly on event location
@@ -978,10 +1014,23 @@ class SigvisaGraph(DirectedGraphModel):
         """
 
         basis = self.wavelet_basis(wave['srate'])
-        n_params = len(basis[0][0])
+
+        """
+        To ensure no confusion, don't allow wave nodes at the same station
+        within an hour of each other.
+        (in the current model, the only legitimate time to allow multiple wns from
+         the same station is when doing event relocation via waveform matching,
+         in which case the wns will potentially be many years apart).
+        """
+        for wn in self.station_waves[wave['sta']]:
+            if wave['chan']==wn.chan and wave['band']==wn.band and \
+               wave['stime'] < wn.et + MAX_TRAVEL_TIME and \
+               wave['etime'] > wn.st - MAX_TRAVEL_TIME:
+                raise Exception("adding new wave at %s,%s,%s from time %.1f-%.1f potentially conflicts with existing wave from %.1f-%.1f" % (wn.sta, wn.chan, wn.band, wave['stime'], wave['etime'], wn.st, wn.et) )
 
         param_models = {}
         if self.wiggle_model_type != "dummy":
+            n_params = len(basis[0][0])
             for phase in self.phases:
                 param_models[phase] = []
                 for param in [self.wiggle_family + "_%d" % i for i in range(n_params)]:

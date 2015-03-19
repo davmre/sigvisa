@@ -412,8 +412,12 @@ class ObservedSignalNode(Node):
         envs = [None] * n
         min_logenv = max(-7.0, np.log(self.nm.c)-2)
 
-        (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
-        n_basis = len(start_idxs)
+        if self.wavelet_basis is not None:
+            (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
+            n_basis = len(start_idxs)
+        else:
+            n_basis = 0
+            iid_std = np.zeros((0,))
 
         components = [(self.noise_arssm, 0, self.npts, None)]
 
