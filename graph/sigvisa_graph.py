@@ -19,8 +19,9 @@ from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential
 from sigvisa.models.conditional import ConditionalGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
+from sigvisa.models.joint_gp import JointGP
 from sigvisa.graph.nodes import Node
-from sigvisa.graph.dag import DirectedGraphModel
+from sigvisa.graph.dag import DirectedGraphModel, ParentConditionalNotDefined
 from sigvisa.graph.graph_utils import extract_sta_node, predict_phases_sta, create_key, get_parent_value, parse_key
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
@@ -113,7 +114,8 @@ class SigvisaGraph(DirectedGraphModel):
                  absorb_n_phases=False, hack_param_constraint=False,
                  uatemplate_rate=1e-3,
                  fixed_arrival_npts=None,
-                 dummy_prior=None):
+                 dummy_prior=None,
+                 joint_wiggle_prior=None):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -193,6 +195,16 @@ class SigvisaGraph(DirectedGraphModel):
         self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
 
         self.fixed_arrival_npts = fixed_arrival_npts
+
+        self._joint_gpmodels = defaultdict(dict)
+        self.joint_wiggle_prior=joint_wiggle_prior
+
+    def joint_gpmodel(self, sta, param):
+        if param not in self._joint_gpmodels[sta]:
+            noise_var, gpcov = self.joint_wiggle_prior
+            jgp = JointGP(param, sta, 0.0, noise_var, gpcov)
+            self._joint_gpmodels[sta][param] = jgp
+        return self._joint_gpmodels[sta][param]
 
     def ev_arriving_phases(self, eid, sta=None, site=None):
         if sta is None and site is not None:
@@ -418,8 +430,16 @@ class SigvisaGraph(DirectedGraphModel):
         signal_lp = 0.0
         for (sta_, wave_list) in self.station_waves.items():
             for wn in wave_list:
-                signal_lp += wn.log_p()
+                try:
+                    signal_lp += wn.log_p()
+                except ParentConditionalNotDefined:
+                    signal_lp += wn.upwards_message_normalizer()
 
+        jointgp_lp = 0.0
+        for sta in self._joint_gpmodels.keys():
+            for param in self._joint_gpmodels[sta].keys():
+                jgp = self._joint_gpmodels[sta][param]
+                jointgp_lp  += jgp.log_likelihood()
 
         print "n_uatemplate: %.1f" % nt_lp
         print "n_event: %.1f" % ne_lp
@@ -431,7 +451,8 @@ class SigvisaGraph(DirectedGraphModel):
         print "peak_decay: ev %.1f ua %.1f total %.1f" % (ev_peak_decay_lp, ua_peak_decay_lp, ev_peak_decay_lp+ua_peak_decay_lp)
         print "peak_offset: ev %.1f ua %.1f total %.1f" % (ev_peak_offset_lp, ua_peak_offset_lp, ev_peak_offset_lp+ua_peak_offset_lp)
         print "coda_height: ev %.1f ua %.1f total %.1f" % (ev_amp_transfer_lp, ua_coda_height_lp, ev_amp_transfer_lp+ua_coda_height_lp)
-        ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp
+        print "coef jointgp: %.1f" % jointgp_lp
+        ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp + jointgp_lp
         ua_total = ua_coda_decay_lp + ua_peak_decay_lp + ua_peak_offset_lp + ua_coda_height_lp
         print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
         ev_total += ev_prior_lp + ev_obs_lp + ev_tt_lp + ne_lp
@@ -445,6 +466,15 @@ class SigvisaGraph(DirectedGraphModel):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
         lp += self.ntemplates_log_p()
         lp += self.nevents_log_p()
+
+        for sta in self._joint_gpmodels.keys():
+            for param in self._joint_gpmodels[sta].keys():
+                jgp = self._joint_gpmodels[sta][param]
+                jgpll = jgp.log_likelihood()
+                lp += jgpll
+                if "verbose" in kwargs and kwargs["verbose"]:
+                    print "jgp %s %s: %.3f" % (sta, param, jgpll)
+
         if np.isnan(lp):
             raise Exception('current_log_p is nan')
         return lp
@@ -1029,7 +1059,14 @@ class SigvisaGraph(DirectedGraphModel):
                 raise Exception("adding new wave at %s,%s,%s from time %.1f-%.1f potentially conflicts with existing wave from %.1f-%.1f" % (wn.sta, wn.chan, wn.band, wave['stime'], wave['etime'], wn.st, wn.et) )
 
         param_models = {}
-        if self.wiggle_model_type != "dummy":
+        has_jointgp = False
+        if self.wiggle_model_type == "gp_joint":
+            n_params = len(basis[0][0])
+            params = [self.wiggle_family + "_%d" % i for i in range(n_params)]
+            for phase in self.phases:
+                param_models[phase] = [self.joint_gpmodel(wave['sta'], param) for param in params]
+            has_jointgp = True
+        elif self.wiggle_model_type != "dummy":
             n_params = len(basis[0][0])
             for phase in self.phases:
                 param_models[phase] = []
@@ -1044,7 +1081,7 @@ class SigvisaGraph(DirectedGraphModel):
                     model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
                     param_models[phase].append(model)
 
-        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, **kwargs)
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, **kwargs)
 
         s = Sigvisa()
         sta = wave['sta']

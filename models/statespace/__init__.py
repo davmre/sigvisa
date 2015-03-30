@@ -371,6 +371,7 @@ class StateSpaceModel(object):
                 check_C_mat("xk_post_obs", k, xk, state_size)
 
                 P = np.dot(d[:state_size]*U[:state_size,:state_size], U[:state_size,:state_size].T)
+                assert(np.min(np.linalg.eig(P)[0]) >= 0)
                 check_C_mat("P_obs", k, P, state_size, lang="naive")
                 check_C_mat("x_obs", k, xk, state_size, lang="naive")
 
@@ -425,7 +426,6 @@ class StateSpaceModel(object):
             if np.isnan(v).any():
                 raise Exception("v is %s" % v)
 
-
             check_C_mat("U_obs_old", k, U, state_size)
             check_C_mat("d_obs_old", k, d, state_size)
             check_C_mat("f", k, f, state_size)
@@ -447,14 +447,19 @@ class StateSpaceModel(object):
                 incr = v[j]*f[j]
                 assert(incr >= 0)
                 alpha += incr
-                # print "   alpha", j, alpha
+                print "   alpha %d %f" % (j, alpha)
                 assert(alpha >= 0)
                 if alpha > 1e-20:
-                    d[j] *= old_alpha/alpha
+                    print "d = %f * %f = %f" % (d[j], old_alpha/alpha, d[j]*old_alpha/alpha)
+                    d[j] = d[j] * (old_alpha/alpha)
+
+                    # old_alpha / (old_alpha+ incr)
+                    # = 1.0 / (1+incr/old_alpha)
+
                 else:
                     alpha = 1e-20
                 u_tmp[:] = U[:state_size,j]
-                U[:state_size,j] = U[:state_size,j] - f[j]/old_alpha * K
+                U[:state_size,j] = U[:state_size,j] - K/old_alpha*f[j]
                 K += v[j]*u_tmp
 
             check_C_mat("U_obs", k, U, state_size)
@@ -631,6 +636,9 @@ class StateSpaceModel(object):
 
         self.apply_observation_matrix(Pk.T, k, KkT)
 
+        if k==1:
+            import pdb; pdb.set_trace()
+
         xk[:state_size] += KkT[:state_size] * yk / Sk
         Pk[:state_size, :state_size] -= np.outer(KkT[:state_size], KkT[:state_size]/Sk)
 
@@ -639,6 +647,27 @@ class StateSpaceModel(object):
         assert(not np.isnan(step_ell))
 
         print "step %d pred %.4f alpha %.4f z %.4f y %.4f ell %f" % (k, pred_z, Sk, zk, yk, step_ell)
+
+        return step_ell
+
+    def kalman_observe_information(self, k, zk, xk, Pk, KkT, state_size):
+        pred_z = self.apply_observation_matrix(xk, k) + self.observation_bias(k)
+        yk = zk - pred_z
+
+        H = self.obs_vector_debug(k)
+        Sk = np.dot(H, np.dot(Pk, H.T))
+        Sk += self.observation_noise(k)
+        step_ell= scipy.stats.norm.logpdf(yk, loc=0, scale=np.sqrt(Sk))
+
+
+        invPk = np.linalg.inv(Pk[:state_size,:state_size])
+        HtRinvH = np.outer(H[:state_size], H[:state_size]) / self.observation_noise(k)
+        Pk_new_internal = invPk + HtRinvH
+        Pk_new = np.linalg.inv(Pk_new_internal)
+        xk_new = np.dot(invPk, xk[:state_size]) + H[:state_size] * yk/self.observation_noise(k)
+        xk_new = np.dot(Pk_new, xk_new)
+        xk[:state_size] = xk_new
+        Pk[:state_size,:state_size] = Pk_new
 
         return step_ell
 
@@ -652,11 +681,11 @@ class StateSpaceModel(object):
         xk[:state_size] = self.prior_mean()
         print "k=0, state size", state_size
 
-        Pk = np.empty((self.max_dimension, self.max_dimension))
+        Pk = np.zeros((self.max_dimension, self.max_dimension))
         Pk[:state_size, :state_size] = np.diag(self.prior_vars())
 
         tmp = np.empty((self.max_dimension,))
-        ell = self.kalman_observe(0, z[0], xk, Pk, tmp, state_size)
+        ell = self.kalman_observe_information(0, z[0], xk, Pk, tmp, state_size)
         if not likelihood_only:
             x = np.empty((self.max_dimension, N))
             x[:len(xk), 0:1] = xk
@@ -673,6 +702,7 @@ class StateSpaceModel(object):
             if not np.isnan(z[k]):
                 ell += self.kalman_observe(k, z[k], xk, Pk, tmp, state_size)
 
+            assert(np.min(np.linalg.eig(Pk)[0]) >= 0)
             np.savetxt("matrices/P_obs_naive_%d.txt" % k, Pk)
             np.savetxt("matrices/x_obs_naive_%d.txt" % k, xk)
 

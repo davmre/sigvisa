@@ -102,6 +102,7 @@ def final_mcmc_state(ev_dir):
 
 def mcmc_run_detail(request, dirname):
     s = Sigvisa()
+    burnin = int(request.GET.get('burnin', '-1'))
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
@@ -135,9 +136,11 @@ def mcmc_run_detail(request, dirname):
     else:
         true_ev_strs = []
 
+    if burnin < 0:
+        burnin = 100 if max_step > 150 else 10
     for eid in eids:
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
-        trace, _, _ = load_trace(ev_trace_file, burnin=100 if max_step > 150 else 10)
+        trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
 
         llon, rlon, blat, tlat = event_bounds(trace)
 
@@ -178,6 +181,7 @@ def rundir_eids(mcmc_run_dir):
             eids.append(eid)
     return eids
 
+@cache_page(60 * 60 * 60)
 def mcmc_event_posterior(request, dirname):
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
@@ -263,6 +267,18 @@ def mcmc_event_posterior(request, dirname):
         for ev in train_evs:
             loc = np.array(((ev.lon, ev.lat), ))
             hm.plot_locations(loc,  labels=None, marker="*", ms=8, mfc="none", mec="#448844", mew=2, alpha=1)
+
+        try:
+            with open(os.path.join(mcmc_run_dir, 'obs_events.pkl'), 'rb') as evfile:
+                obs_evs = pickle.load(evfile)
+        except Exception as e:
+            print e
+            obs_evs = []
+        if obs_evs is None:
+            obs_evs = []
+        for ev in obs_evs:
+            loc = np.array(((ev.lon, ev.lat), ))
+            hm.plot_locations(loc,  labels=None, marker="*", ms=8, mfc="none", mec="#887722", mew=2, alpha=1)
 
 
 

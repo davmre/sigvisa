@@ -80,6 +80,10 @@ def get_relevant_nodes(node_list, exclude_nodes=None):
 
     return node_list, relevant_nodes
 
+
+class ParentConditionalNotDefined(Exception):
+    pass
+
 class DirectedGraphModel(DAG):
 
     """
@@ -108,7 +112,12 @@ class DirectedGraphModel(DAG):
         logp = 0
         for node in self.topo_sorted_nodes():
             if node.deterministic(): continue
-            lp = node.log_p()
+
+            try:
+                lp = node.log_p()
+            except ParentConditionalNotDefined:
+                lp = node.upwards_message_normalizer()
+
             if verbose:
                 print "node %s has logp %.1f" % (node.label, lp)
             logp += lp
@@ -157,7 +166,8 @@ class DirectedGraphModel(DAG):
         #self.set_all(values=v, node_list=node_list)
         return c * ll
 
-    def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, proxy_lps=None, c=1):
+    def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, proxy_lps=None, c=1,
+                           wn_conditional=None):
         # same as joint_logprob, but we specify values only for a
         # specific set of keys.
         # here, node_list contains one entry for each key (so will
@@ -172,6 +182,12 @@ class DirectedGraphModel(DAG):
             ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
         else:
             ll = np.sum([node.log_p() for node in relevant_nodes])
+
+        # special case for nodes with undirected edges so the usual parent-conditional log_p is not defined.
+        # This is specifically for event relocation with a joint GP model of wavelet coefs across events,
+        # which makes the wave_node distributions mutually dependent.
+        if wn_conditional is not None:
+            ll += np.sum([n.conditional_log_p() for n in wn_conditional])
 
         return c * ll
 

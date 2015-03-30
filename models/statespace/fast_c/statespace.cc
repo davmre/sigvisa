@@ -55,7 +55,8 @@ void udu(matrix<double> &M_mat, matrix<double> &U_mat, vector<double> &d_vec, un
     U[i*n+i] = 1;
   }
 
-  for (unsigned j=state_size-1; j >= 1; --j) {
+  // note j cannot be unsigned, to handle state_size=0
+  for (int j=state_size-1; j >= 1; --j) {
     d[j] = M[j*n+j];
     double alpha = 0.0;
     double beta = 0.0;
@@ -324,6 +325,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     if (alpha > 1e-20) {
        d(0) = d_old(0) * r/alpha;
     } else {
+      printf("step %d correcting initial alpha from %f to 1e-20\n", k, alpha);
       d(0) = d_old(0);
       alpha = 1e-20;
     }
@@ -334,16 +336,18 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     for (unsigned j=1; j < state_size; ++j) {
       double old_alpha = alpha;
       alpha += v(j)*f(j);
-      // printf("   alpha C %d: %f\n", j, alpha);
+      printf("   alpha C %d: %f\n", j, alpha);
       if (alpha > 1e-20) {
-         d(j) = d_old(j) * old_alpha/alpha;
+	d(j) = d_old(j) * (old_alpha/alpha);
+	printf("d = %f * %f = %f\n" , d_old(j), old_alpha/alpha, d(j));
       } else {
+	printf("step %d correcting alpha from %f to 1e-20\n", k, alpha);
 	d(j) = d_old(j);
 	alpha = 1e-20;
       }
 
       for (unsigned i=0; i < state_size; ++i) {
-	U(i, j) = U_old(i,j) - f(j)/old_alpha*K(i);
+	U(i, j) = U_old(i,j) - (K(i)/old_alpha)*f(j);
         K(i) += v(j) * U_old(i,j);
       }
 
@@ -665,7 +669,7 @@ void prior_sample(StateSpaceModel &ssm, vector<double> & result) {
 
     result(k) = ssm.apply_observation_matrix(&(cache.xk(0)), k);
     result(k) += ssm.observation_bias(k);
-
+    result(k) += randn(rd) * sqrt(ssm.observation_noise(k));
 
   }
 }

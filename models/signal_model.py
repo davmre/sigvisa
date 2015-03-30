@@ -22,6 +22,7 @@ from sigvisa.models.noise.noise_model import NoiseModel
 #from sigvisa.models.statespace.compact_support import CompactSupportSSM
 from sigvisa.ssms_c import TransientCombinedSSM, ARSSM, CompactSupportSSM
 
+from sigvisa.graph.dag import ParentConditionalNotDefined
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import get_parent_value, create_key
 from sigvisa.plotting.plot import subplot_waveform
@@ -82,7 +83,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, **kwargs):
+    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -129,11 +130,15 @@ class ObservedSignalNode(Node):
 
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)
         self.tssm = TransientCombinedSSM([(self.noise_arssm, 0, self.npts, None),], TSSM_NOISE_PADDING)
+        self.tssm_components =  [(None, None, None, 0, self.npts, "noise"),]
 
         self.wavelet_basis = wavelet_basis
         self.wavelet_param_models = wavelet_param_models
 
         self.cached_logp = None
+        self._coef_message_cache = None
+        self.has_jointgp = has_jointgp
+        self.conditional_coef_distribution = False
 
     def __str__(self):
         try:
@@ -152,6 +157,7 @@ class ObservedSignalNode(Node):
             d[m] = np.nan
         v = ma.masked_array(d, m)
         self.cached_logp = None
+        self._coef_message_cache = None
         super(ObservedSignalNode, self).set_value(value=v, key=self.single_key)
 
     def get_wave(self):
@@ -182,7 +188,6 @@ class ObservedSignalNode(Node):
 
 
     def set_noise_model(self, arm, nmid=None):
-        import pdb; pdb.set_trace()
         self.nm.params = arm.params
         self.nm.c = arm.c
         self.nm.sf = arm.sf
@@ -367,11 +372,90 @@ class ObservedSignalNode(Node):
         if len(new_arrivals) > 0 or len(removed_arrivals) > 0 or len(parent_keys_changed) > 0:
             self.tssm = self.transient_ssm(arrivals=self._arrivals, parent_values=pv)
             self.cached_logp = None
+            self._coef_message_cache = None
 
         del parent_keys_removed
         del parent_keys_changed
         del parent_nodes_added
         return pv
+
+    def pass_jointgp_messages(self, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        if not self.has_jointgp:
+            return
+
+        if self._coef_message_cache is None:
+
+            prior_means, prior_vars = [], []
+            for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
+                if component_type != "wavelet": continue
+                ssm = self.arrival_ssms[(eid, phase)]
+                #pm, pv = ssm.get_coef_prior()
+
+                pm, pv = zip(*[jgp.prior() for jgp in self.wavelet_param_models[phase]])
+                pm, pv = np.asarray(pm, dtype=np.float64), np.asarray(pv, dtype=np.float64)
+                ssm.set_coef_prior(pm, pv)
+                #print "passing with vars", pv
+                prior_means.append(pm)
+                prior_vars.append(pv)
+
+            prior_means, prior_vars = np.concatenate(prior_means), np.concatenate(prior_vars)
+
+            d = self.get_value().data
+            posterior_means, posterior_vars = zip(*self.tssm.all_filtered_cssm_coef_marginals(d))
+            posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
+
+            self._coef_message_cache = prior_means, prior_vars, posterior_means, posterior_vars
+
+        prior_means, prior_vars, posterior_means, posterior_vars = self._coef_message_cache
+        coef_idx = 0
+        for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
+            if component_type!="wavelet":continue
+            evdict = self._ev_params[eid]
+            n_coefs = len(self.wavelet_param_models[phase])
+            for j in range(n_coefs):
+                self.wavelet_param_models[phase][j].message_from_arrival(eid, evdict, prior_means[coef_idx+j], prior_vars[coef_idx+j], posterior_means[coef_idx+j], posterior_vars[coef_idx+j])
+            coef_idx += n_coefs
+
+
+    def upwards_message_normalizer(self, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        assert(self.has_jointgp)
+
+        if self._coef_message_cache is None:
+            self.pass_jointgp_messages(parent_values=parent_values)
+
+        if self.cached_logp is None:
+
+            d = self.get_value().data
+            prior_means, prior_vars, posterior_means, posterior_vars = self._coef_message_cache
+            coef_idx = 0
+            for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
+                if component_type != "wavelet": continue
+                ssm = self.arrival_ssms[(eid, phase)]
+
+                n_coefs = len(self.wavelet_param_models[phase])
+                #print "normalizing with vars", prior_vars[coef_idx:coef_idx+n_coefs]
+                ssm.set_coef_prior(prior_means[coef_idx:coef_idx+n_coefs], prior_vars[coef_idx:coef_idx+n_coefs])
+                coef_idx += n_coefs
+
+            Z = self.tssm.run_filter(d)
+
+            c1 = np.sum(np.log(prior_vars-posterior_vars))
+            c2 = -np.sum(np.log(prior_vars))
+            c3 = np.sum(-.5*(posterior_means - prior_means)**2/(prior_vars-posterior_vars))
+            c4 = np.sum(-.5*np.log(2*np.pi * (prior_vars-posterior_vars)))
+            correction = c1+c2+c3+c4
+
+
+            correction2 = np.sum([ np.log(prior_vars[i]-posterior_vars[i]) - np.log(prior_vars[i]) +\
+                                   scipy.stats.norm(loc=posterior_means[i], \
+                                                    scale=np.sqrt(prior_vars[i]-posterior_vars[i])).logpdf(prior_means[i]) \
+                                   for i in range(len(prior_vars)) ])
+            print self.sta, Z, correction, correction2, Z-correction
+            self.cached_logp = Z - correction
+
+        return self.cached_logp
 
 
     def arrival_ssm(self, eid, phase):
@@ -382,14 +466,8 @@ class ObservedSignalNode(Node):
         (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
         n_basis = len(start_idxs)
 
-        if phase in self.wavelet_param_models:
-            evdict = self._ev_params[eid]
-            # TODO: this will actually have to change a lot since we'll want to share covariance matrices
-            prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
-            prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
-        else:
-            prior_means = np.zeros((n_basis,))
-            prior_vars = np.ones((n_basis,)) * target_coef_var
+        prior_means = np.zeros((n_basis,))
+        prior_vars = np.ones((n_basis,)) * target_coef_var
 
         if (eid, phase) in self.arrival_ssms:
             cssm = self.arrival_ssms[(eid, phase)]
@@ -533,31 +611,46 @@ class ObservedSignalNode(Node):
         for child in self.children:
             child.parent_keys_changed.add((self.single_key), self)
 
-    def log_p(self, parent_values=None, arrivals=None, **kwargs):
+
+    def conditional_log_p(self, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
+        assert(self.has_jointgp)
+
+        for (eid, phase) in self.arrivals():
+            evdict = self._ev_params[eid]
+            cssm = self.arrival_ssms[(eid, phase)]
+            prior_means, prior_vars = zip(*[jgp.posterior(eid) for jgp in self.wavelet_param_models[phase]])
+            prior_means = np.asarray(prior_means)
+            prior_vars = np.asarray(prior_vars)
+            #print "setting", pm, pv
+            cssm.set_coef_prior(prior_means, prior_vars)
+
+        d = self.get_value().data
+        lp = self.tssm.run_filter(d)
+        return lp
+
+
+    def log_p(self, parent_values=None, arrivals=None,  **kwargs):
+        parent_values = parent_values if parent_values else self._parent_values()
+
+        if self.has_jointgp:
+            raise ParentConditionalNotDefined()
 
         if arrivals is None and self.cached_logp is not None:
             return self.cached_logp
-
-        """
-        try:
-            #print self.tssm_components[1][-3], self.tssm_components[1][-2]
-            #
-            if self.tssm_components[1][-3] == -424:
-                print "dumping", self.tssm_components
-                print "parent_values", parent_values
-                with open("wn_debug.pkl", 'wb') as f:
-                    pickle.dump(self, f)
-            import sys
-            sys.stdout.flush()
-        except Exception as e:
-            print e
-        """
 
         if arrivals is None:
             tssm = self.tssm
         else:
             tssm = self.transient_ssm(arrivals=arrivals, save_components=False)
+
+        for (eid, phase) in self.arrivals():
+            evdict = self._ev_params[eid]
+            cssm = self.arrival_ssms[(eid, phase)]
+            prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
+            prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
+            cssm.set_coef_prior(prior_means, prior_vars)
+
 
         d = self.get_value().data
         t0 = time.time()
@@ -866,6 +959,7 @@ signal_diff(i) =value(i) - pred_signal(i);
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)
         self.cached_logp = None
+        self._coef_message_cache = None
         # don't try to regenerate other SSMs here because we might still be in
         # the middle of the unpickling process and can't depend on other program
         # components (e.g. self.graph.template_generator()) being functional.

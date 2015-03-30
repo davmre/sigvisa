@@ -187,7 +187,8 @@ public:
        * of SSMs, otherwise, push an SSM pointer. */
       if (t[0]==boost::python::api::object()) {
 	this->ssms.push_back(NULL);
-	this->pyssms.push_back(NULL);
+
+	this->pyssms.push_back(boost::python::object());
       } else {
 
 	boost::python::extract<PyARSSM> get_ar(t[0]);
@@ -206,9 +207,8 @@ public:
 	// pointer to its internal C++ SSM will remain valid as long
 	// as this TSSM is active (even if the SSM otherwise goes out
 	// of scope in the Python code).
-	PyObject * pyssm = boost::python::object(t[0]).ptr();
-	Py_INCREF(pyssm);
-	this->pyssms.push_back(pyssm);
+	//boost::python::object pyssm(t[0]);
+	this->pyssms.push_back(t[0]);
 
 	this->ssms.push_back(ssm);
       }
@@ -223,7 +223,7 @@ public:
        * or NULL if we were apssed a Python None. */
       if (t[3]==boost::python::api::object()) {
 	this->scales.push_back(NULL);
-	this->vec_refs.push_back(NULL);
+	//this->vec_refs.push_back(boost::python::object());
       } else {
 
 	const pyublas::numpy_vector<double> & scale_vec = boost::python::extract<pyublas::numpy_vector<double> >(t[3]);
@@ -237,9 +237,9 @@ public:
 
 	// Keep a reference to the Numpy array object to prevent it
 	// getting garbage collected.
-	PyObject * pyvec = boost::python::object(t[3]).ptr();
-	Py_INCREF(pyvec);
-	this->vec_refs.push_back(pyvec);
+	//PyObject * pyvec = boost::python::object(t[3]).ptr();
+	//Py_INCREF(pyvec);
+	this->vec_refs.push_back(t[3]);
       }
     }
 
@@ -250,14 +250,14 @@ public:
 
     // release all the Python references we've been holding
     // (SSM objects and scale vectors)
-    std::vector<PyObject *>::iterator it;
-    for (it = pyssms.begin(); it < pyssms.end(); ++it) {
-      if (*it != NULL) Py_DECREF(*it);
-    }
-    for (it = vec_refs.begin(); it < vec_refs.end(); ++it) {
-      if (*it == NULL) continue;
-      Py_DECREF(*it);
-    }
+    // std::vector<PyObject *>::iterator it;
+    //for (it = pyssms.begin(); it < pyssms.end(); ++it) {
+    //  if (*it != NULL) Py_DECREF(*it);
+    //}
+    //for (it = vec_refs.begin(); it < vec_refs.end(); ++it) {
+    //if (*it == NULL) continue;
+    //  Py_DECREF(*it);
+    //}
   };
 
   double run_filter(pyublas::numpy_vector<double> z) {
@@ -346,7 +346,6 @@ public:
   }
 
   /*
-
   int get_n_coefs(int i) {
     if (!this->ssms[i]) {
       printf("ERROR: trying to set means for a NULL ssm.\n");
@@ -362,18 +361,18 @@ public:
   */
 
   boost::python::object get_component(int i) {
-    if (this->pyssms[i]) {
-      boost::python::handle<> h(this->pyssms[i]);
+    return this->pyssms[i];
+    /*if (this->pyssms[i]) {
+      boost::python::handle<> h(boost::python::borrowed(this->pyssms[i]));
       return boost::python::object(h);
     } else {
       return boost::python::object();
-    }
+      }*/
   }
 
   int max_dimension() {
     return this->ssm->max_dimension;
   }
-
 
   TransientCombinedSSM *ssm;
 private:
@@ -381,8 +380,8 @@ private:
 
   // keep references to the Python objects whose internal states we depend on,
   // to prevent the Python garbage collector from killing them.
-  std::vector<PyObject *> pyssms;
-  std::vector<PyObject *> vec_refs;
+  std::vector<boost::python::object> pyssms;
+  std::vector<boost::python::object> vec_refs;
 
   std::vector<StateSpaceModel *> ssms;
   vector<int> start_idxs;

@@ -16,7 +16,6 @@ using google::dense_hash_map;
 //  return m(i,j);
 //}
 
-
 #ifdef DEBUG
 #define D(x) x
 #else

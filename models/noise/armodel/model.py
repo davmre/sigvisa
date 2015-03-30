@@ -667,7 +667,7 @@ class ARModel(NoiseModel):
 
     def prec_matrix(alpha, n):
         # compute the precision matrix for the multivariate Gaussian
-        # on n timesteps induced by this AR process.
+        # on n timesteps induced by an AR(alpha) process.
         # should be equal to inv(cov_matrix), up to numeric precision,
         # but is much faster to compute (and sparse!).
 

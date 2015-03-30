@@ -77,16 +77,18 @@ ssm_sources = ['statespace.cc', 'python_wrappers.cc', 'transient_combined.cc',
                'autoregression.cc']
 from imp import find_module
 f, pathname, descr = find_module("pyublas")
-CTREE_INCLUDE_DIRS = [os.path.join(pathname, "include"),]
-
+ssm_include_dirs = [os.path.join(pathname, "include"),]
+#ssm_include_dirs = ["/home/dmoore/python/sigvisa/scratch/boost_1_57_0",] + ssm_include_dirs
+ssm_libs = sys_libraries
+#ssm_libs = ["/home/dmoore/python/sigvisa/scratch/boost_1_57_0/stage/lib",] + ssm_libs
 statespacemodel_module = Extension('ssms_c',
                            sources=([os.path.join("models", "statespace", "fast_c", f)
                                      for f in ssm_sources]
                                     ),
-                           include_dirs=CTREE_INCLUDE_DIRS,
-                           library_dirs = sys_libraries,
+                           include_dirs=ssm_include_dirs,
+                           library_dirs = ssm_libs,
                            libraries=['boost_python'],
-                           runtime_library_dirs = sys_libraries,
+                           runtime_library_dirs = ssm_libs,
                            extra_compile_args = extra_compile_args,
                            extra_link_args = extra_link_args,
                            )

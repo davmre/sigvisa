@@ -236,6 +236,7 @@ def construct_implicit_basis(srate, wavelet_str=None, wavelet_family='db4', wave
         end_times = np.asarray(end_times)[p]
         identities = np.asarray(identities)[p]
 
+
     return start_times, end_times, identities, prototypes, N
 
 # construct an implicit representation of a wavelet basis, returned
@@ -261,6 +262,15 @@ def construct_implicit_basis_C(*args, **kwargs):
     return implicit_basis_to_C_format(basis)
 
 def construct_padded_implicit_basis(*args, **kwargs):
+
+    if 'wavelet_str' in kwargs and kwargs['wavelet_str']=="dbug_single":
+        starray = np.array((0,), dtype=np.int32)
+        etarray = np.array((300,), dtype=np.int32)
+        idarray = np.array((0,), dtype=np.int32)
+        m = np.matrix(np.ones((1, 300)))
+        N = 300
+        return (starray, etarray, idarray, m, N), np.ones((600,))*0.1, 0.9
+
     basis = construct_implicit_basis(*args, **kwargs)
     basis_C = implicit_basis_to_C_format(basis)
     N = basis[-1]

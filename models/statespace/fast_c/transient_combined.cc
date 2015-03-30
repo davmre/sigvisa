@@ -205,6 +205,10 @@ int TransientCombinedSSM::apply_transition_matrix(const double * x, int k, doubl
     exit(-1);
   }
 
+  if (asidx < 0) {
+    return 0;
+  }
+
   if (!same_active_set) {
     matrix_row < matrix<int> > old_ssm_indices = row(this->active_sets, asidx_prev);
     for (matrix_row < matrix<int> >::const_iterator it = old_ssm_indices.begin();
@@ -268,6 +272,11 @@ int TransientCombinedSSM::apply_transition_matrix( const matrix<double> &X,
   int asidx = this->active_set_idx(k);
   bool same_active_set = (asidx==asidx_prev);
 
+  if (asidx < 0) {
+    return 0;
+  }
+
+
   if (!same_active_set) {
     matrix_row < matrix<int> > old_ssm_indices = row(this->active_sets, asidx_prev);
     for (matrix_row < matrix<int> >::const_iterator it = old_ssm_indices.begin();
@@ -314,6 +323,8 @@ int TransientCombinedSSM::apply_transition_matrix( const matrix<double> &X,
 void TransientCombinedSSM::transition_bias(int k, double *result) {
 
   int asidx = this->active_set_idx(k);
+  if (asidx < 0) return;
+
   matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -335,6 +346,7 @@ void TransientCombinedSSM::transition_bias(int k, double *result) {
 
 void TransientCombinedSSM::transition_noise_diag(int k, double *result) {
   int asidx = this->active_set_idx(k);
+  if (asidx < 0) return;
   matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -358,6 +370,7 @@ double TransientCombinedSSM::apply_observation_matrix(const double *x, int k) {
   double r = 0;
 
   int asidx = this->active_set_idx(k);
+  if (asidx < 0) return 0.0;
   matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -384,6 +397,8 @@ void TransientCombinedSSM::apply_observation_matrix(const matrix<double> &X,
   }
 
   int asidx = this->active_set_idx(k);
+  if (asidx < 0) return;
+
   matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -416,6 +431,7 @@ double TransientCombinedSSM::observation_bias(int k) {
   double bias = 0;
 
   int asidx = this->active_set_idx(k);
+  if (asidx < 0) return 0.0;
   matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -466,7 +482,9 @@ int TransientCombinedSSM::prior_mean(double *result) {
    */
 
   double * r1 = result;
-  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(0));
+  int asidx = this->active_set_idx(0);
+  if (asidx < 0) return 0;
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
 
@@ -504,7 +522,9 @@ int TransientCombinedSSM::prior_mean(double *result) {
 
 int TransientCombinedSSM::prior_vars(double *result) {
   double * r1 = result;
-  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(0));
+  int asidx = this->active_set_idx(0);
+  if (asidx < 0) return 0;
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
 
@@ -564,7 +584,9 @@ void TransientCombinedSSM::extract_all_coefs(FilterState &cache, int k,
   /*
     Assumes cache has a valid, current P matrix.
    */
-  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(k));
+  int asidx = this->active_set_idx(k);
+  if (asidx < 0) return;
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   unsigned int state_offset = 0;
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -585,7 +607,9 @@ void TransientCombinedSSM::extract_all_coefs(FilterState &cache, int k,
 
 void TransientCombinedSSM::extract_component_means(double *xk, int k,
 						   std::vector<vector<double> > & means) {
-  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(k));
+  int asidx = this->active_set_idx(k);
+  if (asidx < 0) return;
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   unsigned int state_offset = 0;
   for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
        it < ssm_indices.end() && *it >= 0; ++it) {
@@ -601,7 +625,9 @@ void TransientCombinedSSM::extract_component_means(double *xk, int k,
 
 void TransientCombinedSSM::extract_component_vars(matrix<double> &P, matrix<double> &P_tmp, int k,
 						  std::vector<vector<double> > & vars) {
-  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, this->active_set_idx(k));
+  int asidx = this->active_set_idx(k);
+  if (asidx < 0) return;
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
   unsigned int state_offset = 0;
 
   double * v_tmp = (double *) malloc(sizeof(double) * P.size1());

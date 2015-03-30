@@ -124,13 +124,15 @@ class CompactSupportSSM(StateSpaceModel):
         return False
 
     def prior_mean(self):
-        p = np.zeros((self.max_dimension,))
+        ss = len(self.active_basis[0])
+        p = np.zeros((ss,))
         for j, idx in enumerate(self.active_basis[0]):
             p[j] = self.coef_means[idx]
         return p
 
     def prior_vars(self):
-        p = np.zeros((self.max_dimension,))
+        ss = len(self.active_basis[0])
+        p = np.zeros((ss,))
         for j, idx in enumerate(self.active_basis[0]):
             p[j] = self.coef_vars[idx]
         return p
