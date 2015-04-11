@@ -325,7 +325,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     if (alpha > 1e-20) {
        d(0) = d_old(0) * r/alpha;
     } else {
-      printf("step %d correcting initial alpha from %f to 1e-20\n", k, alpha);
+      //printf("step %d correcting initial alpha from %f to 1e-20\n", k, alpha);
       d(0) = d_old(0);
       alpha = 1e-20;
     }
@@ -336,12 +336,12 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
     for (unsigned j=1; j < state_size; ++j) {
       double old_alpha = alpha;
       alpha += v(j)*f(j);
-      printf("   alpha C %d: %f\n", j, alpha);
+      //printf("   alpha C %d: %f\n", j, alpha);
       if (alpha > 1e-20) {
 	d(j) = d_old(j) * (old_alpha/alpha);
-	printf("d = %f * %f = %f\n" , d_old(j), old_alpha/alpha, d(j));
+	//printf("d = %f * %f = %f\n" , d_old(j), old_alpha/alpha, d(j));
       } else {
-	printf("step %d correcting alpha from %f to 1e-20\n", k, alpha);
+	//printf("step %d correcting alpha from %f to 1e-20\n", k, alpha);
 	d(j) = d_old(j);
 	alpha = 1e-20;
       }
@@ -578,7 +578,7 @@ void step_obs_likelihoods(StateSpaceModel &ssm, const vector<double> &z,
     ells(k) = kalman_observe_sqrt(ssm, cache, k, z(k));
     preds(k) = cache.pred_z;
     alphas(k) = cache.alpha;
-    printf("got ell %f at step %d\n", ells(k), k);
+    //printf("got ell %f at step %d\n", ells(k), k);
   }
 }
 
@@ -633,18 +633,21 @@ void obs_var(StateSpaceModel &ssm, vector<double> & result) {
   }
 }
 
-void prior_sample(StateSpaceModel &ssm, vector<double> & result) {
+void prior_sample(StateSpaceModel &ssm, vector<double> & result, unsigned long seed) {
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::mt19937 gen(seed);
   std::normal_distribution<double> randn(0,1);
+  /* auto randn = std::bind(std::normal_distribution<double>(0,1),
+			     ); */
+
+  printf("seed with %lu, first randn %f\n", seed, randn(gen));
 
   // sample initial state from the prior
   vector<double> &d = cache.pred_d;
   for (unsigned i=0; i < ssm.max_dimension; ++i) {
-    cache.xk(i) += randn(rd) * sqrt(d(i));
+    cache.xk(i) += randn(gen) * sqrt(d(i));
   }
 
 
@@ -664,12 +667,12 @@ void prior_sample(StateSpaceModel &ssm, vector<double> & result) {
 
     ssm.transition_noise_diag(k, &(tmp(0)));
     for (unsigned i=0; i < state_size; ++i) {
-      cache.xk(i) += randn(rd) * sqrt(tmp(i));
+      cache.xk(i) += randn(gen) * sqrt(tmp(i));
     }
 
     result(k) = ssm.apply_observation_matrix(&(cache.xk(0)), k);
     result(k) += ssm.observation_bias(k);
-    result(k) += randn(rd) * sqrt(ssm.observation_noise(k));
+    result(k) += randn(gen) * sqrt(ssm.observation_noise(k));
 
   }
 }
@@ -677,7 +680,7 @@ void prior_sample(StateSpaceModel &ssm, vector<double> & result) {
 
 
 
-void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
+double all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 				      const vector<double> &z,
 				      std::vector<vector<double> > & cmeans,
 				      std::vector<vector<double> > & cvars) {
@@ -696,11 +699,12 @@ void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
     compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
     ssm.extract_all_coefs(cache, k, cmeans, cvars);
   }
+  return ell;
 }
 
-void tssm_component_means(TransientCombinedSSM &ssm,
-			  const vector<double> &z,
-			  std::vector<vector<double> > & means) {
+double tssm_component_means(TransientCombinedSSM &ssm,
+			    const vector<double> &z,
+			    std::vector<vector<double> > & means) {
 
   if (means.size() != ssm.n_ssms) {
     printf("component_means() needs exactly one vector for each component SSM\n");
@@ -719,10 +723,11 @@ void tssm_component_means(TransientCombinedSSM &ssm,
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
     ssm.extract_component_means(&(cache.xk(0)), k, means);
   }
+  return ell;
 }
 
 
-void tssm_component_vars(TransientCombinedSSM &ssm,
+double tssm_component_vars(TransientCombinedSSM &ssm,
 			  const vector<double> &z,
 			  std::vector<vector<double> > & vars) {
 
@@ -746,4 +751,5 @@ void tssm_component_vars(TransientCombinedSSM &ssm,
     compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
     ssm.extract_component_vars(cache.P, cache.tmp_U2, k, vars);
   }
+  return ell;
 }

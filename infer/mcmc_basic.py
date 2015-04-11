@@ -1,6 +1,7 @@
 import numpy as np
 from functools32 import lru_cache
 from sigvisa.infer.autoregressive_mcmc import gibbs_sweep
+from sigvisa.models.signal_model import ObservedSignalNode
 
 @lru_cache(maxsize=2048)
 def get_node_scales(node_list):
@@ -37,39 +38,52 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
 
 
 
-    jointgp = sg.wiggle_model_type=="gp_joint"
     wns = []
-    if jointgp:
+    if sg.jointgp:
         for n in relevant_nodes:
             if isinstance(n, ObservedSignalNode):
                 wns.append(n)
-        for n in wns:
-            relevant_nodes.remove(n)
+        #for n in wns:
+        #    relevant_nodes.remove(n)
 
-
-    lp_old = sg.joint_logprob_keys(relevant_nodes, proxy_lps=proxy_lps, wn_conditional=wns) # assume oldvalues are still set
+    lp_old = sg.joint_logprob_keys(relevant_nodes, proxy_lps=proxy_lps) # assume oldvalues are still set
 
     #lp_old_true = sg.current_log_p()
 
-    lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list,
-                                   relevant_nodes=relevant_nodes, proxy_lps=proxy_lps, wn_conditional=wns)
+    if sg.jointgp:
+        for wn in wns:
+            for wpms in wn.wavelet_param_models.values():
+                lp_old += np.sum([jgp.log_likelihood() for jgp in wpms])
 
-    #lp_new_true = sg.current_log_p()
+    lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list,
+                                   relevant_nodes=relevant_nodes, proxy_lps=proxy_lps)
+
+    if sg.jointgp:
+        for wn in wns:
+            wn.pass_jointgp_messages()
+            for wpms in wn.wavelet_param_models.values():
+                lp_new += np.sum([jgp.log_likelihood() for jgp in wpms])
+
+    #if np.isfinite(lp_new):
+    #    lp_new_true = sg.current_log_p()
+    #else:
+    #    lp_new_true = lp_new
 
     #if np.isfinite(lp_new):
     #    assert(np.abs( (lp_new - lp_old) - (lp_new_true - lp_old_true) ) < 1e-8 )
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
-        if jointgp:
-            for n in relevant_nodes:
-                if isinstance(n, ObservedSignalNode):
-                    n.pass_jointgp_messages()
 
         return True
     else:
         for (key, val, n) in zip(keys, oldvalues, node_list):
             n.set_value(key=key, value=val)
+
+        if sg.jointgp:
+            for wn in wns:
+                wn.pass_jointgp_messages()
+
         return False
 
 def mh_accept_util(lp_old, lp_new, log_qforward=0, log_qbackward=0, jacobian_determinant=0, accept_move=None, revert_move=None):

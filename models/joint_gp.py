@@ -1,5 +1,6 @@
 import numpy as np
 from sigvisa.treegp.gp import GP
+import scipy.stats
 
 """
 Model a specific parameter at a specific station, jointly over many events.
@@ -34,18 +35,37 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
     Unnormalized product of two Gaussian densities: precisions add, means are averaged weighted by precision.
     """
 
+    assert(v1 >= 0 or v2 >= 0)
+    # without loss of generality, ensure v1 is nonnegative
+    if v1 < 0 and v2 > 0:
+        v2, v1 = v1, v2
+        m2, m1 = m1, m2
+
     if v1 == 0:
-        v1 = 1e-30
+        v1 = 1e-10
     if v2 == 0:
-        v2 = 1e-30
+        v2 = 1e-10
 
     prec = (1.0/v1 + 1.0/v2)
-    v = 1.0/prec if ( np.abs(prec) > 1e-30) else 1e30
+    v = 1.0/prec if ( np.abs(prec) > 1e-10) else 1e10
     m = v * (m1/v1 + m2/v2)
 
-    #assert(not (np.isnan(m) or np.isnan(v)))
+    if v2 > 0:
+        normalizer_var = v1 + v2
+        normalizer = -.5*np.log(2*np.pi*normalizer_var) - .5*(m2-m1)**2/normalizer_var
+    else:
+        normalizer_var = -(v1+v2)
+        if normalizer_var < 1e-20:
+            # if v1 and v2 are essentially the same, we're passing a uniform message.
+            # So we need to just cancel out the (very negative) logp of the message distribution evaluated at its mean,
+            # so that the final logp at the mean is 0.
+            normalizer = .5*np.log(2*np.pi*v)
+        else:
+            # http://davmre.github.io/statistics/2015/03/27/gaussian_quotient/
+            normalizer = .5*np.log(2*np.pi*normalizer_var) + .5*(m2-m1)**2/normalizer_var
+            normalizer += np.log( -v2/normalizer_var  )
 
-    return m, v
+    return m, v, normalizer
 
 class JointGP(object):
 
@@ -60,11 +80,12 @@ class JointGP(object):
         self.evs = dict()
         self._input_cache=False
         self._cached_gp = dict()
+        self.Z = 0
 
     def message_from_arrival(self, eid, evdict, prior_mean, prior_var, posterior_mean, posterior_var):
         self.evs[eid] = evdict
-        m, v = multiply_scalar_gaussian(posterior_mean, posterior_var, prior_mean, -prior_var)
-        self.messages[eid] = m,v
+        m, v, Z = multiply_scalar_gaussian(posterior_mean, posterior_var, prior_mean, -prior_var)
+        self.messages[eid] = m,v, Z
         self._clear_cache()
         return m,v
 
@@ -97,7 +118,7 @@ class JointGP(object):
         gp = self.train_gp()
         if gp is None:
             return 0.0
-        return gp.log_likelihood()
+        return gp.log_likelihood() + self.Z
 
     def train_gp(self, holdout_eid=None):
         if holdout_eid not in self._cached_gp:
@@ -112,7 +133,10 @@ class JointGP(object):
                 y = y[mask]
                 yvar = yvar[mask]
                 compute_ll = False
+            else:
+                self.Z = np.sum([self.messages[eid][2] for eid in eids])
             gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=self.cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=self.noise_var)
+
             self._cached_gp[holdout_eid] = gp
         return self._cached_gp[holdout_eid]
 
@@ -120,6 +144,7 @@ class JointGP(object):
     def _clear_cache(self):
         self._input_cache=False
         self._cached_gp = dict()
+        self.Z = 0
 
     def _gp_inputs(self):
         if not self._input_cache:

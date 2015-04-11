@@ -65,7 +65,10 @@ class LinearBasisModel(ParamModel):
             inner_chol = scipy.linalg.cholesky(inner, lower=True)
             inner_chol_inv = scipy.linalg.inv(inner_chol)
             inner_inv = np.dot(inner_chol_inv.T, inner_chol_inv)
-            outer = np.dot(N_diag, np.dot(H, np.dot(inner_inv, np.dot(H.T, N_diag))))
+
+            # outer = np.dot(N_diag, np.dot(H, np.dot(inner_inv, np.dot(H.T, N_diag))))
+            outer_tmp = np.dot(H, np.dot(inner_inv, np.dot(H.T, N_diag)))
+            outer = (self.noise_prec_diag*outer_tmp.T).T
             marginal_precision = N_diag - outer
 
             # also using the matrix determinant lemma:

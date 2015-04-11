@@ -233,15 +233,15 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k);
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z);
 void mean_obs(StateSpaceModel &ssm, vector<double> & result);
 void obs_var(StateSpaceModel &ssm, vector<double> & result);
-void prior_sample(StateSpaceModel &ssm, vector<double> & result);
+void prior_sample(StateSpaceModel &ssm, vector<double> & result, unsigned long seed);
 
-void tssm_component_means(TransientCombinedSSM &tssm,
+double tssm_component_means(TransientCombinedSSM &tssm,
 			  const vector<double> &z,
 			  std::vector<vector<double> > & means);
-void tssm_component_vars(TransientCombinedSSM &tssm,
+double tssm_component_vars(TransientCombinedSSM &tssm,
 			  const vector<double> &z,
 			  std::vector<vector<double> > & vars);
-void all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
+double all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 				      const vector<double> &z,
 				      std::vector<vector<double> > & cmeans,
 				      std::vector<vector<double> > & cvars);

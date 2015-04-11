@@ -265,7 +265,16 @@ def phases_from_fit(fit):
 
 def wave_from_fit(fit):
     cursor = Sigvisa().dbconn.cursor()
-    wave = fetch_waveform(str(fit.sta), str(fit.chan), float(fit.stime), float(fit.etime), cursor=cursor).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
+
+    try:
+        stime = float(fit.stime)
+        etime = float(fit.etime)
+    except:
+        import calendar
+        stime = calendar.timegm(fit.stime.timetuple())
+        etime = calendar.timegm(fit.etime.timetuple())
+
+    wave = fetch_waveform(str(fit.sta), str(fit.chan), stime, etime, cursor=cursor).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
     cursor.close()
     return wave
 

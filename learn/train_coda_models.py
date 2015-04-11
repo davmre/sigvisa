@@ -55,6 +55,8 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
             ymeans, yvars = zip(*[fit.messages[target] for fit in fits])
         else:
             ymeans, yvars = zip(*[(fit.messages[target][0][param_num], fit.messages[target][1][param_num]) for fit in fits])
+        yvars = np.abs(yvars)
+
     except AttributeError:
         # no messages available?
         print "warning: could not load messages for target", target
@@ -64,6 +66,18 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
 
     ymeans = np.asarray(ymeans, dtype=np.float64)
     yvars = np.asarray(yvars, dtype=np.float64)
+
+
+    # remove outliers
+    bounds = {'tt_residual': (-20, 20),
+              'amp_transfer': (-6, 10),
+              'coda_decay': (-6, 4),
+              'peak_decay': (-6, 4),
+              'peak_offset': (-5, 5) }
+    tbounds = bounds[target]
+    valid = (ymeans <= tbounds[1])*(ymeans >= tbounds[0])
+    X = X[valid, :]
+    ymeans, yvars, evids = ymeans[valid], yvars[valid], evids[valid]
 
     return X, ymeans, yvars, evids
 

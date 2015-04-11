@@ -45,9 +45,9 @@ def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
 
     try:
         arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
-        if len(arrivals) == 0:
-            raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
         if phases is None:
+            if len(arrivals) == 0:
+                raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
             arrival_times = arrivals[:, DET_TIME_COL]
         else:
             from sigvisa.source.event import get_event

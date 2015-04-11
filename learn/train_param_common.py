@@ -150,6 +150,7 @@ def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal
             ll_deriv += noise_prior.deriv_log_p(var)
         return (-ll, -ll_deriv)
 
+
     if optimize_marginal_ll:
         x0 = 10
         result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,

@@ -384,6 +384,11 @@ class ObservedSignalNode(Node):
         if not self.has_jointgp:
             return
 
+        try:
+            self.tssm
+        except AttributeError:
+            self.tssm = self.transient_ssm(parent_values=parent_values)
+
         if self._coef_message_cache is None:
 
             prior_means, prior_vars = [], []
@@ -399,15 +404,20 @@ class ObservedSignalNode(Node):
                 prior_means.append(pm)
                 prior_vars.append(pv)
 
-            prior_means, prior_vars = np.concatenate(prior_means), np.concatenate(prior_vars)
-
             d = self.get_value().data
-            posterior_means, posterior_vars = zip(*self.tssm.all_filtered_cssm_coef_marginals(d))
-            posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
+            if len(prior_means) > 0:
+                prior_means, prior_vars = np.concatenate(prior_means), np.concatenate(prior_vars)
+                ell, marginals = self.tssm.all_filtered_cssm_coef_marginals(d)
+                posterior_means, posterior_vars = zip(*marginals)
+                posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
+            else:
+                ell = self.tssm.run_filter(d)
+                prior_means, prior_vars = np.array(()), np.array(()),
+                posterior_means, posterior_vars = np.array(()), np.array(())
 
-            self._coef_message_cache = prior_means, prior_vars, posterior_means, posterior_vars
+            self._coef_message_cache = ell, prior_means, prior_vars, posterior_means, posterior_vars
 
-        prior_means, prior_vars, posterior_means, posterior_vars = self._coef_message_cache
+        ell, prior_means, prior_vars, posterior_means, posterior_vars = self._coef_message_cache
         coef_idx = 0
         for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
             if component_type!="wavelet":continue
@@ -428,32 +438,24 @@ class ObservedSignalNode(Node):
         if self.cached_logp is None:
 
             d = self.get_value().data
-            prior_means, prior_vars, posterior_means, posterior_vars = self._coef_message_cache
-            coef_idx = 0
-            for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
-                if component_type != "wavelet": continue
-                ssm = self.arrival_ssms[(eid, phase)]
+            ell, prior_means, prior_vars, posterior_means, posterior_vars = self._coef_message_cache
 
-                n_coefs = len(self.wavelet_param_models[phase])
-                #print "normalizing with vars", prior_vars[coef_idx:coef_idx+n_coefs]
-                ssm.set_coef_prior(prior_means[coef_idx:coef_idx+n_coefs], prior_vars[coef_idx:coef_idx+n_coefs])
-                coef_idx += n_coefs
-
-            Z = self.tssm.run_filter(d)
-
-            c1 = np.sum(np.log(prior_vars-posterior_vars))
-            c2 = -np.sum(np.log(prior_vars))
-            c3 = np.sum(-.5*(posterior_means - prior_means)**2/(prior_vars-posterior_vars))
-            c4 = np.sum(-.5*np.log(2*np.pi * (prior_vars-posterior_vars)))
-            correction = c1+c2+c3+c4
+            #var_diff = prior_vars - posterior_vars
+            #var_diff = np.where(var_diff > 1e-30, var_diff, np.ones(var_diff.shape)*1e-30)
+            #c1 = np.sum(np.log(var_diff))
+            #c2 = -np.sum(np.log(prior_vars))
+            #c3 = np.sum(-.5*(posterior_means - prior_means)**2/(var_diff))
+            #c4 = np.sum(-.5*np.log(2*np.pi * (var_diff)))
+            #correction = c1+c2+c3+c4
 
 
-            correction2 = np.sum([ np.log(prior_vars[i]-posterior_vars[i]) - np.log(prior_vars[i]) +\
-                                   scipy.stats.norm(loc=posterior_means[i], \
-                                                    scale=np.sqrt(prior_vars[i]-posterior_vars[i])).logpdf(prior_means[i]) \
-                                   for i in range(len(prior_vars)) ])
-            print self.sta, Z, correction, correction2, Z-correction
-            self.cached_logp = Z - correction
+            #correction2 = np.sum([ np.log(prior_vars[i]-posterior_vars[i]) - np.log(prior_vars[i]) +\
+            #                       scipy.stats.norm(loc=posterior_means[i], \
+            #                                        scale=np.sqrt(prior_vars[i]-posterior_vars[i])).logpdf(prior_means[i]) \
+            #                       for i in range(len(prior_vars)) ])
+            #print self.sta, ell, correction, ell-correction
+            #assert(np.isfinite(correction))
+            self.cached_logp = ell # - correction
 
         return self.cached_logp
 
@@ -495,7 +497,7 @@ class ObservedSignalNode(Node):
             n_basis = len(start_idxs)
         else:
             n_basis = 0
-            iid_std = np.zeros((0,))
+            iid_std = np.ones((int(120*self.srate),))*0.5
 
         components = [(self.noise_arssm, 0, self.npts, None)]
 
@@ -598,15 +600,19 @@ class ObservedSignalNode(Node):
 
     def parent_predict(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
-        v = self.tssm.mean_obs(self.npts)
+        self._set_cssm_priors_from_model(parent_values=parent_values)
 
+        v = self.tssm.mean_obs(self.npts)
         self.set_value(ma.masked_array(data=v, mask=self.get_value().mask, copy=False))
         for child in self.children:
             child.parent_keys_changed.add(self.single_key)
 
     def parent_sample(self, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
-        v = self.tssm.prior_sample(self.npts)
+        self._set_cssm_priors_from_model(parent_values=parent_values)
+        seed = np.random.randint(2**31)
+        print "sampling w/ seed", seed
+        v = self.tssm.prior_sample(self.npts, seed)
         self.set_value(ma.masked_array(data=v, mask=self.get_value().mask, copy=False))
         for child in self.children:
             child.parent_keys_changed.add((self.single_key), self)
@@ -629,6 +635,18 @@ class ObservedSignalNode(Node):
         lp = self.tssm.run_filter(d)
         return lp
 
+    def _set_cssm_priors_from_model(self, arrivals=None, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        arrivals = arrivals if arrivals is not None else self.arrivals()
+
+        for (eid, phase) in arrivals:
+            evdict = self._ev_params[eid]
+            cssm = self.arrival_ssms[(eid, phase)]
+            if cssm is None: continue
+            prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
+            prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
+            cssm.set_coef_prior(prior_means, prior_vars)
+
 
     def log_p(self, parent_values=None, arrivals=None,  **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
@@ -644,13 +662,7 @@ class ObservedSignalNode(Node):
         else:
             tssm = self.transient_ssm(arrivals=arrivals, save_components=False)
 
-        for (eid, phase) in self.arrivals():
-            evdict = self._ev_params[eid]
-            cssm = self.arrival_ssms[(eid, phase)]
-            prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
-            prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
-            cssm.set_coef_prior(prior_means, prior_vars)
-
+        self._set_cssm_priors_from_model(arrivals=arrivals, parent_values=parent_values)
 
         d = self.get_value().data
         t0 = time.time()

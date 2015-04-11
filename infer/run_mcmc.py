@@ -249,10 +249,17 @@ def run_open_world_MH(sg, steps=10000,
     else:
         run_dir = "/dev/null"
 
+    try:
+        np.random.seed(sg.seed)
+    except AttributeError:
+        pass
+
     for step in range(start_step, steps):
 
         # moves to adjust existing events
         for (eid, evnodes) in sg.evnodes.items():
+
+            if sg.event_is_fixed(eid): continue
 
             for (move_name, (node_name, params)) in event_moves_gaussian.items():
                 run_move(move_name=move_name, fn=ev_move_full, step=step,
@@ -316,6 +323,13 @@ def run_open_world_MH(sg, steps=10000,
                      n_accepted=n_accepted, move_times=move_times,
                      move_prob=ev_openworld_move_probability,
                      sg=sg, log_to_run_dir=run_dir)
+
+
+        seed = np.random.randint(2**31)
+        sg.seed = seed
+        np.random.seed(sg.seed)
+
+
 
         if logger != False:
             logger.log(sg, step, n_accepted, n_attempted, move_times)

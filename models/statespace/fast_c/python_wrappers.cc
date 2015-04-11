@@ -71,9 +71,9 @@ public:
     return pyublas::numpy_vector<double>(result);
   };
 
-  pyublas::numpy_vector<double> py_prior_sample(int n) {
+  pyublas::numpy_vector<double> py_prior_sample(int n, unsigned long seed) {
     vector<double> result(n);
-    prior_sample(*(this->ssm), result);
+    prior_sample(*(this->ssm), result, seed);
     return pyublas::numpy_vector<double>(result);
   };
 
@@ -141,9 +141,9 @@ public:
     return pyublas::numpy_vector<double>(result);
   };
 
-  pyublas::numpy_vector<double> py_prior_sample(int n) {
+  pyublas::numpy_vector<double> py_prior_sample(int n, unsigned long seed) {
     vector<double> result(n);
-    prior_sample(*(this->ssm), result);
+    prior_sample(*(this->ssm), result, seed);
     return pyublas::numpy_vector<double>(result);
   };
 
@@ -279,9 +279,9 @@ public:
     return pyublas::numpy_vector<double>(result);
   };
 
-  pyublas::numpy_vector<double> py_prior_sample(int n) {
+  pyublas::numpy_vector<double> py_prior_sample(int n, unsigned long seed) {
     vector<double> result(n);
-    prior_sample(*(this->ssm), result);
+    prior_sample(*(this->ssm), result, seed);
     return pyublas::numpy_vector<double>(result);
   };
 
@@ -330,10 +330,10 @@ public:
     return l;
   }
 
-  boost::python::list marginals(const pyublas::numpy_vector<double> z) {
+  boost::python::tuple marginals(const pyublas::numpy_vector<double> z) {
     std::vector<vector<double> > cmeans;
     std::vector<vector<double> > cvars;
-    all_filtered_cssm_coef_marginals(*(this->ssm), z, cmeans, cvars);
+    double ell = all_filtered_cssm_coef_marginals(*(this->ssm), z, cmeans, cvars);
 
     boost::python::list l;
     for(unsigned i=0; i < cmeans.size(); ++i) {
@@ -341,7 +341,7 @@ public:
       pyublas::numpy_vector<double> v(cvars[i]);
       l.append( boost::python::make_tuple(m,v) );
     }
-    return l;
+    return boost::python::make_tuple(ell, l);
 
   }
 

@@ -43,11 +43,18 @@ from sigvisa.graph.load_sigvisa_graph import load_sg_from_db_fit
 def wiggle_detail_view(request, fpid):
     fphase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
 
-    family, res, levels, len_s = parse_wavelet_basis_str(fphase.wiggle_family)
+    if fphase.wiggle_family != "iid":
+        family, res, levels, len_s = parse_wavelet_basis_str(fphase.wiggle_family)
+    else:
+        len_s = 120
 
     messages = read_messages(fphase.message_fname, fphase.fitid.runid.runid)
-    pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
-    print "posterior vars", pvars
+
+    try:
+        pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
+        print "posterior vars", pvars
+    except KeyError:
+        pmeans, pvars = np.zeros((0,)), np.ones((0,))
 
     xmin = fphase.arrival_time - 10
     xmax = fphase.arrival_time + len_s + 20

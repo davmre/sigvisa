@@ -41,7 +41,7 @@ fixed_node_cache = dict()
 relevant_node_cache = dict()
 
 
-def ev_move_relevant_nodes(node_list, fixed_nodes):
+def ev_move_relevant_nodes(node_list, fixed_nodes, separate_wns=False):
 
     # loc: children are basically all the stochastic nodes, and arrival_time
     #      we want the stochastic nodes, and arrival_time's default parent
@@ -54,7 +54,8 @@ def ev_move_relevant_nodes(node_list, fixed_nodes):
 
     direct_stochastic_children = [c for n in node_list for c in n.children if not c.deterministic()]
     inlaws = [n.parents[n.default_parent_key()] for n in fixed_nodes]
-    return set(node_list + direct_stochastic_children + inlaws)
+    relevant_nodes = set(node_list + direct_stochastic_children + inlaws)
+    return relevant_nodes
 
 """
 def set_ev(ev_node, v, fixed_vals, fixed_nodes, params, fixed_atimes=None, ignore_illegal=True):
@@ -646,7 +647,7 @@ def ev_move_full(sg, ev_node, std, params, adaptive_blocking=False, debug_probs=
         relevant_nodes = ev_move_relevant_nodes(node_list, fixed_nodes)
         relevant_node_cache[ev_node] = (node_list, relevant_nodes)
     else:
-        (node_list, relevant_nodes) = relevant_node_cache[ev_node]
+        (node_list, relevant_nodes, wns) = relevant_node_cache[ev_node]
 
     # propose a new set of param values
     gsample = np.random.normal(0, std, d)
@@ -673,11 +674,15 @@ def ev_move_full(sg, ev_node, std, params, adaptive_blocking=False, debug_probs=
     lp_old = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
     move_logprob, reverse_logprob, revert_move, jump_required, node_lps = ev_phasejump(sg, eid, new_ev, params, adaptive_blocking=adaptive_blocking)
     lp_old += node_lps.update_lp_old(sg, relevant_nodes)
-
+    if sg.jointgp:
+        lp_old += sg.joint_gp_ll()
 
     node_lps.update_relevant_nodes_for_lpnew(relevant_nodes)
     lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
     lp_new += node_lps.update_lp_new(sg, relevant_nodes)
+    if sg.jointgp:
+        lp_new += sg.joint_gp_ll()
+
 
     if debug_probs:
         lp_new_full = sg.current_log_p()

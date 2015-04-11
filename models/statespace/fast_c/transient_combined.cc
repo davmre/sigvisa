@@ -573,7 +573,6 @@ void TransientCombinedSSM::init_coef_priors(std::vector<vector<double> > & cmean
       cmeans.push_back(mean);
       cvars.push_back(var);
     }
-
   }
 }
 

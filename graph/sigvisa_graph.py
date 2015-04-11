@@ -115,7 +115,8 @@ class SigvisaGraph(DirectedGraphModel):
                  uatemplate_rate=1e-3,
                  fixed_arrival_npts=None,
                  dummy_prior=None,
-                 joint_wiggle_prior=None):
+                 joint_wiggle_prior=None,
+                 force_event_wn_matching=False):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -139,6 +140,10 @@ class SigvisaGraph(DirectedGraphModel):
 
 
         self.wiggle_model_type = wiggle_model_type
+        if self.wiggle_model_type=="gp_joint":
+            self.jointgp = True
+        else:
+            self.jointgp=False
         self.wiggle_family = wiggle_family
         self.wavelet_basis_cache = dict()
 
@@ -199,6 +204,9 @@ class SigvisaGraph(DirectedGraphModel):
         self._joint_gpmodels = defaultdict(dict)
         self.joint_wiggle_prior=joint_wiggle_prior
 
+
+        self.force_event_wn_matching = force_event_wn_matching
+
     def joint_gpmodel(self, sta, param):
         if param not in self._joint_gpmodels[sta]:
             noise_var, gpcov = self.joint_wiggle_prior
@@ -219,7 +227,7 @@ class SigvisaGraph(DirectedGraphModel):
         return self.tg[phase]
 
     def wavelet_basis(self, srate):
-        if self.wiggle_family is None or self.wiggle_family=="dummy":
+        if self.wiggle_family is None or self.wiggle_family=="dummy" or self.wiggle_family=="iid":
             return None
 
         if srate not in self.wavelet_basis_cache:
@@ -462,18 +470,25 @@ class SigvisaGraph(DirectedGraphModel):
         print "overall: %.1f" % (ev_total + ua_total + signal_lp)
         print "official: %.1f" % self.current_log_p()
 
-    def current_log_p(self, **kwargs):
-        lp = super(SigvisaGraph, self).current_log_p(**kwargs)
-        lp += self.ntemplates_log_p()
-        lp += self.nevents_log_p()
-
+    def joint_gp_ll(self, verbose=False):
+        lp = 0
         for sta in self._joint_gpmodels.keys():
             for param in self._joint_gpmodels[sta].keys():
                 jgp = self._joint_gpmodels[sta][param]
                 jgpll = jgp.log_likelihood()
                 lp += jgpll
-                if "verbose" in kwargs and kwargs["verbose"]:
+                if verbose:
                     print "jgp %s %s: %.3f" % (sta, param, jgpll)
+        return lp
+
+    def current_log_p(self, **kwargs):
+        lp = super(SigvisaGraph, self).current_log_p(**kwargs)
+        lp += self.ntemplates_log_p()
+        lp += self.nevents_log_p()
+        lp += self.joint_gp_ll()
+
+        #if lp < -1000000:
+        #import pdb; pdb.set_trace()
 
         if np.isnan(lp):
             raise Exception('current_log_p is nan')
@@ -657,6 +672,9 @@ class SigvisaGraph(DirectedGraphModel):
         del self.extended_evnodes[eid]
 
         self._topo_sort()
+
+    def event_is_fixed(self, eid):
+        return np.prod([n._fixed for n in self.evnodes[eid].values()])
 
     def add_event(self, ev, tmshapes=None, sample_templates=False, fixed=False, eid=None,
                   observed=False, stddevs=None):
@@ -961,6 +979,12 @@ class SigvisaGraph(DirectedGraphModel):
                 if wave_node.st > ev_time + MAX_TRAVEL_TIME: continue
                 if wave_node.et < ev_time: continue
 
+                if self.force_event_wn_matching:
+                    ev = self.get_event(eid)
+                    pred_time = ev.time + tt_predict(ev, sta, "P")
+                    if pred_time < wave_node.st or pred_time > wave_node.et: continue
+
+
                 child_wave_nodes.add(wave_node)
 
                 # wave nodes depend directly on event location
@@ -968,6 +992,12 @@ class SigvisaGraph(DirectedGraphModel):
                 # to use on wiggles.
                 evnodes["loc"].addChild(wave_node)
                 evnodes["mb"].addChild(wave_node)
+
+                if self.force_event_wn_matching:
+                    break
+
+        #if self.force_event_wn_matching:
+        #    assert(len(child_wave_nodes)==1)
 
         # create nodes common to all bands and channels: travel
         # time/arrival time, and amp_transfer.
@@ -1038,7 +1068,7 @@ class SigvisaGraph(DirectedGraphModel):
         return fullnodes
 
 
-    def add_wave(self, wave, fixed=True, **kwargs):
+    def add_wave(self, wave, fixed=True, disable_conflict_checking=False, **kwargs):
         """
         Add a wave node to the graph. Assume that all waves are added before all events.
         """
@@ -1053,14 +1083,15 @@ class SigvisaGraph(DirectedGraphModel):
          in which case the wns will potentially be many years apart).
         """
         for wn in self.station_waves[wave['sta']]:
-            if wave['chan']==wn.chan and wave['band']==wn.band and \
+            if not disable_conflict_checking and \
+               wave['chan']==wn.chan and wave['band']==wn.band and \
                wave['stime'] < wn.et + MAX_TRAVEL_TIME and \
                wave['etime'] > wn.st - MAX_TRAVEL_TIME:
                 raise Exception("adding new wave at %s,%s,%s from time %.1f-%.1f potentially conflicts with existing wave from %.1f-%.1f" % (wn.sta, wn.chan, wn.band, wave['stime'], wave['etime'], wn.st, wn.et) )
 
         param_models = {}
         has_jointgp = False
-        if self.wiggle_model_type == "gp_joint":
+        if self.jointgp:
             n_params = len(basis[0][0])
             params = [self.wiggle_family + "_%d" % i for i in range(n_params)]
             for phase in self.phases:

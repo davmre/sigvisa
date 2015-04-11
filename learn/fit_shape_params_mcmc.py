@@ -153,7 +153,11 @@ def compute_template_messages(sg, wn, logger):
             prior_var = n.model.variance(cond=pv)
 
             print "param", p, "prior", (prior_mean, prior_var), "posterior", (m, v)
-            gp_messages[(eid, phase)][p] = multiply_scalar_gaussian(m, v, prior_mean, -prior_var)
+            mm, mv = multiply_scalar_gaussian(m, v, prior_mean, -prior_var)
+            if mv > 0:
+                gp_messages[(eid, phase)][p] = mm, mv
+            else:
+                gp_messages[(eid, phase)][p] = mm, -mv
             gp_messages[(eid, phase)][p+"_posterior"] = m, v
 
         best_lp_idx = np.argmax(lps)
@@ -167,7 +171,7 @@ def compute_wavelet_messages(sg, wn):
     gp_posteriors = dict()
 
     wn._parent_values() # update the SSM to include current templates
-    marginals = wn.tssm.all_filtered_cssm_coef_marginals(wn.get_value().data)
+    ell, marginals = wn.tssm.all_filtered_cssm_coef_marginals(wn.get_value().data)
 
     for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(wn.tssm_components):
 

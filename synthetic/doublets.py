@@ -24,7 +24,7 @@ class SampledWorld(object):
         pass
 
 
-    def sample_region_with_doublet(self, n_evs, lons, lats, times, mbs):
+    def sample_region_with_doublet(self, n_evs, lons, lats, times, mbs, doublet_idx=1, doublet_dist=0.1):
 
         locs = []
         evs = []
@@ -39,9 +39,11 @@ class SampledWorld(object):
             evs.append(ev)
         locs = np.array(locs)
 
-        ev_doublet_base = evs[1]
+        ev_doublet_base = evs[doublet_idx]
         mb = np.random.rand() * (mbs[1]-mbs[0]) + mbs[0]
-        ev_doublet = Event(lon=ev_doublet_base.lon + np.random.rand()*0.1-0.05, lat=ev_doublet_base.lat+ np.random.rand()*0.1-0.05, time= np.random.rand() * (times[1]-times[0]) + times[0],  mb=mb, depth=0, eid=n_evs+1)
+
+
+        ev_doublet = Event(lon=ev_doublet_base.lon + (np.random.rand()-.5)*doublet_dist, lat=ev_doublet_base.lat+ (np.random.rand()-.5)*doublet_dist, time= np.random.rand() * (times[1]-times[0]) + times[0],  mb=mb, depth=0, eid=n_evs+1)
         doublet_dist = dist_km((ev_doublet_base.lon, ev_doublet_base.lat), (ev_doublet.lon, ev_doublet.lat))
 
         self.n_evs = n_evs
@@ -49,6 +51,18 @@ class SampledWorld(object):
         self.locs = locs
         self.ev_doublet = ev_doublet
         self.ev_doublet_base = ev_doublet_base
+        self.all_evs = evs  + [ev_doublet,]
+
+    def add_events(self, evs):
+        locs = []
+        for ev in evs:
+            locs.append((ev.lon, ev.lat))
+        self.locs = locs
+        self.evs = evs
+        self.all_evs = evs
+        self.n_evs = len(evs)
+        self.ev_doublet = None
+        self.ev_doublet_base = None
 
     def joint_sample_arrival_params(self, gpcov, param_means, coef_noise_var=0.01, param_noise_var=0.1):
         """
@@ -68,7 +82,8 @@ class SampledWorld(object):
         self.param_means = param_means
         self.gpcov = gpcov
 
-        X = np.array([(ev.lon, ev.lat, ev.depth, 0.0, ev.mb) for ev in evs + [ev_doublet,]], dtype=float)
+
+        X = np.array([(ev.lon, ev.lat, ev.depth, 0.0, ev.mb) for ev in self.all_evs], dtype=float)
         self.X = X
 
         np.random.seed(self.seed)
@@ -80,7 +95,7 @@ class SampledWorld(object):
             for param in param_means[sta].keys():
                 tm_params[sta][param]  = prior_sample(X, gpcov, param_noise_var) + param_means[sta][param]
 
-            true_coefs[sta] = np.zeros((n_evs+1, n_coefs))
+            true_coefs[sta] = np.zeros((len(self.all_evs), n_coefs))
             for i in range(n_coefs):
                 coefs = prior_sample(X, gpcov, coef_noise_var)
                 true_coefs[sta][:, i] = coefs
@@ -103,7 +118,7 @@ class SampledWorld(object):
         s = Sigvisa()
         waves = dict()
         np.random.seed(self.seed)
-        for i, ev in enumerate(evs + [ev_doublet]):
+        for i, ev in enumerate(self.all_evs):
             sg = SigvisaGraph(template_model_type="dummy", template_shape="lin_polyexp",
                                   wiggle_model_type="dummy", wiggle_family=wavelet_family,
                                   nm_type = "ar", phases=[phase,], runids=(), )
@@ -227,13 +242,13 @@ def load_sampled_world(wave_dir):
 
 
 
-def build_param_means(stas):
+def build_param_means(stas, tt_residual=0.0, coda_decay=-3.0, peak_decay=-3.0, peak_offset=0.0, amp_transfer=3.0):
     param_means = dict()
-    param_mean_base = {"tt_residual": 0.0,
-                       "coda_decay": -3.0,
-                       "peak_decay": -3.0,
-                       "peak_offset": 0.0,
-                       "amp_transfer": 3.0}
+    param_mean_base = {"tt_residual": tt_residual,
+                       "coda_decay": coda_decay,
+                       "peak_decay": peak_decay,
+                       "peak_offset": peak_offset,
+                       "amp_transfer": amp_transfer}
     for sta in stas:
         param_means[sta] = copy.copy(param_mean_base)
     return param_means

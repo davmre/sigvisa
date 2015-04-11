@@ -219,6 +219,13 @@ class Waveform(object):
             f = lambda x: ma.masked_array(data=scipy.signal.decimate(
                 x, rounded_ratio), mask=x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
             fstats['srate'] = new_srate
+        elif name == "forcehz":
+            new_srate = float(pieces[1])
+            ratio = self['srate'] / new_srate
+            rounded_ratio = int(np.round(ratio))
+            f = lambda x: ma.masked_array(data=scipy.signal.decimate(
+                x, rounded_ratio), mask=x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
+            fstats['srate'] = new_srate
         elif name == "env":
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
         elif name == "smooth":
@@ -257,7 +264,7 @@ class Segment(object):
 
     STANDARD_STATS = ["sta", "stime", "etime"]
 
-    filter_order = ['center', 'freq', 'env', 'smooth', 'log', 'hz']
+    filter_order = ['center', 'freq', 'env', 'smooth', 'log', 'hz', 'forcehz']
 
     def __init__(self, waveforms=[]):
         self.__chans = dict()

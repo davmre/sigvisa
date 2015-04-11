@@ -181,7 +181,7 @@ def rundir_eids(mcmc_run_dir):
             eids.append(eid)
     return eids
 
-@cache_page(60 * 60 * 60)
+#@cache_page(60 * 60 * 60)
 def mcmc_event_posterior(request, dirname):
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
@@ -195,6 +195,8 @@ def mcmc_event_posterior(request, dirname):
     plot_true = request.GET.get('plot_true', 't').lower().startswith('t')
     plot_train = request.GET.get('plot_train', 't').lower().startswith('t')
     plot_mean = request.GET.get('plot_mean', 't').lower().startswith('t')
+    stds = float(request.GET.get('stds', '-1'))
+
 
     horiz_deg = right_lon-left_lon
     vert_deg = top_lat-bottom_lat
@@ -231,7 +233,8 @@ def mcmc_event_posterior(request, dirname):
         n = trace.shape[0]
         print eid, trace.shape
         if len(trace.shape)==2:
-            scplot = hm.plot_locations(trace[:, 0:2], marker=".", ms=8, mfc=shape_colors[eid_i-1], mew=0, mec="none", alpha=1.0/np.log(n+1))
+            if stds <= 0:
+                scplot = hm.plot_locations(trace[:, 0:2], marker=".", ms=8, mfc=shape_colors[eid_i-1], mew=0, mec="none", alpha=1.0/np.log(n+1))
             eid_patches.append(mpatches.Patch(color=shape_colors[eid_i-1]))
             eid_labels.append('%d' % eid)
 
@@ -239,6 +242,12 @@ def mcmc_event_posterior(request, dirname):
                 clon, clat = find_center(trace[:, 0:2])
                 loc = np.array(((clon, clat), ))
                 hm.plot_locations(loc,  labels=None, marker="+", ms=16, mfc="none", mec=shape_colors[eid_i-1], mew=2, alpha=1)
+
+            if stds > 0:
+                 m = np.mean(trace[:, 0:2], axis=0)
+                 centered_trace = trace[:, 0:2] - m
+                 cov = np.dot(centered_trace.T, centered_trace)/float(centered_trace.shape[0])
+                 hm.plot_covs([m,], [cov,], stds=stds, colors=[shape_colors[eid_i-1],], alpha=0.2)
 
     f.legend(handles=eid_patches, labels=eid_labels)
 

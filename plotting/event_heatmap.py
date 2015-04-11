@@ -18,7 +18,13 @@ class EventHeatmap(Heatmap):
         self.stations = []
         self.true_event = None
 
-    def add_events(self, locations, labels=None, yvals=None):
+        self.ref_events = []
+        self.ref_covs = []
+
+    def add_events(self, locations=None, labels=None, yvals=None, evs=None):
+
+        if locations is None:
+            locations = np.array([(ev.lon, ev.lat) for ev in evs])
 
         if labels is not None:
             if len(labels) != len(locations):
@@ -31,6 +37,14 @@ class EventHeatmap(Heatmap):
             self.event_yvals.extend(yvals)
         if labels is not None:
             self.event_labels.extend(labels)
+
+    def add_reference_events(self, locations=None, evs=None, covs=None):
+        if locations is None:
+            locations = np.array([(ev.lon, ev.lat) for ev in evs])
+
+        self.ref_events.extend(locations)
+        self.ref_covs.extend(covs)
+
 
     def add_stations(self, names):
         if isinstance(names, str):
@@ -51,7 +65,7 @@ class EventHeatmap(Heatmap):
 
         self.save(fname + ".log")
 
-    def plot(self, event_alpha=0.6, axes=None, offmap_station_arrows=True, label_stations=True, nofillcontinents=True, meridians=True, projection="cyl", **density_args):
+    def plot(self, event_alpha=0.6, cov_alpha=0.1, axes=None, offmap_station_arrows=True, label_stations=True, nofillcontinents=True, meridians=True, projection="cyl", drawlines=True, colorseed=0, **density_args):
 
         self.init_bmap(axes=axes, nofillcontinents=nofillcontinents, projection=projection)
 
@@ -63,14 +77,33 @@ class EventHeatmap(Heatmap):
         if self.f is not None or not np.isnan(self.fvals).all():
             self.plot_density(**density_args)
 
+        if self.ref_events:
+            np.random.seed(colorseed)
+            colors = [np.random.rand(3) for i in range(len(self.ref_events))]
+            self.plot_locations(self.ref_events,
+                                marker="*", ms=6, mec="none", mew=0,
+                                alpha=1, colors=colors)
+            if self.ref_covs:
+                self.plot_covs(self.ref_events, self.ref_covs, alpha=cov_alpha, colors=colors)
+
+            if drawlines:
+                for color, l1, l2 in zip(colors, self.ref_events, self.event_locations):
+                    self.drawline(l1, l2, color=color)
+
         if self.event_yvals:
             self.plot_locations(self.event_locations,
                                 marker=".", s=6, facecolors="none",
                                 yvals=self.event_yvals, alpha=event_alpha)
         else:
+            evcolors=None
+            if self.ref_events and len(self.ref_events)==len(self.event_locations):
+                evcolors = colors
+
             self.plot_locations(self.event_locations, labels=self.event_labels,
                                 marker=".", ms=6, mec="none", mew=0,
-                                alpha=event_alpha)
+                                alpha=event_alpha, colors=evcolors)
+
+
 
 
         if self.true_event is not None:
@@ -82,6 +115,8 @@ class EventHeatmap(Heatmap):
         self.plot_locations(sta_locations, labels=self.stations if label_stations else None,
                             marker="x", ms=4, mfc="none", mec="blue", mew=1, alpha=1,
                             offmap_arrows=offmap_station_arrows)
+
+
 
     def title(self):
         peak = self.max()[0:2]

@@ -147,7 +147,7 @@ class DirectedGraphModel(DAG):
             for dn in node.get_deterministic_children():
                 dn.parent_predict()
 
-    def joint_logprob(self, values, node_list, relevant_nodes, proxy_lps=None, c=1):
+    def joint_logprob(self, values, node_list, relevant_nodes, proxy_lps=None, c=1, wn_conditional=None):
         # node_list: list of nodes whose values we are interested in
 
         # relevant_nodes: all nodes whose log_p() depends on a value
@@ -161,7 +161,16 @@ class DirectedGraphModel(DAG):
             ll = np.sum([f() for (f, df) in proxy_lps.values()])
             ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
         else:
-            ll = np.sum([node.log_p() for node in relevant_nodes])
+            ll = 0
+            for node in relevant_nodes:
+                try:
+                    ll += node.log_p()
+                except ParentConditionalNotDefined:
+                    ll += node.upwards_message_normalizer()
+
+        if wn_conditional is not None:
+            ll += np.sum([n.conditional_log_p() for n in wn_conditional])
+
 
         #self.set_all(values=v, node_list=node_list)
         return c * ll
@@ -181,7 +190,12 @@ class DirectedGraphModel(DAG):
             ll = np.sum([f() for (f, df) in proxy_lps.values()])
             ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
         else:
-            ll = np.sum([node.log_p() for node in relevant_nodes])
+            ll = 0
+            for node in relevant_nodes:
+                try:
+                    ll += node.log_p()
+                except ParentConditionalNotDefined:
+                    ll += node.upwards_message_normalizer()
 
         # special case for nodes with undirected edges so the usual parent-conditional log_p is not defined.
         # This is specifically for event relocation with a joint GP model of wavelet coefs across events,
