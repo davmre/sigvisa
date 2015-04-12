@@ -38,31 +38,13 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
 
 
 
-    wns = []
-    if sg.jointgp:
-        for n in relevant_nodes:
-            if isinstance(n, ObservedSignalNode):
-                wns.append(n)
-        #for n in wns:
-        #    relevant_nodes.remove(n)
-
     lp_old = sg.joint_logprob_keys(relevant_nodes, proxy_lps=proxy_lps) # assume oldvalues are still set
 
     #lp_old_true = sg.current_log_p()
 
-    if sg.jointgp:
-        for wn in wns:
-            for wpms in wn.wavelet_param_models.values():
-                lp_old += np.sum([jgp.log_likelihood() for jgp in wpms])
-
     lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list,
                                    relevant_nodes=relevant_nodes, proxy_lps=proxy_lps)
 
-    if sg.jointgp:
-        for wn in wns:
-            wn.pass_jointgp_messages()
-            for wpms in wn.wavelet_param_models.values():
-                lp_new += np.sum([jgp.log_likelihood() for jgp in wpms])
 
     #if np.isfinite(lp_new):
     #    lp_new_true = sg.current_log_p()
@@ -71,18 +53,19 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
 
     #if np.isfinite(lp_new):
     #    assert(np.abs( (lp_new - lp_old) - (lp_new_true - lp_old_true) ) < 1e-8 )
+    #    print "assertion passed", keys
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
-
         return True
     else:
         for (key, val, n) in zip(keys, oldvalues, node_list):
             n.set_value(key=key, value=val)
 
-        if sg.jointgp:
-            for wn in wns:
-                wn.pass_jointgp_messages()
+        for n in relevant_nodes:
+            if len(n.params_modeled_jointly) > 0:
+                # TODO: cache messages to avoid recomputation
+                n.upwards_message_normalizer()
 
         return False
 

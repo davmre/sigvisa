@@ -135,9 +135,15 @@ class ObservedSignalNode(Node):
         self.wavelet_basis = wavelet_basis
         self.wavelet_param_models = wavelet_param_models
 
+        self.has_jointgp = has_jointgp
+        if self.has_jointgp:
+            self.params_modeled_jointly = set()
+            for phase in self.wavelet_param_models.keys():
+                self.params_modeled_jointly = self.params_modeled_jointly | set(self.wavelet_param_models[phase])
+
         self.cached_logp = None
         self._coef_message_cache = None
-        self.has_jointgp = has_jointgp
+
         self.conditional_coef_distribution = False
 
     def __str__(self):

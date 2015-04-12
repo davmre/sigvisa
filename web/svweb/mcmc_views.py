@@ -359,8 +359,8 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
         key2 = request.GET.get("component", 'combined')
         d = arrival_info[(eid, phase)][key2]
 
-    len_s = len(d)/wn.srate
-    f = Figure((len_s/10.0 * zoom, 5*vzoom))
+    len_s = float(len(d))/wn.srate
+    f = Figure((10.0 * zoom, 5*vzoom))
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
     t = np.linspace(0, len_s, len(d))
@@ -405,7 +405,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     real_wave.data = ma.masked_array(real_wave.data, copy=True)
     len_mins = (wn.et - wn.st) / 60.0
 
-    f = Figure((len_mins * zoom, 5*vzoom))
+    f = Figure((10*zoom, 5*vzoom))
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
     subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=None)

@@ -147,7 +147,8 @@ class DirectedGraphModel(DAG):
             for dn in node.get_deterministic_children():
                 dn.parent_predict()
 
-    def joint_logprob(self, values, node_list, relevant_nodes, proxy_lps=None, c=1, wn_conditional=None):
+
+    def joint_logprob(self, values, node_list, relevant_nodes, proxy_lps=None, c=1):
         # node_list: list of nodes whose values we are interested in
 
         # relevant_nodes: all nodes whose log_p() depends on a value
@@ -157,26 +158,26 @@ class DirectedGraphModel(DAG):
         if values is not None:
             self.set_all(values=values, node_list=node_list)
 
+        joint_factors = set()
         if proxy_lps is not None:
             ll = np.sum([f() for (f, df) in proxy_lps.values()])
             ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
         else:
             ll = 0
             for node in relevant_nodes:
-                try:
+                if len(node.params_modeled_jointly)==0:
                     ll += node.log_p()
-                except ParentConditionalNotDefined:
+                else:
                     ll += node.upwards_message_normalizer()
+                    joint_factors = joint_factors | node.params_modeled_jointly
 
-        if wn_conditional is not None:
-            ll += np.sum([n.conditional_log_p() for n in wn_conditional])
+        for jf in joint_factors:
+            ll += jf.log_likelihood()
 
 
-        #self.set_all(values=v, node_list=node_list)
         return c * ll
 
-    def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, proxy_lps=None, c=1,
-                           wn_conditional=None):
+    def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, proxy_lps=None, c=1):
         # same as joint_logprob, but we specify values only for a
         # specific set of keys.
         # here, node_list contains one entry for each key (so will
@@ -186,22 +187,21 @@ class DirectedGraphModel(DAG):
                 n.set_value(key=key, value=val)
 
 
+        joint_factors = set()
         if proxy_lps is not None:
             ll = np.sum([f() for (f, df) in proxy_lps.values()])
             ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
         else:
             ll = 0
             for node in relevant_nodes:
-                try:
+                if len(node.params_modeled_jointly)==0:
                     ll += node.log_p()
-                except ParentConditionalNotDefined:
+                else:
                     ll += node.upwards_message_normalizer()
+                    joint_factors = joint_factors | node.params_modeled_jointly
 
-        # special case for nodes with undirected edges so the usual parent-conditional log_p is not defined.
-        # This is specifically for event relocation with a joint GP model of wavelet coefs across events,
-        # which makes the wave_node distributions mutually dependent.
-        if wn_conditional is not None:
-            ll += np.sum([n.conditional_log_p() for n in wn_conditional])
+        for jf in joint_factors:
+            ll += jf.log_likelihood()
 
         return c * ll
 

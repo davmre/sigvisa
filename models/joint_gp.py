@@ -82,6 +82,12 @@ class JointGP(object):
         self._cached_gp = dict()
         self.Z = 0
 
+    def generic_upwards_message(self, v, cond):
+        eid, evdict = self._ev_from_pv(cond)
+        self.evs[eid] = evdict
+        self.messages[eid] = v, 0.0, 0.0
+        self._clear_cache()
+
     def message_from_arrival(self, eid, evdict, prior_mean, prior_var, posterior_mean, posterior_var):
         self.evs[eid] = evdict
         m, v, Z = multiply_scalar_gaussian(posterior_mean, posterior_var, prior_mean, -prior_var)
@@ -135,7 +141,7 @@ class JointGP(object):
                 compute_ll = False
             else:
                 self.Z = np.sum([self.messages[eid][2] for eid in eids])
-            gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=self.cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=self.noise_var)
+            gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=self.cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=self.noise_var, sort_events=False)
 
             self._cached_gp[holdout_eid] = gp
         return self._cached_gp[holdout_eid]
@@ -159,6 +165,15 @@ class JointGP(object):
 
     def _ev_features(self, evdict):
         return np.array((evdict['lon'], evdict['lat'], evdict['depth'], 0.0, evdict['mb']))
+
+    def _ev_from_pv(self, parent_values):
+        eid = int(parent_values.keys()[0].split(';')[0])
+        evdict = {'lon': parent_values['%d;lon' % eid],
+                  'lat': parent_values['%d;lat' % eid],
+                  'depth': parent_values['%d;depth' % eid],
+                  'mb': parent_values['%d;mb' % eid]}
+
+        return eid, evdict
 
     def __getstate__(self):
         self._clear_cache()

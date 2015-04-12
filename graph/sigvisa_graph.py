@@ -115,7 +115,7 @@ class SigvisaGraph(DirectedGraphModel):
                  uatemplate_rate=1e-3,
                  fixed_arrival_npts=None,
                  dummy_prior=None,
-                 joint_wiggle_prior=None,
+                 jointgp_prior=None,
                  force_event_wn_matching=False):
         """
 
@@ -202,14 +202,17 @@ class SigvisaGraph(DirectedGraphModel):
         self.fixed_arrival_npts = fixed_arrival_npts
 
         self._joint_gpmodels = defaultdict(dict)
-        self.joint_wiggle_prior=joint_wiggle_prior
+        self.jointgp_prior=jointgp_prior
 
 
         self.force_event_wn_matching = force_event_wn_matching
 
     def joint_gpmodel(self, sta, param):
         if param not in self._joint_gpmodels[sta]:
-            noise_var, gpcov = self.joint_wiggle_prior
+            if param.startswith("db"):
+                noise_var, gpcov = self.jointgp_prior['wiggle']
+            else:
+                noise_var, gpcov = self.jointgp_prior[param]
             jgp = JointGP(param, sta, 0.0, noise_var, gpcov)
             self._joint_gpmodels[sta][param] = jgp
         return self._joint_gpmodels[sta][param]
@@ -421,7 +424,10 @@ class SigvisaGraph(DirectedGraphModel):
                 if node.deterministic():
                     continue
                 if "tt_residual" in node.label:
-                    ev_tt_lp += node.log_p()
+                    try:
+                        ev_tt_lp += node.log_p()
+                    except ParentConditionalNotDefined:
+                        pass
                 elif  "amp_transfer" in node.label:
                     ev_amp_transfer_lp += node.log_p()
                 elif  "coda_decay" in node.label:
@@ -886,7 +892,7 @@ class SigvisaGraph(DirectedGraphModel):
         # appropriate parameter model.
         nodes = dict()
         for sta in self.site_elements[site]:
-            if not model_type.startswith("dummy") and modelid is None:
+            if not model_type.startswith("dummy") and modelid is None and model_type != "gp_joint":
                 try:
                     modelid = self.get_param_model_id(runids=self.runids, sta=sta,
                                                       phase=phase, model_type=model_type,
@@ -902,9 +908,11 @@ class SigvisaGraph(DirectedGraphModel):
                                phase=phase, eid=parents[0].eid,
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
-            if model_type.startswith("dummy"):
+            if model_type.startswith("dummy") or model_type=="gp_joint":
                 if model_type=="dummyPrior":
                     model = self.dummy_prior[param]
+                elif model_type == "gp_joint":
+                    model = None
                 else:
                     if "tt_residual" in label:
                         model = Gaussian(mean=0.0, std=10.0)
@@ -914,6 +922,9 @@ class SigvisaGraph(DirectedGraphModel):
                         model = DummyModel(default_value=initial_value)
 
                 node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
+                if model_type=="gp_joint":
+                    jgp = self.joint_gpmodel(sta, param)
+                    node.params_modeled_jointly.add(jgp)
             else:
                 node = self.load_node_from_modelid(modelid, label, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
 
@@ -1063,6 +1074,12 @@ class SigvisaGraph(DirectedGraphModel):
                             v[invalid_offsets] = -0.01
                 else:
                     n.parent_predict()
+
+                try:
+                    n.upwards_message_normalizer()
+                except:
+                    pass
+
                 fullnodes.append(n)
         self.extended_evnodes[eid].extend(fullnodes)
         return fullnodes

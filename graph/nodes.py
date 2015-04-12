@@ -4,6 +4,7 @@ import copy
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models import DummyModel
 
+
 class Node(object):
 
     def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False):
@@ -15,6 +16,8 @@ class Node(object):
         self.label = label
         self.mark = 0
         self.key_prefix = ""
+
+        self.params_modeled_jointly = set()
 
         if not keys:
             if isinstance(initial_value, dict):
@@ -180,6 +183,11 @@ class Node(object):
         if isinstance(value, np.ndarray) and value.size == 1:
             raise ValueError("%s: setting scalar value as %s np array %s " % (self.label, value.shape, value))
 
+
+        #if "tt_residual" in self.label and value != 0:
+        #    import pdb; pdb.set_trace()
+
+
         key = key if key else self.single_key
         if self._mutable[key]:
             self._dict[key] = value
@@ -274,11 +282,32 @@ class Node(object):
 
         return self._pv_cache
 
+    def upwards_message_normalizer(self, parent_values=None):
+        # assume the generic case is that this node holds a value, modeled as a noisy sample from a GP,
+        # so we just need to pass the "observed" value up to the GP, and there's no special contribution
+        # from the normalizing constant of the (this node | gp mean) likelihood since it's just
+        # Gaussian and sums to 1 (thus log=0).
+
+        if parent_values is None:
+            parent_values = self._parent_values()
+
+        v = self.get_dict()
+        v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
+
+        for joint_model in self.params_modeled_jointly:
+            joint_model.generic_upwards_message(v=v, cond=parent_values)
+
+        return 0.0
+
     def log_p(self, parent_values=None, v=None):
         #  log probability of the values at this node, conditioned on all parent values
 
         if parent_values is None:
             parent_values = self._parent_values()
+
+        if self.model is None and len(self.params_modeled_jointly) > 0:
+            from sigvisa.graph.dag import ParentConditionalNotDefined
+            raise ParentConditionalNotDefined()
 
         if v is None:
             v = self.get_dict()
@@ -367,7 +396,12 @@ class Node(object):
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        nv = self.model.predict(cond=parent_values)
+
+        if self.model is None and len(self.params_modeled_jointly) > 0:
+            nv, _ = list(self.params_modeled_jointly)[0].prior()
+        else:
+            nv = self.model.predict(cond=parent_values)
+
         if set_new_value:
             self._set_values_from_model(nv)
         else:
@@ -476,9 +510,6 @@ class DeterministicNode(Node):
     def set_value(self, value, key=None, parent_key=None):
         if not parent_key:
             parent_key = self.default_parent_key()
-
-        if "coda_height" in self.label and value > 30:
-            import pdb; pdb.set_trace()
 
         parent_val = self.invert(value=value, parent_key=parent_key)
         self.parents[parent_key].set_value(value=parent_val, key=parent_key)

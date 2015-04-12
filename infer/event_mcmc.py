@@ -674,15 +674,10 @@ def ev_move_full(sg, ev_node, std, params, adaptive_blocking=False, debug_probs=
     lp_old = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
     move_logprob, reverse_logprob, revert_move, jump_required, node_lps = ev_phasejump(sg, eid, new_ev, params, adaptive_blocking=adaptive_blocking)
     lp_old += node_lps.update_lp_old(sg, relevant_nodes)
-    if sg.jointgp:
-        lp_old += sg.joint_gp_ll()
 
     node_lps.update_relevant_nodes_for_lpnew(relevant_nodes)
     lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
     lp_new += node_lps.update_lp_new(sg, relevant_nodes)
-    if sg.jointgp:
-        lp_new += sg.joint_gp_ll()
-
 
     if debug_probs:
         lp_new_full = sg.current_log_p()
@@ -700,6 +695,9 @@ def ev_move_full(sg, ev_node, std, params, adaptive_blocking=False, debug_probs=
         return True
     else:
         revert_move()
+        for n in relevant_nodes:
+            if len(n.params_modeled_jointly) > 0:
+                n.upwards_message_normalizer()
         return False
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):

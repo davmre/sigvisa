@@ -1,9 +1,12 @@
+import numpy as np
+
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import fetch_waveform, load_event_station_chan, MissingWaveform
 from sigvisa.infer.run_mcmc import run_open_world_MH
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from sigvisa.treegp.gp import GPCov
 
 import os, sys, traceback
 import cPickle as pickle
@@ -88,18 +91,31 @@ def sigvisa_locate_basic():
                       enable_event_openworld=False,
                       enable_template_openworld=False)
 
-def sigvisa_locate_wavematch():
+def sigvisa_locate_joint(jointtts=False, jointwiggles=False):
 
     evs = load_evs()
     waves = load_waves()
 
-    tm_type_str="tt_residual:gp_joint,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb,peak_decay:param_linear_distmb"
+    tm_type_str="tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb,peak_decay:param_linear_distmb"
     tm_types = {}
     for p in tm_type_str.split(','):
         (param, model_type) = p.strip().split(':')
         tm_types[param] = model_type
+    wiggle_model_type="dummy"
+    wiggle_family="iid"
 
-    sg = build_sg(evs, waves, template_model_type=tm_types, wiggle_model_type="gp_joint", wiggle_family="db4_2.0_3_10", runids=(28,), force_event_wn_matching=True)
+    gpc_wiggle = 0.1, GPCov(wfn_str="compact2", wfn_params=np.array((0.7,)), dfn_str="lld", dfn_params=np.array((40.0, 10.0)))
+    gpc_tt = 0.3, GPCov(wfn_str="se", wfn_params=np.array((6.0,)), dfn_str="lld", dfn_params=np.array((100.0, 10.0)))
+    jgpp = {}
+    if jointtts:
+        tm_types['tt_residual'] = "gp_joint"
+        jgpp['tt_residual'] = gpc_tt
+    if jointwiggles:
+        jgpp['wiggle'] = gpc_wiggle
+        wiggle_model_type="gp_joint"
+        wiggle_family="db4_2.0_3_10"
+
+    sg = build_sg(evs, waves, template_model_type=tm_types, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, force_event_wn_matching=True, jointgp_prior=jgpp, runids=(28,))
 
     logger = MCMCLogger(write_template_vals=False, dump_interval=10)
 
@@ -115,35 +131,17 @@ def sigvisa_locate_wavematch():
 
 
 
-def sigvisa_locate_kriged_tts():
-
-    evs = load_evs()
-    waves = load_waves()
-
-    tm_type_str="tt_residual:gp_joint,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb,peak_decay:param_linear_distmb"
-    tm_types = {}
-    for p in tm_type_str.split(','):
-        (param, model_type) = p.strip().split(':')
-        tm_types[param] = model_type
-
-    sg = build_sg(evs, waves, template_model_type=tm_types, wiggle_model_type="dummy", wiggle_family="iid", runids=(28,), force_event_wn_matching=True)
-
-    logger = MCMCLogger(write_template_vals=False, dump_interval=10)
-
-    with open(os.path.join(logger.run_dir, "events.pkl"), "wb") as f:
-        pickle.dump(evs.values(), f)
-
-    run_open_world_MH(sg, steps=1000,
-                      enable_template_moves=True,
-                      enable_event_moves=True,
-                      logger=logger,
-                      enable_event_openworld=False,
-                      enable_template_openworld=False)
 
 
 def main():
     if sys.argv[1]=="basic":
         sigvisa_locate_basic()
+    if sys.argv[1]=="krigedtts":
+        sigvisa_locate_joint(jointtts=True)
+    if sys.argv[1]=="wavematch":
+        sigvisa_locate_joint(jointtts=False, jointwiggles=True)
+    if sys.argv[1]=="everything":
+        sigvisa_locate_joint(jointtts=True, jointwiggles=True)
 
 """
 def relative_atimes():
