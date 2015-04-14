@@ -206,6 +206,10 @@ void compute_explicit_cov_atlas(FilterState &cache,
   matrix<double> &P = cache.P;
   unsigned state_size = cache.state_size;
 
+  if (prev_state_size == -1) {
+    prev_state_size = state_size;
+  }
+
   // U has dimension (ss x pss)
   for (unsigned i=0; i < state_size; ++i) {
     for (unsigned j=0; j < prev_state_size; ++j) {
@@ -223,13 +227,13 @@ void compute_explicit_cov_atlas(FilterState &cache,
 
 }
 
-void compute_explicit_cov(FilterState &cache,
+/* void compute_explicit_cov(FilterState &cache,
 			  matrix<double> &U_tmp,
 			  vector<double> &d_tmp,
 			  int prev_state_size) {
 
-  /* this is the original version of this function in ublas.
-     it's slow and superceded by the atlas version above. */
+  // this is the original version of this function in ublas.
+  // it's slow and superceded by the atlas version above.
 
   matrix<double> &mtmp = cache.tmp_U2;
   matrix<double> &P = cache.P;
@@ -247,7 +251,7 @@ void compute_explicit_cov(FilterState &cache,
   noalias(subrange(P, 0, state_size, 0, state_size))		\
     = prod(subrange(mtmp, 0, state_size, 0, prev_state_size),
 	   trans(subrange(U_tmp, 0, state_size, 0, prev_state_size)));
-}
+} */
 
 
 
@@ -609,7 +613,7 @@ void mean_obs(StateSpaceModel &ssm, vector<double> & result) {
 void obs_var(StateSpaceModel &ssm, vector<double> & result) {
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);
-  compute_explicit_cov(cache, cache.pred_U, cache.pred_d, -1);
+  compute_explicit_cov_atlas(cache, cache.pred_U, cache.pred_d, -1);
 
   matrix<double> P = cache.P;
 
@@ -691,12 +695,13 @@ double all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
   unsigned int N = z.size();
   double ell = 0;
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
+  compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
   ssm.extract_all_coefs(cache, 0, cmeans, cvars);
   for (unsigned k=1; k < N; ++k) {
     kalman_predict_sqrt(ssm, cache, k, false);
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
 
-    compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
+    compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
     ssm.extract_all_coefs(cache, k, cmeans, cvars);
   }
   return ell;
@@ -738,17 +743,17 @@ double tssm_component_vars(TransientCombinedSSM &ssm,
 
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);
-  compute_explicit_cov(cache, cache.pred_U, cache.pred_d, -1);
+  compute_explicit_cov_atlas(cache, cache.pred_U, cache.pred_d, -1);
 
   unsigned int N = z.size();
   double ell = 0;
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
-  compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
+  compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
   ssm.extract_component_vars(cache.P, cache.tmp_U2, 0, vars);
   for (unsigned k=1; k < N; ++k) {
     kalman_predict_sqrt(ssm, cache, k, false);
     ell += kalman_observe_sqrt(ssm, cache, k, z(k));
-    compute_explicit_cov(cache, cache.obs_U, cache.obs_d, -1);
+    compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
     ssm.extract_component_vars(cache.P, cache.tmp_U2, k, vars);
   }
   return ell;

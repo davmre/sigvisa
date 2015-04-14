@@ -533,6 +533,11 @@ int TransientCombinedSSM::prior_vars(double *result) {
     if (!ssm) continue;
     ssm->prior_vars(result);
 
+    /*printf("ssm %d max dimension %d\n", j, ssm->max_dimension);
+    for (double * q = result; q < result+ssm->max_dimension; ++q) {
+      printf(" initial var %d = %f\n", q-result, *q);
+      }*/
+
     if (this->start_idxs[j] < 0) {
       matrix<double> P (ssm->max_dimension, ssm->max_dimension);
       matrix<double> P2 (ssm->max_dimension, ssm->max_dimension);
@@ -552,8 +557,19 @@ int TransientCombinedSSM::prior_vars(double *result) {
       for (int i=0; i < ssm->max_dimension; ++i) result[i] = P(i,i);
     }
 
+    /*for (double * q = result; q < result+ssm->max_dimension; ++q) {
+      printf(" post-prop var %d = %f\n", q-result, *q);
+      }*/
+
+
     result += ssm->max_dimension;
   }
+
+
+  /*for (double * q = r1; q < result; ++q) {
+    printf("prior var %d = %f\n", q-r1, *q);
+    }*/
+
   return result-r1;
 }
 

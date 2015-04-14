@@ -356,6 +356,9 @@ void CompactSupportSSM::extract_coefs(const vector<double> &x,
       int state_idx = this->active_indices[key] + state_offset;
       coef_means(basis_idx) = x(state_idx);
       coef_vars(basis_idx) = P(state_idx,state_idx);
+
+
+      //printf("extracted coef %d var %f from state %d at cssm-local time %d\n", basis_idx, coef_vars(basis_idx), state_idx, k);
       /*if (coef_vars(basis_idx) == 0) {
 	printf("WARNING: posterior coef var is zero for basis %d at state %d at time %d, this doesn't seem right....\n", basis_idx, state_idx, k);
 	//exit(-1);
