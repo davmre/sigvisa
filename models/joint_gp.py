@@ -47,23 +47,24 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
         v2 = 1e-10
 
     prec = (1.0/v1 + 1.0/v2)
-    v = 1.0/prec if ( np.abs(prec) > 1e-10) else 1e10
-    m = v * (m1/v1 + m2/v2)
-
-    if v2 > 0:
-        normalizer_var = v1 + v2
-        normalizer = -.5*np.log(2*np.pi*normalizer_var) - .5*(m2-m1)**2/normalizer_var
-    else:
-        normalizer_var = -(v1+v2)
-        if normalizer_var < 1e-20:
-            # if v1 and v2 are essentially the same, we're passing a uniform message.
-            # So we need to just cancel out the (very negative) logp of the message distribution evaluated at its mean,
-            # so that the final logp at the mean is 0.
-            normalizer = .5*np.log(2*np.pi*v)
+    if prec > 1e-10:
+        v = 1.0/prec
+        m = v * (m1/v1 + m2/v2)
+        if v2 > 0:
+            normalizer_var = v1 + v2
+            normalizer = -.5*np.log(2*np.pi*normalizer_var) - .5*(m2-m1)**2/normalizer_var
         else:
+            normalizer_var = -(v1+v2)
             # http://davmre.github.io/statistics/2015/03/27/gaussian_quotient/
             normalizer = .5*np.log(2*np.pi*normalizer_var) + .5*(m2-m1)**2/normalizer_var
             normalizer += np.log( -v2/normalizer_var  )
+    else:
+        v = 1e10
+        m = 0.0
+        normalizer = .5*np.log(2*np.pi*v)
+
+    assert (v >= 0)
+    assert(np.isfinite(normalizer))
 
     return m, v, normalizer
 

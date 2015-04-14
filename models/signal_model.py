@@ -416,6 +416,7 @@ class ObservedSignalNode(Node):
                 ell, marginals = self.tssm.all_filtered_cssm_coef_marginals(d)
                 posterior_means, posterior_vars = zip(*marginals)
                 posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
+                assert( np.min(posterior_vars) >= 0 )
             else:
                 ell = self.tssm.run_filter(d)
                 prior_means, prior_vars = np.array(()), np.array(()),
