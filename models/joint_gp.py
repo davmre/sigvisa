@@ -122,6 +122,70 @@ class JointGP(object):
         return posterior
 
     def log_likelihood(self):
+        """Explanation of likelihood calculations:
+
+        Suppose we have two signals s1, s2, each described by a
+        corresponding param c1, c2 with a joint Gaussian prior p(c) =
+        p(c1, c2). We also have the ability to compute p_T(si) = \int
+        p(si|ci)p_T(ci) dci for any Gaussian distribution T on the
+        coef ci, along with the coef posterior p_T(ci|si) (in my case
+        this is the Kalman filter that runs inside the signal model).
+
+        We want to compute the likelihood p(s) = p(s1, s2) which
+        integrates over c1, c2 with respect to their priors. As stated
+        above it's easy to do this for any single signal; the hard
+        part is tracking the dependence between the two coefs. A
+        simple solution would be to apply the chain rule, p(s1,s2) =
+        p(s1)p(s2|s1) where we can use the Kalman filter to compute
+        p(s1) (letting T be the true prior), and then use the
+        posterior on c1 generated from s1 to get a GP posterior on c2,
+        which we can now set as the Kalman filter prior T to evaluate
+        p(s2|s1).
+
+        TODO: why was this bad?
+
+        Instead, we think of a message-passing algorithm, in which we
+        eliminate the signal nodes and pass messages representing
+        their observations upwards to the GP. The log-likelihood of an
+        entire model is the product of elimination messages converging
+        at any node -- in our case we use the GP on c as the root
+        node.
+
+        Each signal sends a message to this node, which is just the
+        likelihood p(si|ci) considered as a function of ci. Since the
+        signal model is Gaussian, this likelihood will have Gaussian
+        form, but I don't have any code to efficiently compute it
+        directly. Instead we can compute the posterior p(ci|si), and
+        recover the likelihood:
+
+        p(si|ci) = Z * p(ci|si)/p(ci)
+
+        (this is just Bayes' rule rearranged, where Z is the local
+        model evidence int_ci p(si|ci p(ci) dci).
+
+        To get an (unnormalized) Gaussian form for the likelihood, we
+        divide the posterior by the prior -- this will give a mean,
+        variance and a normalizing constant (from
+        multiply_scalar_gaussian above).  This normalizing constant is
+        then *multiplied* by Z (or added in logspace) to get the full
+        normalizing constant for the Gaussian message.  (here Z is the
+        upwards_message_normalizer computed by Kalman filtering under
+        the prior distribution -- the new normalizing constant is the
+        "correction" from having run the filter under the actual prior
+        to having run under a flat prior, which is what I originally
+        wanted to do but runs into numerical issues).
+
+        Finally we train a GP using the means and variances of the
+        messages, and gp.log_likelihood() computes the product of all
+        those messages integrated over c, which would be the model log-likelihood
+        if we ignored normalizing constants. But we do actually have to
+        include normalizing constants, which means that we add in the
+        "correction" normalizers here as well as adding in (elsewhere in the code)
+        the Z's computed as upwards_message_normalizers.
+
+        """
+
+
         gp = self.train_gp()
         if gp is None:
             return 0.0
@@ -147,6 +211,73 @@ class JointGP(object):
             self._cached_gp[holdout_eid] = gp
         return self._cached_gp[holdout_eid]
 
+    def holdout_evidence(self, eid):
+        """
+        NOTE: not used in inference, just post-hoc analysis.
+
+        We want to compute the model evidence int_coef p(signal | coef) p(coef),
+        using the unconditional prior on coefs, and the conditional prior in which we regress from
+        all other events.
+
+        We have available the message passed upwards from the signal, which is a normalized version of
+        p(signal|coef). (and we don't care about the normalization constant since the thing we'll
+        be changing is the prior, p(coef), so however we normalize the message will just cancel out).
+        So this is as simple as just multiplying the Gaussian message by the two Gaussian priors,
+        and comparing the resulting normalization constants.
+        """
+
+        m1, v1 = self.prior()
+        m2, v2 = self.posterior(eid)
+
+        message_mean, message_var, _ = self.messages[eid]
+
+        _, _, Z1 = multiply_scalar_gaussian(message_mean, message_var, m1, v1)
+        _, _, Z2 = multiply_scalar_gaussian(message_mean, message_var, m2, v2)
+
+        return Z2-Z1
+
+
+    def pairwise_evidence(self, eid1, eid2):
+        """
+        NOTE: not used in inference, just post-hoc analysis.
+
+        Compute the evidence ratio for the arrival of eid2, given eid1, vs eid2 given the prior.
+        Also do the reverse: eid1|eid2 vs unconditional.
+        """
+
+        m1, v1 = self.prior()
+
+        # train a GP only on a single eid
+        def single_input_gp(eeid):
+            X = np.array([self._ev_features(self.evs[eid]) for eid in [eeid,]])
+            y = np.array([self.messages[eid][0] for eid in [eeid,]])
+            y_obs_variances = np.array([self.messages[eid][1] for eid in [eeid,]])
+            return GP(X=X, y=y, y_obs_variances=y_obs_variances, cov_main=self.cov, ymean=self.ymean, compute_ll=False, sparse_invert=False, noise_var=self.noise_var, sort_events=False)
+
+        gp1 = single_input_gp(eid1)
+        gp2 = single_input_gp(eid2)
+        evdict1 = self.evs[eid1]
+        evdict2 = self.evs[eid2]
+        x1 = self._ev_features(evdict1).reshape(1, -1)
+        x2 = self._ev_features(evdict2).reshape(1, -1)
+
+        posterior12 = gp1.predict(x2), gp1.variance(x2, include_obs=True, pad=0)
+        posterior21 = gp2.predict(x1), gp2.variance(x1, include_obs=True, pad=0)
+
+
+        # ratio for eid1
+        message_mean, message_var, _ = self.messages[eid1]
+        _, _, Z1 = multiply_scalar_gaussian(message_mean, message_var, m1, v1)
+        _, _, Z2 = multiply_scalar_gaussian(message_mean, message_var, posterior21[0], posterior21[1])
+        ratio1 = Z2-Z1
+
+        # ratio for eid2
+        message_mean, message_var, _ = self.messages[eid2]
+        _, _, Z1 = multiply_scalar_gaussian(message_mean, message_var, m1, v1)
+        _, _, Z2 = multiply_scalar_gaussian(message_mean, message_var, posterior12[0], posterior12[1])
+        ratio2 = Z2-Z1
+
+        return ratio1, ratio2
 
     def _clear_cache(self):
         self._input_cache=False
