@@ -472,11 +472,11 @@ class ObservedSignalNode(Node):
         if self.wavelet_basis is None:
             return None
 
-        (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
+        (start_idxs, end_idxs, identities, basis_prototypes, n_steps), target_std = self.wavelet_basis
         n_basis = len(start_idxs)
 
         prior_means = np.zeros((n_basis,))
-        prior_vars = np.ones((n_basis,)) * target_coef_var
+        prior_vars = np.ones((n_basis,))
 
         if (eid, phase) in self.arrival_ssms:
             cssm = self.arrival_ssms[(eid, phase)]
@@ -500,11 +500,12 @@ class ObservedSignalNode(Node):
         min_logenv = max(-7.0, np.log(self.nm.c)-2)
 
         if self.wavelet_basis is not None:
-            (start_idxs, end_idxs, identities, basis_prototypes, n_steps), iid_std, target_coef_var = self.wavelet_basis
+            (start_idxs, end_idxs, identities, basis_prototypes, n_steps), target_std = self.wavelet_basis
             n_basis = len(start_idxs)
         else:
             n_basis = 0
-            iid_std = np.ones((int(120*self.srate),))*0.5
+            target_std = 1.0
+
 
         components = [(self.noise_arssm, 0, self.npts, None)]
 
@@ -527,17 +528,21 @@ class ObservedSignalNode(Node):
                 continue
 
             wssm = self.arrival_ssms[(eid, phase)]
-            mn_len = min(len(iid_std), len(env))
-            mn_scale = env[:mn_len]*iid_std[:mn_len]
+
+            npts = min(len(env), n_steps*2)
+            iid_std = np.empty(env.shape)
+            iid_std[:npts] = 0.1
+            iid_std[npts:] = target_std+0.1
+
+            mn_scale = env*iid_std
             if wssm is not None:
-                npts = min(len(env), n_steps*2)
                 components.append((wssm, start_idx, npts, env))
                 tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
-                components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
-                tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
+                components.append((self.iid_arssm, start_idx, len(env), mn_scale))
+                tssm_components.append((eid, phase, mn_scale, start_idx, len(env), "multnoise"))
             else:
-                components.append((self.iid_arssm, start_idx, mn_len, mn_scale))
-                tssm_components.append((eid, phase, mn_scale, start_idx, mn_len, "multnoise"))
+                components.append((self.iid_arssm, start_idx, len(env), mn_scale))
+                tssm_components.append((eid, phase, mn_scale, start_idx, len(env), "multnoise"))
 
             components.append((None, start_idx, len(env), env))
             tssm_components.append((eid, phase, env, start_idx, len(env), "template"))

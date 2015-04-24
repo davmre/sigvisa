@@ -104,7 +104,7 @@ def sigvisa_locate_joint(jointtts=False, jointwiggles=False):
     wiggle_model_type="dummy"
     wiggle_family="iid"
 
-    gpc_wiggle = 0.1, GPCov(wfn_str="compact2", wfn_params=np.array((0.7,)), dfn_str="lld", dfn_params=np.array((40.0, 10.0)))
+    gpc_wiggle = 0.1, GPCov(wfn_str="compact2", wfn_params=np.array((0.7,)), dfn_str="lld", dfn_params=np.array((80.0, 10.0)))
     gpc_tt = 0.3, GPCov(wfn_str="se", wfn_params=np.array((6.0,)), dfn_str="lld", dfn_params=np.array((100.0, 10.0)))
     jgpp = {}
     if jointtts:
@@ -113,7 +113,7 @@ def sigvisa_locate_joint(jointtts=False, jointwiggles=False):
     if jointwiggles:
         jgpp['wiggle'] = gpc_wiggle
         wiggle_model_type="gp_joint"
-        wiggle_family="db4_2.0_3_10"
+        wiggle_family="db4uvars_2.0_3_10_0.4"
 
     sg = build_sg(evs, waves, template_model_type=tm_types, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, force_event_wn_matching=True, jointgp_prior=jgpp, runids=(28,))
 

@@ -111,7 +111,7 @@ class UncertainInputGP(object):
         return kl
 
 
-    def varobj_ll(self, Xu, q_xmeans, q_xcovs, theta, sigma2_n):
+    def varobj_ll(self, Xu, q_xmeans, q_xcovs, theta, sigma2_n, theta_grad=False, Xu_grad=False):
         # Xu: matrix of size m x q, each row the location of an inducing point
 
         # theta: set of hyperparams passed to the cov_matrix functions
@@ -120,8 +120,11 @@ class UncertainInputGP(object):
         sigma2_f = theta[0]
         n, p = self.Y.shape
 
+        # NEED DERIVS wrt Xu and to theta, for all of these
         Kuu = cov_matrix(Xu, Xu, theta)
         psi0 = n*sigma2_f # expected_kernel_trace(q_xmeans, q_xcovs, theta)
+
+        # also need derivs wrt the qs
         Psi1 = compute_Psi1(q_xmeans, q_xcovs, Xu, theta)
         Psi2 = compute_Psi2(q_xmeans, q_xcovs, Xu, theta)
 
@@ -137,7 +140,6 @@ class UncertainInputGP(object):
         L1 = np.linalg.cholesky(Psi2_Kuu)
         logdet_Psi2_Kuu = 2*np.sum(np.log(np.diag(L1)))
 
-
         F = -n/2.0 * np.log(sigma2_n) + .5*logdet_Kuu # numerator of eqn 24
         F -= -n/2.0 * np.log(2*np.pi) - .5*logdet_Psi2_Kuu # denominator of eqn 24
         F += 1.0/(2*sigma2_n) * (tr_KuuInv_Psi2 - psi0)
@@ -148,6 +150,7 @@ class UncertainInputGP(object):
             L2 = scipy.linalg.cho_solve((L1, True), np.dot(Psi1.T, y))
             F -= .5 * np.dot(y.T/sigma2_n, y - np.dot(Psi1, L2)/sigma2_n)
 
+        # need deriv
         kl = self.kl_vs_prior(q_xmeans, q_xcovs)
 
         return F - kl
@@ -163,26 +166,28 @@ class UncertainInputGP(object):
 
         means = np.concatenate(x_init)
         covs = np.concatenate([flatten_cov_chol(c) for c in self.prior_xcovs])
-        x0 = np.concatenate((means, covs))
+
+        x0 = np.concatenate((inducing, means, covs))
         s = (p*(p+1))/2 # size of a flattened covariance matrix
 
         def unflatten(xparams):
-            means = xparams[:n*p]
+            Xu = xparams[:n*p].reshape(n, p)
+
+            means = xparams[n*p:2*n*p]
             xmeans = [means[p*k:p*(k+1)] for k in range(n)]
 
-            covs = xparams[n*p:]
+            covs = xparams[2*n*p:]
             xcovs = [unflatten_cov_chol(covs[s*k:s*(k+1)]) for k in range(n)]
-            return xmeans, xcovs
+            return Xu, xmeans, xcovs
 
         def xnll(xparams):
-            xmeans, xcovs = unflatten(xparams)
+            Xu, xmeans, xcovs = unflatten(xparams)
             return -self.varobj_ll(Xu, xmeans, xcovs, theta, sigma2_n)
 
         r = scipy.optimize.minimize(xnll, x0, **kwargs)
-        xmeans, xcovs = unflatten(r.x)
+        Xu, xmeans, xcovs = unflatten(r.x)
 
-        return xmeans, xcovs
-
+        return Xu, xmeans, xcovs
 
 def cov_matrix(X1, X2, theta):
     # SE cov with ARD, theta specifies variance and lengthscales (diagonals of W matrix)

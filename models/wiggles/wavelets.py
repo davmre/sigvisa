@@ -1,12 +1,21 @@
 import numpy as np
 import pywt
 
-def parse_wavelet_basis_str(s):
-    family, res, levels, len_s = s.split("_")
+def parse_wavelet_basis_str(s, return_target_std=False, target_std=1.0):
+    ss = s.split("_")
+
+    if len(ss)==5:
+        family, res, levels, len_s, target_std = ss
+        target_std=float(target_std)
+    else:
+        family, res, levels, len_s = ss
     res = float(res)
     levels=int(levels)
     len_s = float(len_s)
-    return family, res, levels, len_s
+    if return_target_std:
+        return family, res, levels, len_s, target_std
+    else:
+        return family, res, levels, len_s
 
 def construct_wavelet_basis(srate, wavelet_str=None, wavelet_family='db4', wavelet_resolution_hz=0.5, wiggle_len_s=30.0, decomp_levels=99, sort=True):
 
