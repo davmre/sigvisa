@@ -1,5 +1,5 @@
 import numpy as np
-from sigvisa.treegp.gp import GP
+from sigvisa.treegp.gp import GP, GPCov
 import scipy.stats
 
 """
@@ -70,12 +70,12 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
 
 class JointGP(object):
 
-    def __init__(self, param, sta, ymean, noise_var, cov):
+    def __init__(self, param, sta, ymean, param_nodes):
         self.param = param
         self.sta = sta
-        self.noise_var = noise_var
         self.ymean = ymean
-        self.cov = cov
+
+        self.param_nodes = param_nodes
 
         self.messages = dict()
         self.evs = dict()
@@ -106,7 +106,8 @@ class JointGP(object):
         self._clear_cache()
 
     def prior(self):
-        return self.ymean, self.cov.wfn_params[0] + self.noise_var
+        noise_var, cov = self._get_cov()
+        return self.ymean, cov.wfn_params[0] + noise_var
 
     def posterior(self, holdout_eid, evdict=None):
         """
@@ -185,14 +186,21 @@ class JointGP(object):
 
         """
 
-
-        gp = self.train_gp()
-        if gp is None:
-            return 0.0
-        return gp.log_likelihood() + self.Z
+        try:
+            gp = self.train_gp()
+            if gp is None:
+                return 0.0
+            return gp.log_likelihood() + self.Z
+        except np.linalg.linalg.LinAlgError:
+            return -np.inf
 
     def train_gp(self, holdout_eid=None):
-        if holdout_eid not in self._cached_gp:
+
+        noise_var, cov = self._get_cov()
+
+        k = (holdout_eid, noise_var, cov)
+
+        if k not in self._cached_gp:
             eids, X, y, yvar = self._gp_inputs()
             if len(eids) == 0:
                 return None
@@ -206,10 +214,10 @@ class JointGP(object):
                 compute_ll = False
             else:
                 self.Z = np.sum([self.messages[eid][2] for eid in eids])
-            gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=self.cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=self.noise_var, sort_events=False)
+            gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=noise_var, sort_events=False)
 
-            self._cached_gp[holdout_eid] = gp
-        return self._cached_gp[holdout_eid]
+            self._cached_gp[k] = gp
+        return self._cached_gp[k]
 
     def holdout_evidence(self, eid):
         """
@@ -247,12 +255,14 @@ class JointGP(object):
 
         m1, v1 = self.prior()
 
+        noise_var, cov = self._get_cov()
+
         # train a GP only on a single eid
         def single_input_gp(eeid):
             X = np.array([self._ev_features(self.evs[eid]) for eid in [eeid,]])
             y = np.array([self.messages[eid][0] for eid in [eeid,]])
             y_obs_variances = np.array([self.messages[eid][1] for eid in [eeid,]])
-            return GP(X=X, y=y, y_obs_variances=y_obs_variances, cov_main=self.cov, ymean=self.ymean, compute_ll=False, sparse_invert=False, noise_var=self.noise_var, sort_events=False)
+            return GP(X=X, y=y, y_obs_variances=y_obs_variances, cov_main=cov, ymean=self.ymean, compute_ll=False, sparse_invert=False, noise_var=noise_var, sort_events=False)
 
         gp1 = single_input_gp(eid1)
         gp2 = single_input_gp(eid2)
@@ -307,7 +317,32 @@ class JointGP(object):
 
         return eid, evdict
 
+    def _get_cov(self):
+
+        try:
+            # for backwards compatibility, will never be
+            # set by new code.
+            return self.noise_var, self.cov
+        except AttributeError:
+
+            noise_var = self.param_nodes["noise_var"].get_value()
+            signal_var = self.param_nodes["signal_var"].get_value()
+            depth_lscale = self.param_nodes["depth_lscale"].get_value()
+            horiz_lscale = self.param_nodes["horiz_lscale"].get_value()
+            #wfn_str = parent_values[param_prefix + "wfn_str"]
+            wfn_str = "se"
+
+            cov = GPCov(wfn_str=wfn_str, wfn_params=np.array((signal_var,)),
+                        dfn_str="lld", dfn_params=np.array((horiz_lscale, depth_lscale)))
+            return noise_var, cov
+
     def __getstate__(self):
         self._clear_cache()
         d = self.__dict__.copy()
+
+        # avoid problems with pickling recursive structures.
+        # this pointer is reset upon unpickling
+        # by the setstate() method of SigvisaGraph
+        del d['param_nodes']
+
         return d

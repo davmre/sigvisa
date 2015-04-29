@@ -6,7 +6,7 @@ from sigvisa.learn.train_param_common import insert_model
 from sigvisa.source.event import Event
 from sigvisa.utils.geog import dist_km
 from sigvisa.utils.fileutils import mkdir_p
-from sigvisa.models.wiggles.wavelets import construct_implicit_basis_C
+from sigvisa.models.wiggles.uniform_variance_wavelets import uvar_wavelet_basis
 from sigvisa.treegp.gp import GPCov, prior_sample
 from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa import Sigvisa
@@ -64,7 +64,29 @@ class SampledWorld(object):
         self.ev_doublet = None
         self.ev_doublet_base = None
 
-    def joint_sample_arrival_params(self, gpcov, param_means, coef_noise_var=0.01, param_noise_var=0.1):
+    def load_param_models(self, runids, tmtypes=None, phase="P"):
+
+        template_shape="lin_polyexp"
+        tmtypes = {'tt_residual': 'constant_laplacian',
+                   'peak_offset': 'param_linear_mb',
+                   'coda_decay': 'param_linear_distmb',
+                   'peak_decay': 'param_linear_distmb',
+                   'amp_transfer': 'param_sin1'} \
+            if tmtypes is None else tmtypes
+
+        from sigvisa.graph.sigvisa_graph import get_param_model_id
+        from sigvisa.learn.train_param_common import load_modelid
+        pmodels = dict()
+        for sta in self.stas:
+            pmodels[sta] = dict()
+            for param in ("tt_residual", "amp_transfer", "coda_decay", "peak_decay", "peak_offset"):
+                modelid = get_param_model_id(runids, sta, phase, tmtypes[param], param, template_shape, chan=None, band=None)
+                model = load_modelid(modelid)
+                pmodels[sta][param] = model
+
+        return pmodels
+
+    def joint_sample_arrival_params(self, gpcov, param_means, coef_noise_var=0.01, param_noise_var=0.1, param_models=None):
         """
         for each station, sample signals jointly for all events.
 
@@ -93,7 +115,10 @@ class SampledWorld(object):
         for sta in self.stas:
             tm_params[sta] = dict()
             for param in param_means[sta].keys():
-                tm_params[sta][param]  = prior_sample(X, gpcov, param_noise_var) + param_means[sta][param]
+                if param_models is not None and param in param_models[sta]:
+                    tm_params[sta][param] = np.array([float(param_models[sta][param].sample(X[i:i+1,:])) for i in range(n_evs+1)])
+                else:
+                    tm_params[sta][param]  = prior_sample(X, gpcov, param_noise_var) + param_means[sta][param]
 
             true_coefs[sta] = np.zeros((len(self.all_evs), n_coefs))
             for i in range(n_coefs):
@@ -110,7 +135,7 @@ class SampledWorld(object):
         Given coefficients, sample signals for each event/station.
         """
         evs, ev_doublet, wavelet_family, stas = self.evs, self.ev_doublet, self.wavelet_family, self.stas
-        tm_params, true_coefs, basis, scaled = self.tm_params, self.true_coefs, self.basis, self.scaled
+        tm_params, true_coefs, basis = self.tm_params, self.true_coefs, self.basis
         self.band = band
         self.phase=phase
         self.chans = dict()
@@ -140,7 +165,7 @@ class SampledWorld(object):
                     if p in tm_params[sta]:
                         n.set_value(tm_params[sta][p][i])
 
-                wn.wavelet_basis = basis, scaled, 0.0
+                wn.wavelet_basis = basis
                 wn.wavelet_param_models[phase] = [Gaussian(c, 1e-8) for c in true_coefs[sta][i,:]]
 
                 wn.unfix_value()
@@ -150,15 +175,11 @@ class SampledWorld(object):
         self.waves = waves
         return waves
 
-    def set_basis(self, wavelet_family="db4_2.0_3_30", iid_repeatable_var=0.1,
-                  iid_nonrepeatable_var=0.4, srate=5.0):
+    def set_basis(self, wavelet_family, srate=5.0):
         self.srate=srate
         self.wavelet_family=wavelet_family
-        self.basis = construct_implicit_basis_C(srate, wavelet_family)
-        self.scaled = np.zeros((1500))
-        self.scaled[0:150] = iid_repeatable_var
-        self.scaled[150:1500] = iid_nonrepeatable_var
-        self.n_coefs = len(self.basis[0])
+        self.basis = uvar_wavelet_basis(srate, wavelet_family)
+        self.n_coefs = len(self.basis[0][0])
 
     def serialize(self, wave_dir):
         """
@@ -266,8 +287,7 @@ def sample_params_and_signals(basedir, seed=0):
                   dfn_str="lld",
                   wfn_str="compact2")
     param_means = build_param_means(sw.stas)
-    sw.set_basis(wavelet_family="db4_2.0_3_30", iid_repeatable_var=0.1,
-                  iid_nonrepeatable_var=0.4, srate=5.0)
+    sw.set_basis(wavelet_family="db4uvars_2.0_3_30_0.4", srate=5.0)
     sw.joint_sample_arrival_params(gpcov, param_means)
     sw.sample_signals("freq_0.8_4.5")
 
@@ -277,7 +297,7 @@ def sample_params_and_signals(basedir, seed=0):
     sw.save_gps(wave_dir, run_name="synth_truedata")
 
 
-def build_sg(sw, runid, ev_init=None, **kwargs):
+def build_doublet_sg(sw, runid, ev_init=None, **kwargs):
     ev_doublet = sw.ev_doublet
     wavelet_family = sw.wavelet_family
 
@@ -291,11 +311,62 @@ def build_sg(sw, runid, ev_init=None, **kwargs):
     wns = dict()
     for sta in sw.stas:
         wns[sta] = sg.add_wave(sw.waves[sw.n_evs][sta])
-        wns[sta].wavelet_basis = sw.basis, sw.scaled, sw.gpcov.wfn_params[0]
+        wns[sta].wavelet_basis = sw.basis, sw.gpcov.wfn_params[0]
 
     evnodes = sg.add_event(ev_doublet_init if ev_init is None else ev_init)
     return sg, wns
 
+def build_joint_sg(sw, runid, init_evs="true", init_templates=True, **kwargs):
+    ev_doublet = sw.ev_doublet
+    wavelet_family = sw.wavelet_family
+
+
+    sg = SigvisaGraph(template_shape="lin_polyexp",
+                              wiggle_family=wavelet_family,
+                              nm_type = "ar", phases=["P"], runids=(runid,), **kwargs)
+    wns = dict()
+    for w in sw.waves.values():
+        for sta in w.keys():
+            wns[sta] = sg.add_wave(w[sta])
+            #wns[sta].wavelet_basis = sw.basis
+
+    for ev in sw.all_evs:
+        if init_evs=="none": continue
+        elif init_evs.startswith("noise"):
+            ev_init = Event(lon=ev.lon+1, lat=ev.lat-1,
+                            depth=ev.depth, mb=ev.mb+0.4,
+                            time=ev.time+20.0)
+        elif init_evs=="true":
+            ev_init = ev
+        evnodes = sg.add_event(ev_init)
+
+    if init_templates:
+        assert(init_evs != "none")
+        for sta in sw.tm_params.keys():
+            for eid in range(1, len(sw.all_evs)+1):
+                tmnodes = sg.get_template_nodes(eid, sta, sw.phase, chan=sw.chans[sta], band=sw.band)
+                for param in sw.tm_params[sta].keys():
+                    k, n = tmnodes[param]
+                    n.set_value(sw.tm_params[sta][param][eid-1])
+
+    return sg, wns
+
+
+def save_hparams(sg, mcmc_dir, vals=None):
+    if vals is None:
+        vals = {'noise_var': 0.01,
+                'signal_var': 1.0,
+                'horiz_lscale': 300,
+                'depth_lscale': 5.0}
+
+    true_params = dict()
+    for sta in sg.station_waves.keys():
+        true_params[sta] = dict()
+        nparams = len(sta.wavelet_basis[0][0])
+        for hparam in sg.jointgp_hparam_prior.keys():
+            true_params[sta][hparam] = [vals[hparam],]*nparams
+    with open(os.path.join(mcmc_dir, 'gp_hparams', 'true.pkl'), 'wb') as f:
+        pickle.dump(true_params, f)
 
 def main():
     basedir = os.path.join(os.getenv("SIGVISA_HOME"), "experiments", "synth_wavematch")

@@ -13,7 +13,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.autoregressive_mcmc import arnoise_gibbs_move
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_lstsqr, swap_threeway_lstsqr
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
@@ -34,7 +34,11 @@ global_stds = {'coda_height': .7,
                'evloc_big': 0.4,
                'evtime': 1.0,
                'evmb': 0.2,
-               'evdepth': 8.0}
+               'evdepth': 8.0,
+               'signal_var': 0.4,
+               'noise_var': 0.4,
+               'depth_lscale': 15.0,
+               'horiz_lscale': 15.0}
 
 
 extra_move_args = {'hamiltonian_reversing': {'log_eps_mean': 6.5,
@@ -53,6 +57,45 @@ extra_move_args = {'hamiltonian_reversing': {'log_eps_mean': 5,
                                              'reverse_block_min_std': 0.5,
                                              'reverse_block_max_std': 1000,}}
 """
+
+def do_gp_hparam_moves(sg, stds, n_attempted=None, n_accepted=None,
+                      move_times=None, step=None):
+
+    from numpy.linalg.linalg import LinAlgError
+
+    """
+    hacky state of affairs, as I understand it:
+    - changing signal_var and noise_var will subtly change the overall logp in a way
+      that's not accounted for by these moves, because it will affect the numeric
+      properties of the calculation of
+    """
+
+    def hparam_move(node, jgp, std):
+        v1 = node.get_value()
+        v2 = v1 + np.random.randn()*std
+
+        if v2 < 0:
+            return False
+
+        def lp(v):
+            node.set_value(v)
+            return node.log_p() + jgp.log_likelihood()
+
+        return mh_accept_lp(sg, lp, v1, v2)
+
+    for sta in sg._joint_gpmodels.keys():
+        for param in sg._joint_gpmodels[sta].keys():
+            jgp, hnodes = sg._joint_gpmodels[sta][param]
+
+            for (hparam, n) in hnodes.items():
+
+                try:
+                    run_move(move_name=hparam, fn=hparam_move,
+                             step=step, n_accepted=n_accepted,
+                             n_attempted=n_attempted, move_times=move_times,
+                             node=n, std=stds[hparam], jgp=jgp)
+                except KeyError:
+                    continue
 
 def do_template_moves(sg, wn, tmnodes, tg, stds,
                       n_attempted=None, n_accepted=None,
@@ -181,7 +224,7 @@ def run_open_world_MH(sg, steps=10000,
                         'event_birth_hough': ev_birth_move_hough,
                         'event_death_hough': ev_death_move_hough,
                         'event_birth_lstsqr': ev_birth_move_lstsqr,
-                        'event_death_lstsqr': ev_death_move_lstsqr}
+                        'event_death_lstsqr': ev_death_move_lstsqr        }
     else:
         if enable_template_openworld:
             # swap moves leave behind uatemplates, so only allow them
@@ -218,7 +261,6 @@ def run_open_world_MH(sg, steps=10000,
     if template_move_type in ("hamiltonian", "both"):
         template_moves_special['hamiltonian_reversing'] = hamiltonian_template_move
 
-
     # allow the caller to disable specific moves by name
     for move in disable_moves:
         for move_type in (global_moves, event_moves_gaussian, event_moves_special, sta_moves, template_moves_special):
@@ -253,6 +295,12 @@ def run_open_world_MH(sg, steps=10000,
         np.random.seed(sg.seed)
     except AttributeError:
         pass
+
+    # we don't actually need the LP, but this will
+    # cause all relevant messages to be passed.
+    # HACK ALERT, should have a separate method
+    # to do this.
+    init_lp = sg.current_log_p()
 
     for step in range(start_step, steps):
 
@@ -323,6 +371,10 @@ def run_open_world_MH(sg, steps=10000,
                      n_accepted=n_accepted, move_times=move_times,
                      move_prob=ev_openworld_move_probability,
                      sg=sg, log_to_run_dir=run_dir)
+
+        if sg.jointgp:
+            do_gp_hparam_moves(sg, stds, step=step, n_attempted=n_attempted,
+                     n_accepted=n_accepted, move_times=move_times)
 
 
         seed = np.random.randint(2**31)

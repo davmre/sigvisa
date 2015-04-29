@@ -22,6 +22,20 @@
 </ul>
 {% endif %}
 
+{% if gp_hparams %}
+<p>GP hyperparams:</p>
+<ul>
+{% for sta in stas %}
+<li>
+<b>{{ sta }}:</b>
+{% for hparam in gp_hparams %}
+<a href="{% url mcmc_hparam_posterior dirname=dirname sta=sta hparam=hparam %}">{{ hparam }}</a>
+{% endfor %}
+</li>
+{% endfor %}
+</ul>
+{% endif %}
+
 <p>True events:<ul>
 {% for tev in true_ev_strs %}
 <li> {{tev}}</li>

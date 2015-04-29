@@ -47,7 +47,7 @@ class InvGamma(Distribution):
     def predict(self):
         return self.beta / (self.alpha+1) # return the mode, since the mean isn't always defined
 
-    def log_p(self, x):
+    def log_p(self, x, **kwargs):
         alpha = self.alpha
         beta = self.beta
         if alpha <= 0 or beta <= 0:
@@ -74,7 +74,7 @@ class LogNormal(Distribution):
         self.mu = mu
         self.sigma = sigma
 
-    def log_p(self, x):
+    def log_p(self, x, **kwargs):
         mu = self.mu
         sigma = self.sigma
         if x == 0.0: return np.log(1e-300)

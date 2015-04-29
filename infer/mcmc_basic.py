@@ -33,6 +33,46 @@ def gaussian_MH_move(sg, keys, node_list, relevant_nodes, scales=None, proxy_lps
     proposal = gaussian_propose(sg, keys, node_list, values=values, scales=scales, **kwargs)
     return MH_accept(sg, keys, values, proposal, node_list, relevant_nodes, proxy_lps=proxy_lps)
 
+
+alldiffs = 0
+def mh_accept_lp(sg, lp, oldvalues, newvalues):
+    # assume "lp" sets the appropriate values and then computes a log-likelihood
+
+    check=False
+
+    lp_old = lp(oldvalues)
+    lp_new = lp(newvalues)
+
+    if check:
+        lp_old1 = lp(oldvalues)
+        lp_old_true = sg.current_log_p()
+        lp_new1 = lp(newvalues)
+        lp_new_true = sg.current_log_p()
+
+        if np.isfinite(lp_new):
+            try:
+                assert(np.abs((lp_new_true-lp_old_true) - (lp_new-lp_old)) < 1e-3)
+                print "check passed!"
+            except AssertionError:
+                import pdb; pdb.set_trace()
+
+    u = np.random.rand()
+
+    #global alldiffs
+    #if u < 0.01:
+    #    print "alldiffs", alldiffs
+
+    if lp_new - lp_old > np.log(u):
+        #print "accepting, diff", lp_new-lp_old
+        #lp(newvalues)
+        #alldiffs += lp_new-lp_old
+        return True
+    else:
+        lp(oldvalues)
+        #print "rejecting, diff", lp_new-lp_old
+        return False
+
+
 def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
               log_qforward=0.0, log_qbackward=0.0, proxy_lps=None):
 
@@ -64,6 +104,8 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
 
         for n in relevant_nodes:
             if len(n.params_modeled_jointly) > 0:
+                # pass the proper (original) messages
+                # back up to the joint param nodes.
                 # TODO: cache messages to avoid recomputation
                 n.upwards_message_normalizer()
 

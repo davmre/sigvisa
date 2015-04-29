@@ -23,12 +23,14 @@ from sigvisa.models.ttime import tt_predict
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.heatmap import event_bounds, find_center
+
 from sigvisa.signals.io import Waveform
 from sigvisa import *
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.patches as mpatches
+import matplotlib.gridspec as gridspec
 
 from stat import S_ISREG, ST_CTIME, ST_MODE
 
@@ -116,6 +118,7 @@ def mcmc_run_detail(request, dirname):
     relative_run_dir = os.path.join("logs", "mcmc", dirname)
     analyze_cmd = "python infer/analyze_mcmc.py %s 10 %s/events.pkl t" % (relative_run_dir, relative_run_dir)
 
+
     try:
         with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as f:
             true_evs = pickle.load(f)
@@ -124,6 +127,14 @@ def mcmc_run_detail(request, dirname):
         true_evs = []
 
     sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+
+    stas = sg.station_waves.keys()
+    try:
+        gp_hparams = sg.jointgp_hparam_prior.keys()
+    except AttributeError:
+        gp_hparams = None
+
     wns = [n.label for n in np.concatenate(sg.station_waves.values())]
 
     eids = sg.evnodes.keys()
@@ -169,6 +180,8 @@ def mcmc_run_detail(request, dirname):
                                'max_step': max_step,
                                'evs': evs,
                                'true_ev_strs': true_ev_strs,
+                               'stas': stas,
+                               'gp_hparams': gp_hparams,
                                }, context_instance=RequestContext(request))
 
 def rundir_eids(mcmc_run_dir):
@@ -180,6 +193,100 @@ def rundir_eids(mcmc_run_dir):
             eid = int(m.group(1))
             eids.append(eid)
     return eids
+
+def mcmc_hparam_posterior(request, dirname, sta, hparam):
+
+
+    def plot_dist(ax, samples):
+        import seaborn as sns
+        sns.distplot(samples, ax=ax)
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    burnin = int(request.GET.get('burnin', '-1'))
+
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    wn = sg.station_waves[sta][0]
+    srate = float(wn.srate)
+
+    # analyze the wavelet basis to lay out the visualization
+    (starray, etarray, idarray, M, N), target_std = wn.wavelet_basis
+    ids_by_length = {idarray[i]: etarray[i]-starray[i] for i in range(len(starray))}
+
+    # longest basis elements first
+    ids_sorted = sorted(ids_by_length.keys(), key = lambda k : -ids_by_length[k])
+
+    st_range = np.max(starray) - np.min(starray)
+    # time resolution of the shortest element
+    res = np.min(np.diff(starray[idarray==ids_sorted[-1]]))
+    nbins = int(st_range/res)+1
+
+
+    # load hparam samples from file
+    ffname = os.path.join(mcmc_run_dir, "gp_hparams", "%s_%s" % (sta, hparam))
+    a = np.loadtxt(ffname)
+    if burnin < 0:
+        burnin = 100 if a.shape[0] > 150 else 10
+    assert(a.shape[1]==len(starray))
+
+    true_vals = None
+    try:
+        # for each sta, for each hparam, for each param, we'll have a true hparam
+        with open(os.path.join(mcmc_run_dir, "gp_hparams", "true.pkl"), 'rb') as f:
+            true_dict = pickle.load(f)
+        true_vals = true_dict[sta][hparam]
+    except IOError:
+        pass
+
+    f = Figure((16, 8))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(len(ids_sorted), nbins)
+
+    firstax=dict()
+    for i in range(a.shape[1]):
+        st, et, pid = starray[i], etarray[i], idarray[i]
+        id_idx = ids_sorted.index(pid)
+
+        st_idx = (st-np.min(starray))/res
+
+        my_id_sts = starray[idarray==idarray[i]]
+        width = (my_id_sts[1] - my_id_sts[0])/res
+
+
+        shared_ax = firstax[pid] if pid in firstax else None
+        ax = f.add_subplot(gs[id_idx,st_idx:st_idx+width],
+                           sharey=shared_ax,
+                           sharex=shared_ax)
+        #ax.patch.set_facecolor('white')
+
+        samples = a[burnin:, i]
+        plot_dist(ax, samples)
+        ax.set_xticks(np.linspace(0, np.max(a), 3))
+
+        if true_vals is not None:
+            ax.axvline(true_vals[i], lw=1, color="green")
+
+        if pid not in firstax:
+            firstax[pid] = ax
+        else:
+            ax.get_yaxis().set_visible(False)
+        t_start = max(0, starray[i]/srate)
+        t_end = etarray[i]/srate
+        ax.set_title("%d" % i)
+        ax.annotate('%.1fs:%.1fs\nmean %.1f\nstd %.1f' % (t_start, t_end, np.mean(samples), np.std(samples)), (0.3, 0.85), xycoords='axes fraction', size=10)
+
+
+
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
 
 #@cache_page(60 * 60 * 60)
 def mcmc_event_posterior(request, dirname):
@@ -372,6 +479,7 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
     canvas.print_png(response)
     return response
 
+
 def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
@@ -452,7 +560,6 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     f.tight_layout()
     canvas.print_png(response)
     return response
-
 
 
 def mcmcrun_analyze(request, dirname):

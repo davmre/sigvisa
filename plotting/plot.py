@@ -206,7 +206,7 @@ def plot_with_fit_shapes(fname, wn, title="",
             highlight_tmpl = (cmeans[(eid, phase)]["combined"], cmeans[(eid, phase)]["stime"])
 
     if plot_wave:
-        subplot_waveform(wave, axes, color='black', linewidth=1.5, plot_dets=plot_dets, **kwargs)
+        subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=plot_dets, **kwargs)
 
 
     if model_lw is not None:

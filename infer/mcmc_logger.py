@@ -9,7 +9,7 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in
 
 class MCMCLogger(object):
 
-    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=500, template_move_step=True, print_interval=20, transient=False):
+    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=500, template_move_step=True, print_interval=20, transient=False, write_gp_hparams=False):
 
         s = Sigvisa()
 
@@ -28,6 +28,7 @@ class MCMCLogger(object):
 
         self.dumpsteps = dumpsteps
         self.write_template_vals=write_template_vals
+        self.write_gp_hparams = write_gp_hparams
         self.dump_interval = dump_interval
         self.print_interval = print_interval
 
@@ -99,6 +100,21 @@ class MCMCLogger(object):
                             lbl_handle.close()
 
             handle.close()
+
+            if sg.jointgp and self.write_gp_hparams:
+                gpdir = os.path.join(self.run_dir, 'gp_hparams')
+                mkdir_p(gpdir)
+                for (sta, pdicts) in sg._joint_gpmodels.items():
+                    for hparam in sg.jointgp_hparam_prior.keys():
+                        lbl = "%s_%s" % (sta, hparam)
+                        if lbl not in self.log_handles:
+                            self.log_handles[lbl] = open(os.path.join(gpdir, lbl), 'a')
+                        handle = self.log_handles[lbl]
+                        for param in sorted(pdicts.keys()):
+                            jgp, hnodes = pdicts[param]
+                            handle.write("%.4f " % hnodes[hparam].get_value())
+                        handle.write("\n")
+
 
 
         for move_name in move_times.keys():

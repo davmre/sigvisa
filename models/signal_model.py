@@ -42,7 +42,7 @@ def extract_arrival_from_key(k, r):
 def get_new_arrivals(new_nodes, r):
     new_arrivals = set()
     for n in new_nodes:
-        if "loc" in n.label or "mb" in n.label: continue
+        if n.label.startswith("gp;") or "loc" in n.label or "mb" in n.label: continue
         for k in n.keys():
             new_arrivals.add(extract_arrival_from_key(k, r))
     return new_arrivals
@@ -61,7 +61,7 @@ def update_arrivals(parent_values):
     r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
     for k in parent_values.keys():
         if k=="prefix": continue
-        if "lon" in k or "lat" in k or "depth" in k or "mb" in k: continue
+        if n.label.startswith("gp;") or "lon" in k or "lat" in k or "depth" in k or "mb" in k: continue
         arrivals.add(extract_arrival_from_key(k, r))
     return arrivals
 
@@ -144,7 +144,6 @@ class ObservedSignalNode(Node):
         self.cached_logp = None
         self._coef_message_cache = None
 
-        self.conditional_coef_distribution = False
 
     def __str__(self):
         try:
@@ -405,6 +404,10 @@ class ObservedSignalNode(Node):
 
                 pm, pv = zip(*[jgp.prior() for jgp in self.wavelet_param_models[phase]])
                 pm, pv = np.asarray(pm, dtype=np.float64), np.asarray(pv, dtype=np.float64)
+
+                pm = np.zeros(pm.shape)
+                pv = np.ones(pv.shape)
+
                 ssm.set_coef_prior(pm, pv)
                 #print "passing with vars", pv
                 prior_means.append(pm)
@@ -444,7 +447,7 @@ class ObservedSignalNode(Node):
 
         if self.cached_logp is None:
 
-            d = self.get_value().data
+            #d = self.get_value().data
             ell, prior_means, prior_vars, posterior_means, posterior_vars = self._coef_message_cache
 
             #var_diff = prior_vars - posterior_vars
@@ -463,6 +466,8 @@ class ObservedSignalNode(Node):
             #print self.sta, ell, correction, ell-correction
             #assert(np.isfinite(correction))
             self.cached_logp = ell # - correction
+
+
 
         return self.cached_logp
 
@@ -655,8 +660,13 @@ class ObservedSignalNode(Node):
             evdict = self._ev_params[eid]
             cssm = self.arrival_ssms[(eid, phase)]
             if cssm is None: continue
-            prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
-            prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
+
+            if self.has_jointgp:
+                prior_means, prior_vars = zip(*[jgp.prior() for jgp in self.wavelet_param_models[phase]])
+                prior_means, prior_vars = np.asarray(prior_means, dtype=np.float64), np.asarray(prior_vars, dtype=np.float64)
+            else:
+                prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
+                prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
             cssm.set_coef_prior(prior_means, prior_vars)
 
 
@@ -967,11 +977,25 @@ signal_diff(i) =value(i) - pred_signal(i);
         return proxy_lps
 
     def __getstate__(self):
+
+        pv = self._parent_values()
+
         d = self.__dict__.copy()
         del d['tssm']
         del d['arrival_ssms']
         del d['noise_arssm']
         del d['iid_arssm']
+
+        # avoid hitting the recursion depth limit
+        # by removing upwards pointers to
+        # GP hyperparam nodes.
+        # These are filled in upon reloading
+        # by the setstate() method of SigvisaGraph.
+        d['parents'] = d['parents'].copy()
+        for k in self.parents.keys():
+            if k.startswith("gp"):
+                del d['parents'][k]
+
         return d
 
     def __setstate__(self, d):
