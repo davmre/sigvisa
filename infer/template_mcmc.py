@@ -189,7 +189,8 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time
 
-def indep_peak_move(sg, wave_node, tmnodes, window_lps=None, std=None):
+def indep_peak_move(sg, wave_node, tmnodes,
+                    window_lps=None, std=None, **kwargs):
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
     relevant_nodes = [wave_node,]

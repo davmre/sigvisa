@@ -13,7 +13,7 @@ def get_node_scales(node_list):
     scales[~scaled] = 1.0
     return scales
 
-def gaussian_propose(sg, keys, node_list, values=None, scales=None, std=0.01, phase_wraparound=False):
+def gaussian_propose(sg, keys, node_list, values=None, scales=None, std=0.01, phase_wraparound=False, **kwargs):
     scales = scales if scales is not None else get_node_scales(node_list)
     values = values if values is not None else np.array([n.get_value(k) for (n,k) in zip(node_list, keys)])
     n = len(values)

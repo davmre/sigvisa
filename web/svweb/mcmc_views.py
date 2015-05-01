@@ -19,6 +19,7 @@ from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.utils.geog import azimuth_gap
 from sigvisa.infer.analyze_mcmc import load_trace, trace_stats
+from sigvisa.infer.template_xc import get_arrival_signal, fastxc
 from sigvisa.models.ttime import tt_predict
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
 from sigvisa.plotting.event_heatmap import EventHeatmap
@@ -194,6 +195,109 @@ def rundir_eids(mcmc_run_dir):
             eids.append(eid)
     return eids
 
+def mcmc_alignment_posterior(request, dirname, sta, phase):
+    import seaborn as sns
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    burnin = int(request.GET.get('burnin', '50'))
+    xmin = float(request.GET.get('xmin', '-5'))
+    xmax = float(request.GET.get('xmax', '5'))
+    temp = float(request.GET.get('xmax', '10'))
+    titles = request.GET.get('titles', 'f').startswith('t')
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+    atimes = dict()
+    for eid in sg.evnodes.keys():
+
+        eid_dir = os.path.join(mcmc_run_dir, "ev_%05d" % eid)
+        for fname in os.listdir(eid_dir):
+            if sta not in fname: continue
+            if not fname.endswith("_%s" % phase): continue
+
+            tmpl = np.loadtxt(os.path.join(eid_dir, fname))
+            atimes[eid] = tmpl[burnin:, 1]
+            atimes[eid] = atimes[eid]
+            break
+
+    f = Figure((16, 8))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(len(atimes), len(atimes))
+
+    sorted_eids = sorted(atimes.keys())
+    shared_ax = None
+    shared_ax_xc = None
+    for i, eid1 in enumerate(sorted_eids):
+        ev1 = sg.get_event(eid1)
+        pred_t1 = ev1.time + tt_predict(ev1, sta, phase=phase)
+
+        ax = f.add_subplot(gs[i,i],
+                           sharey=shared_ax,
+                           sharex=shared_ax)
+        if shared_ax is None:
+            shared_ax = ax
+
+        mean_atime = np.mean(atimes[eid1])
+        sns.distplot(atimes[eid1]-mean_atime, ax=ax)
+        ax.set_xticks(np.linspace(xmin, xmax, 5))
+        ax.set_xlim([xmin, xmax])
+
+        ax.axvline(pred_t1-mean_atime, lw=1, color="green")
+
+        if titles:
+            ax.set_title("atimes %d" % eid1)
+
+        wn = [wn for wn in sg.station_waves[sta] if (eid1, phase) in wn.arrivals()][0]
+        s1, _, _ = get_arrival_signal(sg, eid1, phase, wn, 2-xmin, 10+xmax, atime = mean_atime)
+
+        for j, eid2 in enumerate(sorted_eids[i+1:]):
+            ev2 = sg.get_event(eid2)
+
+            ax = f.add_subplot(gs[i,i+j+1],
+                               sharey=shared_ax,
+                               sharex=shared_ax)
+
+            pred_t2 = ev2.time + tt_predict(ev2, sta, phase=phase)
+            pred_diff = pred_t1-pred_t2
+
+            n = min(len(atimes[eid1]), len(atimes[eid2]))
+            reltimes = atimes[eid1][:n] - atimes[eid2][:n]
+            mean_reltime = np.mean(reltimes)
+            reltimes -= mean_reltime
+            sns.distplot(reltimes, ax=ax)
+
+            ax.axvline(pred_diff-mean_reltime, lw=1, color="green")
+
+            if titles:
+                ax.set_title("atime diff %d %d" % (eid1, eid2))
+
+            ax2 = f.add_subplot(gs[i+j+1, i],
+                                sharex=shared_ax,
+                                sharey=shared_ax_xc)
+            if shared_ax_xc is None:
+                shared_ax_xc = ax2
+            # compute xcorr relative to mean relative time
+            wn = [wn for wn in sg.station_waves[sta] if (eid2, phase) in wn.arrivals()][0]
+            s2, _, _ = get_arrival_signal(sg, eid2, phase, wn, 2, 10, atime=np.mean(atimes[eid2]))
+            xc = fastxc(s2, s1)
+            xcdist = np.exp(temp*xc)
+            xcdist /= np.sum(xcdist)
+            x = np.linspace(xmin, xmax, len(xcdist))
+            ax2.plot(x, xc)
+
+            if titles:
+                ax2.set_title("xcorr: %d %d" % (eid1, eid2))
+
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
 def mcmc_hparam_posterior(request, dirname, sta, hparam):
 
 
@@ -277,8 +381,6 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
         t_end = etarray[i]/srate
         ax.set_title("%d" % i)
         ax.annotate('%.1fs:%.1fs\nmean %.1f\nstd %.1f' % (t_start, t_end, np.mean(samples), np.std(samples)), (0.3, 0.85), xycoords='axes fraction', size=10)
-
-
 
 
     canvas = FigureCanvas(f)

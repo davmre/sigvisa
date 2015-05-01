@@ -508,6 +508,7 @@ class ObservedSignalNode(Node):
             (start_idxs, end_idxs, identities, basis_prototypes, n_steps), target_std = self.wavelet_basis
             n_basis = len(start_idxs)
         else:
+            n_steps = 0
             n_basis = 0
             target_std = 1.0
 

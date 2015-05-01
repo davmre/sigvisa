@@ -76,11 +76,8 @@ class MCMCLogger(object):
             if self.write_template_vals:
                 for (sta,wns) in sg.station_waves.items():
                     for wn in wns:
-                        if sg.phases=="leb" or sg.phases=="auto":
-                            phases = sg.ev_arriving_phases(eid, sta=sta)
-                        else:
-                            phases = sg.phases
-                        for phase in phases:
+                        ev_phases = [phase for (eeid,phase) in wn.arrivals() if eeid==eid]
+                        for phase in ev_phases:
                             try:
                                 tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
                             except KeyError:

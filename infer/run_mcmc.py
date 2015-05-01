@@ -13,6 +13,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.autoregressive_mcmc import arnoise_gibbs_move
+from sigvisa.infer.template_xc import atime_xc_move
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_lstsqr, swap_threeway_lstsqr
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options
@@ -257,7 +258,8 @@ def run_open_world_MH(sg, steps=10000,
 
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move_gaussian,
-                              'arrival_time': improve_atime_move,} if enable_template_moves else {}
+                              'arrival_time': improve_atime_move,
+                              'atime_xc': atime_xc_move} if enable_template_moves else {}
     if template_move_type in ("hamiltonian", "both"):
         template_moves_special['hamiltonian_reversing'] = hamiltonian_template_move
 
@@ -351,6 +353,7 @@ def run_open_world_MH(sg, steps=10000,
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                      n_accepted=n_accepted, move_times=move_times,
                                      sg=sg, wave_node=wn, tmnodes=tmnodes,
+                                     eid=eid, phase=phase,
                                      std=stds[move_name] if move_name in stds else None,
                                      window_lps = window_lps)
 
