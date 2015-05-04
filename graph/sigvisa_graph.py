@@ -120,7 +120,7 @@ class SigvisaGraph(DirectedGraphModel):
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True, smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
-                 absorb_n_phases=False, hack_param_constraint=False,
+                 absorb_n_phases=False, hack_param_constraint=True,
                  uatemplate_rate=1e-3,
                  fixed_arrival_npts=None,
                  dummy_prior=None,
@@ -217,7 +217,7 @@ class SigvisaGraph(DirectedGraphModel):
             # todo: different priors for different params
             self.jointgp_hparam_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=1.0),
                                          'depth_lscale': LogNormal(mu=3.0, sigma=1.0),
-                                         'signal_var': InvGamma(beta=1.0, alpha=3.0),
+                                         'signal_var': InvGamma(beta=3.0, alpha=3.0),
                                          'noise_var': InvGamma(beta=1.0, alpha=3.0)}
 
         self.force_event_wn_matching = force_event_wn_matching
@@ -1391,17 +1391,21 @@ class SigvisaGraph(DirectedGraphModel):
             gpmodels = self._joint_gpmodels[sta]
             params = gpmodels.keys()
 
-            for wn in self.station_waves[sta]:
-                for param in params:
-                    jgp, hparam_nodes = gpmodels[param]
+            try:
+                for wn in self.station_waves[sta]:
+                    for param in params:
+                        jgp, hparam_nodes = gpmodels[param]
 
-                    # fill in pointers discarded by
-                    # getstate() of JointGP
-                    jgp.param_nodes = hparam_nodes
+                        # fill in pointers discarded by
+                        # getstate() of JointGP
+                        jgp.param_nodes = hparam_nodes
 
-                    # fill in the parent pointers discarded
-                    # during pickling by the getstate() method
-                    # of ObservedSignalNode
+                        # fill in the parent pointers discarded
+                        # during pickling by the getstate() method
+                        # of ObservedSignalNode
 
-                    for n in hparam_nodes.values():
-                        wn.parents[n.single_key] = n
+                        for n in hparam_nodes.values():
+                            wn.parents[n.single_key] = n
+            except TypeError:
+                # backwards compatibility if we're loading sggraphs with no hparams
+                pass

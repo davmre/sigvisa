@@ -977,6 +977,16 @@ signal_diff(i) =value(i) - pred_signal(i);
         proxy_lps = {self.label: (lpw, deriv_lp_w)}
         return proxy_lps
 
+    def plot(wn, ax=None):
+        if ax is None:
+            f = plt.figure(figsize=(15,5))
+            ax=f.add_subplot(111)
+        shape_colors = plot_with_fit_shapes(fname=None, wn=self, axes=ax, plot_wave=True)
+        atimes = dict([("%d_%s" % (eid, phase), self.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in self.arrivals()])
+        colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in self.arrivals()])
+        plot_pred_atimes(dict(atimes), self.get_wave(), axes=ax, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
+        return ax
+
     def __getstate__(self):
 
         pv = self._parent_values()

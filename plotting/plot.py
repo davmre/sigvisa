@@ -189,6 +189,7 @@ def plot_with_fit_shapes(fname, wn, title="",
 
     cmeans = wn.signal_component_means()
 
+
     for arrival in wn.arrivals():
         eid, phase = arrival
         if eid < 0:
@@ -231,6 +232,15 @@ def plot_with_fit_shapes(fname, wn, title="",
                              linewidth=ev_lw, alpha = 0.8*alpha,
                              plot_dets=False, fill_y2=wn.nm.c,
                              **kwargs)
+
+    if plot_pred:
+        pred_signal = wn.tssm.mean_obs(wn.npts)
+        w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+        subplot_waveform(w, axes, color='red',
+                         alpha = 0.8*alpha,
+                         plot_dets=False, fill_y2=wn.nm.c,
+                         **kwargs)
+
 
     if fname is not None:
         savefig(fname, fig, bbox_inches="tight", dpi=300)

@@ -117,7 +117,7 @@ def sigvisa_locate_joint(jointtts=False, jointwiggles=False):
 
     sg = build_sg(evs, waves, template_model_type=tm_types, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, force_event_wn_matching=True,  runids=(28,))
 
-    logger = MCMCLogger(write_template_vals=False, dump_interval=10, write_gp_hparams=True)
+    logger = MCMCLogger(write_template_vals=True, dump_interval=10, write_gp_hparams=True)
 
     with open(os.path.join(logger.run_dir, "events.pkl"), "wb") as f:
         pickle.dump(evs.values(), f)

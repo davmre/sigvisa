@@ -18,7 +18,7 @@ import cPickle as pickle
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.utils.geog import azimuth_gap
-from sigvisa.infer.analyze_mcmc import load_trace, trace_stats
+from sigvisa.infer.analyze_mcmc import load_trace, trace_stats, match_true_ev
 from sigvisa.infer.template_xc import get_arrival_signal, fastxc
 from sigvisa.models.ttime import tt_predict
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
@@ -205,13 +205,22 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
     burnin = int(request.GET.get('burnin', '50'))
     xmin = float(request.GET.get('xmin', '-5'))
     xmax = float(request.GET.get('xmax', '5'))
-    temp = float(request.GET.get('xmax', '10'))
+    ymax = float(request.GET.get('ymax', '-1'))
+    temp = float(request.GET.get('temp', '10'))
+    nplots = int(request.GET.get('nplots', '20'))
     titles = request.GET.get('titles', 'f').startswith('t')
+    plotxc = request.GET.get('plotxc', 'f').startswith('t')
 
     sg, max_step = final_mcmc_state(mcmc_run_dir)
 
+    eid_request = request.GET.get('eids', 'None')
+    if eid_request == "None":
+        eids = sg.evnodes.keys()
+    else:
+        eids = [int(eid) for eid in eid_request.split(',')]
+
     atimes = dict()
-    for eid in sg.evnodes.keys():
+    for eid in eids:
 
         eid_dir = os.path.join(mcmc_run_dir, "ev_%05d" % eid)
         for fname in os.listdir(eid_dir):
@@ -225,7 +234,7 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
 
     f = Figure((16, 8))
     f.patch.set_facecolor('white')
-    gs = gridspec.GridSpec(len(atimes), len(atimes))
+    gs = gridspec.GridSpec(len(atimes)*2+1, len(atimes))
 
     sorted_eids = sorted(atimes.keys())
     shared_ax = None
@@ -234,30 +243,39 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
         ev1 = sg.get_event(eid1)
         pred_t1 = ev1.time + tt_predict(ev1, sta, phase=phase)
 
-        ax = f.add_subplot(gs[i,i],
-                           sharey=shared_ax,
+        ax = f.add_subplot(gs[2*i+1:2*i+3,i],
                            sharex=shared_ax)
         if shared_ax is None:
             shared_ax = ax
 
         mean_atime = np.mean(atimes[eid1])
-        sns.distplot(atimes[eid1]-mean_atime, ax=ax)
+        try:
+            sns.distplot(atimes[eid1]-mean_atime, ax=ax)
+        except ZeroDivisionError:
+            pass
+
         ax.set_xticks(np.linspace(xmin, xmax, 5))
         ax.set_xlim([xmin, xmax])
 
         ax.axvline(pred_t1-mean_atime, lw=1, color="green")
 
+        if ymax > 0:
+            ax.set_ylim([0, ymax])
+
+
         if titles:
             ax.set_title("atimes %d" % eid1)
 
-        wn = [wn for wn in sg.station_waves[sta] if (eid1, phase) in wn.arrivals()][0]
-        s1, _, _ = get_arrival_signal(sg, eid1, phase, wn, 2-xmin, 10+xmax, atime = mean_atime)
+        try:
+            wn = [wn for wn in sg.station_waves[sta] if (eid1, phase) in wn.arrivals() and mean_atime > wn.st][0]
+            s1, _, _ = get_arrival_signal(sg, eid1, phase, wn, 2, 10, atime = mean_atime)
+        except:
+            s1 = None
 
         for j, eid2 in enumerate(sorted_eids[i+1:]):
             ev2 = sg.get_event(eid2)
 
-            ax = f.add_subplot(gs[i,i+j+1],
-                               sharey=shared_ax,
+            ax = f.add_subplot(gs[2*i+1:2*i+3,i+j+1],
                                sharex=shared_ax)
 
             pred_t2 = ev2.time + tt_predict(ev2, sta, phase=phase)
@@ -267,36 +285,88 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
             reltimes = atimes[eid1][:n] - atimes[eid2][:n]
             mean_reltime = np.mean(reltimes)
             reltimes -= mean_reltime
-            sns.distplot(reltimes, ax=ax)
+            try:
+                sns.distplot(reltimes, ax=ax)
+            except ZeroDivisionError:
+                pass
 
             ax.axvline(pred_diff-mean_reltime, lw=1, color="green")
 
             if titles:
                 ax.set_title("atime diff %d %d" % (eid1, eid2))
 
-            ax2 = f.add_subplot(gs[i+j+1, i],
-                                sharex=shared_ax,
-                                sharey=shared_ax_xc)
+            if s1 is None:
+                continue
+
+            # compute xcorr relative to mean relative time
+            try:
+                wn = [wn for wn in sg.station_waves[sta] if (eid2, phase) in wn.arrivals() and np.mean(atimes[eid2]) > wn.st][0]
+                s2, _, _ = get_arrival_signal(sg, eid2, phase, wn, 2-xmin, 10+xmax, atime=np.mean(atimes[eid2]))
+            except IndexError:
+                continue
+
+
+            if plotxc:
+                ax2 = f.add_subplot(gs[2*(i+j+1)+1:2*(i+j+1)+3, i],
+                                    sharex=shared_ax,
+                                    sharey=shared_ax_xc)
+
+
+                xc = fastxc(s1, s2)
+                xcdist = np.exp(temp*xc)
+                xcdist /= np.sum(xcdist)
+                x = np.linspace(xmin, xmax, len(xcdist))
+                ax2.plot(x, xc)
+
+                if titles:
+                    ax2.set_title("xcorr: %d %d" % (eid1, eid2))
+            else:
+                ax2 = f.add_subplot(gs[2*(i+j+1)+1:2*(i+j+1)+3, i],
+                                    sharex=shared_ax_xc,
+                                    sharey=None)
+                x1 = np.linspace(-2+xmin, 10+xmax, len(s2))
+                ax2.plot(x1, s2/np.max(s2))
+
+                idxs = np.linspace(0, len(atimes[eid2])-1, nplots)
+                idxs = np.array([int(idx) for idx in idxs])
+                ats = atimes[eid2][idxs]
+                mean_at2 = np.mean(atimes[eid2])
+                for at2 in ats:
+                    offset = at2-mean_at2
+                    x2 = np.linspace(-2+offset, 10+offset, len(s1))
+                    ax2.plot(x2, s1/np.max(s1), alpha = 1.0/nplots, c="green")
+
+                ax2.set_xlim(-2, 10)
+                if titles:
+                    ax2.set_title("waves: %d %d" % (eid1, eid2))
+
+
             if shared_ax_xc is None:
                 shared_ax_xc = ax2
-            # compute xcorr relative to mean relative time
-            wn = [wn for wn in sg.station_waves[sta] if (eid2, phase) in wn.arrivals()][0]
-            s2, _, _ = get_arrival_signal(sg, eid2, phase, wn, 2, 10, atime=np.mean(atimes[eid2]))
-            xc = fastxc(s2, s1)
-            xcdist = np.exp(temp*xc)
-            xcdist /= np.sum(xcdist)
-            x = np.linspace(xmin, xmax, len(xcdist))
-            ax2.plot(x, xc)
 
-            if titles:
-                ax2.set_title("xcorr: %d %d" % (eid1, eid2))
 
+    f.suptitle("atime alignments at %s, phase %s" % (sta, phase))
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')
     f.tight_layout()
     canvas.print_png(response)
     return response
+
+
+def safe_loadtxt(fname):
+    # np.loadtxt breaks if the last line is only
+    # partially written (e.g. when inference is
+    # still running and buffers have been flushed
+    # in a way that doesn't align with line
+    # boundaries). This method runs np.loadtxt
+    # ignoring the last line of a file.
+    with open(fname, 'r') as f:
+        lines = f.readlines()
+    import StringIO
+
+    inp = StringIO.StringIO("\n".join(lines[:-1]))
+    return np.loadtxt(inp)
 
 def mcmc_hparam_posterior(request, dirname, sta, hparam):
 
@@ -331,7 +401,7 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
 
     # load hparam samples from file
     ffname = os.path.join(mcmc_run_dir, "gp_hparams", "%s_%s" % (sta, hparam))
-    a = np.loadtxt(ffname)
+    a = safe_loadtxt(ffname)
     if burnin < 0:
         burnin = 100 if a.shape[0] > 150 else 10
     assert(a.shape[1]==len(starray))
@@ -436,9 +506,26 @@ def mcmc_event_posterior(request, dirname):
     shape_colors = sns.color_palette("hls", len(eids))
     eid_patches = []
     eid_labels = []
+
+    try:
+        with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as evfile:
+            true_evs = pickle.load(evfile)
+    except Exception as e:
+        print e
+        true_evs = []
+
     for eid_i, eid in enumerate(sorted(eids)):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
+
+        if plot_true:
+            true_ev = match_true_ev(trace, true_evs)
+            if true_ev is not None:
+                true_loc = np.array(((true_ev.lon, true_ev.lat), ))
+                hm.plot_locations(true_loc,  labels=None, marker="*", ms=16, mfc="none", mec=shape_colors[eid_i-1], mew=2, alpha=1)
+                true_evs.remove(true_ev)
+                print len(true_evs)
+
         n = trace.shape[0]
         print eid, trace.shape
         if len(trace.shape)==2:
@@ -451,6 +538,8 @@ def mcmc_event_posterior(request, dirname):
                 clon, clat = find_center(trace[:, 0:2])
                 loc = np.array(((clon, clat), ))
                 hm.plot_locations(loc,  labels=None, marker="+", ms=16, mfc="none", mec=shape_colors[eid_i-1], mew=2, alpha=1)
+                if true_ev is not None:
+                    hm.drawline(loc[0], true_loc[0], color=shape_colors[eid_i-1])
 
             if stds > 0:
                  m = np.mean(trace[:, 0:2], axis=0)
@@ -460,17 +549,11 @@ def mcmc_event_posterior(request, dirname):
 
     f.legend(handles=eid_patches, labels=eid_labels)
 
+
+    # plot any true events unmatched to inferred events
     if plot_true:
-        try:
-            with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as evfile:
-                true_evs = pickle.load(evfile)
-        except Exception as e:
-            print e
-            true_evs = []
-        if true_evs is None:
-            true_evs = []
-        for ev in true_evs:
-            loc = np.array(((ev.lon, ev.lat), ))
+        for true_ev in true_evs:
+            loc = np.array(((true_ev.lon, true_ev.lat), ))
             hm.plot_locations(loc,  labels=None, marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
 
     if plot_train:

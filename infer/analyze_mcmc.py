@@ -22,6 +22,21 @@ from sigvisa.models.ttime import tt_predict
 
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
+def match_true_ev(trace, true_evs):
+    mean_lon, mean_lat = find_center(trace[:, 0:2])
+    mean_time = np.mean(trace[:,3])
+
+    true_ev = None
+    best_distance = np.float('inf')
+    true_evs = true_evs if true_evs is not None else []
+    for ev in true_evs:
+        dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
+        dist += np.abs(ev.time - mean_time) * 5 # equate one second of error with 5km
+        if dist < best_distance:
+            best_distance = dist
+            true_ev = ev
+    return true_ev
+
 def trace_stats(trace, true_evs):
     mean_lon, mean_lat = find_center(trace[:, 0:2])
 
@@ -52,16 +67,7 @@ def trace_stats(trace, true_evs):
     results['lon_std_km'] = lon_std_km
     results['lat_std_km'] = lat_std_km
 
-    true_ev = None
-    best_distance = np.float('inf')
-    true_evs = true_evs if true_evs is not None else []
-    for ev in true_evs:
-        dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
-        dist += np.abs(ev.time - mean_time) * 5 # equate one second of error with 5km
-        if dist < best_distance:
-            best_distance = dist
-            true_ev = ev
-
+    true_ev = match_true_ev(trace, true_evs)
     if true_ev is not None:
         txt += '\ntrue: %.2f, %.2f\n' % (true_ev.lon, true_ev.lat)
         dist_mean = geog.dist_km((mean_lon, mean_lat), (true_ev.lon, true_ev.lat))

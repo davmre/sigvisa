@@ -314,13 +314,14 @@ class Node(object):
             v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
         lp = self.model.log_p(x = v, cond=parent_values, key_prefix=self.key_prefix)
 
+        # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
-            if 'tt_residual' in self.label and np.abs(v) > 10:
-                lp = -99999999
-            elif 'peak_offset' in self.label and np.exp(v) > 15:
-                lp = -99999999
-            elif 'coda_decay' in self.label and np.exp(v) < .008:
-                lp = -9999999
+            if 'tt_residual' in self.label and np.abs(v) > 15:
+                lp -= np.exp(  10*(np.abs(v)-15)  )
+            elif 'peak_offset' in self.label and v > 3.0:
+                lp -= np.exp(  100*(v-3)  )
+            elif 'coda_decay' in self.label and v < -5:
+                lp -= np.exp( 100 * -(v+5))
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))

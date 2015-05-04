@@ -106,12 +106,14 @@ class MCMCLogger(object):
                         lbl = "%s_%s" % (sta, hparam)
                         if lbl not in self.log_handles:
                             self.log_handles[lbl] = open(os.path.join(gpdir, lbl), 'a')
-                        handle = self.log_handles[lbl]
+
+                        s = ""
                         for param in sorted(pdicts.keys()):
                             jgp, hnodes = pdicts[param]
-                            handle.write("%.4f " % hnodes[hparam].get_value())
-                        handle.write("\n")
-
+                            s += "%.4f " % hnodes[hparam].get_value()
+                        handle = self.log_handles[lbl]
+                        handle.write(s + "\n")
+                        handle.flush()
 
 
         for move_name in move_times.keys():

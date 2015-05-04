@@ -4,7 +4,7 @@ import cPickle as pickle
 
 vals = {'noise_var': 0.01,
         'signal_var': 1.0,
-        'horiz_lscale': 300,
+        'horiz_lscale': 100,
         'depth_lscale': 5.0}
 
 for fn in os.listdir('.'):

@@ -299,14 +299,14 @@ def sample_params_and_signals(basedir, seed=0):
 
 def build_doublet_sg(sw, runid, ev_init=None, **kwargs):
     ev_doublet = sw.ev_doublet
-    wavelet_family = sw.wavelet_family
+
+    kwargs['wiggle_family'] = sw.wavelet_family if "wiggle_family" not in kwargs else kwargs['wiggle_family']
 
     ev_doublet_init = Event(lon=ev_doublet.lon+1, lat=ev_doublet.lat-1,
                             depth=ev_doublet.depth, mb=ev_doublet.mb+0.4,
                             time=ev_doublet.time+20.0)
 
     sg = SigvisaGraph(template_shape="lin_polyexp",
-                              wiggle_family=wavelet_family,
                               nm_type = "ar", phases=["P"], runids=(runid,), **kwargs)
     wns = dict()
     for sta in sw.stas:
@@ -318,11 +318,10 @@ def build_doublet_sg(sw, runid, ev_init=None, **kwargs):
 
 def build_joint_sg(sw, runid, init_evs="true", init_templates=True, **kwargs):
     ev_doublet = sw.ev_doublet
-    wavelet_family = sw.wavelet_family
 
+    kwargs['wiggle_family'] = sw.wavelet_family if "wiggle_family" not in kwargs else kwargs['wiggle_family']
 
     sg = SigvisaGraph(template_shape="lin_polyexp",
-                              wiggle_family=wavelet_family,
                               nm_type = "ar", phases=["P"], runids=(runid,), **kwargs)
     wns = dict()
     for w in sw.waves.values():
