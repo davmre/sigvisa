@@ -120,7 +120,7 @@ document.getElementById('loading').style.visibility = 'hidden';
   </td>
   <td colspan=4 rowspan=2 valign='top'>
     <table border=1 width=100%>
-      <tr>
+      <tr style="font-size: 10pt">
 	<td><strong>Phase</strong></td>
 	<td><strong>atime</strong></td>
 	<td><strong>log(onset_seconds)</strong></td>
@@ -128,6 +128,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td><strong>log(peak_decay)</strong></td>
 	<td><strong>log(coda_decay)</strong></td>
 	<td><strong>amp_transfer</strong></td>
+	<td><strong>mult_wiggle_std</strong></td>
 	<td><strong>trained wiggles</strong></td>
       </tr>
       {% for phase in fit.sigvisacodafitphase_set.all %}
@@ -139,6 +140,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td>{{ phase.peak_decay }}</td>
 	<td>{{ phase.coda_decay }}</td>
 	<td>{{ phase.amp_transfer }}</td>
+	<td>{{ phase.mult_wiggle_std }}</td>
 	<td><a href="{% url fit_phase_wiggles fpid=phase.fpid%}">wiggle</a></td>
       </tr>
       {% endfor %}

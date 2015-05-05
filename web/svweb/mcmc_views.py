@@ -210,6 +210,7 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
     nplots = int(request.GET.get('nplots', '20'))
     titles = request.GET.get('titles', 'f').startswith('t')
     plotxc = request.GET.get('plotxc', 'f').startswith('t')
+    plot_true_alignment = request.GET.get('plot_true_alignment', 'f').startswith('t')
 
     sg, max_step = final_mcmc_state(mcmc_run_dir)
 
@@ -218,6 +219,18 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
         eids = sg.evnodes.keys()
     else:
         eids = [int(eid) for eid in eid_request.split(',')]
+
+    true_atimes = dict()
+    try:
+        with open(os.path.join(mcmc_run_dir, "sw.pkl"), "rb") as f:
+            sw = pickle.load(f)
+        residuals = sw.tm_params[sta]['tt_residual']
+        for eid in eids:
+            true_ev = sw.all_evs[eid-1]
+            true_atimes[eid] = true_ev.time + tt_predict(true_ev, sta, phase) \
+                               + residuals[eid-1]
+    except IOError:
+        pass
 
     atimes = dict()
     for eid in eids:
@@ -232,7 +245,7 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
             atimes[eid] = atimes[eid]
             break
 
-    f = Figure((16, 8))
+    f = Figure((3*len(eids), 1.5*len(eids)))
     f.patch.set_facecolor('white')
     gs = gridspec.GridSpec(len(atimes)*2+1, len(atimes))
 
@@ -258,6 +271,9 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
         ax.set_xlim([xmin, xmax])
 
         ax.axvline(pred_t1-mean_atime, lw=1, color="green")
+
+        if eid1 in true_atimes:
+            ax.axvline(true_atimes[eid1]-mean_atime, lw=1, color="red")
 
         if ymax > 0:
             ax.set_ylim([0, ymax])
@@ -292,6 +308,10 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
 
             ax.axvline(pred_diff-mean_reltime, lw=1, color="green")
 
+            if eid1 in true_atimes and eid2 in true_atimes:
+                true_reltime = true_atimes[eid1] - true_atimes[eid2]
+                ax.axvline(true_reltime-mean_reltime, lw=1, color="red")
+
             if titles:
                 ax.set_title("atime diff %d %d" % (eid1, eid2))
 
@@ -325,18 +345,34 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
                                     sharex=shared_ax_xc,
                                     sharey=None)
                 x1 = np.linspace(-2+xmin, 10+xmax, len(s2))
-                ax2.plot(x1, s2/np.max(s2))
+                visible = [(x1> -2) * (x1 <10) ]
+                ax2.plot(x1, s2/np.max(s2[visible]))
 
-                idxs = np.linspace(0, len(atimes[eid2])-1, nplots)
+                idxs = np.linspace(0, len(reltimes)-1, nplots)
                 idxs = np.array([int(idx) for idx in idxs])
-                ats = atimes[eid2][idxs]
-                mean_at2 = np.mean(atimes[eid2])
-                for at2 in ats:
-                    offset = at2-mean_at2
+
+                #ats = atimes[eid2][idxs]
+                #mean_at2 = np.mean(atimes[eid2])
+
+                # truths
+                # mean_reltime = mean(atime1 - atime2) = mean(atime1) - mean(atime2)
+                # we load s1 around mean_atime1
+                # we load s2 around mean_atime2
+                # so reltime=0 corresponds to plotting s1 at
+                # mean_atime1 and s2 at mean_atime2, which requires no offset
+                if plot_true_alignment:
+                    offset = true_reltime-mean_reltime
                     x2 = np.linspace(-2+offset, 10+offset, len(s1))
-                    ax2.plot(x2, s1/np.max(s1), alpha = 1.0/nplots, c="green")
+                    visible = [(x2> -2) * (x2 <10) ]
+                    ax2.plot(x2, s1/np.max(s1[visible]), alpha = 1.0, c="red")
+                else:
+                    for offset in reltimes[idxs]:
+                        x2 = np.linspace(-2+offset, 10+offset, len(s1))
+                        visible = [(x2> -2) * (x2 <10) ]
+                        ax2.plot(x2, s1/np.max(s1[visible]), alpha = 1.0/nplots, c="green")
 
                 ax2.set_xlim(-2, 10)
+                ax2.set_ylim(0, 1)
                 if titles:
                     ax2.set_title("waves: %d %d" % (eid1, eid2))
 
@@ -669,7 +705,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
     vzoom = float(request.GET.get("vzoom", '1'))
-    pred_signal = request.GET.get("pred_signal", 'false').lower().startswith('t')
+    plot_pred_signal = request.GET.get("pred_signal", 'false').lower().startswith('t')
     pred_signal_var = request.GET.get("pred_signal_var", 'false').lower().startswith('t')
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_dets = request.GET.get("plot_dets", 'leb')
@@ -710,7 +746,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     for step in steps:
         wn = sgs[step].all_nodes[wn_label]
 
-        if pred_signal:
+        if plot_pred_signal:
             wn._parent_values()
             pred_signal = wn.tssm.mean_obs(wn.npts)
             w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)

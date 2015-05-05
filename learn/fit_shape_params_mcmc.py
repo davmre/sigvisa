@@ -30,7 +30,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False, smoothing=0):
+                init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False, smoothing=0, dummy_fallback=False):
 
     """
     Set up the graph with the signal for a given training event.
@@ -42,6 +42,7 @@ def setup_graph(event, sta, chan, band,
     try:
         input_runid = get_fitting_runid(cursor, init_run_name, init_iteration, create_if_new = False)
         runids = (input_runid,)
+        print "input_runid", input_runid
     except RunNotFoundException:
         runids = ()
 
@@ -49,7 +50,8 @@ def setup_graph(event, sta, chan, band,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, nm_type = nm_type,
                       runids = runids,
-                      absorb_n_phases=absorb_n_phases)
+                      absorb_n_phases=absorb_n_phases,
+                      dummy_fallback=dummy_fallback)
 
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True, phases=None if phases=="leb" else phases).filter("%s;env" % band)
     cursor.close()
@@ -75,11 +77,11 @@ def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
     #nm2 = sample_posterior_armodel_from_signal(noise_mean, noise_var, wn.prior_nm), None
 
     if sigvisa_graph.template_shape=="lin_polyexp":
-        nphases = int(len(sigvisa_graph.template_nodes)/5) # HACK
+        nphases = int(len(sigvisa_graph.template_nodes)/6) # HACK
 
-        v1 = np.array([ 0., 2.0, -0.5, -4, -3] * nphases)
-        v2 = np.array([ 2., -1, -1.5, -4, -1.5] * nphases)
-        v3 = np.array([ -3., 2.3, 0.5, -4, -3] * nphases)
+        v1 = np.array([ 0., 2.0, -0.5, -1, -3, 0.6] * nphases)
+        v2 = np.array([ 2., -1, -1.5, -1, -1.5, 0.2] * nphases)
+        v3 = np.array([ -3., 2.3, 0.5, -1, -3, 0.4] * nphases)
         init_vs = [(v1, nm1), (v2, nm1), (v3, nm1)]
     else:
         raise Exception("don't know how to initialize params for template shape %s" % sigvisa_graph.template_shape)
@@ -113,7 +115,7 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
     m = v * (m1/v1 + m2/v2)
     return m, v
 
-def compute_template_messages(sg, wn, logger):
+def compute_template_messages(sg, wn, logger, burnin=50):
     """
     After an MCMC run, compute a Gaussian approximation to the
     posterior distribution on template parameters. Then divide out the
@@ -145,8 +147,8 @@ def compute_template_messages(sg, wn, logger):
                 elif p == "arrival_time":
                     p = "tt_residual"
 
-            m = np.mean(vals)
-            v = np.var(vals) + 1e-6 # avoid zero-variance problems
+            m = np.mean(vals[burnin:])
+            v = np.var(vals[burnin:]) + 1e-6 # avoid zero-variance problems
 
             pv = n._parent_values()
             prior_mean = n.model.predict(cond=pv)
@@ -201,7 +203,7 @@ def compute_wavelet_messages(sg, wn):
 
     return gp_messages, gp_posteriors
 
-def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_iteration, steps):
+def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_iteration, steps, burnin):
 
     s = Sigvisa()
     cursor = Sigvisa().dbconn.cursor()
@@ -216,12 +218,12 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_it
     # run MCMC to sample from the posterior on template params
     st = time.time()
 
-    logger = MCMCLogger(run_dir="scratch/mcmc_fit_%s/" % (str(uuid.uuid4())), write_template_vals=True, dump_interval=10, transient=True)
-    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, logger=logger)
+    logger = MCMCLogger(run_dir="scratch/mcmc_fit_%s/" % (str(uuid.uuid4())), write_template_vals=True, dump_interval=50, transient=True)
+    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, logger=logger, disable_moves=['atime_xc', 'constpeak_atime_xc'])
     et = time.time()
 
     # compute template posterior, and set the graph state to the best template params
-    messages, best_tmvals = compute_template_messages(sigvisa_graph, wn, logger)
+    messages, best_tmvals = compute_template_messages(sigvisa_graph, wn, logger, burnin=burnin)
     for (vals, nodes) in best_tmvals.values():
         for (v, n) in zip(vals, nodes):
             n.set_value(v)
@@ -305,13 +307,14 @@ def save_template_params(sg, tmpl_optim_param_str,
             tg = sg.template_generator(phase)
 
             peak_decay = fit_params['peak_decay'] if 'peak_decay' in fit_params else 0.0
+            mult_wiggle_std = fit_params['mult_wiggle_std'] if 'mult_wiggle_std' in fit_params else 0.0
 
             if eid > 0:
-                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer, peak_decay, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f, '%s')" % (
-                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'], peak_decay, sg.wiggle_family)
+                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer, peak_decay, mult_wiggle_std, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f, %f, '%s')" % (
+                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'], peak_decay, mult_wiggle_std, sg.wiggle_family)
             else:
-                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, peak_decay, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, '%s')" % (
-                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], peak_decay, sg.wiggle_family)
+                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, peak_decay, mult_wiggle_std, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f, '%s')" % (
+                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], peak_decay, mult_wiggle_std, sg.wiggle_family)
 
             fpid = execute_and_return_id(s.dbconn, phase_insert_query, "fpid")
             for (k, n) in fit_param_nodes.values():
@@ -356,13 +359,16 @@ def main():
     parser.add_option("--template_shape", dest="template_shape", default="lin_polyexp", type="str",
                       help="template model type to fit parameters under (lin_polyexp)")
     parser.add_option("--template_model", dest="template_model", default="dummyPrior", type="str", help="")
+    parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true", help="")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", type="str", help="")
+
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
     parser.add_option("--phases", dest="phases", default="leb", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="auto", type="str", help="")
     parser.add_option("--smooth", dest="smooth", default=0, type=int, help="perform the given level of smoothing")
     parser.add_option("--steps", dest="steps", default=500, type=int, help="number of MCMC steps to run (500)")
+    parser.add_option("--burnin", dest="burnin", default=50, type=int, help="number of initial MCMC steps to disregard (50)")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
@@ -401,10 +407,10 @@ def main():
         init_run_name = options.init_run_name
         init_iteration = options.init_run_iteration
 
-    if options.template_model == "hack26":
-        init_run_name = "multiphase26_linpolyexp"
+    if options.template_model == "hack28":
+        init_run_name = "multiphase_wiggle"
         init_iteration = 1
-        template_model = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb'}
+        template_model = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'dummyPrior'}
 
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
@@ -412,14 +418,15 @@ def main():
                                 phases=phases,
                                 fit_hz=options.hz, nm_type=options.nm_type,
                                 init_run_name = init_run_name, init_iteration = init_iteration,
-                                absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth)
+                                absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth,
+                                dummy_fallback=options.dummy_fallback)
 
     if options.seed >= 0:
         np.random.seed(options.seed)
 
     fitid = run_fit(sigvisa_graph,  fit_hz = options.hz,
                     tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
-                    output_run_name = options.run_name, output_iteration=options.run_iteration, steps=options.steps)
+                    output_run_name = options.run_name, output_iteration=options.run_iteration, steps=options.steps, burnin=options.burnin)
 
 
     print "fit id %d completed successfully." % fitid

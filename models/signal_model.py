@@ -61,7 +61,7 @@ def update_arrivals(parent_values):
     r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
     for k in parent_values.keys():
         if k=="prefix": continue
-        if n.label.startswith("gp;") or "lon" in k or "lat" in k or "depth" in k or "mb" in k: continue
+        if "gp;" in k or "lon" in k or "lat" in k or "depth" in k or "mb" in k: continue
         arrivals.add(extract_arrival_from_key(k, r))
     return arrivals
 
@@ -477,7 +477,7 @@ class ObservedSignalNode(Node):
         if self.wavelet_basis is None:
             return None
 
-        (start_idxs, end_idxs, identities, basis_prototypes, n_steps), target_std = self.wavelet_basis
+        (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
         n_basis = len(start_idxs)
 
         prior_means = np.zeros((n_basis,))
@@ -505,12 +505,12 @@ class ObservedSignalNode(Node):
         min_logenv = max(-7.0, np.log(self.nm.c)-2)
 
         if self.wavelet_basis is not None:
-            (start_idxs, end_idxs, identities, basis_prototypes, n_steps), target_std = self.wavelet_basis
+            (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
             n_basis = len(start_idxs)
         else:
             n_steps = 0
             n_basis = 0
-            target_std = 1.0
+
 
 
         components = [(self.noise_arssm, 0, self.npts, None)]
@@ -535,15 +535,19 @@ class ObservedSignalNode(Node):
 
             wssm = self.arrival_ssms[(eid, phase)]
 
-            npts = min(len(env), n_steps*2)
+
+            npts = min(len(env), n_steps)
+
+            wiggle_std = np.abs(v['mult_wiggle_std'])
             iid_std = np.empty(env.shape)
-            iid_std[:npts] = 0.1
-            iid_std[npts:] = target_std+0.1
+            iid_std[:npts] = 0.05
+            iid_std[npts:] = np.sqrt(wiggle_std**2+0.05**2)
 
             mn_scale = env*iid_std
             if wssm is not None:
-                components.append((wssm, start_idx, npts, env))
-                tssm_components.append((eid, phase, env, start_idx, npts, "wavelet"))
+                components.append((wssm, start_idx, npts, env*wiggle_std))
+                tssm_components.append((eid, phase, env*wiggle_std, start_idx, npts, "wavelet"))
+
                 components.append((self.iid_arssm, start_idx, len(env), mn_scale))
                 tssm_components.append((eid, phase, mn_scale, start_idx, len(env), "multnoise"))
             else:

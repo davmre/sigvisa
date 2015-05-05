@@ -84,6 +84,7 @@ dummyPriorModel = {
 "tt_residual": TruncatedGaussian(mean=0.0, std=1.0, a=-15.0, b=15.0),
 "amp_transfer": Gaussian(mean=0.0, std=2.0),
 "peak_offset": TruncatedGaussian(mean=-0.5, std=1.0, b=4.0),
+"mult_wiggle_std": TruncatedGaussian(mean=0.5, std=0.25, a=0.0),
 "coda_decay": Gaussian(mean=0.0, std=1.0),
 "peak_decay": Gaussian(mean=0.0, std=1.0)
 }
@@ -215,8 +216,8 @@ class SigvisaGraph(DirectedGraphModel):
         self.jointgp_hparam_prior=jointgp_hparam_prior
         if self.jointgp_hparam_prior is None:
             # todo: different priors for different params
-            self.jointgp_hparam_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=1.0),
-                                         'depth_lscale': LogNormal(mu=3.0, sigma=1.0),
+            self.jointgp_hparam_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
+                                         'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
                                          'signal_var': InvGamma(beta=3.0, alpha=3.0),
                                          'noise_var': InvGamma(beta=1.0, alpha=3.0)}
 
@@ -428,6 +429,7 @@ class SigvisaGraph(DirectedGraphModel):
                 ua_coda_height_lp += uanodes['coda_height'].log_p()
                 ua_peak_decay_lp += uanodes['peak_decay'].log_p()
                 ua_coda_decay_lp += uanodes['coda_decay'].log_p()
+                ua_mult_wiggle_std_lp += uanodes['mult_wiggle_std'].log_p()
 
 
         ev_prior_lp = 0.0
@@ -437,6 +439,7 @@ class SigvisaGraph(DirectedGraphModel):
         ev_peak_offset_lp = 0.0
         ev_coda_decay_lp = 0.0
         ev_peak_decay_lp = 0.0
+        ev_mult_wiggle_std_lp = 0.0
         for (eid, evdict) in self.evnodes.items():
             evnode_set = set(evdict.values())
             for node in evnode_set:
@@ -460,6 +463,8 @@ class SigvisaGraph(DirectedGraphModel):
                     ev_peak_decay_lp += node.log_p()
                 elif  "peak_offset" in node.label:
                     ev_peak_offset_lp += node.log_p()
+                elif  "mult_wiggle_std" in node.label:
+                    mult_wiggle_std += node.log_p()
                 elif "obs" in node.label:
                     ev_obs_lp += node.log_p()
                 else:
@@ -490,8 +495,8 @@ class SigvisaGraph(DirectedGraphModel):
         print "peak_offset: ev %.1f ua %.1f total %.1f" % (ev_peak_offset_lp, ua_peak_offset_lp, ev_peak_offset_lp+ua_peak_offset_lp)
         print "coda_height: ev %.1f ua %.1f total %.1f" % (ev_amp_transfer_lp, ua_coda_height_lp, ev_amp_transfer_lp+ua_coda_height_lp)
         print "coef jointgp: %.1f" % jointgp_lp
-        ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp + jointgp_lp
-        ua_total = ua_coda_decay_lp + ua_peak_decay_lp + ua_peak_offset_lp + ua_coda_height_lp
+        ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp +ev_mult_wiggle_std_lp+ jointgp_lp
+        ua_total = ua_coda_decay_lp + ua_peak_decay_lp + ua_peak_offset_lp + ua_mult_wiggle_std_lp + ua_coda_height_lp
         print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
         ev_total += ev_prior_lp + ev_obs_lp + ev_tt_lp + ne_lp
         ua_total += nt_lp
@@ -884,7 +889,7 @@ class SigvisaGraph(DirectedGraphModel):
             except ModelNotFoundError:
                 if self.dummy_fallback:
                     print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
-                    model_type = "dummy"
+                    model_type = "dummyPrior"
                 else:
                     raise
         label = create_key(param=param, sta="%s_arr" % site,
@@ -925,7 +930,7 @@ class SigvisaGraph(DirectedGraphModel):
                 except ModelNotFoundError:
                     if self.dummy_fallback:
                         print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
-                        model_type = "dummy"
+                        model_type = "dummyPrior"
                     else:
                         raise
             label = create_key(param=param, sta=sta,
@@ -1091,6 +1096,13 @@ class SigvisaGraph(DirectedGraphModel):
                         else:
                             invalid_offsets = (v <= 0)
                             v[invalid_offsets] = 0.5
+                    if "mult_wiggle_std" in n.label:
+                        v = n.get_value()
+                        if isinstance(v, float):
+                            v = 0.5 if v <= 0 else v
+                        else:
+                            invalid_offsets = (v <= 0)
+                            v[invalid_offsets] = 0.5
                     if "coda_decay" in n.label:
                         v = n.get_value()
                         if isinstance(v, float):
@@ -1136,7 +1148,7 @@ class SigvisaGraph(DirectedGraphModel):
         hparam_nodes = set()
         has_jointgp = False
         if self.jointgp:
-            n_params = len(basis[0][0])
+            n_params = len(basis[0])
             params = [self.wiggle_family + "_%d" % i for i in range(n_params)]
             for phase in self.phases:
                 param_models[phase] = []
@@ -1146,7 +1158,7 @@ class SigvisaGraph(DirectedGraphModel):
                     hparam_nodes = hparam_nodes | set(nodes.values())
             has_jointgp = True
         elif self.wiggle_model_type != "dummy":
-            n_params = len(basis[0][0])
+            n_params = len(basis[0])
             for phase in self.phases:
                 param_models[phase] = []
                 for param in [self.wiggle_family + "_%d" % i for i in range(n_params)]:
@@ -1159,6 +1171,14 @@ class SigvisaGraph(DirectedGraphModel):
                     #    continue
                     model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
                     param_models[phase].append(model)
+        else:
+            try:
+                n_params = len(basis[0])
+                for phase in self.phases:
+                    param_models[phase] = [Gaussian(0.0, 1.0),]*n_params
+            except TypeError:
+                pass
+
 
         wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, **kwargs)
 

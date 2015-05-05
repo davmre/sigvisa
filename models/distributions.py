@@ -134,7 +134,7 @@ class Gaussian(Distribution):
     def variance(self, **kwargs):
         return self.var
 
-    def sample(self, **kwargs):
+    def sample(self, *args, **kwargs):
         return self.mean + np.random.randn() * self.std
 
     def product(self, other):

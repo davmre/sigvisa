@@ -25,7 +25,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     nmid = int(fit[10])
     runid = fit[0]
 
-    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, peak_decay, coda_decay, wiggle_family from sigvisa_coda_fit_phase where fitid=%d" % fitid
+    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, peak_decay, coda_decay, mult_wiggle_std, wiggle_family from sigvisa_coda_fit_phase where fitid=%d" % fitid
     cursor.execute(phase_sql_query)
     phase_details = cursor.fetchall()
     phases = [p[1] for p in phase_details]
@@ -35,7 +35,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     wiggle_family="dummy"
     for (phase, p) in zip(phases, phase_details):
         shape = p[2]
-        tparams = {'arrival_time': p[3], 'peak_offset': p[4], 'coda_height': p[5], 'coda_decay': p[7]}
+        tparams = {'arrival_time': p[3], 'peak_offset': p[4], 'coda_height': p[5], 'coda_decay': p[7], 'mult_wiggle_std': p[8]}
         if p[2]=="lin_polyexp":
             tparams['peak_decay'] = p[6]
         wiggle_family=p[-1]
@@ -63,8 +63,6 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
         print "setting template", ev.eid, phase, "to", templates[phase]
 
     return sg
-
-
 
 def register_svgraph_cmdline(parser):
     parser.add_option("-s", "--sites", dest="sites", default=None, type="str",

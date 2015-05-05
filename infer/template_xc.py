@@ -169,6 +169,7 @@ def xc_move(sg, wave_node, eid, phase, tmnodes, propose_peak=False, **kwargs):
     relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
 
     eid_src, wn_src = sample_xc_source_arrival(sg, eid_target, phase, wn_target.sta, wn_target.band, wn_target.chan)
+
     xcdist, idx_to_atime, atime_to_idx = atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase, wn_src, wn_target, temp=10.0)
 
     proposed_idx = np.random.choice(np.arange(len(xcdist)), p=xcdist)

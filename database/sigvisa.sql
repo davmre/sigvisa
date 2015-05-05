@@ -75,6 +75,7 @@ create table sigvisa_coda_fit_phase (
  peak_decay double precision,
  coda_decay  double precision,
  amp_transfer double precision,
+ mult_wiggle_std double precision,
  wiggle_stime double precision,
  wiggle_fname varchar(255),
  primary key(fpid),

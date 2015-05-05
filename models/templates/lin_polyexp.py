@@ -27,13 +27,14 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
         self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
                          "peak_decay": Gaussian(-2.5, 1.),
                          "coda_height": Gaussian(0.5, 3),
-                         "coda_decay": Gaussian(-2.5, 1.5),}
+                         "coda_decay": Gaussian(-2.5, 1.5),
+                         "mult_wiggle_std": Gaussian(0.5, 0.25)}
 
         self.hack_force_mean = None
 
     @staticmethod
     def params():
-        return ("peak_offset", "peak_decay", "coda_height", "coda_decay")
+        return ("peak_offset", "peak_decay", "coda_height", "coda_decay", "mult_wiggle_std")
 
     @staticmethod
     def default_param_vals():
@@ -42,6 +43,7 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
         d['peak_decay'] = 0.0
         d['coda_height'] = 1.0
         d['coda_decay'] = np.log(0.03)
+        d['mult_wiggle_std'] = 0.5
         return d
 
     @staticmethod
@@ -199,6 +201,7 @@ if (l > 0) {
         bounds['peak_offset'] = -2
         bounds['coda_decay'] = -6
         bounds['peak_decay'] = -6
+        bounds['mult_wiggle_std'] = 0
 
         return bounds
 
@@ -210,7 +213,7 @@ if (l > 0) {
         bounds['coda_height'] = 10
         bounds['peak_offset'] = 4
         bounds['coda_decay'] = 1
-        bounds['peak_decay'] = 1
+        bounds['mult_wiggle_std'] = 1
 
         return bounds
 

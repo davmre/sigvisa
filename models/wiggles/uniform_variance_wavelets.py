@@ -70,7 +70,7 @@ def optimize_for_uniform_variance(start_times, end_times, identities, prototypes
     return prototypes_new
 
 def uvar_wavelet_basis(srate, wavelet_str):
-    wavelet_family, wavelet_resolution_hz, decomp_levels, wiggle_len_s, target_std = parse_wavelet_basis_str(wavelet_str, return_target_std=True)
+    wavelet_family, wavelet_resolution_hz, decomp_levels, wiggle_len_s = parse_wavelet_basis_str(wavelet_str)
 
     opt=False
     stationary=False
@@ -104,7 +104,4 @@ def uvar_wavelet_basis(srate, wavelet_str):
         mean_std = np.mean(np.sqrt(np.diag(np.dot(basis.T, basis))))
         M /= mean_std
 
-    # scale the basis vectors to achieve the target marginal variance
-    M *= target_std
-
-    return (start_times, end_times, identities, M, N), target_std
+    return start_times, end_times, identities, M, N

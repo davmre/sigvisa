@@ -316,6 +316,11 @@ class Node(object):
 
         # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
+            if 'mult_wiggle_std' in self.label:
+                if v > 1:
+                    lp -= np.exp(100*(v-1))
+                if v < 0:
+                    lp -= np.exp(100*(-v))
             if 'tt_residual' in self.label and np.abs(v) > 15:
                 lp -= np.exp(  10*(np.abs(v)-15)  )
             elif 'peak_offset' in self.label and v > 3.0:

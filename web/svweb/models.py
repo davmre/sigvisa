@@ -256,6 +256,7 @@ class SigvisaCodaFitPhase(models.Model):
     coda_decay = models.FloatField(null=True, blank=True)
     peak_decay = models.FloatField(null=True, blank=True)
     amp_transfer = models.FloatField(null=True, blank=True)
+    mult_wiggle_std = models.FloatField(null=True, blank=True)
     wiggle_stime = models.FloatField(null=True, blank=True)
     message_fname = models.CharField(max_length=255, blank=True)
     wiggle_family = models.CharField(max_length=20, blank=True)

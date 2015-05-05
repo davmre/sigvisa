@@ -88,12 +88,13 @@ class MCMCLogger(object):
                             mkdir_p(os.path.join(self.run_dir, 'ev_%05d' % eid))
                             lbl_handle = open(os.path.join(self.run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
 
-                            lbl_handle.write('%06d %f %f %f %f %f\n' % (step,
+                            lbl_handle.write('%06d %f %f %f %f %f %f\n' % (step,
                                                                      tmvals['arrival_time'],
                                                                      tmvals['peak_offset'],
                                                                      tmvals['coda_height'],
                                                                      tmvals['peak_decay'],
-                                                                     tmvals['coda_decay']))
+                                                                     tmvals['coda_decay'],
+                                                                     tmvals['mult_wiggle_std']))
                             lbl_handle.close()
 
             handle.close()
@@ -152,7 +153,7 @@ class MCMCLogger(object):
         lbl = "%d_%s_%s" % (eid, wn.label, phase)
         lbl_fname = os.path.join(self.run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl)
         vals = np.loadtxt(lbl_fname)
-        labels = ('step', 'arrival_time', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay')
+        labels = ('step', 'arrival_time', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'mult_wiggle_std')
 
 
         lps = np.loadtxt(os.path.join(self.run_dir, 'lp.txt'))

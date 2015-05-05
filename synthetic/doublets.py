@@ -69,6 +69,7 @@ class SampledWorld(object):
         template_shape="lin_polyexp"
         tmtypes = {'tt_residual': 'constant_laplacian',
                    'peak_offset': 'param_linear_mb',
+                   'mult_wiggle_std': 'dummy',
                    'coda_decay': 'param_linear_distmb',
                    'peak_decay': 'param_linear_distmb',
                    'amp_transfer': 'param_sin1'} \
@@ -83,6 +84,7 @@ class SampledWorld(object):
                 modelid = get_param_model_id(runids, sta, phase, tmtypes[param], param, template_shape, chan=None, band=None)
                 model = load_modelid(modelid)
                 pmodels[sta][param] = model
+            pmodels[sta]['mult_wiggle_std'] = Gaussian(0.6, 0.1)
 
         return pmodels
 
@@ -179,7 +181,7 @@ class SampledWorld(object):
         self.srate=srate
         self.wavelet_family=wavelet_family
         self.basis = uvar_wavelet_basis(srate, wavelet_family)
-        self.n_coefs = len(self.basis[0][0])
+        self.n_coefs = len(self.basis[0])
 
     def serialize(self, wave_dir):
         """
@@ -263,12 +265,13 @@ def load_sampled_world(wave_dir):
 
 
 
-def build_param_means(stas, tt_residual=0.0, coda_decay=-3.0, peak_decay=-3.0, peak_offset=0.0, amp_transfer=3.0):
+def build_param_means(stas, tt_residual=0.0, coda_decay=-3.0, peak_decay=-3.0, peak_offset=0.0, amp_transfer=3.0, mult_wiggle_std=0.6):
     param_means = dict()
     param_mean_base = {"tt_residual": tt_residual,
                        "coda_decay": coda_decay,
                        "peak_decay": peak_decay,
                        "peak_offset": peak_offset,
+                       "mult_wiggle_std": mult_wiggle_std,
                        "amp_transfer": amp_transfer}
     for sta in stas:
         param_means[sta] = copy.copy(param_mean_base)
@@ -332,9 +335,11 @@ def build_joint_sg(sw, runid, init_evs="true", init_templates=True, **kwargs):
     for ev in sw.all_evs:
         if init_evs=="none": continue
         elif init_evs.startswith("noise"):
-            ev_init = Event(lon=ev.lon+1, lat=ev.lat-1,
-                            depth=ev.depth, mb=ev.mb+0.4,
-                            time=ev.time+20.0)
+            ev_init = Event(lon=ev.lon+1*np.random.randn(),
+                            lat=ev.lat-1*np.random.randn(),
+                            depth=ev.depth,
+                            mb=ev.mb+0.4 *np.random.randn(),
+                            time=ev.time+20.0*np.random.randn())
         elif init_evs=="true":
             ev_init = ev
         evnodes = sg.add_event(ev_init)

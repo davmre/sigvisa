@@ -260,6 +260,7 @@ def phases_from_fit(fit):
                                  'peak_offset': p.peak_offset,
                                  'coda_height': p.coda_height,
                                  'peak_decay': p.peak_decay,
+                                 'mult_wiggle_std': p.mult_wiggle_std,
                                  'coda_decay': p.coda_decay}
     return fit_params
 
