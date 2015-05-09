@@ -477,7 +477,10 @@ class ObservedSignalNode(Node):
         if self.wavelet_basis is None:
             return None
 
-        (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+        try:
+            (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+        except ValueError:
+            (start_idxs, end_idxs, identities, basis_prototypes, n_steps), _ = self.wavelet_basis
         n_basis = len(start_idxs)
 
         prior_means = np.zeros((n_basis,))
@@ -505,7 +508,10 @@ class ObservedSignalNode(Node):
         min_logenv = max(-7.0, np.log(self.nm.c)-2)
 
         if self.wavelet_basis is not None:
-            (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+            try:
+                (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+            except ValueError:
+                (start_idxs, end_idxs, identities, basis_prototypes, n_steps), _ = self.wavelet_basis
             n_basis = len(start_idxs)
         else:
             n_steps = 0
@@ -538,7 +544,11 @@ class ObservedSignalNode(Node):
 
             npts = min(len(env), n_steps)
 
-            wiggle_std = np.abs(v['mult_wiggle_std'])
+            try:
+                wiggle_std = np.abs(v['mult_wiggle_std'])
+            except KeyError:
+                wiggle_std = 0.5
+
             iid_std = np.empty(env.shape)
             iid_std[:npts] = 0.05
             iid_std[npts:] = np.sqrt(wiggle_std**2+0.05**2)
@@ -981,7 +991,8 @@ signal_diff(i) =value(i) - pred_signal(i);
         proxy_lps = {self.label: (lpw, deriv_lp_w)}
         return proxy_lps
 
-    def plot(wn, ax=None):
+    def plot(self, ax=None):
+        from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes
         if ax is None:
             f = plt.figure(figsize=(15,5))
             ax=f.add_subplot(111)
@@ -1006,10 +1017,13 @@ signal_diff(i) =value(i) - pred_signal(i);
         # GP hyperparam nodes.
         # These are filled in upon reloading
         # by the setstate() method of SigvisaGraph.
-        d['parents'] = d['parents'].copy()
-        for k in self.parents.keys():
-            if k.startswith("gp"):
-                del d['parents'][k]
+
+
+        d["parents"] = dict()
+        #d['parents'] = d['parents'].copy()
+        #for k in self.parents.keys():
+        #    if k.startswith("gp"):
+        #        del d['parents'][k]
 
         return d
 

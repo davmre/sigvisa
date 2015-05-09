@@ -37,14 +37,18 @@ class MCMCLogger(object):
         # whether to delete the log directoryat the end of the run
         self.transient = transient
 
+        self.lps = []
+        self.last_step = None
+
     def start(self):
         self.start_time = time.time()
 
     def log(self, sg, step, n_accepted, n_attempted, move_times):
-
+        self.last_step = step
         if 'lp' not in self.log_handles:
             self.log_handles['lp'] = open(os.path.join(self.run_dir, 'lp.txt'), 'a')
         lp = sg.current_log_p()
+        self.lps.append(lp)
         self.log_handles['lp'].write('%f\n' % lp)
 
 

@@ -321,6 +321,30 @@ class Poisson(Distribution):
     def sample(self, **kwargs):
         return stats.poisson.rvs(self.mu)
 
+class Beta(Distribution):
+    def __init__(self, alpha, beta):
+        assert(alpha >= 0 and beta >= 0)
+        self.alpha = float(alpha)
+        self.beta = float(beta)
+
+    def log_p(self, x, **kwargs):
+        if x <= 0 or x >= 1:
+            return -np.inf
+        alpha , beta = self.alpha, self.beta
+
+        lp = (alpha-1)*np.log(x) + (beta-1)*np.log(1-x) - scipy.special.betaln(alpha, beta)
+        return lp
+
+    def predict(self, **kwargs):
+        return self.alpha/(self.alpha+self.beta)
+
+    def sample(self, **kwargs):
+        return scipy.stats.beta(alpha, beta, loc=0, scale=1).rvs(1)
+
+    def variance(self):
+        alpha, beta = self.alpha, self.beta
+        return (alpha*beta)/((alpha+beta)**2(alpha+beta+1))
+
 class Bernoulli(Distribution):
 
     def __init__(self, p):

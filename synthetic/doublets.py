@@ -88,7 +88,7 @@ class SampledWorld(object):
 
         return pmodels
 
-    def joint_sample_arrival_params(self, gpcov, param_means, coef_noise_var=0.01, param_noise_var=0.1, param_models=None):
+    def joint_sample_arrival_params(self, gpcov, param_means, coef_noise_var=0.01, param_noise_var=0.1, param_models=None, params_as_gp_base=None):
         """
         for each station, sample signals jointly for all events.
 

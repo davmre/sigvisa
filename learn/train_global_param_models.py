@@ -293,6 +293,8 @@ def accumulate_hyperparams(hparams, model, model_type):
         hparams.append((model.mean, model.std**2))
     elif model_type== 'constant_laplacian':
         hparams.append((model.center, model.scale**2))
+    elif model_type== 'constant_beta':
+        hparams.append((model.predict(), model.variance()))
     elif model_type.startswith('gplocal'):
         noise_hparams = [model.noise_var,]
         main_hparams = list(model.cov_main.flatten(include_xu=False)) if model.cov_main is not None else []

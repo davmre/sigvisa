@@ -285,7 +285,8 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
         try:
             wn = [wn for wn in sg.station_waves[sta] if (eid1, phase) in wn.arrivals() and mean_atime > wn.st][0]
             s1, _, _ = get_arrival_signal(sg, eid1, phase, wn, 2, 10, atime = mean_atime)
-        except:
+        except Exception as e:
+            print e
             s1 = None
 
         for j, eid2 in enumerate(sorted_eids[i+1:]):
@@ -316,13 +317,15 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
                 ax.set_title("atime diff %d %d" % (eid1, eid2))
 
             if s1 is None:
+                print "no signal for", eid1
                 continue
 
             # compute xcorr relative to mean relative time
             try:
                 wn = [wn for wn in sg.station_waves[sta] if (eid2, phase) in wn.arrivals() and np.mean(atimes[eid2]) > wn.st][0]
                 s2, _, _ = get_arrival_signal(sg, eid2, phase, wn, 2-xmin, 10+xmax, atime=np.mean(atimes[eid2]))
-            except IndexError:
+            except IndexError as e:
+                print e
                 continue
 
 
@@ -347,6 +350,7 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
                 x1 = np.linspace(-2+xmin, 10+xmax, len(s2))
                 visible = [(x1> -2) * (x1 <10) ]
                 ax2.plot(x1, s2/np.max(s2[visible]))
+
 
                 idxs = np.linspace(0, len(reltimes)-1, nplots)
                 idxs = np.array([int(idx) for idx in idxs])

@@ -257,6 +257,14 @@ def plot_laplacian(request, model_record, axes):
     pdf = scipy.stats.laplace.pdf(x, loc=model.center, scale=model.scale)
     axes.plot(x, pdf, 'r-', linewidth=3)
 
+def plot_beta(request, model_record, axes):
+
+    full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
+    model = load_model(full_fname, model_record.model_type)
+    x = np.linspace(0, 1, 200)
+    pdf = scipy.stats.beta(model.alpha, model.beta).pdf(x)
+    axes.plot(x, pdf, 'r-', linewidth=3)
+
 def plot_adhoc_gaussian(request, xy_by_phase, axes):
 
     for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
@@ -340,6 +348,8 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
                     plot_gaussian(request, model, axes=axes)
                 elif model.model_type == "constant_laplacian":
                     plot_laplacian(request, model, axes=axes)
+                elif model.model_type == "constant_beta":
+                    plot_beta(request, model, axes=axes)
                 else:
                     raise Exception("don't know how to plot a histogram for %s" % model.model_type)
         elif plot_type == "mb":

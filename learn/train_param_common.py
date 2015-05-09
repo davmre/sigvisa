@@ -83,6 +83,8 @@ def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=Non
         model = learn_constant_gaussian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type == "constant_laplacian":
         model = learn_constant_laplacian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
+    elif model_type == "constant_beta":
+        model = learn_constant_beta(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
         model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta,
@@ -292,6 +294,9 @@ def learn_constant_laplacian(X, y, sta, optimize_marginal_ll=True, optim_params=
 
     return baseline_models.ConstLaplacianModel(X=X, y=y, sta=sta, center=center, scale=scale)
 
+def learn_constant_beta(X, y, sta, **kwargs):
+    return baseline_models.ConstBetaModel(X=X, y=y, sta=sta)
+
 def load_modelid(modelid, memoize=True, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -316,6 +321,8 @@ def load_model_notmemoized(fname, model_type, gpmodel_build_trees=True):
         model = baseline_models.ConstGaussianModel(fname=fname)
     elif model_type == "constant_laplacian":
         model = baseline_models.ConstLaplacianModel(fname=fname)
+    elif model_type == "constant_beta":
+        model = baseline_models.ConstBetaModel(fname=fname)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model

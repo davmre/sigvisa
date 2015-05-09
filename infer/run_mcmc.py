@@ -13,7 +13,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.autoregressive_mcmc import arnoise_gibbs_move
-from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move
+from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_lstsqr, swap_threeway_lstsqr
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options
@@ -216,7 +216,8 @@ def run_open_world_MH(sg, steps=10000,
                       start_step=0,
                       cyclic_template_moves=False,
                       use_proxy_lp=False,
-                      template_openworld_custom=None):
+                      template_openworld_custom=None,
+                      stop_condition=None):
 
 
     if enable_event_openworld:
@@ -261,7 +262,9 @@ def run_open_world_MH(sg, steps=10000,
                               'peak_offset': improve_offset_move_gaussian,
                               'arrival_time': improve_atime_move,
                               'atime_xc': atime_xc_move,
-                              'constpeak_atime_xc': constpeak_atime_xc_move} if enable_template_moves else {}
+                              #'constpeak_atime_xc': constpeak_atime_xc_move,
+                              #'adjpeak_atime_xc': adjpeak_atime_xc_move,
+                             } if enable_template_moves else {}
     if template_move_type in ("hamiltonian", "both"):
         template_moves_special['hamiltonian_reversing'] = hamiltonian_template_move
 
@@ -304,7 +307,8 @@ def run_open_world_MH(sg, steps=10000,
     # cause all relevant messages to be passed.
     # HACK ALERT, should have a separate method
     # to do this.
-    init_lp = sg.current_log_p()
+    if start_step == 0:
+        init_lp = sg.current_log_p()
 
     for step in range(start_step, steps):
 
@@ -386,10 +390,12 @@ def run_open_world_MH(sg, steps=10000,
         sg.seed = seed
         np.random.seed(sg.seed)
 
-
-
         if logger != False:
             logger.log(sg, step, n_accepted, n_attempted, move_times)
+
+        if stop_condition is not None:
+            if stop_condition(logger):
+                return
 
         """"
         atnodes = [n for n in sg.extended_evnodes[1] if "arrival_time" in n.label]

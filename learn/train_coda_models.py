@@ -21,7 +21,7 @@ from sigvisa.models.wiggles.wavelets import construct_wavelet_basis
 
 
 
-def get_training_data(runid, site, chan, band, phases, target,  require_human_approved=False, max_acost=200, min_amp=-10, array=False, **kwargs):
+def get_training_data(runid, site, chan, band, phases, target,  require_human_approved=False, max_acost=np.inf, min_amp=-10, array=False, **kwargs):
 
     s = Sigvisa()
     try:
@@ -64,8 +64,8 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
         yvars = np.ones( (len(ymeans),)) * 1e-10
 
 
-    ymeans = np.asarray(ymeans, dtype=np.float64)
-    yvars = np.asarray(yvars, dtype=np.float64)
+    ymeans = np.asarray(ymeans, dtype=np.float64).flatten()
+    yvars = np.asarray(yvars, dtype=np.float64).flatten()
 
 
     # remove outliers
@@ -73,6 +73,7 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
               'amp_transfer': (-6, 10),
               'coda_decay': (-6, 4),
               'peak_decay': (-6, 4),
+              'mult_wiggle_std': (0, 1),
               'peak_offset': (-5, 5) }
     tbounds = bounds[target]
     valid = (ymeans <= tbounds[1])*(ymeans >= tbounds[0])
@@ -212,14 +213,14 @@ def main():
     param_var = options.param_var
     slack_var = options.slack_var
     if options.preset == "param":
-        targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_decay', 'peak_offset'] if targets is None else targets
-        model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb'}
+        targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_decay', 'peak_offset', 'mult_wiggle_std'] if targets is None else targets
+        model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'constant_beta'}
         iterations = 5
     if options.preset == "gplocal":
         targets = ['tt_residual', 'coda_decay', 'peak_offset', 'amp_transfer'] if targets is None else targets
         model_types = {'amp_transfer': 'gplocal+lld+sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'gplocal+lld+linear_distmb', 'peak_offset': 'gplocal+lld+linear_mb'}
         iterations = 5
-    if options.preset.startswith("db"):
+    if options.preset is not None and options.preset.startswith("db"):
         wiggle_family = options.preset
         basis = construct_wavelet_basis(20.0, wavelet_str=wiggle_family)
         targets = [wiggle_family + "_%d" % i for i in range(basis.shape[0])]

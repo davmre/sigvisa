@@ -39,7 +39,7 @@ class Node(object):
         self._fixed = not any(self._mutable.itervalues())
         self._update_mutable_cache()
 
-        if isinstance(initial_value, float) and np.isnan(initial_value):
+        if isinstance(initial_value, float) and not np.isfinite(initial_value):
             raise ValueError("creating node %s with NaN value!" % label)
 
         if len(keys) > 1:
@@ -88,13 +88,15 @@ class Node(object):
         child.parent_nodes_added.add(self)
 
 
-    def addParent(self, parent):
-        parent.children.add(self)
+    def addParent(self, parent, stealth=False):
         for key in parent.keys():
             self.parents[key] = parent
-            self.parent_keys_removed.discard(key)
-        parent.child_set_changed=True
-        self.parent_nodes_added.add(parent)
+            if not stealth:
+                self.parent_keys_removed.discard(key)
+        if not stealth:
+            parent.child_set_changed=True
+            self.parent_nodes_added.add(parent)
+            parent.children.add(self)
 
     # NOTE: removeChild and removeParent assume that node is actually
     # being removed from the graph. We'd have to do more bookkeeping
@@ -177,7 +179,7 @@ class Node(object):
 
     def set_value(self, value, key=None, force_deterministic_consistency=True):
 
-        if isinstance(value, float) and np.isnan(value):
+        if isinstance(value, float) and not np.isfinite(value):
             raise ValueError("trying to set NaN at node %s" % self.label)
 
         if isinstance(value, np.ndarray) and value.size == 1:
@@ -293,6 +295,8 @@ class Node(object):
 
         v = self.get_dict()
         v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
+
+        assert(np.isfinite(v))
 
         for joint_model in self.params_modeled_jointly:
             joint_model.generic_upwards_message(v=v, cond=parent_values)
@@ -428,15 +432,18 @@ class Node(object):
     # use custom getstate() and setstate() methods to avoid pickling
     # param models when we pickle a graph object (since these models
     # can be large, and GP models can't be directly pickled anyway).
+
     def __getstate__(self):
+        d = copy.copy(self.__dict__)
         try:
             self.modelid
-            d = copy.copy(self.__dict__)
             del d['model']
-            state = d
         except AttributeError:
-            state = self.__dict__
-        return state
+            pass
+
+        d['parents'] = dict()
+
+        return d
 
     def __setstate__(self, state):
         if "model" not in state:

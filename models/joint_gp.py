@@ -1,5 +1,7 @@
 import numpy as np
 from sigvisa.treegp.gp import GP, GPCov
+from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel, ConstLaplacianModel
+from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
 import scipy.stats
 
 """
@@ -70,12 +72,13 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
 
 class JointGP(object):
 
-    def __init__(self, param, sta, ymean, param_nodes):
+    def __init__(self, param, sta, ymean, hparam_nodes, param_model=None):
         self.param = param
         self.sta = sta
         self.ymean = ymean
 
-        self.param_nodes = param_nodes
+        self.hparam_nodes = hparam_nodes
+        self._gpinit_params = gpinit_from_model(param_model)
 
         self.messages = dict()
         self.evs = dict()
@@ -214,7 +217,7 @@ class JointGP(object):
                 compute_ll = False
             else:
                 self.Z = np.sum([self.messages[eid][2] for eid in eids])
-            gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=noise_var, sort_events=False)
+            gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=noise_var, sort_events=False, **self._gpinit_params)
 
             self._cached_gp[k] = gp
         return self._cached_gp[k]
@@ -262,7 +265,7 @@ class JointGP(object):
             X = np.array([self._ev_features(self.evs[eid]) for eid in [eeid,]])
             y = np.array([self.messages[eid][0] for eid in [eeid,]])
             y_obs_variances = np.array([self.messages[eid][1] for eid in [eeid,]])
-            return GP(X=X, y=y, y_obs_variances=y_obs_variances, cov_main=cov, ymean=self.ymean, compute_ll=False, sparse_invert=False, noise_var=noise_var, sort_events=False)
+            return GP(X=X, y=y, y_obs_variances=y_obs_variances, cov_main=cov, ymean=self.ymean, compute_ll=False, sparse_invert=False, noise_var=noise_var, sort_events=False, **self._gpinit_params)
 
         gp1 = single_input_gp(eid1)
         gp2 = single_input_gp(eid2)
@@ -309,7 +312,12 @@ class JointGP(object):
         return np.array((evdict['lon'], evdict['lat'], evdict['depth'], 0.0, evdict['mb']))
 
     def _ev_from_pv(self, parent_values):
-        eid = int(parent_values.keys()[0].split(';')[0])
+        for k in parent_values.keys():
+            try:
+                eid = int(k.split(';')[0])
+            except ValueError:
+                continue
+
         evdict = {'lon': parent_values['%d;lon' % eid],
                   'lat': parent_values['%d;lat' % eid],
                   'depth': parent_values['%d;depth' % eid],
@@ -325,16 +333,19 @@ class JointGP(object):
             return self.noise_var, self.cov
         except AttributeError:
 
-            noise_var = self.param_nodes["noise_var"].get_value()
-            signal_var = self.param_nodes["signal_var"].get_value()
-            depth_lscale = self.param_nodes["depth_lscale"].get_value()
-            horiz_lscale = self.param_nodes["horiz_lscale"].get_value()
+            noise_var = self.hparam_nodes["noise_var"].get_value()
+            signal_var = self.hparam_nodes["signal_var"].get_value()
+            depth_lscale = self.hparam_nodes["depth_lscale"].get_value()
+            horiz_lscale = self.hparam_nodes["horiz_lscale"].get_value()
             #wfn_str = parent_values[param_prefix + "wfn_str"]
             wfn_str = "se"
 
             cov = GPCov(wfn_str=wfn_str, wfn_params=np.array((signal_var,)),
                         dfn_str="lld", dfn_params=np.array((horiz_lscale, depth_lscale)))
             return noise_var, cov
+
+
+
 
     def __getstate__(self):
         self._clear_cache()
@@ -343,6 +354,30 @@ class JointGP(object):
         # avoid problems with pickling recursive structures.
         # this pointer is reset upon unpickling
         # by the setstate() method of SigvisaGraph
-        del d['param_nodes']
+        del d['hparam_nodes']
 
         return d
+
+def gpinit_from_model(model):
+    gpinit_dict = dict()
+    if isinstance(model, ConstGaussianModel):
+        gpinit_dict['basis']="mlinear"
+        gpinit_dict['extract_dim']=np.array((), dtype=int)
+        gpinit_dict['param_mean']=model.mean
+        gpinit_dict['param_cov']=np.asarray(model.variance(None)).reshape((1,1))
+    elif isinstance(model, ConstLaplacianModel):
+        gpinit_dict['basis']="mlinear"
+        gpinit_dict['extract_dim']=np.array((), dtype=int)
+        gpinit_dict['param_mean']=model.center
+        gpinit_dict['param_cov']=np.asarray(model.variance(None)).reshape((1,1))
+    elif isinstance(model, LinearBasisModel):
+        gpinit_dict["basis"] = model.basis
+        gpinit_dict["featurizer_recovery"] = model.featurizer_recovery
+        gpinit_dict["param_mean"] = model.param_mean()
+        gpinit_dict["param_cov"] = model.param_covariance()
+    elif model is None:
+        pass
+    else:
+        raise Exception("unrecognized model type %s" % str(type(model)))
+
+    return gpinit_dict

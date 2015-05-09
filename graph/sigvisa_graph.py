@@ -41,9 +41,10 @@ import cPickle as pickle
 #import pickle, logging, traceback
 #class SpyingPickler(pickle.Pickler, object):
 #    def save(self, obj):
-#        logging.info("depth: %d, obj_type: %s, obj: %s",
-#                     len(traceback.extract_stack()),
-#                     type(obj), repr(obj))
+#        print "saving stuff"
+#        logging.critical("depth: %d, obj_type: %s, obj: %s",
+#                         len(traceback.extract_stack()),
+#                         type(obj), repr(obj))
 #        super(SpyingPickler, self).save(obj)
 
 MAX_TRAVEL_TIME = 2000.0
@@ -126,6 +127,7 @@ class SigvisaGraph(DirectedGraphModel):
                  fixed_arrival_npts=None,
                  dummy_prior=None,
                  jointgp_hparam_prior=None,
+                 jointgp_param_run_init=None,
                  force_event_wn_matching=False):
         """
 
@@ -141,7 +143,17 @@ class SigvisaGraph(DirectedGraphModel):
         self.absorb_n_phases = absorb_n_phases
         self.hack_param_constraint = hack_param_constraint
 
-        self.template_model_type = template_model_type
+
+        if template_model_type=="param":
+            # sensible defaults
+            self.template_model_type = {'tt_residual': 'constant_laplacian',
+                                        'peak_offset': 'param_linear_mb',
+                                        'coda_decay': 'param_linear_distmb',
+                                        'peak_decay': 'param_linear_distmb',
+                                        'mult_wiggle_std': 'constant_beta',
+                                        'amp_transfer': 'param_sin1'}
+        else:
+            self.template_model_type = template_model_type
         self.template_shape = template_shape
         self.tg = dict()
         if type(self.template_shape) == dict:
@@ -214,6 +226,8 @@ class SigvisaGraph(DirectedGraphModel):
         self._joint_gpmodels = defaultdict(dict)
 
         self.jointgp_hparam_prior=jointgp_hparam_prior
+        self.jointgp_param_run_init=jointgp_param_run_init
+
         if self.jointgp_hparam_prior is None:
             # todo: different priors for different params
             self.jointgp_hparam_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
@@ -223,8 +237,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.force_event_wn_matching = force_event_wn_matching
 
-    def joint_gpmodel(self, sta, param):
-        if param not in self._joint_gpmodels[sta]:
+    def joint_gpmodel(self, sta, phase, band, chan, param):
+        if (param, band, chan, phase) not in self._joint_gpmodels[sta]:
             #if param.startswith("db"):
             #    noise_var, gpcov = self.jointgp_prior['wiggle']
             #else:
@@ -237,9 +251,23 @@ class SigvisaGraph(DirectedGraphModel):
                 nodes[hparam]=n
                 self.add_node(n)
 
-            jgp = JointGP(param, sta, 0.0, param_nodes=nodes)
-            self._joint_gpmodels[sta][param] = jgp, nodes
-        return self._joint_gpmodels[sta][param]
+            model = None
+            if self.jointgp_param_run_init is not None:
+                runid, tmtypes = self.jointgp_param_run_init
+                if param in tmtypes:
+                    modelid = self.get_param_model_id(runids=(runid,),
+                                                      sta=sta,
+                                                      phase=phase,
+                                                      model_type=tmtypes[param],
+                                                      param=param,
+                                                      template_shape=self.template_shape,
+                                                      chan=chan, band=band)
+                    model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+
+            jgp = JointGP(param, sta, 0.0, hparam_nodes=nodes, param_model=model)
+
+            self._joint_gpmodels[sta][(param, band, chan, phase)] = jgp, nodes
+        return self._joint_gpmodels[sta][(param, band, chan, phase)]
 
     def ev_arriving_phases(self, eid, sta=None, site=None):
         if sta is None and site is not None:
@@ -267,8 +295,14 @@ class SigvisaGraph(DirectedGraphModel):
         tg = self.template_generator(phase)
         nodes = dict()
         for param in tg.params() + ('arrival_time',):
-            k, node = get_parent_value(eid=eid, sta=sta, phase=phase, param_name=param, chan=chan, band=band, parent_values=self.nodes_by_key, return_key=True)
-            nodes[param]=(k, node)
+            try:
+                k, node = get_parent_value(eid=eid, sta=sta, phase=phase, param_name=param, chan=chan, band=band, parent_values=self.nodes_by_key, return_key=True)
+                nodes[param]=(k, node)
+            except KeyError:
+                if param =="mult_wiggle_std":
+                    pass
+                else:
+                    raise
 
         # if this template is a real event, also load the latent event variables
         for param in ('amp_transfer', 'tt_residual'):
@@ -480,8 +514,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         jointgp_lp = 0.0
         for sta in self._joint_gpmodels.keys():
-            for param in self._joint_gpmodels[sta].keys():
-                jgp, _ = self._joint_gpmodels[sta][param]
+            for k in self._joint_gpmodels[sta].keys():
+                jgp, _ = self._joint_gpmodels[sta][k]
                 jointgp_lp  += jgp.log_likelihood()
 
         print "n_uatemplate: %.1f" % nt_lp
@@ -508,12 +542,12 @@ class SigvisaGraph(DirectedGraphModel):
     def joint_gp_ll(self, verbose=False):
         lp = 0
         for sta in self._joint_gpmodels.keys():
-            for param in self._joint_gpmodels[sta].keys():
-                jgp, _ = self._joint_gpmodels[sta][param]
+            for k in self._joint_gpmodels[sta].keys():
+                jgp, _ = self._joint_gpmodels[sta][k]
                 jgpll = jgp.log_likelihood()
                 lp += jgpll
                 if verbose:
-                    print "jgp %s %s: %.3f" % (sta, param, jgpll)
+                    print "jgp %s %s: %.3f" % (sta, k, jgpll)
         return lp
 
     def current_log_p(self, **kwargs):
@@ -952,10 +986,10 @@ class SigvisaGraph(DirectedGraphModel):
 
                 node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
                 if model_type=="gp_joint":
-                    jgp, hparam_nodes = self.joint_gpmodel(sta, param)
+                    jgp, hparam_nodes = self.joint_gpmodel(sta=sta, param=param, chan=chan, band=band, phase=phase)
                     node.params_modeled_jointly.add(jgp)
                     for n in hparam_nodes.values():
-                        node.add_parent(n)
+                        node.addParent(n)
             else:
                 node = self.load_node_from_modelid(modelid, label, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
 
@@ -1153,7 +1187,7 @@ class SigvisaGraph(DirectedGraphModel):
             for phase in self.phases:
                 param_models[phase] = []
                 for param in params:
-                    jgp, nodes = self.joint_gpmodel(wave['sta'], param)
+                    jgp, nodes = self.joint_gpmodel(sta=wave['sta'], param=param, chan=wave['chan'], band=wave['band'], phase=phase)
                     param_models[phase].append(jgp)
                     hparam_nodes = hparam_nodes | set(nodes.values())
             has_jointgp = True
@@ -1409,23 +1443,24 @@ class SigvisaGraph(DirectedGraphModel):
         for sta in self.station_waves.keys():
 
             gpmodels = self._joint_gpmodels[sta]
-            params = gpmodels.keys()
+            ks = gpmodels.keys()
 
             try:
                 for wn in self.station_waves[sta]:
-                    for param in params:
-                        jgp, hparam_nodes = gpmodels[param]
+                    for k in ks:
+                        jgp, hparam_nodes = gpmodels[k]
 
                         # fill in pointers discarded by
                         # getstate() of JointGP
-                        jgp.param_nodes = hparam_nodes
+                        jgp.hparam_nodes = hparam_nodes
 
                         # fill in the parent pointers discarded
                         # during pickling by the getstate() method
                         # of ObservedSignalNode
 
-                        for n in hparam_nodes.values():
-                            wn.parents[n.single_key] = n
+                        #for n in hparam_nodes.values():
+                        #    wn.parents[n.single_key] = n
+                self.recover_parents_from_children()
             except TypeError:
                 # backwards compatibility if we're loading sggraphs with no hparams
                 pass

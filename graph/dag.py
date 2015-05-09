@@ -64,6 +64,17 @@ class DAG(object):
             node.clear_mark()
             q.extendleft(node.children)
 
+
+    def topo_sorted_nodes(self):
+        self._gc_topo_sorted_nodes()
+        assert(len(self._topo_sorted_list) == len(self.all_nodes))
+        return self._topo_sorted_list
+
+    def recover_parents_from_children(self):
+        for node in self.topo_sorted_nodes():
+            for child in node.children:
+                child.addParent(node, stealth=True)
+
 def get_relevant_nodes(node_list, exclude_nodes=None):
     # note, it's important that the nodes have a consistent order, since
     # we represent their joint values as a vector.
@@ -318,10 +329,6 @@ class DirectedGraphModel(DAG):
         for parent in node.parents.values():
             self.leaf_nodes.discard(parent)
 
-    def topo_sorted_nodes(self):
-        self._gc_topo_sorted_nodes()
-        assert(len(self._topo_sorted_list) == len(self.all_nodes))
-        return self._topo_sorted_list
 
     def get_node_from_key(self, key):
         return self.nodes_by_key[key]

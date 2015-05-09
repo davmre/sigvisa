@@ -1,6 +1,7 @@
 import numpy as np
 
 from sigvisa.utils.geog import dist_km
+from sigvisa.models.distributions import Gaussian
 from sigvisa.models.ttime import tt_predict
 from sigvisa.models.signal_model import ObservedSignalNode
 from sigvisa.infer.mcmc_basic import MH_accept
@@ -169,8 +170,9 @@ def xc_move(sg, wave_node, eid, phase, tmnodes, propose_peak=False, **kwargs):
     relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
 
     eid_src, wn_src = sample_xc_source_arrival(sg, eid_target, phase, wn_target.sta, wn_target.band, wn_target.chan)
+    source_v, _ = wn_src.get_template_params_for_arrival(eid_src, phase)
 
-    xcdist, idx_to_atime, atime_to_idx = atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase, wn_src, wn_target, temp=10.0)
+    xcdist, idx_to_atime, atime_to_idx = atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase, wn_src, wn_target, temp=20.0)
 
     proposed_idx = np.random.choice(np.arange(len(xcdist)), p=xcdist)
 
@@ -183,7 +185,7 @@ def xc_move(sg, wave_node, eid, phase, tmnodes, propose_peak=False, **kwargs):
 
     #print "atime_xc %s %d: atime %.1f proposing %.1f qf %.1f qb %.1f" % (wn_target.sta, eid, current_atime, proposed_atime, log_qforward, log_qbackward)
 
-    return current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes
+    return current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v
 
 def atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
     """
@@ -192,7 +194,7 @@ def atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
     """
 
     try:
-        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
+        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
     except Exception as e:
         print e
         return False
@@ -214,7 +216,7 @@ def constpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
     """
 
     try:
-        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
+        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
     except Exception as e:
         print e
         return False
@@ -224,7 +226,7 @@ def constpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
     peak = current_atime + np.exp(current_offset)
 
     proposed_offset = np.log(peak-proposed_atime)
-    if np.isnan(proposed_offset):
+    if not np.isfinite(proposed_offset):
         # if the proposed atime is *after* the current peak,
         # it's not possible to maintain the current peak time.
         return False
@@ -237,4 +239,53 @@ def constpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
                      log_qforward = log_qforward,
                      log_qbackward = log_qbackward,
                      node_list = (n_atime,n_offset),
+                     relevant_nodes = relevant_nodes,)
+
+def adjpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
+    """
+    Propose a new arrival time from cross-correlation, while also
+    adjusting the offset to leave the peak time constant. The hope is
+    that this is more likely to be accepted, since changing the peak
+    time (as the basic atime move does) is a very disruptive thing.
+    """
+
+    try:
+        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
+    except Exception as e:
+        print e
+        return False
+
+
+    k_amp_transfer, n_amp_transfer = tmnodes['amp_transfer']
+    k_pdecay, n_pdecay = tmnodes['peak_decay']
+    k_cdecay, n_cdecay = tmnodes['coda_decay']
+    cdecay = n_cdecay.get_value(key=k_cdecay)
+    pdecay = n_pdecay.get_value(key=k_pdecay)
+
+    k_offset, n_offset = tmnodes['peak_offset']
+
+    current_offset = n_offset.get_value(key=k_offset)
+    current_peak = current_atime + np.exp(current_offset)
+    current_amp = n_amp_transfer.get_value(key=k_amp_transfer)
+
+    source_offset = source_v['peak_offset']
+    offset_proposal_dist = Gaussian(source_offset, 0.1)
+
+    proposed_offset = offset_proposal_dist.sample()
+    log_qforward += offset_proposal_dist.log_p(proposed_offset)
+    log_qbackward += offset_proposal_dist.log_p(current_offset)
+
+    # how many seconds later/earlier is the new offset?
+    offset_shift = np.exp(proposed_offset) - np.exp(current_offset)
+    amp_change = -np.exp(cdecay) * offset_shift
+    proposed_amp = current_amp + amp_change
+
+    relevant_nodes += [n_offset,n_amp_transfer]
+
+    return MH_accept(sg, keys=(k_atime,k_offset),
+                     oldvalues = (current_atime,current_offset, current_amp),
+                     newvalues = (proposed_atime,proposed_offset, proposed_amp),
+                     log_qforward = log_qforward,
+                     log_qbackward = log_qbackward,
+                     node_list = (n_atime,n_offset, n_amp_transfer),
                      relevant_nodes = relevant_nodes,)
