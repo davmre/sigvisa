@@ -61,10 +61,7 @@ class MCMCLogger(object):
 
 
         if (step % self.dump_interval == self.dump_interval-1):
-            sg.debug_dump(dump_path = os.path.join(self.run_dir, 'step_%06d' % step), pickle_only=True)
-            for f in self.log_handles.values():
-                if type(f) == file:
-                    f.flush()
+            self.dump()
 
         for (eid, evnodes) in sg.evnodes.items():
 
@@ -143,6 +140,12 @@ class MCMCLogger(object):
                 self.log_handles["acceptance_rates"] = open(os.path.join(self.run_dir, 'acceptance_rates.txt'), 'a')
             self.log_handles["acceptance_rates"].write(s + "\n\n")
 
+    def dump(self):
+        step = self.last_step
+        sg.debug_dump(dump_path = os.path.join(self.run_dir, 'step_%06d' % step), pickle_only=True)
+        for f in self.log_handles.values():
+            if type(f) == file:
+                f.flush()
 
 
     def load_template_vals(self, eid, phase, wn):

@@ -228,6 +228,8 @@ def load_signals_from_cmdline(sg, options, args):
         evs = [get_event(evid=evid) for evid in evids]
     else:
         evs = get_leb_events(sg, cursor)
+
+
     if options.initialize_leb != "no" or options.initialize_evids is not None or options.synth:
         if options.initialize_leb == "yes" or options.initialize_evids is not None or options.synth:
             for ev in evs:

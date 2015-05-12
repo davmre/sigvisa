@@ -103,6 +103,26 @@ def final_mcmc_state(ev_dir):
     sg = graph_for_step(ev_dir, max_step)
     return sg, max_step
 
+def mcmc_lp_posterior(request, dirname):
+    s = Sigvisa()
+
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    lps = np.loadtxt(os.path.join(mcmc_run_dir, "lp.txt"))
+    f = Figure()
+    f.patch.set_facecolor('white')
+    ax = f.add_subplot(111)
+    ax.plot(lps)
+    ax.set_xlabel("step")
+    ax.set_ylabel("log density")
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
 def mcmc_run_detail(request, dirname):
     s = Sigvisa()
     burnin = int(request.GET.get('burnin', '-1'))
@@ -136,7 +156,9 @@ def mcmc_run_detail(request, dirname):
     except AttributeError:
         gp_hparams = None
 
-    wns = [n.label for n in np.concatenate(sg.station_waves.values())]
+    wns = []
+    for sta in sorted(sg.station_waves.keys()):
+        wns.append((sta, [n.label for n in sg.station_waves[sta]]))
 
     eids = sg.evnodes.keys()
     evs = []
@@ -150,11 +172,17 @@ def mcmc_run_detail(request, dirname):
 
     if burnin < 0:
         burnin = 100 if max_step > 150 else 10
+
+    X = []
     for eid in eids:
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
 
         llon, rlon, blat, tlat = event_bounds(trace)
+        X.append([llon, tlat])
+        X.append([llon, blat])
+        X.append([rlon, tlat])
+        X.append([rlon, blat])
 
         results, txt = trace_stats(trace, true_evs)
         ev = sg.get_event(eid)
@@ -172,6 +200,15 @@ def mcmc_run_detail(request, dirname):
         }
         evs.append(evdict)
 
+    X = np.array(X, dtype=np.float)
+    left_bound, right_bound, bottom_bound, top_bound = event_bounds(X, quantile=0.99)
+    bounds = dict()
+    bounds["top"] = top_bound + 0.2
+    bounds["bottom"] = bottom_bound - 0.2
+    bounds["left"] = left_bound - 0.2
+    bounds["right"] = right_bound + 0.2
+
+
     return render_to_response("svweb/mcmc_run_detail.html",
                               {'wns': wns,
                                'dirname': dirname,
@@ -183,6 +220,7 @@ def mcmc_run_detail(request, dirname):
                                'true_ev_strs': true_ev_strs,
                                'stas': stas,
                                'gp_hparams': gp_hparams,
+                               'bounds': bounds,
                                }, context_instance=RequestContext(request))
 
 def rundir_eids(mcmc_run_dir):
@@ -194,6 +232,91 @@ def rundir_eids(mcmc_run_dir):
             eid = int(m.group(1))
             eids.append(eid)
     return eids
+
+def conditional_wiggle_posterior(request, dirname, sta, phase):
+    s = Sigvisa()
+
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+    from sigvisa.models.wiggles.uniform_variance_wavelets import implicit_to_explicit
+
+
+    (starray, etarray, idarray, M, N)= sg.station_waves.values()[0][0].wavelet_basis
+    prototypes = [np.asarray(m).flatten() for m in M]
+    basis = implicit_to_explicit(starray, etarray, idarray, prototypes, N)
+
+    def plot_wavelet_dist_samples(ax, srate, basis, wmeans, wvars, c="blue"):
+        wmeans = np.asarray(wmeans).flatten()
+        wvars = np.asarray(wvars).flatten()
+
+        n = basis.shape[1]
+        x = np.linspace(0, n/float(srate), n)
+        for n in range(30):
+            ws = np.random.randn(basis.shape[0])*np.sqrt(wvars)+wmeans
+            w = np.dot(basis.T, ws) + 1
+            ax.plot(x, w, c=c, linestyle="-", alpha=0.2, lw=3)
+
+
+    def plot_wavelet_dist(ax, srate, basis, wmeans, wvars, c="blue"):
+        wmeans = np.asarray(wmeans).flatten()
+        wvars = np.asarray(wvars).flatten()
+
+        w = np.dot(basis.T, wmeans) + 1
+        wv = np.diag(np.dot(basis.T, np.dot(np.diag(wvars), basis)))
+        n = basis.shape[1]
+        x = np.linspace(0, n/float(srate), n)
+        ax.plot(x, w, c=c, linestyle="-", lw=2)
+        ax.fill_between(x, w+2*np.sqrt(wv), w-2*np.sqrt(wv), facecolor=c, alpha=0.2)
+
+
+
+    eids = sg.evnodes.keys()
+
+    eid_wiggle_posteriors = dict()
+
+    wiggle_gpmodels = dict([(k, v) for (k, v) in sg._joint_gpmodels[sta].items() if k[0].startswith("db")])
+
+    holdout_evidence = dict()
+    for eid in eids:
+        try:
+            holdout_evidence[eid] = np.sum([jgp.holdout_evidence(eid) for jgp, wnodes in wiggle_gpmodels.values()])
+        except KeyError:
+            continue
+
+    n = len(eids)
+    f = Figure((12, 4*n))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(n, 2)
+
+    j = 0
+    for wn in sg.station_waves[sta]:
+        wn.pass_jointgp_messages()
+        ell, prior_means, prior_vars, posterior_means, posterior_vars = wn._coef_message_cache
+
+        for i, (eid, pphase, _, _, _, ctype) in enumerate(wn.tssm_components):
+            if ctype != "wavelet": continue
+            if pphase != phase: continue
+            cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
+
+            ax = f.add_subplot(gs[j, 0])
+            plot_wavelet_dist(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
+            plot_wavelet_dist(ax, wn.srate, basis, cond_means, cond_vars, c="green")
+            ax.set_title("%s - %d - evidence %f" % (sta, eid, holdout_evidence[eid]))
+            ax = f.add_subplot(gs[j, 1])
+            plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
+            plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
+            ax.set_title("%s - %d - evidence %f" % (sta, eid, holdout_evidence[eid]))
+            j += 1
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
 
 def mcmc_alignment_posterior(request, dirname, sta, phase):
     import seaborn as sns
@@ -427,7 +550,7 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
     srate = float(wn.srate)
 
     # analyze the wavelet basis to lay out the visualization
-    (starray, etarray, idarray, M, N), target_std = wn.wavelet_basis
+    starray, etarray, idarray, M, N = wn.wavelet_basis
     ids_by_length = {idarray[i]: etarray[i]-starray[i] for i in range(len(starray))}
 
     # longest basis elements first
@@ -444,7 +567,10 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
     a = safe_loadtxt(ffname)
     if burnin < 0:
         burnin = 100 if a.shape[0] > 150 else 10
-    assert(a.shape[1]==len(starray))
+    #import pdb; pdb.set_trace()
+    #assert(a.shape[1]==len(starray))
+    keys = sorted(sg._joint_gpmodels[sta].keys())
+
 
     true_vals = None
     try:
@@ -460,19 +586,23 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
     gs = gridspec.GridSpec(len(ids_sorted), nbins)
 
     firstax=dict()
-    for i in range(a.shape[1]):
-        st, et, pid = starray[i], etarray[i], idarray[i]
-        id_idx = ids_sorted.index(pid)
+    j = 0
+    for i, k in enumerate(keys):
+        if k[0].startswith("db"):
+            st, et, pid = starray[j], etarray[j], idarray[j]
+            id_idx = ids_sorted.index(pid)
 
-        st_idx = (st-np.min(starray))/res
+            st_idx = (st-np.min(starray))/res
 
-        my_id_sts = starray[idarray==idarray[i]]
-        width = (my_id_sts[1] - my_id_sts[0])/res
+            my_id_sts = starray[idarray==idarray[j]]
+            width = (my_id_sts[1] - my_id_sts[0])/res
 
+        else:
+            continue
 
         shared_ax = firstax[pid] if pid in firstax else None
         ax = f.add_subplot(gs[id_idx,st_idx:st_idx+width],
-                           sharey=shared_ax,
+                           #sharey=shared_ax,
                            sharex=shared_ax)
         #ax.patch.set_facecolor('white')
 
@@ -487,11 +617,15 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
             firstax[pid] = ax
         else:
             ax.get_yaxis().set_visible(False)
-        t_start = max(0, starray[i]/srate)
-        t_end = etarray[i]/srate
+
+
+        t_start = max(0, starray[j]/srate)
+        t_end = etarray[j]/srate
         ax.set_title("%d" % i)
         ax.annotate('%.1fs:%.1fs\nmean %.1f\nstd %.1f' % (t_start, t_end, np.mean(samples), np.std(samples)), (0.3, 0.85), xycoords='axes fraction', size=10)
 
+        if k[0].startswith("db"):
+            j += 1
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')

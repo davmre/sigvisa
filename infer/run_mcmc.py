@@ -395,6 +395,7 @@ def run_open_world_MH(sg, steps=10000,
 
         if stop_condition is not None:
             if stop_condition(logger):
+                logger.dump()
                 return
 
         """"

@@ -3,21 +3,34 @@ import numpy as np
 import os
 
 import cPickle as pickle
+import hashlib
 
 from sigvisa.database.dataset import read_timerange, read_events, EV_MB_COL, EV_EVID_COL
-from sigvisa.signals.io import load_event_station_chan, load_segments, fetch_waveform
+from sigvisa.signals.io import load_event_station_chan, load_segments, fetch_waveform, MissingWaveform
 from sigvisa.infer.run_mcmc import run_open_world_MH
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa import Sigvisa
-from sigvisa.source.event import get_event
+from sigvisa.source.event import get_event, Event
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
-class SyntheticRunSpec(object):
+class RunSpec(object):
+    def build_sg(self, modelspec):
+        kwargs = modelspec.sg_params.copy()
 
-    def __init__(self, sw, runid):
+        sg = SigvisaGraph(runids=self.runids, **kwargs)
+        waves = self.get_waves(modelspec)
+        for wave in waves:
+            sg.add_wave(wave)
+        return sg
+
+
+class SyntheticRunSpec(RunSpec):
+
+    def __init__(self, sw, runid, init_noise=False):
         self.sw = sw
-        self.runid = runid
+        self.runids = (runid,)
+        self.init_noise = init_noise
 
     def get_waves(self, modelspec):
         w = self.sw.waves
@@ -25,13 +38,95 @@ class SyntheticRunSpec(object):
         return waves
 
     def get_init_events(self):
-        return self.sw.all_evs
+        if self.init_noise:
+            evs = []
+            for ev in self.sw.all_evs:
+                ev_init = Event(lon=ev.lon+1*np.random.randn(),
+                                lat=ev.lat-1*np.random.randn(),
+                                depth=ev.depth,
+                                mb=ev.mb+0.4 *np.random.randn(),
+                                time=ev.time+20.0*np.random.randn())
+                evs.append(ev_init)
+            return evs
+        else:
+            return self.sw.all_evs
 
-class RunSpec(object):
-    def __init__(sites, dataset="training", hour=0.0, len_hours=2.0, start_time=None, end_time=None, runid=None, initialize_events=None):
+class EventRunSpec(RunSpec):
+
+    def __init__(self, sites=None, stas=None, evids=None, runids=None, initialize_events=True,
+                 pre_s=10, post_s=120, force_event_wn_matching=True, disable_conflict_checking=False):
 
         self.sites = sites
-        self.runid = runid
+        self.stas = stas
+        self.runids = runids
+        self.evids = evids
+        self.pre_s = pre_s
+        self.post_s = post_s
+        self.initialize_events=initialize_events
+        self.force_event_wn_matching = force_event_wn_matching
+        self.disable_conflict_checking = disable_conflict_checking
+
+    def get_waves(self, modelspec):
+        s = Sigvisa()
+        cursor = s.dbconn.cursor()
+
+        stas = self.stas
+        if stas is None:
+            stas = s.sites_to_stas(self.sites, refsta_only=not modelspec.sg_params['arrays_joint'])
+
+
+        k = hashlib.md5(repr(self.__dict__) + repr(modelspec.sg_params) + repr(modelspec.signal_params)).hexdigest()[:10]
+        cache_fname = os.path.join(s.homedir, 'scratch/evwaves_%s.pkl' % k)
+        try:
+            with open(cache_fname, 'rb') as f:
+                waves = pickle.load(f)
+        except IOError:
+            waves = []
+            for evid in self.evids:
+                for sta in stas:
+                    try:
+                        wave=load_event_station_chan(evid, sta, chan="auto", cursor=cursor,
+                                                     pre_s=self.pre_s,
+                                                     post_s=self.post_s,
+                                                     exclude_other_evs=True,
+                                                     phases=modelspec.sg_params['phases'])
+                        bands = modelspec.signal_params['bands']
+                        hz = modelspec.signal_params['max_hz']
+                        assert(len(bands)==1)
+                        wave = wave.filter("%s;env;hz_%.1f" % (bands[0], hz))
+                        waves.append(wave)
+                    except MissingWaveform as e:
+                        print e
+                        continue
+            cursor.close()
+            with open(cache_fname, 'wb') as f:
+                pickle.dump(waves, f)
+
+        return waves
+
+    def get_init_events(self):
+        if self.initialize_events:
+            evs = [get_event(evid=evid) for evid in self.evids]
+        else:
+            evs = []
+        return evs
+
+    def build_sg(self, modelspec):
+        kwargs = modelspec.sg_params.copy()
+        kwargs['force_event_wn_matching'] = self.force_event_wn_matching
+
+        sg = SigvisaGraph(runids=self.runids, **kwargs)
+        waves = self.get_waves(modelspec)
+        for wave in waves:
+            sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking)
+        return sg
+
+
+class TimeRangeRunSpec(RunSpec):
+    def __init__(self, sites, dataset="training", hour=0.0, len_hours=2.0, start_time=None, end_time=None, runids=None, initialize_events=None):
+
+        self.sites = sites
+        self.runids = runids
 
         if start_time is not None:
             self.start_time = start_time
@@ -44,7 +139,7 @@ class RunSpec(object):
 
         self.initialize_events=initialize_events
 
-    def get_waves(modelspec):
+    def get_waves(self, modelspec):
         s = Sigvisa()
         cursor = s.dbconn.cursor()
 
@@ -81,6 +176,7 @@ class RunSpec(object):
         else:
             raise Exception("unrecognized event initialization %s" % self.initialize_events)
 
+
 class ModelSpec(object):
 
     def __init__(self, ms_label=None, vert_only=True, inference_preset=None, seed=0, **kwargs):
@@ -95,6 +191,7 @@ class ModelSpec(object):
             'arrays_joint': False,
             'uatemplate_rate': 1e-6,
             'jointgp_hparam_prior': None,
+            'absorb_n_phases': True,
         }
         signal_params = {
             'max_hz': 5.0,
@@ -138,25 +235,11 @@ class ModelSpec(object):
             inference_params[k] = kwargs[k]
         self.inference_rounds.append(inference_params)
 
-"""
-How can I specify a run?
 
-list of sites, time bounds *for all sites*, model runid,
+    def update_args(self, kwargs):
+        pass
 
-OR list of generated signals with times. okay so ultimately there's going to be a set of waves. either I provide it explicitly or specify it implicitly. But the particular set of waves will depend on things like whether we're doing arrayjoint. Different models will have different sets of waves.
 
-max signal hz, uatemplate rate, wiggle family, wiggle model type, initialization...
-
-I should be able to apply the *same* list
-
-"""
-
-def build_sg(modelspec, runspec):
-    sg = SigvisaGraph(runids=(runspec.runid,), **modelspec.sg_params)
-    waves = runspec.get_waves(modelspec)
-    for wave in waves:
-        sg.add_wave(wave)
-    return sg
 
 def initialize_sg(sg, modelspec, runspec):
     evs = runspec.get_init_events()
@@ -228,6 +311,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
                           **inference_params)
         step = logger.last_step
 
+
 def do_coarse_to_fine(modelspecs, runspec,
                       model_switch_lp_threshold=1000,
                       max_steps_intermediate=100,
@@ -235,7 +319,7 @@ def do_coarse_to_fine(modelspecs, runspec,
 
     sg_old, ms_old = None, None
 
-    sgs = [build_sg(modelspec, runspec) for modelspec in modelspecs]
+    sgs = [runspec.build_sg(modelspec) for modelspec in modelspecs]
 
     for (sg, modelspec) in zip(sgs[:-1], modelspecs[:-1]):
         if sg_old is None:

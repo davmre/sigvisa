@@ -343,7 +343,7 @@ class Beta(Distribution):
 
     def variance(self):
         alpha, beta = self.alpha, self.beta
-        return (alpha*beta)/((alpha+beta)**2(alpha+beta+1))
+        return (alpha*beta)/((alpha+beta)**2 * (alpha+beta+1))
 
 class Bernoulli(Distribution):
 
