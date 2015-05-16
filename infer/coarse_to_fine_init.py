@@ -277,7 +277,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
     # and hooks to monitor convergence?
 
     logger = MCMCLogger( write_template_vals=True, dump_interval=50, print_interval=10, write_gp_hparams=True)
-
+    logger.dump(sg)
 
     try:
         sw = runspec.sw

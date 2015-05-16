@@ -38,7 +38,7 @@ class MCMCLogger(object):
         self.transient = transient
 
         self.lps = []
-        self.last_step = None
+        self.last_step = 0
 
     def start(self):
         self.start_time = time.time()
@@ -61,7 +61,7 @@ class MCMCLogger(object):
 
 
         if (step % self.dump_interval == self.dump_interval-1):
-            self.dump()
+            self.dump(sg)
 
         for (eid, evnodes) in sg.evnodes.items():
 
@@ -140,7 +140,7 @@ class MCMCLogger(object):
                 self.log_handles["acceptance_rates"] = open(os.path.join(self.run_dir, 'acceptance_rates.txt'), 'a')
             self.log_handles["acceptance_rates"].write(s + "\n\n")
 
-    def dump(self):
+    def dump(self, sg):
         step = self.last_step
         sg.debug_dump(dump_path = os.path.join(self.run_dir, 'step_%06d' % step), pickle_only=True)
         for f in self.log_handles.values():
