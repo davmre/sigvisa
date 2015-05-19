@@ -1,11 +1,12 @@
 import numpy as np
 import scipy.stats
-from sigvisa.treegp.gp import GP, GPCov, mcov
+from sigvisa.treegp.gp import GP, GPCov, mcov, dgaussian
 from collections import defaultdict
+
 
 class LocalGPs(object):
 
-    def __init__(self, block_centers, cov_block_params, X=None, y=None, X_blocks=None, y_blocks=None):
+    def __init__(self, block_centers, cov_block_params, X=None, y=None, X_blocks=None, y_blocks=None, cov_blocks=None, gps=None):
         self.n_blocks = len(block_centers)
         self.block_centers = block_centers
 
@@ -15,11 +16,13 @@ class LocalGPs(object):
         self.y_blocks = y_blocks
         self.cov_block_params = cov_block_params
 
-        cov_blocks = []
-        for cbp in cov_block_params:
-            noise_var = cbp[0]
-            cov = GPCov(wfn_params=cbp[1:2], dfn_params=cbp[2:], dfn_str="euclidean", wfn_str="se")
-            cov_blocks.append((noise_var, cov))
+        if cov_blocks is None:
+            cov_blocks = []
+            for cbp in cov_block_params:
+                noise_var = cbp[0]
+                cov = GPCov(wfn_params=cbp[1:2], dfn_params=cbp[2:], dfn_str="euclidean", wfn_str="se")
+                cov_blocks.append((noise_var, cov))
+
         if len(cov_blocks) == 1:
             cov_blocks = cov_blocks * self.n_blocks
             self.tied_params = True
@@ -28,16 +31,18 @@ class LocalGPs(object):
 
         self.cov_blocks = cov_blocks
 
-        self.gps = []
-        for (X, y, nc) in zip(X_blocks, y_blocks, cov_blocks):
-            noise_var, cov = nc
-            gp = GP(X, y, cov_main=cov,
-                    noise_var=noise_var,
-                    compute_ll=True,
-                    compute_grad=True,
-                    sort_events=False,
-                    sparse_invert=False)
-            self.gps.append(gp)
+        if gps is None:
+            gps = []
+            for (X, y, nc) in zip(X_blocks, y_blocks, cov_blocks):
+                noise_var, cov = nc
+                gp = GP(X, y, cov_main=cov,
+                        noise_var=noise_var,
+                        compute_ll=True,
+                        compute_grad=True,
+                        sort_events=False,
+                        sparse_invert=False)
+                gps.append(gp)
+        self.gps = gps
 
     def blocks_from_centers(self, X, y):
         X_blocks = [[] for i in range(self.n_blocks)]
@@ -159,22 +164,102 @@ class BCM(LocalGPs):
         mean = np.dot(cov, np.sum(weighted_means, axis=0))
         return mean, cov
 
+
+    def _local_pred_gradient_Xi_source(self, target_i, source_i):
+        target_X = self.X_blocks[target_i]
+        target_y = self.y_blocks[target_i]
+        source_gp = self.gps[source_i]
+
+        n, d = source_gp.X.shape
+        llgrad = np.zeros((n, d))
+
+        mean = source_gp.predict(target_X)
+        cov = source_gp.covariance(target_X, include_obs=True)
+        r = target_y.flatten() - mean.flatten()
+        prec = np.linalg.inv(cov)
+
+        for p in range(n):
+            for i in range(d):
+                dm, dc = source_gp.grad_prediction_wrt_source_x(target_X, p, i)
+                llgrad[p, i] = dgaussian(r, prec, dc, dm)
+
+
+        return llgrad
+
+    def _local_pred_gradient_Xi_target(self, target_i, source_i, subtract_prior=True):
+        target_X = self.X_blocks[target_i]
+        target_y = self.y_blocks[target_i].flatten()
+        source_gp = self.gps[source_i]
+
+        mean = source_gp.predict(target_X)
+        cov = source_gp.covariance(target_X, include_obs=True)
+        r = target_y.flatten() - mean.flatten()
+        prec = np.linalg.inv(cov)
+
+        prior_cov = source_gp.kernel(target_X, target_X, identical=True)
+        prior_prec = np.linalg.inv(prior_cov)
+
+        n, d = target_X.shape
+        llgrad = np.zeros((n, d))
+        for p in range(n):
+            for i in range(d):
+                dm, dc = source_gp.grad_prediction_wrt_target_x(target_X, p, i)
+                llgrad[p, i] = dgaussian(r, prec, dc, dm)
+                #print "setting %d, %d = %f" % (p, i, llgrad[p, i])
+
+                if subtract_prior:
+                # compute the llgrad from the message from the source to target, by
+                # subtracting the gradient of p_source(target)
+                # (the target's prior likelihood in the source model)
+                    dc = source_gp.dKdx(target_X, p, i)
+                    plp = dgaussian(target_y, prior_prec, dc)
+                    llgrad[p, i] -= plp
+                    #print "subtracting %f from %d, %d = %f" % (plp, p, i, llgrad[p, i])
+
+        return llgrad
+
+    def llgrad_Xi_block(self, i):
+        # derivatives of the total log-likelihood wrt each coordinate of the inputs for block i
+        gp = self.gps[i]
+        grad = gp.grad_ll_wrt_X()
+
+        for source_i in range(i):
+            grad += self._local_pred_gradient_Xi_target(i, source_i, subtract_prior=True)
+
+        for target_i in range(i+1, self.n_blocks):
+            grad += self._local_pred_gradient_Xi_source(target_i, i)
+
+        return grad
+
+    def llgrad_X(self):
+        block_grads = [self.llgrad_Xi_block(i) for i in range(self.n_blocks)]
+        grad = np.concatenate([xg.flatten() for xg in block_grads])
+        return grad
+
+    def flat_X(self):
+        return np.concatenate([x.flatten() for x in self.X_blocks])
+
+    def update_X(self, flatX, flatcov):
+        X_blocks = []
+        cov_block_params = []
+        ix = 0
+        ic = 0
+        for xb, cb in zip(self.X_blocks, self.cov_block_params):
+            nx = xb.size
+            X_blocks.append(flatX[ix:ix+nx].reshape(xb.shape))
+            ix += nx
+
+            nc = len(cb)
+            cov_block_params.append(flatcov[ic:ic+nc])
+            ic += nc
+
+        return BCM(block_centers=self.block_centers,
+                   cov_block_params = cov_block_params,
+                   X_blocks = X_blocks,
+                   y_blocks = self.y_blocks,
+                   test_cov = self.test_cov)
+
     def _local_pred_gradient(self, target_X, target_y, source_gp, subtract_prior=True):
-        def dgaussian(r, prec, dcov, dmean=None):
-            r = r.reshape((-1, 1))
-
-            dprec = -np.dot(prec, np.dot(dcov, prec))
-            dll_dcov = -.5*np.dot(r.T, np.dot(dprec, r))
-            dll_dcov -= .5*np.trace(np.dot(prec, dcov))
-            dll = dll_dcov
-
-            if dmean is not None:
-                dmean = dmean.reshape((-1, 1))
-                dll_dmean = np.dot(r.T, np.dot(prec, dmean))
-                dll += dll_dmean
-
-            return dll
-
         mean = source_gp.predict(target_X)
         cov = source_gp.covariance(target_X, include_obs=True)
 
@@ -200,13 +285,65 @@ class BCM(LocalGPs):
             llgrad[i_hparam] = dgaussian(r, prec, dcov, dmean)
 
             if subtract_prior:
-                dcov = source_gp.dK(target_X, target_X, i_hparam, identical=True)
+                dcov = source_gp.dKdi(target_X, target_X, i_hparam, identical=True)
                 llgrad[i_hparam] -= dgaussian(target_y, prior_prec, dcov)
 
         return ll, llgrad
 
+
+
+    def llgrad_hparam_block(self, i):
+        gp = self.gps[i]
+        grad = gp.ll_grad.copy()
+        nparams = len(grad)
+        ll = gp.log_likelihood()
+
+        for target_i in range(i+1, self.n_blocks):
+            target_X = self.X_blocks[target_i]
+            target_y = self.y_blocks[target_i]
+            pll, pllgrad = self._local_pred_gradient(target_X, target_y, gp, subtract_prior=True)
+            ll += pll
+            grad += pllgrad
+
+        return ll, grad
+
+    def llgrad_hparam(self):
+        llgrads = [self.llgrad_hparam_block(i) for i in range(self.n_blocks)]
+        lls, grads = zip(*llgrads)
+        ll = np.sum(lls)
+
+        if self.tied_params:
+            llgrad = np.sum(grads, axis=0)
+        else:
+            llgrad = np.concatenate(grads)
+
+        return ll, llgrad
+
+    def permute(block_perm=None):
+        if block_perm is None:
+            block_perm = np.random.permutation(self.n_blocks)
+
+        X_blocks = []
+        y_blocks = []
+        gps = []
+        block_centers = []
+        cov_blocks = []
+        cov_block_params = []
+
+        for b in block_perm:
+            X_blocks.append(self.X_blocks[b])
+            y_blocks.append(self.y_blocks[b])
+            gps.append(self.gps[b])
+            block_centers.append(self.block_centers[b])
+            cov_blocks.append(self.cov_blocks[b])
+            cov_block_params.append(self.cov_block_params[b])
+
+        return BCM(block_centers, cov_block_params, X_blocks=X_blocks, y_blocks=y_blocks, cov_blocks=cov_blocks, gps=gps)
+
+    """
     def llgrad(self, block_perm = None, pseudo=False):
         pseudo_ll = False
+
         if block_perm is None:
             X_blocks = self.X_blocks
             y_blocks = self.y_blocks
@@ -216,7 +353,7 @@ class BCM(LocalGPs):
             y_blocks = []
             gps = []
 
-            for i, b in enumerate(block_perm):
+            for b in block_perm:
                 X_blocks.append(self.X_blocks[b])
                 y_blocks.append(self.y_blocks[b])
                 gps.append(self.gps[b])
@@ -270,6 +407,7 @@ class BCM(LocalGPs):
             llgrad = np.concatenate(llgrad)
 
         return ll, llgrad
+    """
 
     def stochastic_llgrad(self, samples=1, pseudo=True):
         ll = 0
