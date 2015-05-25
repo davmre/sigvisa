@@ -115,7 +115,7 @@ class MultiSharedBCM(object):
 
         if self.kernelized:
             YY = self.YY[i_start:i_end, i_start:i_end]
-            return self.gaussian_llgrad_kernel(X, YY, **kwargs)
+            return self.gaussian_llgrad_kernel(X, YY, dy=self.dy, **kwargs)
         else:
             Y = self.Y[i_start:i_end]
             return self.gaussian_llgrad(X, Y, **kwargs)
@@ -136,7 +136,7 @@ class MultiSharedBCM(object):
             YY[ni:, ni:] = self.YY[j_start:j_end, j_start:j_end]
             YY[:ni, ni:] = self.YY[i_start:i_end, j_start:j_end]
             YY[ni:, :ni]  = YY[:ni, ni:].T
-            return self.gaussian_llgrad_kernel(X, YY, **kwargs)
+            return self.gaussian_llgrad_kernel(X, YY, dy=self.dy, **kwargs)
         else:
             Yi = self.Y[i_start:i_end]
             Yj = self.Y[j_start:j_end]
@@ -205,7 +205,7 @@ class MultiSharedBCM(object):
     def gaussian_llgrad_kernel(self, X, YY, dy=None, grad_X=False):
         n, dx = X.shape
         if dy is None:
-            dy = dx
+            dy = self.dy
 
         K = mcov(X, self.cov, self.noise_var)
         Kinv = np.linalg.inv(K)
