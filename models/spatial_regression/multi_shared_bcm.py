@@ -57,10 +57,6 @@ def sample_synthetic(seed=1, n=400, xd=2, yd=10, lscale=0.1, noise_var=0.01):
 
     return X, y, cov
 
-def vis(X, y):
-    for i in range(y.shape[0]):
-        figure()
-        scatter(X[:, 0], X[:, 1], c=y[i,:], cmap="jet")
 
 
 class MultiSharedBCM(object):
@@ -85,6 +81,7 @@ class MultiSharedBCM(object):
         self.predict_tree = VectorTree(dummy_X, 1, cov.dfn_str, cov.dfn_params, cov.wfn_str, cov.wfn_params)
 
         self.compute_neighbors(threshold=neighbor_threshold)
+        self.neighbor_threshold = neighbor_threshold
 
     def compute_neighbors(self, threshold=1e-5):
         neighbor_count = defaultdict(int)
@@ -104,6 +101,37 @@ class MultiSharedBCM(object):
                     neighbor_count[j] += 1
         self.neighbor_count = neighbor_count
         self.neighbors = neighbors
+
+    def update_X(self, new_X, recompute_neighbors=False):
+        self.X = new_X
+        if recompute_neighbors:
+            self.compute_neighbors(threshold=self.neighbor_threshold)
+
+    def llgrad_blocked(self, parallel=False, **kwargs):
+        """
+        Compute likelihood under a model with blocked local GPs (no pairwise corrections)
+        """
+        if parallel:
+            pool = Pool(processes=4)
+            unary_args = [(kwargs, self, i) for i in range(self.n_blocks)]
+            unaries = pool.map(llgrad_unary_shim, unary_args)
+        else:
+            unaries = [self.llgrad_unary(i, **kwargs) for i in range(self.n_blocks)]
+
+        unary_lls, unary_grads = zip(*unaries)
+
+        ll = np.sum(unary_lls)
+
+        if "grad_X" in kwargs and kwargs['grad_X']:
+            grads = np.zeros(self.X.shape)
+        else:
+            grads = np.zeros((0, 0))
+
+        for i in range(self.n_blocks):
+            i_start, i_end = self.block_boundaries[i]
+            grads[i_start:i_end, :] += unary_grads[i]
+
+        return ll, grads
 
     def llgrad(self, parallel=False, local=True, **kwargs):
         # overall likelihood is the pairwise potentials for all (unordered) pairs,
@@ -129,12 +157,20 @@ class MultiSharedBCM(object):
             pairs = [self.llgrad_joint(i, j, **kwargs) for (i,j) in neighbors]
 
         unary_lls, unary_grads = zip(*unaries)
-        pair_lls, pair_grads = zip(*pairs)
+        if len(pairs) > 0:
+            pair_lls, pair_grads = zip(*pairs)
+        else:
+            pair_lls = []
+            pair_grads = []
 
         ll = np.sum(pair_lls)
         ll -= np.sum([(neighbor_count[i]-1)*ull for (i, ull) in enumerate(unary_lls) ])
 
-        grads = np.zeros(self.X.shape)
+        if "grad_X" in kwargs and kwargs['grad_X']:
+            grads = np.zeros(self.X.shape)
+        else:
+            grads = np.zeros((0, 0))
+
         pair_idx = 0
         for i in range(self.n_blocks):
             i_start, i_end = self.block_boundaries[i]
@@ -157,7 +193,7 @@ class MultiSharedBCM(object):
             YY = self.YY[i_start:i_end, i_start:i_end]
             return self.gaussian_llgrad_kernel(X, YY, dy=self.dy, **kwargs)
         else:
-            Y = self.Y[i_start:i_end]
+            Y = self.Y[i_start:i_end, :]
             return self.gaussian_llgrad(X, Y, **kwargs)
 
     def llgrad_joint(self, i, j, **kwargs):
@@ -178,8 +214,8 @@ class MultiSharedBCM(object):
             YY[ni:, :ni]  = YY[:ni, ni:].T
             return self.gaussian_llgrad_kernel(X, YY, dy=self.dy, **kwargs)
         else:
-            Yi = self.Y[i_start:i_end]
-            Yj = self.Y[j_start:j_end]
+            Yi = self.Y[i_start:i_end, :]
+            Yj = self.Y[j_start:j_end, :]
             Y = np.vstack([Yi, Yj])
             return self.gaussian_llgrad(X, Y, **kwargs)
 
