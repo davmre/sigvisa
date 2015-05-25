@@ -404,7 +404,7 @@ class BCM(LocalGPs):
 
         return ll, llgrad
 
-    def permute(block_perm=None):
+    def permute(self, block_perm=None):
         if block_perm is None:
             block_perm = np.random.permutation(self.n_blocks)
 
@@ -421,9 +421,13 @@ class BCM(LocalGPs):
             gps.append(self.gps[b])
             block_centers.append(self.block_centers[b])
             cov_blocks.append(self.cov_blocks[b])
-            cov_block_params.append(self.cov_block_params[b])
 
-        return BCM(block_centers, cov_block_params, X_blocks=X_blocks, y_blocks=y_blocks, cov_blocks=cov_blocks, gps=gps)
+            try:
+                cov_block_params.append(self.cov_block_params[b])
+            except IndexError:
+                continue
+
+        return BCM(block_centers=block_centers, cov_block_params=cov_block_params, X_blocks=X_blocks, y_blocks=y_blocks, cov_blocks=cov_blocks, gps=gps, test_cov=self.test_cov)
 
 
     def stochastic_llgrad(self, samples=1, pseudo=True):
@@ -525,7 +529,7 @@ class MultiGPLVM(object):
 
     def __init__(self, X, Y, cov_block_params, tied_hparams=True, bcm=False, **kwargs):
         self.lgps = []
-        for y in Y:
+        for y in Y.T:
             if bcm:
                 lgp = BCM(X=X, y=y, cov_block_params=cov_block_params, **kwargs)
             else:
@@ -623,6 +627,88 @@ def local_pred_gradient_Xi_target(target_X, target_y, source_gp, subtract_prior=
 
 def local_pred_gradient_Xi_source_args(args):
     return local_pred_gradient_Xi_source(*args)
+
+def shared_local_pred_gradient(target_X, source_gp):
+    # how much of this can I compute without knowing the source or target y, r, alpha?
+
+    n, d = source_gp.X.shape
+    llgrad = np.zeros((n, d))
+    Kinv = source_gp.Kinv
+
+    #alpha_source = source_gp.alpha_r
+
+    #mean = source_gp.predict(target_X)
+    cov = source_gp.covariance(target_X, include_obs=True)
+    #r = target_y.flatten() - mean.flatten()
+    prec = np.linalg.inv(cov)
+    #alpha_target = np.dot(prec, r)
+
+    # can share Kstar over different vals of p, i
+    Kstar = source_gp.kernel(target_X, source_gp.X)
+    Kstar_Kyinv = np.dot(Kstar, Kinv)
+
+    m1 = np.asarray(np.dot(prec, Kstar_Kyinv))
+    m2 = np.asarray(np.dot(Kstar_Kyinv.T, m1))
+
+    for p in range(n):
+        for i in range(d):
+
+            # this gives the p'th column of dKstar, all others are zero
+            dKstar = np.asarray(source_gp.dKdx(source_gp.X[p:p+1, :], 0, i, target_X)).flatten()
+
+            # dKy has one nonzero row and column
+            dKy = source_gp.dKdx(source_gp.X, p, i, return_vec=True)
+
+            #dK_alpha = alpha_source[p] * dKy
+            #dK_alpha[p] = np.dot(dKy, alpha_source)
+
+            #dKstar_alpha = np.asarray(alpha_source[p] * dKstar).flatten()
+
+            gammaprime = np.asarray(np.dot(Kstar_Kyinv, dK_alpha)).flatten()
+            dm = dKstar_alpha - gammaprime
+            dll_dmean = np.dot(r.T, np.dot(prec, dm))
+
+
+
+
+            # let C = cov as computed above
+            # dll_dcov = r' C^-1 dCdx C^-1 r + a trace term
+            #          = alpha' dCdx alpha (ignoring trace term)
+            # where dCdx = (Kstar Kinv dK Kinv Kstar + dKstar Kinv Kstar + Kstar Kinv dKstar)
+            # Distributing alpha over dCdx, we get the first term below corresponding
+            # to the first term above, and the second term below collapses the second
+            # two terms above (which are symmetric).
+            Kyinv_KstarT_talpha = np.asarray(np.dot(Kstar_Kyinv.T, alpha_target)).flatten()
+            tmp = Kyinv_KstarT_talpha[p] * dKy
+            tmp[p] = np.dot(dKy, Kyinv_KstarT_talpha)
+            dll_dcov_term1 = -np.dot(Kyinv_KstarT_talpha.T, tmp)
+
+            # this is really a vector whose p'th entry is this scalar
+            dKstarT_talpha = np.dot(dKstar.T, alpha_target)
+            dll_dcov_term2 = 2*Kyinv_KstarT_talpha[p] * dKstarT_talpha
+
+            # The trace term is tr(C^-1 dCdx) which again we can distribute over the
+            # terms of dCdx, and using the cyclic property of trace we can rewrite as
+            # the hypothetical computation
+            #    cov_tr_factor = 2*np.sum(m1 * dKstar) - np.sum(m2 * dKy)
+            # where m1 and m2 are as precomputed above. However we have to do a bit more
+            # work to exploit the fact that we have dKstar and dKy in sparse form.
+            cov_tr_factor = -2*np.sum(m1[:,p] * dKstar) + 2*np.sum(m2[:,p] * dKy)
+            dll_dcov = -.5* (dll_dcov_term1 + dll_dcov_term2 + cov_tr_factor)
+
+            llgrad[p,i] = dll_dcov + dll_dmean
+
+            # ORIGINAL
+            #dm2, dc2 = source_gp.grad_prediction_wrt_source_x(target_X, p, i)
+            #llgrad2 = dgaussian(r, prec, dc2, dm2)
+
+            #print llgrad[p,i], llgrad2
+
+
+    return llgrad
+
+
+
 
 def local_pred_gradient_Xi_source(target_X, target_y, source_gp):
     n, d = source_gp.X.shape
