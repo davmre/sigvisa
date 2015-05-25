@@ -65,7 +65,7 @@ def vis(X, y):
 
 class MultiSharedBCM(object):
 
-    def __init__(self, X, Y, block_boundaries, cov, noise_var, kernelized=False, dy=None):
+    def __init__(self, X, Y, block_boundaries, cov, noise_var, kernelized=False, dy=None, neighbor_threshold=1e-5):
         self.X = X
 
         if kernelized:
@@ -84,6 +84,50 @@ class MultiSharedBCM(object):
         dummy_X = np.array([[0.0,] * self.X.shape[1],], dtype=float)
         self.predict_tree = VectorTree(dummy_X, 1, cov.dfn_str, cov.dfn_params, cov.wfn_str, cov.wfn_params)
 
+        self.compute_neighbors(threshold=neighbor_threshold)
+
+    def compute_neighbors(self, threshold=1e-5):
+        neighbor_count = defaultdict(int)
+        neighbors = []
+        for i in range(self.n_blocks):
+            i_start, i_end = self.block_boundaries[i]
+            Xi = self.X[i_start:i_end]
+            ni = Xi.shape[0]
+            for j in range(i):
+                j_start, j_end = self.block_boundaries[j]
+                Xj = self.X[j_start:j_end]
+                Kij = self.kernel(Xi, X2=Xj)
+                maxk = np.max(np.abs(Kij))
+                if maxk > threshold:
+                    neighbors.append((i,j))
+                    neighbor_count[i] += 1
+                    neighbor_count[j] += 1
+        self.neighbor_count = neighbor_count
+        self.neighbors = neighbors
+
+    def llgrad_local(self, **kwargs):
+        unaries = [self.llgrad_unary(i, **kwargs) for i in range(self.n_blocks)]
+        pairs = [self.llgrad_joint(i, j, **kwargs) for (i, j) in self.neighbors]
+        unary_lls, unary_grads = zip(*unaries)
+        pair_lls, pair_grads = zip(*pairs)
+
+        ll = np.sum(pair_lls)
+        ll -= np.sum([(self.neighbor_count[i]-1)*ull for (i, ull) in enumerate(unary_lls) ])
+
+        grads = np.zeros(self.X.shape)
+        pair_idx = 0
+        for i in range(self.n_blocks):
+            i_start, i_end = self.block_boundaries[i]
+            grads[i_start:i_end, :] -= (self.neighbor_count[i]-1)*unary_grads[i]
+
+        for pair_idx, (i,j) in enumerate(self.neighbors):
+            i_start, i_end = self.block_boundaries[i]
+            j_start, j_end = self.block_boundaries[j]
+            ni = i_end-i_start
+            grads[i_start:i_end] += pair_grads[pair_idx][:ni]
+            grads[j_start:j_end] += pair_grads[pair_idx][ni:]
+        return ll, grads
+
     def llgrad(self, **kwargs):
         # overall likelihood is the pairwise potentials for all (unordered) pairs,
         # where each block is involved in (n-1) pairs. So we subtract each unary potential n-1 times.
@@ -97,15 +141,15 @@ class MultiSharedBCM(object):
 
         ll = np.sum(pair_lls) - (self.n_blocks - 2)*np.sum(unary_lls)
 
-        grads = -(self.n_blocks-2) * np.concatenate(unary_grads)
+        grads = -(self.n_blocks-2) * np.vstack(unary_grads)
         pair_idx = 0
         for i in range(self.n_blocks):
             i_start, i_end = self.block_boundaries[i]
             ni = i_end-i_start
             for j in range(i):
                 j_start, j_end = self.block_boundaries[j]
-                grads[i_start:i_end] += pair_grads[pair_idx][:ni]
-                grads[j_start:j_end] += pair_grads[pair_idx][ni:]
+                grads[i_start:i_end, :] += pair_grads[pair_idx][:ni, :]
+                grads[j_start:j_end, :] += pair_grads[pair_idx][ni:, :]
                 pair_idx += 1
         return ll, grads
 
@@ -150,7 +194,7 @@ class MultiSharedBCM(object):
             K = self.predict_tree.kernel_matrix(X, X, False)
             K += np.eye(n) * self.noise_var
         else:
-            K = predict_tree.kernel_matrix(X, X2, False)
+            K = self.predict_tree.kernel_matrix(X, X2, False)
         return K
 
     def dKdx(self, X, p, i, return_vec=False):
