@@ -105,22 +105,42 @@ class MultiSharedBCM(object):
         self.neighbor_count = neighbor_count
         self.neighbors = neighbors
 
-    def llgrad_local(self, **kwargs):
-        unaries = [self.llgrad_unary(i, **kwargs) for i in range(self.n_blocks)]
-        pairs = [self.llgrad_joint(i, j, **kwargs) for (i, j) in self.neighbors]
+    def llgrad(self, parallel=False, local=True, **kwargs):
+        # overall likelihood is the pairwise potentials for all (unordered) pairs,
+        # where each block is involved in (n-1) pairs. So we subtract each unary potential n-1 times.
+        # Then finally each unary potential gets added in once.
+
+        if local:
+            neighbors = self.neighbors
+            neighbor_count = self.neighbor_count
+        else:
+            neighbors = [(i,j) for i in range(self.n_blocks) for j in range(i)]
+            neighbor_count = dict([(i, self.n_blocks-1) for i in range(self.n_blocks)])
+
+        if parallel:
+            pool = Pool(processes=4)
+            unary_args = [(kwargs, self, i) for i in range(self.n_blocks)]
+            unaries = pool.map(llgrad_unary_shim, unary_args)
+
+            pair_args = [(kwargs, self, i, j) for (i,j) in neighbors]
+            pairs = pool.map(llgrad_joint_shim, pair_args)
+        else:
+            unaries = [self.llgrad_unary(i, **kwargs) for i in range(self.n_blocks)]
+            pairs = [self.llgrad_joint(i, j, **kwargs) for (i,j) in neighbors]
+
         unary_lls, unary_grads = zip(*unaries)
         pair_lls, pair_grads = zip(*pairs)
 
         ll = np.sum(pair_lls)
-        ll -= np.sum([(self.neighbor_count[i]-1)*ull for (i, ull) in enumerate(unary_lls) ])
+        ll -= np.sum([(neighbor_count[i]-1)*ull for (i, ull) in enumerate(unary_lls) ])
 
         grads = np.zeros(self.X.shape)
         pair_idx = 0
         for i in range(self.n_blocks):
             i_start, i_end = self.block_boundaries[i]
-            grads[i_start:i_end, :] -= (self.neighbor_count[i]-1)*unary_grads[i]
+            grads[i_start:i_end, :] -= (neighbor_count[i]-1)*unary_grads[i]
 
-        for pair_idx, (i,j) in enumerate(self.neighbors):
+        for pair_idx, (i,j) in enumerate(neighbors):
             i_start, i_end = self.block_boundaries[i]
             j_start, j_end = self.block_boundaries[j]
             ni = i_end-i_start
@@ -128,30 +148,6 @@ class MultiSharedBCM(object):
             grads[j_start:j_end] += pair_grads[pair_idx][ni:]
         return ll, grads
 
-    def llgrad(self, **kwargs):
-        # overall likelihood is the pairwise potentials for all (unordered) pairs,
-        # where each block is involved in (n-1) pairs. So we subtract each unary potential n-1 times.
-        # Then finally each unary potential gets added in once.
-
-        unaries = [self.llgrad_unary(i, **kwargs) for i in range(self.n_blocks)]
-        pairs = [self.llgrad_joint(i, j, **kwargs) for i in range(self.n_blocks) for j in range(i)]
-
-        unary_lls, unary_grads = zip(*unaries)
-        pair_lls, pair_grads = zip(*pairs)
-
-        ll = np.sum(pair_lls) - (self.n_blocks - 2)*np.sum(unary_lls)
-
-        grads = -(self.n_blocks-2) * np.vstack(unary_grads)
-        pair_idx = 0
-        for i in range(self.n_blocks):
-            i_start, i_end = self.block_boundaries[i]
-            ni = i_end-i_start
-            for j in range(i):
-                j_start, j_end = self.block_boundaries[j]
-                grads[i_start:i_end, :] += pair_grads[pair_idx][:ni, :]
-                grads[j_start:j_end, :] += pair_grads[pair_idx][ni:, :]
-                pair_idx += 1
-        return ll, grads
 
     def llgrad_unary(self, i, **kwargs):
         i_start, i_end = self.block_boundaries[i]
@@ -279,3 +275,22 @@ class MultiSharedBCM(object):
                 #t1[:, p] = -np.dot(prec, dcov_v)
 
         return ll, llgrad
+
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        del d['predict_tree']
+        return d
+
+    def __setstate__(self, d):
+        self.__dict__ = d
+        dummy_X = np.array([[0.0,] * self.X.shape[1],], dtype=float)
+        self.predict_tree = VectorTree(dummy_X, 1, self.cov.dfn_str, self.cov.dfn_params, self.cov.wfn_str, self.cov.wfn_params)
+
+from multiprocessing import Pool
+import time
+
+def llgrad_unary_shim(arg):
+    return MultiSharedBCM.llgrad_unary(*arg[1:], **arg[0])
+
+def llgrad_joint_shim(arg):
+    return MultiSharedBCM.llgrad_joint(*arg[1:], **arg[0])
