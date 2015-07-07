@@ -287,8 +287,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         if srate not in self.wavelet_basis_cache:
             self.wavelet_basis_cache[srate] = \
-                uvar_wavelet_basis(srate=srate, wavelet_str=self.wiggle_family)
-                #construct_padded_implicit_basis(
+                construct_implicit_basis_C(srate=srate, wavelet_str=self.wiggle_family)
+            # TODO: make sure this basis has marginal variance 1.0
         return self.wavelet_basis_cache[srate]
 
     def get_template_nodes(self, eid, sta, phase, band, chan):
