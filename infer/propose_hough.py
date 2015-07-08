@@ -59,7 +59,9 @@ def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False, 
     timebins = int((etime-stime)/time_tick_s)
     #init_val = -.7 if sta_array else 0.0
     #init_val = np.exp(-.7) if sta_array else 1.0
-    init_val = -0.7 if sta_array else 1.0
+
+    bins_total = latbins * lonbins * timebins
+    init_val = 0.0 if sta_array else 1.0
 
     if prev_array is None:
         hough_array = np.empty((lonbins, latbins, timebins))
@@ -109,7 +111,7 @@ def template_origin_times(sta, time, phaseid=1, latbins=18):
     ttimes = travel_time_cache[(sta, phaseid, latbins)]
     return time - ttimes
 
-def add_template_to_sta_hough_smooth(sta_hough_array, sta, template_snr, stime, atime, time_tick_s=20, vote_size = 5):
+def add_template_to_sta_hough_smooth(sta_hough_array, sta, template_snr, stime, atime, time_tick_s=20, vote_size = 1.0, phaseids=(1,5)):
     """
 
     Incorporate a template into the Hough accumulator for a particular
@@ -180,10 +182,11 @@ def add_template_to_sta_hough_smooth(sta_hough_array, sta, template_snr, stime, 
     }
     """
 
-    phaseids = (1,5)
     template_times = np.dstack([template_origin_times(sta, atime, latbins=latbins, phaseid=phaseid) for phaseid in phaseids])
     nphases = len(phaseids)
     phase_prior = np.array([0.7, 0.3]) # P vs S
+
+    uniform_weight = 1.0/(latbins*lonbins*timebins)
     timebin_weights = np.zeros((timebins,))
 
     code = """
@@ -191,7 +194,7 @@ def add_template_to_sta_hough_smooth(sta_hough_array, sta, template_snr, stime, 
 for (int i=0; i < lonbins; ++i) {
     for (int j=0; j < latbins; ++j) {
 
-        std::unordered_set<int> bins(10);
+        // std::unordered_set<int> bins(10);
 
         for (int phaseidx=0; phaseidx < nphases; ++phaseidx) {
             double origin_time = template_times(i,j, phaseidx);
@@ -208,32 +211,23 @@ for (int i=0; i < lonbins; ++i) {
                 double timebin_right = timebin_left + time_tick_s;
                 double bin_weight = laplace_cdf(timebin_right) - laplace_cdf(timebin_left);
                 timebin_weights(timebin) += bin_weight * phase_prior(phaseidx);
-
-                bins.insert(timebin);
             }
         }
 
-        //for (int k=0; k < timebins; ++k) {
-        for (std::unordered_set<int>::iterator ix=bins.begin(); ix != bins.end(); ++ix) {
-            int k = *ix;
+        for (int k=0; k < timebins; ++k) {
             double w = timebin_weights(k);
-            if (w > 0) {
-               double change = std::max(0.0, vote + log(w));
-
-               // double oldval = sta_hough_array(i,j,k);
-               // sta_hough_array(i,j,k) = log (  exp(oldval) + exp(vote)*w);
-               // if (oldval > -10) {
-               //   printf(\"oldval %.3f exp %.3f newexp %.3f newval %.3f w %.3f\\n\", oldval, exp(oldval), exp(oldval) + exp(vote)*w, sta_hough_array(i,j,k), w);
-
-               sta_hough_array(i,j,k) += change;
-               timebin_weights(k) = 0;
+            double oldval = sta_hough_array(i,j,k);
+            sta_hough_array(i,j,k) += log(uniform_weight + vote * w);
+            if ((i>=82 && i <= 84) && (j==25) &&  ( k > 22 && k < 26) ) {
+               printf(\"%d %d %d old %.6f new %.6f weight %f\\n\", i, j, k, oldval, sta_hough_array(i,j,k), w);
             }
+            timebin_weights(k) = 0;
         }
-        bins.clear();
+
     }
 }
     """
-    weave.inline(code,['stime', 'latbins', 'lonbins', 'timebins', 'time_tick_s', 'template_times', 'timebin_weights', 'phase_prior', 'nphases', 'sta_hough_array', 'vote'], support_code=laplacian_cdf, headers=["<math.h>", "<unordered_set>"], type_converters = converters.blitz,verbose=2,compiler='gcc', extra_compile_args=["-std=c++11"])
+    weave.inline(code,['stime', 'latbins', 'lonbins', 'timebins', 'time_tick_s', 'template_times', 'timebin_weights', 'phase_prior', 'nphases', 'sta_hough_array', 'vote', 'uniform_weight'], support_code=laplacian_cdf, headers=["<math.h>", "<unordered_set>"], type_converters = converters.blitz,verbose=2,compiler='gcc', extra_compile_args=["-std=c++11"])
     #print "added template"
 
 
@@ -431,7 +425,7 @@ def synthetic_hough_array(ev, stas, stime, etime, bin_width_deg):
     return hough_array
 
 
-def generate_sta_hough_array(sg, wn, stime, etime, latbins, time_tick_s, prev_array=None):
+def generate_sta_hough_array(sg, wn, stime, etime, latbins, time_tick_s, prev_array=None, phaseids=(1,5)):
     sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True, prev_array=prev_array)
 
     #if debug_ev is not None:
@@ -461,11 +455,14 @@ def generate_sta_hough_array(sg, wn, stime, etime, latbins, time_tick_s, prev_ar
             #13
             #32
 
-        #32, 88, 44, 2, 70, 38,
-        if uaid not in (18, 13): continue
-        print uaid, stime, atime, snr
+            # 38
+        # 9, 41 generates diffraction
+        # whereas 9, 38 is legit potential P/S
+        #if uaid not in (9, 41 , ): continue
 
-        add_template_to_sta_hough_smooth(sta_hough_array, wn.sta, stime=stime, atime=atime, template_snr=snr, time_tick_s = time_tick_s)
+        #print uaid, stime, atime, snr
+
+        add_template_to_sta_hough_smooth(sta_hough_array, wn.sta, stime=stime, atime=atime, template_snr=snr, time_tick_s = time_tick_s, phaseids=phaseids)
 
     return sta_hough_array
 
@@ -575,7 +572,7 @@ def main():
 
 
     bin_width_deg=3.0
-    time_tick_s = (1.41 * bin_width_deg * DEG_WIDTH_KM / P_WAVE_VELOCITY_KM_PER_S)
+    time_tick_s = (1.41 * bin_width_deg * DEG_WIDTH_KM / P_WAVE_VELOCITY_KM_PER_S)/40
     latbins = int(180.0 / bin_width_deg)
 
     """
@@ -599,6 +596,7 @@ def main():
                                                        prev_array=sta_hough_array)
             fname = "hough_%s.png" % wn.sta
             sta_hough_array -= np.max(sta_hough_array)
+            #import pdb; pdb.set_trace()
             sta_hough_array = np.exp(sta_hough_array)
             sta_hough_array /= np.max(sta_hough_array)
             visualize_hough_array(sta_hough_array, [wn.sta,], fname=fname, ax=None, timeslice=None)
