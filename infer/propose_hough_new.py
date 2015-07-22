@@ -175,7 +175,7 @@ def template_origin_times(sta, time, phaseid=1, latbins=18, depthbins=1):
 
 def generate_sta_hough(sta_hough_array, atimes, amps, ttimes, amp_transfers, amp_transfer_stds,
                        stime, time_tick_s, bin_width_deg, mb_bin_width, min_mb, bin_width_km,
-                       source_logamps):
+                       source_logamps, uatemplate_rate, ua_amp_model, valid_len):
     lonbins, latbins, depthbins, timebins, mbbins = sta_hough_array.shape
     time_radius = time_tick_s / 2.0
     lonbin_deg = 360.0/lonbins
@@ -185,13 +185,16 @@ def generate_sta_hough(sta_hough_array, atimes, amps, ttimes, amp_transfers, amp
     amps = np.asarray(amps, dtype=np.float)
     atimes = np.asarray(atimes, dtype=np.float)
 
-    detection_prob = 0.8 # TODO calibrate by magnitude, phaseid
-    uniform_atime = 1.0/3600
-    uniform_amp_prior = 1.0/10
-    background_cost_lp = float(np.log((1-detection_prob) * uniform_atime * uniform_amp_prior))
-    detection_lp = float(np.log(detection_prob))
-    print "background cost lp", background_cost_lp, "detection lp", detection_lp
+    ua_amp_lps = np.array([ua_amp_model.log_p(amp) for amp in amps])
 
+    ua_poisson_lp_full = ntemplates * np.log(uatemplate_rate) - (uatemplate_rate * valid_len)
+    ua_poisson_lp_incr = float(np.log(uatemplate_rate)) # change in the ua_poisson_lp if we have one fewer uatemplate
+
+    detection_probs = np.array([0.8, 0.4], dtype=np.float) # TODO calibrate by magnitude, phaseid
+    detection_lps = np.log(detection_probs)
+    nodetection_lps =np.log(1-detection_probs)
+
+    null_ll = np.sum(nodetection_lps) + ua_poisson_lp_full + np.sum(ua_amp_lps)
 
 
     cdfs = """
@@ -237,6 +240,8 @@ def generate_sta_hough(sta_hough_array, atimes, amps, ttimes, amp_transfers, amp
     phase_score = np.empty((timebins, mbbins))
     assoc = np.empty((nphases, timebins, mbbins), dtype=np.uint8)
 
+    sta_hough_array.fill(null_ll)
+
     #print "source logamps"
     #print source_logamps
 
@@ -265,7 +270,7 @@ for (int i=0; i < lonbins; ++i) {
                 // TODO use memset
                 for (int timebin=0; timebin < timebins; ++timebin) {
                     for (int mbbin=0; mbbin < mbbins; ++mbbin) {
-                        phase_score(timebin, mbbin) = background_cost_lp;
+                        phase_score(timebin, mbbin) = 0;
                         assoc(phaseidx, timebin, mbbin) = -1;
                     }
                 }
@@ -336,7 +341,7 @@ for (int i=0; i < lonbins; ++i) {
                             double bin_weight = gaussian_cdf(at_residual_left/amp_transfer_std)
                                                    - gaussian_cdf(at_residual_right/amp_transfer_std);
                             double mb_lp = log(bin_weight) - log(mb_bin_width);
-                            double tmpl_score = detection_lp + atime_lp + mb_lp;
+                            double tmpl_score = (detection_lps(phaseidx) - nodetection_lps(phaseidx)) + (mb_lp - ua_amp_lps(t)) + atime_lp - ua_poisson_lp_incr;
                             double oldval = phase_score(timebin, mbbin);
 
                             if (verbose) {
@@ -366,13 +371,12 @@ for (int i=0; i < lonbins; ++i) {
                        'sta_hough_array', 'ttimes', 'amp_transfers', 'amp_transfer_stds',
                        'source_logamps', 'phase_score', 'assoc',
                        'bin_width_deg', 'time_tick_s', 'mb_bin_width',
-                       'bin_width_km', 'stime', 'min_mb', 'background_cost_lp', 'detection_lp',
-                       'amps', 'atimes', 'ntemplates', 'debug_lonbin', 'debug_depthbin', 'debug_latbin'],
-                 support_code=cdfs, headers=["<math.h>", "<unordered_set>"], type_converters = converters.blitz,verbose=2,compiler='gcc', extra_compile_args=["-std=c++11", "-g", "-O0"])
+                       'bin_width_km', 'stime', 'min_mb', 'detection_lps', 'nodetection_lps',
+                       'amps', 'atimes', 'ntemplates', 'debug_lonbin', 'debug_depthbin', 'debug_latbin', 'ua_poisson_lp_incr', 'ua_amp_lps'],
+                 support_code=cdfs, headers=["<math.h>", "<unordered_set>"], type_converters = converters.blitz,verbose=2,compiler='gcc', extra_compile_args=["-std=c++11",])
     #print "added template"
 
-    noev_ll = nphases*background_cost_lp
-    return noev_ll
+    return null_ll
 
 
 def categorical_sample_array(a):
@@ -559,7 +563,8 @@ hough_array(i,j,k) = exp(hough_array(i,j,k));
 
 
 def main():
-    sfile = "/home/dmoore/python/sigvisa/logs/mcmc/02135/step_000000/pickle.sg"
+    #sfile = "/home/dmoore/python/sigvisa/logs/mcmc/02135/step_000000/pickle.sg"
+    sfile = "/home/dmoore/python/sigvisa/logs/mcmc/02138/step_000489/pickle.sg"
     with open(sfile, 'rb') as f:
         sg = pickle.load(f)
     print "read sg"
@@ -596,7 +601,7 @@ def main():
     global_noev_ll = 0
     stas = sg.station_waves.keys()
     #stas = ['AS12', 'FITZ', 'WR1']
-    stas = ["FITZ",]
+
     for sta in stas:
         for wn in sg.station_waves[sta]:
             sta_wn = wn
@@ -607,7 +612,7 @@ def main():
             #if eid not in (-13, -18, -9, -41, -2, -38,  ): continue
             #if eid not in ( -70, -9,): continue
             #if eid not in ( -88, -2,): continue
-            if sta=="FITZ" and eid not in (-18, -13): continue
+            #if sta=="FITZ" and eid not in (-18, -13): continue
             print i, eid
             v, _ = sta_wn.get_template_params_for_arrival(eid, phase)
             atimes.append(v['arrival_time'])
@@ -625,17 +630,17 @@ def main():
 
         source_logamps = np.array([[brune.source_logamp(mb=mb, band="freq_0.8_4.5", phase=phase) for phase in ("P", "S") ] for mb in np.linspace(min_mb, max_mb, mbbins+1) ], dtype=np.float)
 
-
-        noev_ll = generate_sta_hough(array, atimes, amps, ttimes,
+        tg = sg.template_generator(phase="UA")
+        ua_amp_model = tg.unassociated_model(param="coda_height", nm=wn.nm)
+        uatemplate_rate = 1e-3 # sg.uatemplate_rate
+        null_ll = generate_sta_hough(array, atimes, amps, ttimes,
                                      amp_transfers, amp_transfer_stds,
-                                     sg.event_start_time, time_tick_s, bin_width_deg, mb_bin_width, min_mb, bin_width_km, source_logamps)
-        print "noev ll", noev_ll
+                                     sg.event_start_time, time_tick_s, bin_width_deg, mb_bin_width, min_mb, bin_width_km, source_logamps, uatemplate_rate, ua_amp_model, wn.valid_len)
+        print "null ll", null_ll
 
-        amax = np.max(array)
-        array -= amax
         global_array += array
-        global_noev_ll += noev_ll - amax
-        array = np.exp(array)
+        global_noev_ll += null_ll
+        array = np.exp(array - np.max(array))
         fname = "newhough_%d_%s" % (bin_width_deg, sta)
         visualize_hough_array(array, [sta], fname=fname+".png", ax=None, timeslice=None)
         np.save(fname + ".npy", array)
@@ -651,10 +656,15 @@ def main():
     noev_prior_log = np.log(1-ev_prior)
     global_noev_lik = np.exp(global_noev_ll-armax + noev_prior_log)
 
+
     global_lik /= (global_lik + global_noev_lik)
 
     fname = "newhough_%d_global.png" % bin_width_deg
     visualize_hough_array(global_lik, sg.station_waves.keys(), fname=fname, ax=None, timeslice=None)
+    print "wrote to", fname
+
+    fname = "newhough_%d_global_norm.png" % bin_width_deg
+    visualize_hough_array(np.exp(global_array-armax), sg.station_waves.keys(), fname=fname, ax=None, timeslice=None)
     print "wrote to", fname
 
 if __name__ =="__main__":
