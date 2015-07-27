@@ -39,7 +39,7 @@ def ev_mb_posterior_laplace_functional(sg, ev, targets, amps):
         return -lp
 
     x0 = [4.0,]
-    r = scipy.optimize.minimize(amp_transfer_nlp, x0)
+    r = scipy.optimize.minimize(amp_transfer_nlp, x0, bounds=[(0.0, 10.0)])
     prec = nd.Hessian(amp_transfer_nlp).hessian(r.x)
 
     var = 1.0/prec[0,0]
@@ -70,13 +70,14 @@ def ev_mb_posterior_laplace(sg, eid):
 
 
     x0 = [4.0,]
-    r = scipy.optimize.minimize(amp_transfer_nlp, x0)
+    r = scipy.optimize.minimize(amp_transfer_nlp, x0, bounds=[(0.0, 10.0),])
     mb_node.set_value(orig_mb)
     reset_coda_heights()
 
-    #prec = nd.Hessian(amp_transfer_nlp).hessian(r.x)
-    #var = 1.0/prec[0,0]
-    return r.x[0], r.hess_inv[0,0], reset_coda_heights
+    prec = nd.Hessian(amp_transfer_nlp).hessian(r.x)
+    var = 1.0/prec[0,0]
+    #return r.x[0], r.hess_inv[0,0], reset_coda_heights
+    return r.x[0], var, reset_coda_heights
 
 def propose_mb(sg, eid, fix_result=None):
     z, v, reset_coda_heights = ev_mb_posterior_laplace(sg, eid)

@@ -121,6 +121,10 @@ class Sigvisa(threading.local):
 
         self.global_dict_cache = dict() # cache a mapping of event dictionaries to arrays, used by ParamModels
 
+        # hold the cache of precomputed traveltime and amp_transfer
+        # on grid cells, used for fast event birth proposals
+        self.hough_proposer = dict()
+
     def __del__(self):
         self.dbconn.close()
         #self.lock.release()

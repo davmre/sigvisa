@@ -44,10 +44,10 @@ else:
 print sys_includes
 print sys_libraries
 
-extra_compile_args = ['-Wall', '-std=c++11', '-g', '-O3']
-#extra_compile_args = ['-std=c99','-O3']
+#extra_compile_args = ['-Wall', '-std=c++11', '-g', '-O0']
+extra_compile_args = ['-std=c++11','-O3',]
 #extra_link_args = ['-Wl,--strip-all']
-extra_link_args = ['-lrt','-lcblas',]
+extra_link_args = ['-lrt', '-lcblas',]
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c',

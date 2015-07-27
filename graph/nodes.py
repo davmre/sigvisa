@@ -107,6 +107,7 @@ class Node(object):
 
     def removeParent(self, parent):
         self.parent_nodes_added.discard(parent)
+
         for key in parent.keys():
             del self.parents[key]
             self.parent_keys_removed.add(key)
@@ -276,6 +277,7 @@ class Node(object):
             self._pv_cache[key] = node.get_value(key)
         del self.parent_keys_changed
         self.parent_keys_changed = set()
+
         for node in self.parent_nodes_added:
             self._pv_cache.update(node.get_dict())
 
@@ -325,12 +327,12 @@ class Node(object):
                     lp -= np.exp(100*(v-1))
                 if v < 0:
                     lp -= np.exp(100*(-v))
-            if 'tt_residual' in self.label and np.abs(v) > 15:
-                lp -= np.exp(  10*(np.abs(v)-15)  )
-            elif 'peak_offset' in self.label and v > 3.0:
-                lp -= np.exp(  100*(v-3)  )
-            elif 'coda_decay' in self.label and v < -5:
-                lp -= np.exp( 100 * -(v+5))
+            #if 'tt_residual' in self.label and np.abs(v) > 25:
+            #    lp -= np.exp(  10*(np.abs(v)-15)  )
+            #elif 'peak_offset' in self.label and v > 3.0:
+            #    lp -= np.exp(  100*(v-3)  )
+            #elif 'coda_decay' in self.label and v < -9:
+            #    lp -= np.exp( 100 * -(v+5))
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))

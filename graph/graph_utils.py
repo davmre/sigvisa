@@ -18,7 +18,10 @@ def predict_phases_sta(ev, sta, phases):
         cursor = s.dbconn.cursor()
         if ev.evid is None:
             raise Exception("trying to use LEB phases, but event has evid None: %s" % str(ev))
-        predicted_phases = [s.phasenames[int(id_minus1)] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
+        try:
+            predicted_phases = [s.phasenames[int(id_minus1)] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
+        except IndexError:
+            predicted_phases=[]
         cursor.close()
     elif phases == "auto":
         predicted_phases = s.arriving_phases(event=ev, sta=sta)

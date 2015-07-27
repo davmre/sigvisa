@@ -112,7 +112,11 @@ class MCMCLogger(object):
                         s = ""
                         for param in sorted(pdicts.keys()):
                             jgp, hnodes = pdicts[param]
-                            s += "%.4f " % hnodes[hparam].get_value()
+                            try:
+                                s += "%.4f " % hnodes[hparam].get_value()
+                            except KeyError:
+                                continue
+
                         handle = self.log_handles[lbl]
                         handle.write(s + "\n")
                         handle.flush()

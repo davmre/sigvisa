@@ -38,6 +38,7 @@ DEG_WIDTH_KM = 111.32
 P_WAVE_VELOCITY_KM_PER_S = 6.0
 
 travel_time_cache = dict()
+amp_transfer_cache = dict()
 
 
 def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False, prev_array=None):
@@ -61,7 +62,7 @@ def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False, 
     #init_val = np.exp(-.7) if sta_array else 1.0
 
     bins_total = latbins * lonbins * timebins
-    init_val = 0.0 if sta_array else 1.0
+    init_val = 0.0 if sta_array else 0.0
 
     if prev_array is None:
         hough_array = np.empty((lonbins, latbins, timebins))
@@ -70,6 +71,26 @@ def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False, 
     hough_array.fill(init_val)
 
     return hough_array
+
+def precompute_amp_transfer(model, latbins=18):
+    lonbins = latbins * 2
+    latbin_deg = 180.0/latbins
+    lonbin_deg = 360.0/lonbins
+
+    at_means = np.zeros((lonbins, latbins), dtype=float)
+    at_vars = np.zeros((lonbins, latbins), dtype=float)
+
+    d = {'lon': 0.0, 'lat': 0.0, 'depth': 0.0, 'mb': 4.0}
+    for i in range(lonbins):
+        lon = -180.0 + (i+.5) * lonbin_deg
+        d['lon'] = lon
+        for j in range(latbins):
+            lat = -90.0 + (j+.5) * latbin_deg
+            d['lat'] = lat
+            at_means[i,j] = model.predict(d)
+            at_vars[i,j] = model.variance(d)
+    return at_means, at_vars
+
 
 def precompute_travel_times(sta, phaseid=1, latbins=18):
     s = Sigvisa()
@@ -96,6 +117,21 @@ def precompute_travel_times(sta, phaseid=1, latbins=18):
     return times
 
 
+def template_amp_transfer(sg, wn, phase, latbins=18):
+    key = (wn.sta, wn.chan, wn.band, phase, latbins)
+    if key not in amp_transfer_cache:
+        sta, band, chan = wn.sta, wn.band, wn.chan
+
+        modelid = sg.get_param_model_id(runids=sg.runids, sta=sta,
+                                        phase=phase, model_type=sg._tm_type("amp_transfer"),
+                                        param="amp_transfer", template_shape=sg.template_shape,
+                                        chan=chan, band=band)
+        model = sg.load_modelid(modelid)
+        amp_transfer_cache[key]= precompute_amp_transfer(model, latbins=latbins)
+    at_means, at_vars = amp_transfer_cache[key]
+    return at_means, at_vars
+
+
 def template_origin_times(sta, time, phaseid=1, latbins=18):
     """
 
@@ -111,7 +147,7 @@ def template_origin_times(sta, time, phaseid=1, latbins=18):
     ttimes = travel_time_cache[(sta, phaseid, latbins)]
     return time - ttimes
 
-def add_template_to_sta_hough_smooth(sta_hough_array, sta, template_snr, stime, atime, time_tick_s=20, vote_size = 1.0, phaseids=(1,5)):
+def add_template_to_sta_hough_smooth(sta_hough_array, sta, template_snr, stime, atime, time_tick_s=20, vote_size = 1.0, phaseids=(1,5), amp_transfer={}):
     """
 
     Incorporate a template into the Hough accumulator for a particular
@@ -183,6 +219,9 @@ def add_template_to_sta_hough_smooth(sta_hough_array, sta, template_snr, stime, 
     """
 
     template_times = np.dstack([template_origin_times(sta, atime, latbins=latbins, phaseid=phaseid) for phaseid in phaseids])
+
+    #at_means, at_vars = amp_transfer[phaseid]
+
     nphases = len(phaseids)
     phase_prior = np.array([0.7, 0.3]) # P vs S
 
@@ -218,9 +257,6 @@ for (int i=0; i < lonbins; ++i) {
             double w = timebin_weights(k);
             double oldval = sta_hough_array(i,j,k);
             sta_hough_array(i,j,k) += log(uniform_weight + vote * w);
-            if ((i>=82 && i <= 84) && (j==25) &&  ( k > 22 && k < 26) ) {
-               printf(\"%d %d %d old %.6f new %.6f weight %f\\n\", i, j, k, oldval, sta_hough_array(i,j,k), w);
-            }
             timebin_weights(k) = 0;
         }
 
@@ -425,8 +461,13 @@ def synthetic_hough_array(ev, stas, stime, etime, bin_width_deg):
     return hough_array
 
 
-def generate_sta_hough_array(sg, wn, stime, etime, latbins, time_tick_s, prev_array=None, phaseids=(1,5)):
+def generate_sta_hough_array(sg, wn, stime, etime, latbins, time_tick_s, prev_array=None, phaseids=(1,5), uaids=None):
     sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True, prev_array=prev_array)
+
+    amp_transfer= {}
+    #phases = {1: "P", 5: "S"}
+    #for phaseid in phaseids:
+    #    amp_transfer[phaseid] = template_amp_transfer(sg, wn, phases[phaseid], latbins)
 
     #if debug_ev is not None:
     #    pred_atime = debug_ev.time + tt_predict(event=debug_ev, sta=sta, phase='P')
@@ -438,6 +479,9 @@ def generate_sta_hough_array(sg, wn, stime, etime, latbins, time_tick_s, prev_ar
         atime = sg.uatemplates[uaid]['arrival_time'].get_value()
         amp = sg.uatemplates[uaid]['coda_height'].get_value()
         snr = np.exp(amp) / wn.nm.c
+
+
+
         #if debug_ev is not None:
         #    print wn.sta, ":", uaid, ':', np.exp(amp), wn.nm.c, snr, ";", atime
 
@@ -459,10 +503,10 @@ def generate_sta_hough_array(sg, wn, stime, etime, latbins, time_tick_s, prev_ar
         # 9, 41 generates diffraction
         # whereas 9, 38 is legit potential P/S
         #if uaid not in (9, 41 , ): continue
-
+        if uaids is not None and uaid not in uaids: continue
         #print uaid, stime, atime, snr
 
-        add_template_to_sta_hough_smooth(sta_hough_array, wn.sta, stime=stime, atime=atime, template_snr=snr, time_tick_s = time_tick_s, phaseids=phaseids)
+        add_template_to_sta_hough_smooth(sta_hough_array, wn.sta, stime=stime, atime=atime, template_snr=snr, time_tick_s = time_tick_s, phaseids=phaseids, amp_transfer=amp_transfer)
 
     return sta_hough_array
 
@@ -522,10 +566,12 @@ def generate_hough_array(sg, stime, etime, bin_width_deg=1.0, time_tick_s=10.0, 
                                                        latbins=latbins,
                                                        time_tick_s=time_tick_s,
                                                        prev_array=sta_hough_array)
+            #print "generated at", sta
             hough_array += sta_hough_array
         t2 = time.time()
             #print "station %s time %f" % (sta, t2-t1)
 
+    hough_array -= np.max(hough_array)
     #t2 = time.time()
     exp_in_place(hough_array)
     #t3 = time.time()
@@ -571,23 +617,15 @@ def main():
     print "read sg"
 
 
-    bin_width_deg=3.0
-    time_tick_s = (1.41 * bin_width_deg * DEG_WIDTH_KM / P_WAVE_VELOCITY_KM_PER_S)/40
+    bin_width_deg=1.0
+    time_tick_s = (1.41 * bin_width_deg * DEG_WIDTH_KM / P_WAVE_VELOCITY_KM_PER_S)
     latbins = int(180.0 / bin_width_deg)
 
-    """
-    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time)
-    fname = "hough.png"
-    visualize_hough_array(hough_array, sg.station_waves.keys(), fname=fname, ax=None, timeslice=None)
-    print "saved array to", fname
-    """
-
-    #import pdb; pdb.set_trace()
 
     sta_hough_array = None
     for wns in sg.station_waves.values():
         for wn in wns:
-            if wn.sta not in ("FITZ",): continue
+            #if wn.sta not in ("FITZ",): continue
             sta_hough_array = generate_sta_hough_array(sg, wn,
                                                        stime=sg.event_start_time,
                                                        etime=sg.end_time,
@@ -601,6 +639,23 @@ def main():
             sta_hough_array /= np.max(sta_hough_array)
             visualize_hough_array(sta_hough_array, [wn.sta,], fname=fname, ax=None, timeslice=None)
             print "saved array to", fname
+
+
+    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, force_stas=["FITZ", "MK31", "AS12"], bin_width_deg=bin_width_deg)
+    fname = "hough_FMA.png"
+    visualize_hough_array(hough_array, sg.station_waves.keys(), fname=fname, ax=None, timeslice=None)
+    print "saved array to", fname
+
+    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, bin_width_deg=bin_width_deg)
+    fname = "hough.png"
+    visualize_hough_array(hough_array, sg.station_waves.keys(), fname=fname, ax=None, timeslice=None)
+    print "saved array to", fname
+
+
+
+
+    #import pdb; pdb.set_trace()
+
 
 
 if __name__ =="__main__":

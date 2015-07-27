@@ -1009,22 +1009,22 @@ class CTFProposer(object):
                          left_lon=left_lon, right_lon=right_lon)
         self.global_hc = hc
 
-    def propose_event(self, sg, uatemplates_by_sta=None, fixed_result=None):
+    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None):
         if uatemplates_by_sta is None:
             uatemplates_by_sta = get_uatemplates(sg)
 
         hc = self.global_hc
 
-        array,assocs, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
-        dist = normalize_global(array, nll, one_event_semantics=True)
+        global_array,assocs, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
+        global_dist = normalize_global(global_array, nll, one_event_semantics=True)
 
-        if fixed_result:
-            ev = fixed_result
+        if fix_result:
+            ev = fix_result
             coord = (ev.lon, ev.lat, ev.depth, ev.time, ev.mb)
             v = hc.coords_to_index(coord)
         else:
-            v = categorical_sample_array(dist)
-        prob = categorical_prob(dist, v)
+            v = categorical_sample_array(global_dist)
+        prob = categorical_prob(global_dist, v)
         (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), _, _ = hc.index_to_coords(v)
 
         for fine_width in self.bin_widths[1:]:
@@ -1035,20 +1035,31 @@ class CTFProposer(object):
                              mbbins=self.mbbins)
             array,assocs, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
             dist = normalize_global(array, nll, one_event_semantics=True)
-            if fixed_result:
+            if fix_result:
                 v = hc.coords_to_index(coord)
             else:
                 v = categorical_sample_array(dist)
             prob *= categorical_prob(dist, v)
             (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), _, _ = hc.index_to_coords(v)
 
-        if fixed_result:
+        if fix_result:
             _, evlp = event_from_bin(hc, v)
+            return evlp
         else:
             ev, evlp = event_from_bin(hc, v)
-        return ev, np.log(prob) + evlp
+            return ev, np.log(prob) + evlp, global_dist
 
+def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None, offset=False):
+    s = Sigvisa()
+    if proposal_dist_seed is not None:
+        np.random.seed(proposal_dist_seed)
 
+    try:
+        ctf = s.hough_proposer[offset]
+    except:
+        ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=10, offset=offset)
+        s.hough_proposer[offset] = ctf
+    return ctf.propose_event(sg, fix_result=fix_result)
 
 def main():
     #sfile = "/home/dmoore/python/sigvisa/logs/mcmc/02135/step_000000/pickle.sg"
@@ -1069,7 +1080,7 @@ def main():
     print ev
     print evlp
 
-    #_, evlp2 = ctf.propose_event(sg, fixed_result=ev)
+    #_, evlp2 = ctf.propose_event(sg, fix_result=ev)
     #print evlp2
     #visualize_coarse_to_fine(sg, bc, sg.station_waves.keys())
 

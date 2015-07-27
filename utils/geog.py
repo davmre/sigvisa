@@ -96,6 +96,9 @@ def dist_km(loc1, loc2):
 
     return d
 
+def dist_km_ev(ev1, ev2):
+    return dist_km((ev1.lon, ev1.lat), (ev2.lon, ev2.lat))
+
 
 def degdiff(angle1, angle2):
     """

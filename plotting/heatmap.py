@@ -549,8 +549,8 @@ class Heatmap(object):
             # it as the initialization for iterative updating.
             return self
 
-        if self.left_lon != other.left_lon or self.bottom_lat != other.bottom_lat or self.right_lon != other.right_lon or self.top_lat != other.top_lat or self.n != other.n:
-            raise Exception("cannot multiply heatmaps with different gridpoints!")
+        if np.abs(self.left_lon - other.left_lon) > 1e-8 or np.abs(self.bottom_lat - other.bottom_lat) > 1e-8 or np.abs(self.right_lon - other.right_lon) > 1e-8 or np.abs(self.top_lat - other.top_lat) > 1e-8 or self.n != other.n:
+            raise Exception("cannot add heatmaps with different gridpoints!")
 
         newf = lambda lon, lat: self.f(lon, lat) * other.f(lon, lat)
         new_vals = self.fvals * other.fvals
@@ -566,7 +566,7 @@ class Heatmap(object):
             # it as the initialization for iterative updating.
             return self
 
-        if self.left_lon != other.left_lon or self.bottom_lat != other.bottom_lat or self.right_lon != other.right_lon or self.top_lat != other.top_lat or self.n != other.n:
+        if np.abs(self.left_lon - other.left_lon) > 1e-8 or np.abs(self.bottom_lat - other.bottom_lat) > 1e-8 or np.abs(self.right_lon - other.right_lon) > 1e-8 or np.abs(self.top_lat - other.top_lat) > 1e-8 or self.n != other.n:
             raise Exception("cannot add heatmaps with different gridpoints!")
 
         newf = lambda lon, lat: self.f(lon, lat) + other.f(lon, lat)

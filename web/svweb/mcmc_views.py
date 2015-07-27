@@ -201,13 +201,15 @@ def mcmc_run_detail(request, dirname):
         evs.append(evdict)
 
     X = np.array(X, dtype=np.float)
-    left_bound, right_bound, bottom_bound, top_bound = event_bounds(X, quantile=0.99)
+    try:
+        left_bound, right_bound, bottom_bound, top_bound = event_bounds(X, quantile=0.99)
+    except:
+        left_bound, right_bound, bottom_bound, top_bound= -180, 180, -90, 90
     bounds = dict()
     bounds["top"] = top_bound + 0.2
     bounds["bottom"] = bottom_bound - 0.2
     bounds["left"] = left_bound - 0.2
     bounds["right"] = right_bound + 0.2
-
 
     return render_to_response("svweb/mcmc_run_detail.html",
                               {'wns': wns,
@@ -241,7 +243,7 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
 
     sg, max_step = final_mcmc_state(mcmc_run_dir)
 
-    from sigvisa.models.wiggles.uniform_variance_wavelets import implicit_to_explicit
+    from sigvisa.models.wiggles.wavelets import implicit_to_explicit
 
 
     (starray, etarray, idarray, M, N)= sg.station_waves.values()[0][0].wavelet_basis
@@ -250,7 +252,7 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
 
     def plot_wavelet_dist_samples(ax, srate, basis, wmeans, wvars, c="blue"):
         wmeans = np.asarray(wmeans).flatten()
-        wvars = np.asarray(wvars).flatten()
+        wvars = np.asarray(wvars, dtype=float).flatten()
 
         n = basis.shape[1]
         x = np.linspace(0, n/float(srate), n)
@@ -262,10 +264,10 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
 
     def plot_wavelet_dist(ax, srate, basis, wmeans, wvars, c="blue"):
         wmeans = np.asarray(wmeans).flatten()
-        wvars = np.asarray(wvars).flatten()
+        wvars = np.asarray(wvars, dtype=float).flatten()
 
         w = np.dot(basis.T, wmeans) + 1
-        wv = np.diag(np.dot(basis.T, np.dot(np.diag(wvars), basis)))
+        wv = np.asarray(np.diag(np.dot(basis.T, np.dot(np.diag(wvars), basis))), dtype=float)
         n = basis.shape[1]
         x = np.linspace(0, n/float(srate), n)
         ax.plot(x, w, c=c, linestyle="-", lw=2)
@@ -692,6 +694,9 @@ def mcmc_event_posterior(request, dirname):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
 
+        if len(trace.shape) != 2 or trace.shape[0] < 2:
+            continue
+
         if plot_true:
             true_ev = match_true_ev(trace, true_evs)
             if true_ev is not None:
@@ -848,6 +853,8 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_dets = request.GET.get("plot_dets", 'leb')
     plot_template_arrivals = request.GET.get("plot_templates", 'true').lower().startswith('t')
+    model_lw = float(request.GET.get("model_lw", '2'))
+    signal_lw = float(request.GET.get("signal_lw", '1.5'))
     step = request.GET.get("step", 'all')
 
     s = Sigvisa()
@@ -875,7 +882,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     f = Figure((10*zoom, 5*vzoom))
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
-    subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=None)
+    subplot_waveform(wn.get_wave(), axes, color='black', linewidth=signal_lw, plot_dets=None)
 
     import matplotlib.cm as cm
     shape_colors = dict([(eid, cm.get_cmap('jet')(np.random.rand()*.5)) for (eid, phase) in wn.arrivals()])
@@ -883,6 +890,12 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     alpha = 1.0/len(steps)
     for step in steps:
         wn = sgs[step].all_nodes[wn_label]
+
+        try:
+            wn.tssm
+        except AttributeError:
+            wn.tssm = wn.transient_ssm()
+
 
         if plot_pred_signal:
             wn._parent_values()
@@ -896,7 +909,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
                 w2 = Waveform(pred_signal-2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
                 subplot_waveform(w2, axes, color='red', linewidth=1.0)
         else:
-            shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha)
+            shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha, model_lw=model_lw, zorder=5)
 
         if plot_predictions:
             predictions = []

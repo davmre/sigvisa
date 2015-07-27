@@ -126,6 +126,13 @@ def do_template_moves(sg, wn, tmnodes, tg, stds,
         except KeyError:
             continue
 
+        if param=="coda_height":
+            run_move(move_name="coda_height_small", fn=gaussian_MH_move,
+                     step=step, n_accepted=n_accepted,
+                     n_attempted=n_attempted, move_times=move_times,
+                     sg=sg, keys=(k,), node_list=(n,),
+                     relevant_nodes=relevant_nodes, std=stds["coda_height_small"], proxy_lps=proxy_lps)
+
 
 def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, cyclic=False, **kwargs):
 
@@ -210,6 +217,7 @@ def run_open_world_MH(sg, steps=10000,
                       enable_event_moves=True,
                       enable_template_openworld=True,
                       enable_template_moves=True,
+                      enable_hparam_moves=True,
                       template_move_type="rw", # can be "hamiltonian", "rw" (i.e. random-walk MH), or "both"
                       logger=None,
                       disable_moves=[],
@@ -262,6 +270,7 @@ def run_open_world_MH(sg, steps=10000,
                               'peak_offset': improve_offset_move_gaussian,
                               'arrival_time': improve_atime_move,
                               'atime_xc': atime_xc_move,
+                              'arrival_time_big': improve_atime_move,
                               #'constpeak_atime_xc': constpeak_atime_xc_move,
                               #'adjpeak_atime_xc': adjpeak_atime_xc_move,
                              } if enable_template_moves else {}
@@ -310,12 +319,14 @@ def run_open_world_MH(sg, steps=10000,
     if start_step == 0:
         init_lp = sg.current_log_p()
 
-    for step in range(start_step, steps):
+    for step in range(start_step, start_step+steps):
 
         # moves to adjust existing events
         for (eid, evnodes) in sg.evnodes.items():
 
-            if sg.event_is_fixed(eid): continue
+            if sg.event_is_fixed(eid):
+                #print "skipping fixed eid %d" % (eid,)
+                continue
 
             for (move_name, (node_name, params)) in event_moves_gaussian.items():
                 run_move(move_name=move_name, fn=ev_move_full, step=step,
@@ -343,6 +354,12 @@ def run_open_world_MH(sg, steps=10000,
                                  sg=sg, wave_node=wn)
 
                     for (eid, phase) in wn.arrivals():
+
+                        #if sg.event_is_fixed(eid):
+                        #   print "skipping fixed eid %d at %s" % (eid, sta)
+                        #   continue
+
+
                         tg = sg.template_generator(phase)
                         if eid < 0:
                             tmid = -eid
@@ -381,7 +398,7 @@ def run_open_world_MH(sg, steps=10000,
                      move_prob=ev_openworld_move_probability,
                      sg=sg, log_to_run_dir=run_dir)
 
-        if sg.jointgp:
+        if sg.jointgp and enable_hparam_moves:
             do_gp_hparam_moves(sg, stds, step=step, n_attempted=n_attempted,
                      n_accepted=n_accepted, move_times=move_times)
 

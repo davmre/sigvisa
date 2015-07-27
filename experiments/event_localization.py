@@ -2,7 +2,7 @@ import numpy as np
 import sys
 import os
 import traceback
-import pickle
+import cPickle as pickle
 import copy
 import hashlib
 
@@ -17,74 +17,10 @@ from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
 from sigvisa.utils.fileutils import clear_directory, mkdir_p
 from sigvisa.utils.geog import dist_km
+from sigvisa.synthetic import sample_event, wave_dirname
 
 BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "experiments", "event_localization")
 
-def hash(x, n=8):
-    return hashlib.md5(repr(x)).hexdigest()[:n]
-
-def sample_event(wave_dir, runid, seed, wiggle_model_type, wiggle_family, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tmshape="lin_polyexp", nm_type="ar"):
-    mkdir_p(wave_dir)
-
-    sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
-                      wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family,
-                      nm_type = nm_type, phases=phases, runid=runid)
-
-    s = Sigvisa()
-
-
-    wns = dict()
-    for site in sites:
-        try:
-            sta = s.get_default_sta(site)
-            chan = s.canonical_channel_name[s.default_vertical_channel[sta]]
-            wave = Waveform(data = np.zeros(2000), srate=1.0, stime=stime, sta=sta, chan=chan, filter_str="freq_2.0_3.0;env;hz_1.0")
-            wns[sta] = sg.add_wave(wave)
-        except Exception as e:
-            print e
-            continue
-
-    if seed is not None:
-        np.random.seed(seed)
-        s.sigmodel.srand(seed)
-
-
-    evs = sg.prior_sample_events(stime=stime, etime=stime+len_s, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
-    print "sampled", len(evs), "evs"
-
-    sg.uatemplate_rate = uatemplate_rate
-    if sample_uatemplates:
-        for wn in wns.values():
-            sg.prior_sample_uatemplates(wn)
-
-    #sg.debug_dump(dump_path=os.path.join(BASE_DIR, 'sampled_seed%d' % seed))
-
-    for (sta, wn) in wns.items():
-        wn.unfix_value()
-        wn.parent_sample()
-
-        f = open(os.path.join(wave_dir, "wave_%s" % sta), 'wb')
-        pickle.dump(wn.get_wave(), f)
-        f.close()
-    #np.savetxt(os.path.join(BASE_DIR, 'sampled_wave_seed%d' % seed))
-
-    f = open(os.path.join(wave_dir, "events.txt"), 'w')
-    for (eid, d) in sg.evnodes.items():
-        lon = d['loc'].get_local_value('lon')
-        lat = d['loc'].get_local_value('lat')
-        depth = d['loc'].get_local_value('depth')
-        mb = d['mb'].get_local_value('mb')
-        time = d['time'].get_local_value('time')
-        source = d['natural_source'].get_local_value('natural_source')
-        f.write("%d\t%f\t%f\t%f\t%f\t%f\t%d\n" % (eid, lon, lat, depth, time, mb, source))
-    f.close()
-
-    with open(os.path.join(wave_dir, "events.pkl"), 'wb') as f:
-        pickle.dump(evs, f)
-
-    sg.debug_dump(dump_path=os.path.join(wave_dir, 'init_dump'))
-
-    return evs
 
 
 def perturb_ev(ev, perturb_amt=0.0):
@@ -132,23 +68,21 @@ def load_graph(sg, wave_dir, max_distance=None):
     print "loaded %d of %d stations" % (i, j)
     return evs
 
-def wave_dirname(**kwargs):
-    return os.path.join(BASE_DIR, hash("sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ])))
 
 def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, sites=None, tmshape="lin_polyexp", nm_type="ar", wiggle_model_type="dummy", wiggle_family="dummy"):
 
     np.random.seed(seed)
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family,
-                      nm_type = nm_type, phases=phases, runid=runid)
+                      nm_type = nm_type, phases=phases, runids=(runid,))
 
     sg.uatemplate_rate = uatemplate_rate
 
-    wave_dir = wave_dirname(seed=seed, runid=runid, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, sites=sites, phases=phases, tmtype=hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb, nm_type=nm_type)
+    wave_dir = wave_dirname(seed=seed, runid=runid, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, sites=sites, phases=phases, tmtype=md5hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb, nm_type=nm_type, base_dir=BASE_DIR)
     try:
         evs = load_graph(sg, wave_dir, max_distance=max_distance)
     except (IOError, OSError) as e:
-        sample_event(wave_dir, runid, seed, wiggle_model_type, wiggle_family, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, nm_type=nm_type)
+        sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, nm_type=nm_type, wave_dir=wave_dir)
         evs = load_graph(sg, wave_dir, max_distance=max_distance)
 
     if init_events:
@@ -198,7 +132,8 @@ def main():
               'peak_offset': 'param_linear_mb',
               'amp_transfer': 'param_sin1',
               'coda_decay': 'param_linear_distmb',
-              'peak_decay': 'param_linear_distmb',}
+              'peak_decay': 'param_linear_distmb',
+              'mult_wiggle_std': "constant_beta"}
 
     phases = options.phases.split(',')
     sites = options.sites.split(',')

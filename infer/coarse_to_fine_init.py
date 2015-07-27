@@ -22,8 +22,12 @@ class RunSpec(object):
         waves = self.get_waves(modelspec)
         for wave in waves:
             sg.add_wave(wave)
-        return sg
 
+        try:
+            sg.seed = self.seed
+        except AttributeError:
+            sg.seed = 0
+        return sg
 
 class SyntheticRunSpec(RunSpec):
 
@@ -132,8 +136,12 @@ class TimeRangeRunSpec(RunSpec):
             self.start_time = start_time
             self.end_time = end_time
         else:
+            s = Sigvisa()
+            cursor = s.dbconn.cursor()
             #print "loading signals from dataset %s" % options.dataset
             (stime, etime) = read_timerange(cursor, dataset, hours=None, skip=0)
+            cursor.close()
+
             self.start_time = stime + hour * 3600
             self.end_time = self.start_time + len_hours*3600.0
 
@@ -143,14 +151,15 @@ class TimeRangeRunSpec(RunSpec):
         s = Sigvisa()
         cursor = s.dbconn.cursor()
 
-        stas = s.sites_to_stas(sites, refsta_only=not modelspec.sg_params['arrays_joint'])
+        stas = s.sites_to_stas(self.sites, refsta_only=not modelspec.sg_params['arrays_joint'])
 
-        segments = load_segments(cursor, stas, self.start_time, self.end_time, chans = modelspac.signal_params['chans'])
+
+        segments = load_segments(cursor, stas, self.start_time, self.end_time, chans = modelspec.signal_params['chans'])
 
         waves = []
         for seg in segments:
             for band in modelspec.signal_params['bands']:
-                filtered_seg = seg.with_filter(band)
+                filtered_seg = seg.with_filter(band).with_filter("env")
                 if modelspec.signal_params['smooth'] is not None:
                     filtered_seg = filtered_seg.with_filter("smooth_%d" % modelspec.signal_params['smooth'])
                 filtered_seg = filtered_seg.with_filter("hz_%.3f" % modelspec.signal_params['max_hz'])
@@ -168,14 +177,24 @@ class TimeRangeRunSpec(RunSpec):
         elif self.initialize_events == "leb":
             s = Sigvisa()
             cursor = s.dbconn.cursor()
-            evs = get_leb_events(sg, cursor)
+
+            events, orid2num = read_events(cursor, self.start_time, self.end_time, 'leb')
+            events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
+            evs = []
+            eid = 1
+            for evarr in events:
+                ev = get_event(evid=evarr[EV_EVID_COL])
+                ev.eid = eid
+                eid += 1
+                evs.append(ev)
+
             cursor.close()
         elif isinstance(self.initialize_events, list) or \
              isinstance(self.initialize_events, tuple):
             evs = [get_event(evid=evid) for evid in self.initialize_events]
         else:
             raise Exception("unrecognized event initialization %s" % self.initialize_events)
-
+        return evs
 
 class ModelSpec(object):
 
@@ -185,12 +204,14 @@ class ModelSpec(object):
             'template_model_type': "param",
             'wiggle_family': "iid",
             'wiggle_model_type': "dummy",
+            'skip_levels': 1,
             'dummy_fallback': False,
             'nm_type': "ar",
             'phases': ["P",],
             'arrays_joint': False,
             'uatemplate_rate': 1e-6,
             'jointgp_hparam_prior': None,
+            'hack_param_constraint': False,
             'absorb_n_phases': True,
         }
         signal_params = {
@@ -201,7 +222,7 @@ class ModelSpec(object):
         }
 
         if vert_only:
-            chans = ['vertical']
+            signal_params['chans'] = ['auto'] # 'vertical'
         for k in kwargs.keys():
             if k in sg_params:
                 sg_params[k] = kwargs[k]
@@ -218,7 +239,10 @@ class ModelSpec(object):
         self.inference_rounds = []
         if inference_preset == "closedworld":
             self.add_inference_round(enable_template_openworld=False,
-                                     enable_event_openworld=False)
+                                     enable_event_openworld=False, )
+        elif inference_preset == "closedworld_noatime":
+            self.add_inference_round(enable_template_openworld=False,
+                                     enable_event_openworld=False, disable_moves=['atime_xc'])
         elif inference_preset == "openworld":
             self.add_inference_round(enable_template_openworld=True,
                                      enable_event_openworld=True)
@@ -230,6 +254,8 @@ class ModelSpec(object):
             'enable_template_openworld': True,
             'enable_event_moves': True,
             'enable_event_openworld': True,
+            'enable_hparam_moves': True,
+            'steps': -1,
         }
         for k in kwargs.keys():
             inference_params[k] = kwargs[k]
@@ -267,7 +293,7 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
         except:
             continue
 
-def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_threshold=500):
+def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_threshold=500, dump_interval=50, print_interval=10):
 
     # save 'true' events if they are known
     # build logger
@@ -276,8 +302,10 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
     # run inference with appropriate params
     # and hooks to monitor convergence?
 
-    logger = MCMCLogger( write_template_vals=True, dump_interval=50, print_interval=10, write_gp_hparams=True)
+    logger = MCMCLogger( write_template_vals=True, dump_interval=dump_interval, print_interval=print_interval, write_gp_hparams=True)
     logger.dump(sg)
+
+    sg.seed = modelspec.seed
 
     try:
         sw = runspec.sw
@@ -303,10 +331,12 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
         return diff < model_switch_lp_threshold
 
     step = 0
+    if max_steps is not None:
+        inference_params["steps"] = max_steps
+
     for inference_params in modelspec.inference_rounds:
         run_open_world_MH(sg, logger=logger,
                           stop_condition=lp_change_threshold,
-                          steps=max_steps,
                           start_step=step,
                           **inference_params)
         step = logger.last_step

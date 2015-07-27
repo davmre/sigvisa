@@ -17,7 +17,7 @@ from sigvisa.models.ttime import tt_predict
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname, model_params
 from sigvisa.learn.train_global_param_models import retrain_models
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.models.wiggles.wavelets import construct_wavelet_basis
+from sigvisa.models.wiggles.wavelets import construct_full_basis
 
 
 

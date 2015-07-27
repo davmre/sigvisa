@@ -185,7 +185,9 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
     peak_time = stime + float(idx-1)/srate
 
     if return_lp:
-        return peak_time, np.log(cdf[idx]-cdf[idx-1])
+        lp = np.log(cdf[idx]-cdf[idx-1])
+        assert(not np.isnan(lp))
+        return peak_time, lp
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time
 
@@ -1320,7 +1322,14 @@ def amp_decay_proposal_laplace_ar(wn, tg, signal_window, window_start_idx, peak_
         start = (vals['arrival_time'] - wn.st) * wn.srate
         tmpl_start_idx = int(np.floor(start))
         offset = float(start - tmpl_start_idx)
-        pred_logenv, jacobian = tg.abstract_logenv_raw(vals, idx_offset=offset, srate=wn.srate, return_jac_exp=True)
+        try:
+            pred_logenv, jacobian = tg.abstract_logenv_raw(vals, idx_offset=offset, srate=wn.srate, return_jac_exp=True)
+        except ValueError:
+            if return_debug:
+                return np.inf, np.ones(x.shape), None, None, None, None, None, None, vals
+            else:
+                return np.inf, np.ones(x.shape)
+
         pred_env = np.exp(pred_logenv)
 
         tmpl_start_idx_rel = tmpl_start_idx-window_start_idx
@@ -1950,7 +1959,10 @@ def get_fit_window(wn, peak_time, signal_diff_pos, incr_s=5.0, max_s=60.0, smoot
     peak_s = peak_time - wn.st
     peak_idx1 = int(np.floor(peak_s * wn.srate))
     peak_idx2 = int(np.ceil(peak_s * wn.srate))
-    sidx = peak_idx1 if signal_diff_pos[peak_idx1] > signal_diff_pos[peak_idx2] else peak_idx2
+    try:
+        sidx = peak_idx1 if signal_diff_pos[peak_idx1] > signal_diff_pos[peak_idx2] else peak_idx2
+    except IndexError:
+        return None
 
     jump_idx = int(incr_s * wn.srate)
     eidx = sidx + jump_idx
@@ -2535,7 +2547,7 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False, lapla
                     (coda_height, peak_decay, coda_decay), proposal_lp = amp_decay_proposal(fitting_window, wn.srate, fix_result=x)
 
     initial_vals = {'arrival_time': atime, 'peak_offset': peak_offset, 'coda_height': coda_height,
-                    'coda_decay': coda_decay, 'peak_decay': peak_decay }
+                    'coda_decay': coda_decay, 'peak_decay': peak_decay, 'mult_wiggle_std':  0.6}
 
 
 

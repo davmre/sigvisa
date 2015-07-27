@@ -142,7 +142,7 @@ def setup_svgraph_from_cmdline(options, args):
 
     tm_type_str = options.tm_types
     if tm_type_str == "param":
-        tm_type_str = "tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb,peak_decay:param_linear_distmb"
+        tm_type_str = "tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb,peak_decay:param_linear_distmb,mult_wiggle_std:constant_beta"
 
     tm_types = {}
     if ',' in tm_type_str:

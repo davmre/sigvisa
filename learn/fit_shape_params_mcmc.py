@@ -235,6 +235,7 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_it
         messages[k][sigvisa_graph.wiggle_family] = v
         messages[k][sigvisa_graph.wiggle_family + "_posterior"] = wavelet_posteriors[k]
 
+
     tops=repr(tmpl_optim_params)[1:-1]
     fitids = save_template_params(sigvisa_graph,
                                   tmpl_optim_param_str = "mcmc",
@@ -340,8 +341,6 @@ def save_template_params(sg, tmpl_optim_param_str,
     cursor.close()
 
     return fitids
-
-
 
 def main():
     parser = OptionParser()

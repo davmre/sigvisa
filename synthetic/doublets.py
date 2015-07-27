@@ -6,7 +6,7 @@ from sigvisa.learn.train_param_common import insert_model
 from sigvisa.source.event import Event
 from sigvisa.utils.geog import dist_km
 from sigvisa.utils.fileutils import mkdir_p
-from sigvisa.models.wiggles.uniform_variance_wavelets import uvar_wavelet_basis
+from sigvisa.models.wiggles.wavelets import construct_full_basis_implicit
 from sigvisa.treegp.gp import GPCov, prior_sample
 from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa import Sigvisa
@@ -14,6 +14,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.signals.common import Waveform
 from sigvisa.models.ttime import tt_predict
 from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian
+from sigvisa.synthetic import sample_event
 import copy
 
 
@@ -23,8 +24,22 @@ class SampledWorld(object):
         self.seed = seed
         pass
 
+    def sample_sg(self, *args, **kwargs):
+        evs, waves, sg = sample_event(*args, seed=self.seed,return_all=True,  **kwargs)
+        self.evs = evs
+        self.all_evs = evs
+        self.n_evs = len(evs)
+        self.locs = [(ev.lon, ev.lat) for ev in evs]
+        self.ev_doublet = None
+        self.ev_doublet_base = None
 
-    def sample_region_with_doublet(self, n_evs, lons, lats, times, mbs, doublet_idx=1, doublet_dist=0.1):
+        w = dict()
+        w[-1] = dict()
+        for wave in waves:
+            w[-1][wave['sta']] = wave
+        self.waves = w
+
+    def sample_region(self, n_evs, lons, lats, times, mbs, doublet_idx=None, doublet_dist=0.1):
 
         locs = []
         evs = []
@@ -39,18 +54,17 @@ class SampledWorld(object):
             evs.append(ev)
         locs = np.array(locs)
 
-        ev_doublet_base = evs[doublet_idx]
-        mb = np.random.rand() * (mbs[1]-mbs[0]) + mbs[0]
-
-
-        ev_doublet = Event(lon=ev_doublet_base.lon + (np.random.rand()-.5)*doublet_dist, lat=ev_doublet_base.lat+ (np.random.rand()-.5)*doublet_dist, time= np.random.rand() * (times[1]-times[0]) + times[0],  mb=mb, depth=0, eid=n_evs+1)
-        doublet_dist = dist_km((ev_doublet_base.lon, ev_doublet_base.lat), (ev_doublet.lon, ev_doublet.lat))
+        if doublet_idx is not None:
+            ev_doublet_base = evs[doublet_idx]
+            mb = np.random.rand() * (mbs[1]-mbs[0]) + mbs[0]
+            ev_doublet = Event(lon=ev_doublet_base.lon + (np.random.rand()-.5)*doublet_dist, lat=ev_doublet_base.lat+ (np.random.rand()-.5)*doublet_dist, time= np.random.rand() * (times[1]-times[0]) + times[0],  mb=mb, depth=0, eid=n_evs+1)
+            doublet_dist = dist_km((ev_doublet_base.lon, ev_doublet_base.lat), (ev_doublet.lon, ev_doublet.lat))
+            self.ev_doublet = ev_doublet
+            self.ev_doublet_base = ev_doublet_base
 
         self.n_evs = n_evs
         self.evs = evs
         self.locs = locs
-        self.ev_doublet = ev_doublet
-        self.ev_doublet_base = ev_doublet_base
         self.all_evs = evs  + [ev_doublet,]
 
     def add_events(self, evs):
@@ -180,8 +194,13 @@ class SampledWorld(object):
     def set_basis(self, wavelet_family, srate=5.0):
         self.srate=srate
         self.wavelet_family=wavelet_family
-        self.basis = uvar_wavelet_basis(srate, wavelet_family)
-        self.n_coefs = len(self.basis[0])
+        if wavelet_family.startswith("db"):
+            self.basis = construct_full_basis_implicit(srate=srate,
+                                                       wavelet_str=wavelet_family,
+                                                       c_format=True)
+            self.n_coefs = len(self.basis[0])
+        else:
+            self.n_coefs = 0
 
     def serialize(self, wave_dir):
         """
@@ -284,7 +303,7 @@ def sample_params_and_signals(basedir, seed=0):
     times = [1240240000, 1240340000]
     mbs = [4.0, 5.0]
     sw = SampledWorld(seed=seed)
-    sw.sample_region_with_doublet(n_evs, lons, lats, times, mbs)
+    sw.sample_region(n_evs, lons, lats, times, mbs, doublet_idx=1)
     sw.stas = ["MK31", "AS12", "CM16", "FITZ", "WR1"]
     gpcov = GPCov([0.7,], [ 40.0, 5.0],
                   dfn_str="lld",
