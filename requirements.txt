@@ -1,12 +1,12 @@
-numpy==1.6.2
-scipy==0.12.0
+numpy
+scipy
 cython
 scikit-learn
 scikits.sparse
-matplotlib==1.2.0
+matplotlib
 -e git+http://github.com/matplotlib/basemap.git#egg=basemap
 obspy
-django==1.4.3
+django
 #cx_Oracle
 MySQL-python
 python-dateutil
@@ -29,4 +29,4 @@ tornado
 ipython
 
 # interactive debugger, "python manage.py runserver_plus" to enable
-werkzeug
+# werkzeug
