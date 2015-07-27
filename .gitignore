@@ -56,7 +56,6 @@ database/*.csv
 /test_orids
 /gen_templates.sh
 /test_orids3
-/parameters/
 *.wave
 database/setup_db_custom.sql
 *prof

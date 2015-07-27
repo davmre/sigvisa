@@ -36,7 +36,6 @@ class ParamModel(Distribution):
         if sta is not None:
             self.site_lon, self.site_lat, self.site_elev, _, _, _, _ = Sigvisa().earthmodel.site_info(sta, 0)
 
-        self.s = Sigvisa()
 
     def __repr_base_params__(self):
         return repr({'site_lon': self.site_lon, 'site_lat': self.site_lat, 'site_elev': self.site_elev})
@@ -129,14 +128,22 @@ class ConstGaussianModel(ParamModel):
 
         # I'm too lazy to work out a proper Bayesian analysis, so instead we'll do a hack where
         # we just assume var=1
-        weights = 1.0/(yvars+1.0)
-        self.mean = np.average(y, weights=weights)
-        variance = np.average((y-self.mean)**2, weights=weights)
-        self.std = np.sqrt(variance)
+        if mean is not None:
+            self.mean = mean
+            self.std = std
+        else:
+            weights = 1.0/(yvars+1.0)
+            self.mean = np.average(y, weights=weights)
+            variance = np.average((y-self.mean)**2, weights=weights)
+            self.std = np.sqrt(variance)
 
         self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
-        self.ll = np.sum(self.l1 - .5 * ((y - self.mean)/self.std)**2)
+        if y is not None:
+            self.ll = np.sum(self.l1 - .5 * ((y - self.mean)/self.std)**2)
+        else:
+            self.ll=0
 
+        self.s = None
 
     def save_trained_model(self, fname):
         with open(fname, 'w') as f:

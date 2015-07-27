@@ -15,7 +15,7 @@ from sigvisa.database.signal_data import *
 from sigvisa import *
 
 import pyublas
-from sigvisa.models.wiggles.wavelets import parse_wavelet_basis_str, construct_implicit_basis_C
+from sigvisa.models.wiggles.wavelets import parse_wavelet_basis_str, construct_full_basis_implicit
 #from sigvisa.models.statespace.compact_support import CompactSupportSSM
 from sigvisa.ssms_c import CompactSupportSSM
 from sigvisa.signals.common import Waveform

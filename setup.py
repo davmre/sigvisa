@@ -48,7 +48,7 @@ extra_compile_args_cpp = ['-Wall', '-std=c++11', '-g', '-O3']
 extra_compile_args_c = ['-Wall', '-std=c99', '-g', '-O3']
 #extra_compile_args = ['-std=c99','-O3']
 #extra_link_args = ['-Wl,--strip-all']
-extra_link_args = ['-lrt','-lcblas',]
+extra_link_args = ['-lrt', '-lcblas',]
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c',

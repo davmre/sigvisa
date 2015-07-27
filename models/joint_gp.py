@@ -3,6 +3,7 @@ from sigvisa.treegp.gp import GP, GPCov
 from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel, ConstLaplacianModel
 from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
 import scipy.stats
+from collections import defaultdict
 
 """
 Model a specific parameter at a specific station, jointly over many events.
@@ -70,6 +71,8 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
 
     return m, v, normalizer
 
+
+
 class JointGP(object):
 
     def __init__(self, param, sta, ymean, hparam_nodes, param_model=None):
@@ -92,7 +95,7 @@ class JointGP(object):
         self.messages[eid] = v, 0.0, 0.0
         self._clear_cache()
 
-    def message_from_arrival(self, eid, evdict, prior_mean, prior_var, posterior_mean, posterior_var):
+    def message_from_arrival(self, eid, evdict, prior_mean, prior_var, posterior_mean, posterior_var, coef=None):
         self.evs[eid] = evdict
         m, v, Z = multiply_scalar_gaussian(posterior_mean, posterior_var, prior_mean, -prior_var)
         self.messages[eid] = m,v, Z
@@ -112,15 +115,16 @@ class JointGP(object):
         noise_var, cov = self._get_cov()
         return self.ymean, cov.wfn_params[0] + noise_var
 
-    def posterior(self, holdout_eid, evdict=None):
+    def posterior(self, holdout_eid, x=None, evdict=None):
         """
         posterior on value for event eid, given messages from all other events
         """
         gp = self.train_gp(holdout_eid=holdout_eid)
         if gp is None:
             return self.prior()
-        evdict = self.evs[holdout_eid] if evdict is None else evdict
-        x = self._ev_features(evdict).reshape(1, -1)
+        if x is None:
+            evdict = self.evs[holdout_eid] if evdict is None else evdict
+            x = self._ev_features(evdict).reshape(1, -1)
         posterior = gp.predict(x), gp.variance(x, include_obs=True, pad=0)
         #print holdout_eid, "posterior", posterior
         return posterior
@@ -232,6 +236,8 @@ class JointGP(object):
 
         We have available the message passed upwards from the signal, which is a normalized version of
         p(signal|coef). (and we don't care about the normalization constant since the thing we'll
+
+
         be changing is the prior, p(coef), so however we normalize the message will just cancel out).
         So this is as simple as just multiplying the Gaussian message by the two Gaussian priors,
         and comparing the resulting normalization constants.
@@ -357,6 +363,51 @@ class JointGP(object):
         del d['hparam_nodes']
 
         return d
+
+class JointIndepGaussian(JointGP):
+    def __init__(self, param, sta, ymean, hparam_nodes, param_model=None):
+        self.param = param
+        self.sta = sta
+        self.ymean = ymean
+
+        self.hparam_nodes = hparam_nodes
+        #self._gpinit_params = gpinit_from_model(param_model)
+
+        self.messages = defaultdict(dict)
+
+
+    def generic_upwards_message(self, v, cond):
+        self.messages[eid] = 0.0
+        self._clear_cache()
+
+    def message_from_arrival(self, eid, evdict, prior_mean, prior_var, posterior_mean, posterior_var, coef):
+        m, v, Z = multiply_scalar_gaussian(posterior_mean, posterior_var, prior_mean, -prior_var)
+        self.messages[eid] = Z
+
+    def get_message(self, eid):
+        return self.messages[eid]
+
+    def remove_arrival(self, eid):
+        del self.messages[eid]
+        self._clear_cache()
+
+    def prior(self):
+        noise_var = self.hparam_nodes["level_var"].get_value()
+        return self.ymean, noise_var
+
+    def posterior(self, holdout_eid, x=None, evdict=None):
+        return self.prior()
+
+    def log_likelihood(self):
+        Z = np.sum(self.messages.values())
+        return Z
+
+    def _clear_cache(self):
+        self._input_cache=False
+
+    def holdout_evidence(self, *args, **kwargs):
+        return 0.0
+
 
 def gpinit_from_model(model):
     gpinit_dict = dict()

@@ -43,7 +43,7 @@ def main():
     s = Sigvisa()
     cursor = db.connect().cursor()
 
-    """
+
     for sta in os.listdir(basedir):
         if sta=="seismic": continue
         print sta
@@ -62,7 +62,7 @@ def main():
         load_table(cursor, 'leb_arrival', os.path.join(stadir, 'leb_arrival.csv'))
         load_table(cursor, 'leb_origin', os.path.join(stadir, 'leb_origin.csv'))
         load_table(cursor, 'leb_assoc', os.path.join(stadir, 'leb_assoc.csv'))
-    """
+
     mkdir_p(wfdest)
     cmd = "cp -R %s/* %s" % (wfsrc , wfdest)
     print cmd

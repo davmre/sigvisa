@@ -9,7 +9,7 @@ from sigvisa.models.templates.template_model import TemplateGenerator
 from sigvisa.models.templates.coda_height import CodaHeightNode
 from sigvisa.graph.graph_utils import create_key, extract_sta_node
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Gamma, Negate, Gaussian, TruncatedGaussian
+from sigvisa.models.distributions import Gamma, Negate, Gaussian, TruncatedGaussian, Beta
 
 import scipy.weave as weave
 from scipy.weave import converters
@@ -28,7 +28,7 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
                          "peak_decay": Gaussian(-2.5, 1.),
                          "coda_height": Gaussian(0.5, 3),
                          "coda_decay": Gaussian(-2.5, 1.5),
-                         "mult_wiggle_std": Gaussian(0.5, 0.25)}
+                         "mult_wiggle_std": Beta(4.23342488227, 1.41958698073)}
 
         self.hack_force_mean = None
 
@@ -183,9 +183,9 @@ if (l > 0) {
 """
         weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'min_logenv', 'idx_offset', 'srate', 'return_jac_exp', 'jacobian'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-        if np.isfinite(vals.values()).all() and (~np.isfinite(d[1:])).any():
-            # finite parameters should never produce an infinite signal...
-            import pdb; pdb.set_trace()
+        #if np.isfinite(vals.values()).all() and (~np.isfinite(d[1:])).any():
+        # finite parameters should never produce an infinite signal...
+        #    import pdb; pdb.set_trace()
 
         if return_jac_exp:
             return d, jacobian
@@ -199,8 +199,8 @@ if (l > 0) {
 
         bounds['coda_height'] = -4
         bounds['peak_offset'] = -2
-        bounds['coda_decay'] = -6
-        bounds['peak_decay'] = -6
+        bounds['coda_decay'] = -7
+        bounds['peak_decay'] = -7
         bounds['mult_wiggle_std'] = 0
 
         return bounds
@@ -213,6 +213,7 @@ if (l > 0) {
         bounds['coda_height'] = 10
         bounds['peak_offset'] = 4
         bounds['coda_decay'] = 1
+        bounds['peak_decay'] = 4
         bounds['mult_wiggle_std'] = 1
 
         return bounds

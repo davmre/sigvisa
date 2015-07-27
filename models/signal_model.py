@@ -312,8 +312,13 @@ class ObservedSignalNode(Node):
 
         for eid, phase in new_arrivals:
             self._arrival_phases[eid].add(phase)
+
         for eid, phase in removed_arrivals:
-            self._arrival_phases[eid].remove(phase)
+            if eid in self._arrival_phases:
+                try:
+                    self._arrival_phases[eid].remove(phase)
+                except KeyError:
+                    pass
 
         # cache the list of tmpl/wiggle param keys for the new arrivals
         for (eid, phase) in new_arrivals:
@@ -368,7 +373,11 @@ class ObservedSignalNode(Node):
         for (eid, phase) in new_arrivals:
             self.arrival_ssms[(eid, phase)] = self.arrival_ssm(eid, phase)
         for (eid, phase) in removed_arrivals:
-            del self.arrival_ssms[(eid, phase)]
+            try:
+                del self.arrival_ssms[(eid, phase)]
+            except KeyError:
+                pass
+
         for eid in evs_moved:
             for phase in self._arrival_phases[eid]:
                 self.arrival_ssms[(eid, phase)] = self.arrival_ssm(eid, phase)
@@ -434,7 +443,7 @@ class ObservedSignalNode(Node):
             evdict = self._ev_params[eid]
             n_coefs = len(self.wavelet_param_models[phase])
             for j in range(n_coefs):
-                self.wavelet_param_models[phase][j].message_from_arrival(eid, evdict, prior_means[coef_idx+j], prior_vars[coef_idx+j], posterior_means[coef_idx+j], posterior_vars[coef_idx+j])
+                self.wavelet_param_models[phase][j].message_from_arrival(eid, evdict, prior_means[coef_idx+j], prior_vars[coef_idx+j], posterior_means[coef_idx+j], posterior_vars[coef_idx+j], coef=j)
             coef_idx += n_coefs
 
 
@@ -672,16 +681,19 @@ class ObservedSignalNode(Node):
         arrivals = arrivals if arrivals is not None else self.arrivals()
 
         for (eid, phase) in arrivals:
-            evdict = self._ev_params[eid]
+            if phase=="UA":
+                continue
+
             cssm = self.arrival_ssms[(eid, phase)]
+            evdict = self._ev_params[eid]
             if cssm is None: continue
 
             if self.has_jointgp:
                 prior_means, prior_vars = zip(*[jgp.prior() for jgp in self.wavelet_param_models[phase]])
                 prior_means, prior_vars = np.asarray(prior_means, dtype=np.float64), np.asarray(prior_vars, dtype=np.float64)
             else:
-                prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]])
-                prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]])
+                prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]], dtype=np.float)
+                prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]], dtype=np.float)
             cssm.set_coef_prior(prior_means, prior_vars)
 
 
@@ -695,7 +707,11 @@ class ObservedSignalNode(Node):
             return self.cached_logp
 
         if arrivals is None:
-            tssm = self.tssm
+            try:
+                tssm = self.tssm
+            except AttributeError:
+                tssm = self.transient_ssm(arrivals=self.arrivals(), save_components=True)
+                self.tssm=tssm
         else:
             tssm = self.transient_ssm(arrivals=arrivals, save_components=False)
 
@@ -1007,10 +1023,14 @@ signal_diff(i) =value(i) - pred_signal(i);
         pv = self._parent_values()
 
         d = self.__dict__.copy()
-        del d['tssm']
-        del d['arrival_ssms']
-        del d['noise_arssm']
-        del d['iid_arssm']
+        if "tssm" in d:
+            del d['tssm']
+        if "arrival_ssms" in d:
+            del d['arrival_ssms']
+        if "noise_arssm" in d:
+            del d['noise_arssm']
+        if "iid_arssm" in d:
+            del d['iid_arssm']
 
         # avoid hitting the recursion depth limit
         # by removing upwards pointers to

@@ -26,10 +26,13 @@ def construct_basis_simple(N, family, pad, level=None):
     return basis
 
 
+
 def construct_implicit_basis_simple(N, family, pad, level=None):
 
     w = pywt.Wavelet(family)
     cc = pywt.wavedec(np.zeros((N,)), family, pad, level=level)
+
+    level_sizes = [len(ccc) for ccc in cc]
 
     start_times = []
     end_times = []
@@ -78,7 +81,7 @@ def construct_implicit_basis_simple(N, family, pad, level=None):
             end_times.append(st+length)
             identities.append(i)
 
-    return start_times, end_times, identities, prototypes, N
+    return start_times, end_times, identities, prototypes, level_sizes
 
 
 def construct_full_basis(srate, wavelet_str=None, wavelet_family='db4', wiggle_len_s=30.0, decomp_levels=99):
@@ -102,12 +105,16 @@ def construct_full_basis_implicit(srate, wavelet_str=None, wavelet_family='db4',
     else:
         return basis
 
+def level_sizes(srate, wavelet_str):
+    if wavelet_str is not None:
+        # overwrite all the other params
+        wavelet_family, _, decomp_levels, wiggle_len_s = parse_wavelet_basis_str(wavelet_str)
 
 # construct an implicit representation of a wavelet basis, returned
 # in the format required by the fast C++ implementation of
 # the CompactSupportSSM
 def implicit_basis_to_C_format(basis):
-    start_times, end_times, identities, prototypes, N = basis
+    start_times, end_times, identities, prototypes, levels = basis
     starray = np.asarray(start_times, dtype=np.int32)
     etarray = np.asarray(end_times, dtype=np.int32)
     idarray = np.asarray(identities, dtype=np.int32)
@@ -118,10 +125,11 @@ def implicit_basis_to_C_format(basis):
     for i, p in enumerate(prototypes):
         m[i,:len(p)] = p
 
-    return starray, etarray, idarray, m, N
+    return starray, etarray, idarray, m, levels
 
-def implicit_to_explicit(start_times, end_times, identities, prototypes, N):
+def implicit_to_explicit(start_times, end_times, identities, prototypes, levels):
     m = len(start_times)
+    N = m
     basis = []
     for i in range(m):
         st = max(start_times[i], 0)

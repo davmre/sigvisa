@@ -37,7 +37,8 @@ class ConflictingEvent(Exception):
     pass
 
 def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
-                            pre_s = 10, post_s=200, exclude_other_evs=False, phases=None):
+                            pre_s = 10, post_s=200, exclude_other_evs=False,
+                            phases=None, pad_seconds=20):
     close_cursor = False
     if cursor is None:
         cursor = Sigvisa().dbconn.cursor()
@@ -70,7 +71,7 @@ def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
 
 
         print st, et
-        wave = fetch_waveform(sta, chan, st, et)
+        wave = fetch_waveform(sta, chan, st, et, pad_seconds=pad_seconds)
         wave.segment_stats['evid'] = evid
         wave.segment_stats['event_arrivals'] = arrivals
 
@@ -222,12 +223,12 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
         # how many samples are actually available
         available_samples = waveform['nsamp'] - first_offset
         # grab the available and needed samples
-        try:
-            wave = _read_waveform_from_file(waveform, first_offset,
-                                            min(desired_samples, available_samples))
-        except IOError:
-            raise MissingWaveform("Can't find data for sta %s chan %s time %d"
-                                  % (station, chan, stime))
+        #try:
+        wave = _read_waveform_from_file(waveform, first_offset,
+                                        min(desired_samples, available_samples))
+        #except IOError:
+        #     raise MissingWaveform("Can't find data for sta %s chan %s time %d"
+        #                          % (station, chan, stime))
 
         # copy the data we loaded into the global array
         t_start = max(0, int((waveform['time'] - global_stime) * samprate))
@@ -266,7 +267,7 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
     # open the waveform file
     # filename = os.path.join(*(waveform['dir'].split("/")
     #                          + [waveform['dfile']]))
-    filename = waveform['dir'] + waveform['dfile']
+    filename = os.path.join(waveform['dir'], waveform['dfile'])
     try:
         datafile = open(filename, "rb")
     except IOError, e:

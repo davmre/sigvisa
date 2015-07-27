@@ -113,7 +113,7 @@ class EventHeatmap(Heatmap):
 
         sta_locations = [s.earthmodel.site_info(n, 0)[0:2] for n in self.stations]
         self.plot_locations(sta_locations, labels=self.stations if label_stations else None,
-                            marker="x", ms=4, mfc="none", mec="blue", mew=1, alpha=1,
+                            marker="^", ms=4, mfc="none", mec="blue", mew=1, alpha=1,
                             offmap_arrows=offmap_station_arrows)
 
 

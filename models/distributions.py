@@ -128,10 +128,10 @@ class Gaussian(Distribution):
     def deriv_log_p(self, x, **kwargs):
         return -(x - self.mean)/self.var
 
-    def predict(self, **kwargs):
+    def predict(self, *args, **kwargs):
         return self.mean
 
-    def variance(self, **kwargs):
+    def variance(self, *args, **kwargs):
         return self.var
 
     def sample(self, *args, **kwargs):
@@ -339,9 +339,9 @@ class Beta(Distribution):
         return self.alpha/(self.alpha+self.beta)
 
     def sample(self, **kwargs):
-        return scipy.stats.beta(alpha, beta, loc=0, scale=1).rvs(1)
+        return scipy.stats.beta(self.alpha, self.beta, loc=0, scale=1).rvs(1)[0]
 
-    def variance(self):
+    def variance(self, **kwargs):
         alpha, beta = self.alpha, self.beta
         return (alpha*beta)/((alpha+beta)**2 * (alpha+beta+1))
 
