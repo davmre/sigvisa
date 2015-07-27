@@ -44,7 +44,8 @@ else:
 print sys_includes
 print sys_libraries
 
-extra_compile_args = ['-Wall', '-std=c++11', '-g', '-O3']
+extra_compile_args_cpp = ['-Wall', '-std=c++11', '-g', '-O3']
+extra_compile_args_c = ['-Wall', '-std=c99', '-g', '-O3']
 #extra_compile_args = ['-std=c99','-O3']
 #extra_link_args = ['-Wl,--strip-all']
 extra_link_args = ['-lrt','-lcblas',]
@@ -67,7 +68,7 @@ sigvisa_module = Extension('sigvisa_c',
                                     + [f for f in main_sources]),
                            library_dirs = sys_libraries,
                            runtime_library_dirs = sys_libraries,
-                           extra_compile_args = extra_compile_args,
+                           extra_compile_args = extra_compile_args_c,
                            extra_link_args = extra_link_args,
                            )
 
@@ -89,7 +90,7 @@ statespacemodel_module = Extension('ssms_c',
                            library_dirs = ssm_libs,
                            libraries=['boost_python'],
                            runtime_library_dirs = ssm_libs,
-                           extra_compile_args = extra_compile_args,
+                           extra_compile_args = extra_compile_args_cpp,
                            extra_link_args = extra_link_args,
                            )
 
