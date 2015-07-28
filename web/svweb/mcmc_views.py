@@ -983,4 +983,4 @@ def mcmcrun_browsedir(request, dirname, path):
 
     else:
         mimetype=mimetypes.guess_type(path)[0]
-        return HttpResponse(open(current_path).read(), mimetype=mimetype)
+        return HttpResponse(open(current_path).read(), content_type=mimetype)
