@@ -17,7 +17,7 @@ from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
-from sigvisa.models.spatial_regression.features import ortho_poly_fit
+from sigvisa.treegp.features import ortho_poly_fit
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
 

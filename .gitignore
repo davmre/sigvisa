@@ -3,6 +3,7 @@
 *.pyc
 *.so
 parameters/*.txt
+parameters/noise_models/
 eval/*
 bgjob*
 utils/bgjob

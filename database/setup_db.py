@@ -59,7 +59,7 @@ with open('setup_db_custom.sql', 'r') as f:
     print "running %s" % " ".join(cmd) +  " < setup_db_custom.sql"
     call(cmd, stdin=f)
 print "removing setup_db_custom.sql..."
-os.remove('setup_db_custom.sql')
+#os.remove('setup_db_custom.sql')
 
 with open('sigvisa.sql', 'r') as f:
     cmd = ["mysql", "-u", "root", "-p%s" % mysql_root, db_name]

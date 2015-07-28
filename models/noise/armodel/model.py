@@ -76,7 +76,7 @@ class ARModel(NoiseModel):
         K = np.eye(n_p) * 1.0e4
         u = np.zeros((n_p,))
 
-        var = std**2
+        var = float(std**2)
 
         code = """
         int t_since_mask = 0;

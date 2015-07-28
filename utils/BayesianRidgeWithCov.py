@@ -10,7 +10,7 @@ from scipy import linalg
 from sklearn.linear_model.base import LinearModel
 from sklearn.base import RegressorMixin
 from sklearn.utils.extmath import fast_logdet, pinvh
-from sklearn.utils import check_arrays
+#from sklearn.utils import check_arrays
 
 
 class BayesianRidgeWithCov(LinearModel, RegressorMixin):
@@ -126,8 +126,7 @@ class BayesianRidgeWithCov(LinearModel, RegressorMixin):
         -------
         self : returns an instance of self.
         """
-        X, y = check_arrays(X, y, sparse_format='dense',
-dtype=np.float)
+        #X, y = check_arrays(X, y, sparse_format='dense', dtype=np.float)
         X, y, X_mean, y_mean, X_std = self._center_data(
             X, y, self.fit_intercept, self.normalize, self.copy_X)
         n_samples, n_features = X.shape

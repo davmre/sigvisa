@@ -20,6 +20,7 @@ nose
 pyublas
 pywavelets
 seaborn
+numdifftools
 
 # not strictly necessary, but useful:
 
