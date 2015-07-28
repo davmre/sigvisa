@@ -699,8 +699,12 @@ def ev_death_helper_full(sg, eid, location_proposal, proposal_includes_mb=False)
         lqb = 0.0
 
     log_qforward, log_qbackward, revert_move = ev_death_helper(sg, eid, associate_using_mb=False)
-    lp_loc = location_proposal(sg, fix_result=ev)
-    print "death helper", lqb, log_qbackward, lp_loc
+    try:
+        lp_loc = location_proposal(sg, fix_result=ev)
+        print "death helper", lqb, log_qbackward, lp_loc
+    except Exception as e:
+        print "exception in birth probability evaluation: ", e
+        lp_loc = -np.inf
 
     def revert():
         revert_move()
@@ -822,8 +826,12 @@ def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
 
 def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=False):
     # propose a new ev location
-    ev, lp_loc, extra = location_proposal(sg)
-    print "proposing new ev", ev
+    try:
+        ev, lp_loc, extra = location_proposal(sg)
+        print "proposing new ev", ev
+    except Exception as e:
+        print "exception in birth proposal", e
+        return -np.inf, lambda : pass, (None, 0, [])
 
     # propose its associations
     log_qforward, log_qbackward, revert_move, eid, associations = ev_birth_helper(sg, ev, associate_using_mb=proposal_includes_mb, eid=eid)
