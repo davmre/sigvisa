@@ -831,7 +831,8 @@ def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=F
         print "proposing new ev", ev
     except Exception as e:
         print "exception in birth proposal", e
-        return -np.inf, lambda : pass, (None, 0, [])
+        def noop(): pass
+        return -np.inf, 0.0, noop, (None, 0, [])
 
     # propose its associations
     log_qforward, log_qbackward, revert_move, eid, associations = ev_birth_helper(sg, ev, associate_using_mb=proposal_includes_mb, eid=eid)
@@ -899,7 +900,13 @@ def ev_birth_move_lstsqr(sg, log_to_run_dir=None, **kwargs):
         log_file = os.path.join(log_to_run_dir, "lsqr_proposals.txt")
 
         # proposed event should be the most recently created
-        proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
+        try:
+            proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
+        except:
+            proposed_ev = None
+
+        if refined_proposals is None:
+            refined_proposals = []
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s\n" % proposed_ev)
