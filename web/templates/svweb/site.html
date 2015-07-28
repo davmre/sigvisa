@@ -7,7 +7,7 @@
 <body>
 {% include "svweb/header.html"  %}
 
-<img src="{% url site_det_img sta=site.sta %}" width=700 height=700>
+<img src="{% url 'site_det_img' sta=site.sta %}" width=700 height=700>
 
 <table>
 <tr><td><strong>id</strong></td><td>{{ site.id }}</td></tr>

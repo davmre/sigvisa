@@ -39,7 +39,7 @@
 <tr><td><strong>lddate</strong></td><td>{{ ev.lddate }}</td></tr>
 </table>
 
-<form action="{% url event_wave evid=ev.evid %}" method="GET">
+<form action="{% url 'event_wave' evid=ev.evid %}" method="GET">
 Site: <input type="text" name="sta" size="5">
 <input type="hidden" name="chan" value="auto">
 <input type="hidden" name="filter_str" value="freq_0.8_4.5;">
@@ -48,7 +48,7 @@ Site: <input type="text" name="sta" size="5">
 
 </td>
 <td>
-<img src="{% url event_context_img evid=ev.evid %}" width=700 height=700>
+<img src="{% url 'event_context_img' evid=ev.evid %}" width=700 height=700>
 </td>
 </tr>
 
@@ -59,7 +59,7 @@ Site: <input type="text" name="sta" size="5">
 
 {% for det in dets %}
 
-<tr><td><a href="{% url site sta=det.sta %}">{{ det.sta }}</a></td><td>{{ det.arr }}</td><td>{{ det.phase }}</td><td>{{ det.snr }}</td><td>{{ det.dist }}</td><td>{{ det.time }}</td><td>{{ det.amp }}</td><td>{{ det.true_azi }}</td><td>{{ det.det_azi }}</td><td>{{ det.slo }}</td><td><a href="{% url event_wave evid=ev.evid %}?sta={{ det.sta }};chan=auto;filter_str=freq_0.8_4.5%3B">view wave</a></td></tr>
+<tr><td><a href="{% url 'site' sta=det.sta %}">{{ det.sta }}</a></td><td>{{ det.arr }}</td><td>{{ det.phase }}</td><td>{{ det.snr }}</td><td>{{ det.dist }}</td><td>{{ det.time }}</td><td>{{ det.amp }}</td><td>{{ det.true_azi }}</td><td>{{ det.det_azi }}</td><td>{{ det.slo }}</td><td><a href="{% url 'event_wave' evid=ev.evid %}?sta={{ det.sta }};chan=auto;filter_str=freq_0.8_4.5%3B">view wave</a></td></tr>
 
 {% endfor %}
 

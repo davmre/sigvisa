@@ -8,7 +8,7 @@
 {% include "svweb/header.html"  %}
 
 
-  <img src="{% url gs_heatmap gsid=wave.gsid.gsid %}?colorbar=true;smooth=true;lon={{lon}};lat={{lat}};depth={{ depth }};exp=true" width=600 height=600>
+  <img src="{% url 'gs_heatmap' gsid=wave.gsid.gsid %}?colorbar=true;smooth=true;lon={{lon}};lat={{lat}};depth={{ depth }};exp=true" width=600 height=600>
 
 
      <table>
@@ -43,14 +43,14 @@
 	       <td valign=top>{{ model.modelid.model_type }}</td>
 	       <td valign=top>
 		 {% if model.modelid.model_type|slice:":8" == "constant" %}
-		 <a href="{% url model_density modelid=model.modelid.modelid %}">density</a>
+		 <a href="{% url 'model_density' modelid=model.modelid.modelid %}">density</a>
 		 {% endif %}
 		 {% if model.modelid.model_type|slice:":6" = "linear" %}
-		 <a href="{% url model_distance_plot modelid=model.modelid.modelid %}">distance plot</a>
+		 <a href="{% url 'model_distance_plot' modelid=model.modelid.modelid %}">distance plot</a>
 		 {% endif %}
 		 {% if model.modelid.model_type|slice:":2" == "gp" %}
-		 <a href="{% url model_distance_plot modelid=model.modelid.modelid %}">distance plot</a>
-		 <a href="{% url model_heatmap modelid=model.modelid.modelid %}">heatmap</a>
+		 <a href="{% url 'model_distance_plot' modelid=model.modelid.modelid %}">distance plot</a>
+		 <a href="{% url 'model_heatmap' modelid=model.modelid.modelid %}">heatmap</a>
 		 {% endif %}
 	       </td>
 	     </tr>
@@ -62,7 +62,7 @@
      </table>
 
 
-<form action="{% url gs_debug gswid=wave.gswid %}" method="get">
+<form action="{% url 'gs_debug' gswid=wave.gswid %}" method="get">
 <input type="text" name="lon" value="{{lon}}">
 <input type="text" name="lat" value="{{lat}}">
 <input type="text" name="depth" value="{{ depth }}">
@@ -72,11 +72,11 @@
 <tr><td>time</td><td>error</td><td>wavell</td><td>paramll</td><td>ll</td><td>params</td><td>template</td></tr>
 
 
-<tr border=1><td valign=top>{{ gproposal.0 }}<strong>(global)</strong></td><td valign=top>{{ gproposal.1 }}</td><td valign=top>{{gproposal.3.0}}</td><td valign=top>{{gproposal.3.1}}</td><td valign=top>{{gproposal.3.2}}</td><td valign=top><table>{% for row in gproposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param|floatformat:-3}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url gs_debug_wave gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{gproposal.0}}"></td></tr>
+<tr border=1><td valign=top>{{ gproposal.0 }}<strong>(global)</strong></td><td valign=top>{{ gproposal.1 }}</td><td valign=top>{{gproposal.3.0}}</td><td valign=top>{{gproposal.3.1}}</td><td valign=top>{{gproposal.3.2}}</td><td valign=top><table>{% for row in gproposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param|floatformat:-3}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url 'gs_debug_wave' gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{gproposal.0}}"></td></tr>
 
 {% for proposal in proposals %}
 
-<tr><td valign=top>{{ proposal.0 }}</td><td valign=top>{{ proposal.1 }}</td><td valign=top>{{proposal.3.0}}</td><td valign=top>{{proposal.3.1}}</td><td valign=top>{{proposal.3.2}}</td><td valign=top><table>{% for row in proposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param|floatformat:-3}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url gs_debug_wave gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{proposal.0}}"></td></tr>
+<tr><td valign=top>{{ proposal.0 }}</td><td valign=top>{{ proposal.1 }}</td><td valign=top>{{proposal.3.0}}</td><td valign=top>{{proposal.3.1}}</td><td valign=top>{{proposal.3.2}}</td><td valign=top><table>{% for row in proposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param|floatformat:-3}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url 'gs_debug_wave' gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{proposal.0}}"></td></tr>
 {% endfor %}
 </table>
 

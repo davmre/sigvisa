@@ -10,7 +10,7 @@
 {% include "svweb/header.html"  %}
 
 <h1>{{ run.run_name }}: iter {{ run.iter }}</h1>
-<p><a href="{% url all_runs %}">back to run list</a></p>
+<p><a href="{% url 'all_runs' %}">back to run list</a></p>
 
 {{ fits_filter }}<br>
 
@@ -18,36 +18,36 @@
  <tr>
   <td rowspan=3>
    <p>{{ total_fits }} fits, average cost {{ mean_acost }}, average time {{ mean_time }}.</p>
-   <p><a href="{% url model_list %}?fitting_runid={{run.runid}}">{{ run.sigvisatemplateparammodel_set.count }} template param models trained on fits from this run</a></p>
+   <p><a href="{% url 'model_list' %}?fitting_runid={{run.runid}}">{{ run.sigvisatemplateparammodel_set.count }} template param models trained on fits from this run</a></p>
   </td>
   <td><b>onset_seconds</b></td>
   <td>
-   <a href="{% url param_histogram  runid=runid %}?plot_param=peak_offset;phases=P;{{ filter_GET_params }}">histogram</a>
+   <a href="{% url 'param_histogram'  runid=runid %}?plot_param=peak_offset;phases=P;{{ filter_GET_params }}">histogram</a>
   </td>
   <td>
-   <a href="{% url distance_decay runid=runid %}?plot_param=peak_offset;ymin=-5;ymax=30;phases=P;{{ filter_GET_params }}">distance plot</a>
+   <a href="{% url 'distance_decay' runid=runid %}?plot_param=peak_offset;ymin=-5;ymax=30;phases=P;{{ filter_GET_params }}">distance plot</a>
   </td>
  </tr>
  <tr>
   <td><b>coda_height</b></td>
   <td>
-   <a href="{% url param_histogram runid=runid  %}?plot_param=coda_height;phases=P;{{ filter_GET_params }}">histogram</a>
+   <a href="{% url 'param_histogram' runid=runid  %}?plot_param=coda_height;phases=P;{{ filter_GET_params }}">histogram</a>
   </td>
   <td>
-   <a href="{% url distance_decay runid=runid  %}?plot_param=coda_height;ymin=-7;ymax=10;phases=P;{{ filter_GET_params }}">distance plot</a>
+   <a href="{% url 'distance_decay' runid=runid  %}?plot_param=coda_height;ymin=-7;ymax=10;phases=P;{{ filter_GET_params }}">distance plot</a>
   </td>
  </tr>
  <tr>
   <td><b>coda_decay</b></td>
   <td>
-   <a href="{% url param_histogram runid=runid  %}?plot_param=coda_decay;phases=P;{{ filter_GET_params }}">histogram</a>
+   <a href="{% url 'param_histogram' runid=runid  %}?plot_param=coda_decay;phases=P;{{ filter_GET_params }}">histogram</a>
   </td>
   <td>
-   <a href="{% url distance_decay runid=runid  %}?plot_param=coda_decay;phases=P;{{ filter_GET_params }}">distance plot</a>
+   <a href="{% url 'distance_decay' runid=runid  %}?plot_param=coda_decay;phases=P;{{ filter_GET_params }}">distance plot</a>
   </td>
  </tr>
 <tr>
-<td></td><td><b>Pairwise</b></td><td colspan=2><a href="{% url pairwise_params runid=runid %}?param1=coda_decay;param2=peak_decay;phases=P;{{ filter_GET_params }}">coda_decay vs peak_decay</a> (for example)</td>
+<td></td><td><b>Pairwise</b></td><td colspan=2><a href="{% url 'pairwise_params' runid=runid %}?param1=coda_decay;param2=peak_decay;phases=P;{{ filter_GET_params }}">coda_decay vs peak_decay</a> (for example)</td>
 </tr>
 </table>
 <p>
@@ -68,15 +68,15 @@
       </tr>
         {% for fit in fit_list %}
             <tr>
-                <td><a href="{% url event evid=fit.evid %}">{{ fit.evid }}</a></td>
-                <td><a href="{% url site sta=fit.sta %}">{{ fit.sta }}</a></td>
+                <td><a href="{% url 'event' evid=fit.evid %}">{{ fit.evid }}</a></td>
+                <td><a href="{% url 'site' sta=fit.sta %}">{{ fit.sta }}</a></td>
                 <td>{{ fit.chan }}</td>
                 <td>{{ fit.band }}</td>
                 <td>{{ fit.stime }}</td>
                 <td>{{ fit.timestamp }}</td>
                 <td>{{ fit.elapsed }}</td>
                 <td>{{ fit.acost }}</td>
-                <td><a href="{% url fit_run_detail fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url visual fitid=fit.fitid %}?smooth=8;logscale=true;saveprefs=false" width=150 height=100></a></td>
+                <td><a href="{% url 'fit_run_detail' fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url 'visual' fitid=fit.fitid %}?smooth=8;logscale=true;saveprefs=false" width=150 height=100></a></td>
             </tr>
         {% endfor %}
     </table>

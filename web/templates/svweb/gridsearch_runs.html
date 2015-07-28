@@ -49,7 +49,7 @@ window.location = url;
         {% for run in run_list %}
             <tr>
                 <td>{{ run.gsid }}</td>
-                <td><a href="{% url event evid=run.evid %}">{{ run.evid }}</a></td>
+                <td><a href="{% url 'event' evid=run.evid %}">{{ run.evid }}</a></td>
                 <td>{{ run.sigvisagsrunwave_set.count }}</td>
 		<td>{{ run.timestamp }}</td>
                 <td>{{ run.elapsed }}</td>
@@ -63,8 +63,8 @@ window.location = url;
                 <td>{{ run.true_time }}</td>
                 <td>{{ run.true_mb }}</td>
                 <td>{{ run.wiggle_model_type }}</td>
-                <td><a href="{% url gsrun_detail gsid=run.gsid %}">details</a></td>
-                <td><input type="button" onclick="confirm_delete({{ run.gsid }}, '{% url gsrun_delete gsid=run.gsid %}')" value="delete"/></td>
+                <td><a href="{% url 'gsrun_detail' gsid=run.gsid %}">details</a></td>
+                <td><input type="button" onclick="confirm_delete({{ run.gsid }}, '{% url 'gsrun_delete' gsid=run.gsid %}')" value="delete"/></td>
             </tr>
         {% endfor %}
     </table>

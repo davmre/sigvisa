@@ -36,7 +36,7 @@
             <tr>
 	      <td>{{ nm.nmid }}</td>
 	      <td>{{ nm.timestamp }}</td>
-	      <td><a href="{% url site sta=nm.sta %}">{{ nm.sta }}</a></td>
+	      <td><a href="{% url 'site' sta=nm.sta %}">{{ nm.sta }}</a></td>
 	      <td>{{ nm.chan }}</td>
 	      <td>{{ nm.band }}</td>
 	      <td>{{ nm.hz }}</td>
@@ -47,7 +47,7 @@
 	      <td>{{ nm.mean }}</td>
 	      <td>{{ nm.std }}</td>
 	      <td>{{ nm.created_for_hour }}</td>
-	      <td><a href="{% url nm_detail nmid=nm.nmid %}">details</a></td>
+	      <td><a href="{% url 'nm_detail' nmid=nm.nmid %}">details</a></td>
             </tr>
         {% endfor %}
     </table>

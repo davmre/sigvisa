@@ -23,15 +23,15 @@ ifr.src = src;
 <table>
  <tr>
   <td rowspan=2 valign=top>
-    <a href="{% url gsrun_detail gsid=gs.gsid %}">
-   <img ismap src="{% url gs_heatmap gsid=gs.gsid %}?colorbar=true;smooth=true;query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}" width=550 height=400>
+    <a href="{% url 'gsrun_detail' gsid=gs.gsid %}">
+   <img ismap src="{% url 'gs_heatmap' gsid=gs.gsid %}?colorbar=true;smooth=true;query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}" width=550 height=400>
     </a>
   </td>
    <td valign=top>
      <table>
        <tr>
 	 <tr><td><strong>gsid: </strong></td><td>{{ gs.gsid }}</td></tr>
-	 <tr><td><strong>evid: </strong></td><td><a href="{% url event evid=gs.evid %}">{{ gs.evid }}</a></td></tr>
+	 <tr><td><strong>evid: </strong></td><td><a href="{% url 'event' evid=gs.evid %}">{{ gs.evid }}</a></td></tr>
 	 <tr><tr><td><strong>timestamp: </strong></td><td>{{ gs.timestamp }}</td></tr>
 	 <tr><td><strong>elapsed: </strong></td><td>{{ gs.elapsed }}</td></tr>
 	 <tr><tr><td><strong>nw: </strong></td><td>{{ nw_str }}</td></tr>
@@ -103,22 +103,22 @@ ifr.src = src;
 
        <tr>
 	 <td valign=top>
-	   <strong>sta:</strong>: <a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a><br>
+	   <strong>sta:</strong>: <a href="{% url 'site' sta=wave.sta %}">{{ wave.sta }}</a><br>
 	   <strong>band:</strong>: {{ wave.band }}<br>
 	   <strong>chan:</strong>: {{ wave.chan }}<br>
 	   <strong>hz:</strong>: {{ wave.hz }}<br>
 	   <br>
 	   <strong>dist:</strong> {{ query_distances|get_item:k|floatformat:1 }}km
 	 </td>
-	 <td valign=top><a href="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}"><img src="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}" width=200 height=125></a>
-<a href="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}"><img src="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}" width=200 height=125></a></td></td>
+	 <td valign=top><a href="{% url 'gs_pickled_wave' gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}"><img src="{% url 'gs_pickled_wave' gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}" width=200 height=125></a>
+<a href="{% url 'gs_pickled_wave' gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}"><img src="{% url 'gs_pickled_wave' gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}" width=200 height=125></a></td></td>
 	 <td valign=top>{% for phase in wave_phases|get_item:k %}{{phase}}, {% endfor %} <br>
-	   <a href="" onclick="expand_iframe('{% url gs_phase_frame gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}', 'phase_frame_true_{{ k }}'); expand_iframe('{% url gs_phase_frame gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}', 'phase_frame_query_{{ k }}'); return false;">Expand phase arrivals.</a><br>
+	   <a href="" onclick="expand_iframe('{% url 'gs_phase_frame' gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}', 'phase_frame_true_{{ k }}'); expand_iframe('{% url 'gs_phase_frame' gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}', 'phase_frame_query_{{ k }}'); return false;">Expand phase arrivals.</a><br>
 	   <iframe id="phase_frame_true_{{ k }}" src="" width=400 height=300 style="display: none"></iframe>
 	   <iframe id="phase_frame_query_{{ k }}" src="" width=400 height=300 style="display: none"></iframe>
 	 </td>
-<!--	 <td valign=top><a href="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}}"><img src="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}};ratio=2;dpi=30" width=150 height=75></a></td> -->
-	 <td valign=top><a href="{% url gs_heatmap gsid=gs.gsid %}?colorbar=false;smooth=true;wave_label={{wave.sta}}_{{wave.chan}}_{{wave.band}};query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}"><img src="{% url gs_heatmap gsid=gs.gsid %}?colorbar=false;smooth=true;wave_label={{wave.sta}}_{{wave.chan}}_{{wave.band}};query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}" width=150 height=109></a></td>
+<!--	 <td valign=top><a href="{% url 'wave_image' %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}}"><img src="{% url 'wave_image' %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}};ratio=2;dpi=30" width=150 height=75></a></td> -->
+	 <td valign=top><a href="{% url 'gs_heatmap' gsid=gs.gsid %}?colorbar=false;smooth=true;wave_label={{wave.sta}}_{{wave.chan}}_{{wave.band}};query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}"><img src="{% url 'gs_heatmap' gsid=gs.gsid %}?colorbar=false;smooth=true;wave_label={{wave.sta}}_{{wave.chan}}_{{wave.band}};query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}" width=150 height=109></a></td>
 	 <td valign=top>
 	   <strong>true ev ll:</strong>: {{ true_wave_lls|get_item:k|floatformat:1 }}<br>
 	 <strong>query ev ll:</strong>: {{ query_wave_lls|get_item:k|floatformat:1 }}<br>
@@ -139,14 +139,14 @@ ifr.src = src;
 	       <td valign=top>{{ model.modelid.model_type }}</td>
 	       <td valign=top>
 		 {% if model.modelid.model_type|slice:":8" == "constant" %}
-		 <a href="{% url model_density modelid=model.modelid.modelid %}">density</a>
+		 <a href="{% url 'model_density' modelid=model.modelid.modelid %}">density</a>
 		 {% endif %}
 		 {% if model.modelid.model_type|slice:":6" = "linear" %}
-		 <a href="{% url model_distance_plot modelid=model.modelid.modelid %}">distance plot</a>
+		 <a href="{% url 'model_distance_plot' modelid=model.modelid.modelid %}">distance plot</a>
 		 {% endif %}
 		 {% if model.modelid.model_type|slice:":2" == "gp" %}
-		 <a href="{% url model_distance_plot modelid=model.modelid.modelid %}">distance plot</a>
-		 <a href="{% url model_heatmap modelid=model.modelid.modelid %}">heatmap</a>
+		 <a href="{% url 'model_distance_plot' modelid=model.modelid.modelid %}">distance plot</a>
+		 <a href="{% url 'model_heatmap' modelid=model.modelid.modelid %}">heatmap</a>
 		 {% endif %}
 	       </td>
 	     </tr>
@@ -156,7 +156,7 @@ ifr.src = src;
 	 </td>
 	 <td valign=top>
 	   noise type: {{ wave.nmid.model_type }} {% if wave.nmid.model_type != "l1" %} order {{ wave.nmid.nparams }} {% endif %}
-	   <a href="{% url nm_detail nmid=wave.nmid.nmid %}"><img src="{% url nm_sample nmid=wave.nmid.nmid %}" width=150 height=90></a></td>
+	   <a href="{% url 'nm_detail' nmid=wave.nmid.nmid %}"><img src="{% url 'nm_sample' nmid=wave.nmid.nmid %}" width=150 height=90></a></td>
 </td>
        </tr>
 

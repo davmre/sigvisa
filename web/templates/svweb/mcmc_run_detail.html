@@ -13,11 +13,11 @@
 <td valign=top>
 <p>Command: <tt>{{ cmd }}</tt></p>
 
-<p>Browse results directory: <a href="{% url mcmcrun_browsedir dirname=dirname path="" %}">{{ full_dirname }}</a></p>
+<p>Browse results directory: <a href="{% url 'mcmcrun_browsedir' dirname=dirname path="" %}">{{ full_dirname }}</a></p>
 <p>Run analysis: <tt>{{ analyze_cmd }}</tt></p>
 </td>
 <td valign=top align=right>
-<a href="{%url mcmc_lp_posterior dirname=dirname%}"><img src="{%url mcmc_lp_posterior dirname=dirname%}" width=300 height=200></a>
+<a href="{% url 'mcmc_lp_posterior' dirname=dirname %}"><img src="{% url 'mcmc_lp_posterior' dirname=dirname %}" width=300 height=200></a>
 </td>
 </tr>
 </table>
@@ -32,11 +32,11 @@
 </ul></p>
 
 {% if evs %}
-<p>Inferred events: <a href="{% url mcmc_event_posterior dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=0">global posterior</a> <a href="{% url mcmc_event_posterior dirname=dirname %}?left_lon={{bounds.left}};right_lon={{bounds.right}};top_lat={{bounds.top}};bottom_lat={{bounds.bottom}};burnin=0;stds=2.0">regional posterior</a></p>
+<p>Inferred events: <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=0">global posterior</a> <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{bounds.left}};right_lon={{bounds.right}};top_lat={{bounds.top}};bottom_lat={{bounds.bottom}};burnin=0;stds=2.0">regional posterior</a></p>
 <table>
 <tr><td><b>eid</b></td><td><b>info</b></td><td><b>azimuth gap</b></td><td><b>loc error (km)</b></td><td><b>(lon, lat) std</b></td><td><b>vis</b></td><td><b>inspect</b></td></tr>
 {% for ev in evs %}
-<tr><td>{{ ev.eid }}</td><td>{{ ev.evstr }}</td><td>{{ ev.azgap|floatformat }}</td><td>{{ ev.dist_mean|floatformat }}km</td><td>({{ ev.lon_std_km|floatformat }}, {{ ev.lat_std_km|floatformat }})</td><td><a href="{% url mcmc_event_posterior dirname=dirname %}?left_lon={{ ev.left_lon }};right_lon={{ ev.right_lon }};top_lat={{ ev.top_lat }};bottom_lat={{ ev.bottom_lat }};burnin=0">local</a></td><td><a href="{% url mcmc_param_posterior dirname=dirname node_label=ev.example_node %}">e.g.</a></td></tr>
+<tr><td>{{ ev.eid }}</td><td>{{ ev.evstr }}</td><td>{{ ev.azgap|floatformat }}</td><td>{{ ev.dist_mean|floatformat }}km</td><td>({{ ev.lon_std_km|floatformat }}, {{ ev.lat_std_km|floatformat }})</td><td><a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{ ev.left_lon }};right_lon={{ ev.right_lon }};top_lat={{ ev.top_lat }};bottom_lat={{ ev.bottom_lat }};burnin=0">local</a></td><td><a href="{% url 'mcmc_param_posterior' dirname=dirname node_label=ev.example_node %}">e.g.</a></td></tr>
 {% endfor %}
 </table>
 {% endif %}
@@ -50,14 +50,14 @@
 {% if gp_hparams %}
 <p>GP hyperparams:
 {% for hparam in gp_hparams %}
-<a href="{% url mcmc_hparam_posterior dirname=dirname sta=sta hparam=hparam %}">{{ hparam }}</a>
+<a href="{% url 'mcmc_hparam_posterior' dirname=dirname sta=sta hparam=hparam %}">{{ hparam }}</a>
 {% endfor %}
 {% endif %}
-<p>P waves: <a href="{% url mcmc_alignment_posterior dirname=dirname sta=sta phase='P' %}">alignments</a>, <a href="{% url conditional_wiggle_posterior dirname=dirname sta=sta phase='P' %}">conditional wiggles</a></p>
+<p>P waves: <a href="{% url 'mcmc_alignment_posterior' dirname=dirname sta=sta phase='P' %}">alignments</a>, <a href="{% url 'conditional_wiggle_posterior' dirname=dirname sta=sta phase='P' %}">conditional wiggles</a></p>
 <p>Waveform posteriors:</p>
 <ol>
 {% for wn in stawns %}
-<li><a href="{% url mcmc_wave_posterior dirname=dirname wn_label=wn %}?step={{ max_step }};pred_signal=True">{{ wn }}</a> (<a href="{% url mcmc_arrivals dirname=dirname wn_label=wn step=max_step %}">templates</a>)</li>
+<li><a href="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wn %}?step={{ max_step }};pred_signal=True">{{ wn }}</a> (<a href="{% url 'mcmc_arrivals' dirname=dirname wn_label=wn step=max_step %}">templates</a>)</li>
 
 {% endfor %}
 </ol>

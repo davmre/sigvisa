@@ -11,7 +11,7 @@
 <tr>
 <td>
 Showing {{ n_evs }} events.<br>
-<form action="{% url event_region %}" method="GET">
+<form action="{% url 'event_region' %}" method="GET">
 <strong>Longitude:</strong> <input type="text" name="left_lon" size="5" value={{ left_lon }}> to <input type="text" name="right_lon" size="5" value={{right_lon}}>.<br>
 <strong>Latitude:</strong> <input type="text" name="bottom_lat" size="5" value={{ bottom_lat }}> to <input type="text" name="top_lat" size="5" value={{top_lat}}>.<br>
 <strong>Depth:</strong> <input type="text" name="min_depth" size="5" value={{ min_depth }}> to <input type="text" name="max_depth" size="5" value={{max_depth}}>.<br>
@@ -22,7 +22,7 @@ Showing {{ n_evs }} events.<br>
 </form>
 </td>
 <td>
-<img src="{% url event_region_image %}?left_lon={{ left_lon }};right_lon={{ right_lon }};bottom_lat={{bottom_lat}};top_lat={{ top_lat }};start_time={{ start_time }};end_time={{ end_time }};min_mb={{min_mb}};max_mb={{max_mb}};min_depth={{min_depth}};max_depth={{max_depth}};detected_at_station={{detected_at_station}}" width=700>
+<img src="{% url 'event_region_image' %}?left_lon={{ left_lon }};right_lon={{ right_lon }};bottom_lat={{bottom_lat}};top_lat={{ top_lat }};start_time={{ start_time }};end_time={{ end_time }};min_mb={{min_mb}};max_mb={{max_mb}};min_depth={{min_depth}};max_depth={{max_depth}};detected_at_station={{detected_at_station}}" width=700>
 </tr>
 </table>
 
@@ -30,7 +30,7 @@ Showing {{ n_evs }} events.<br>
 <tr><td><strong>evid</strong></td><td><strong>lon</strong></td><td><strong>lat</strong></td><td><strong>depth</strong></td><td><strong>time</strong></td><td><strong>mb</strong></td></tr>
 {% for ev in evs %}
 
-<tr><td><a href="{% url event evid=ev.5 %}">{{ ev.5 }}</a></td><td>{{ev.0}}</td><td>{{ev.1}}</td><td>{{ev.2}}</td><td>{{ev.3}}</td><td>{{ev.4}}</td></tr>
+<tr><td><a href="{% url 'event' evid=ev.5 %}">{{ ev.5 }}</a></td><td>{{ev.0}}</td><td>{{ev.1}}</td><td>{{ev.2}}</td><td>{{ev.3}}</td><td>{{ev.4}}</td></tr>
 
 {% endfor %}
 

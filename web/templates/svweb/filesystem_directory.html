@@ -16,12 +16,12 @@
    <ul>
    {% for d in dlist %}
    {% with ""|add:path|add:d|add:"/" as fullpath %}
-   <li> <a href="{% url mcmcrun_browsedir dirname=dirname path=fullpath %}" >{{ d }}</a> </li>
+   <li> <a href="{% url 'mcmcrun_browsedir' dirname=dirname path=fullpath %}" >{{ d }}</a> </li>
    {% endwith %}
    {% endfor %}
    {% for f in flist %}
    {% with ""|add:path|add:f.name as fullpath_f %}
-   <li> <a href="{% url mcmcrun_browsedir dirname=dirname path=fullpath_f %}" >{{ f.name }}</a> ({{ f.type }})</li>
+   <li> <a href="{% url 'mcmcrun_browsedir' dirname=dirname path=fullpath_f %}" >{{ f.name }}</a> ({{ f.type }})</li>
    {% endwith %}
    {% endfor %}
    </ul>
