@@ -34,7 +34,6 @@ import sigvisa.source.brune_source as brune
 from scipy.optimize import leastsq
 
 
-from sigvisa.infer.propose_hough import propose_event_from_hough
 from sigvisa.infer.propose_lstsqr import ev_lstsqr_dist
 
 fixed_node_cache = dict()

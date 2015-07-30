@@ -15,7 +15,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.models.ttime import tt_predict
 from sigvisa.infer.event_mcmc import *
-from sigvisa.infer.propose_hough_new import hough_location_proposal
+from sigvisa.infer.propose_hough import hough_location_proposal
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 
 from sigvisa.infer.event_birthdeath import ev_birth_helper_full,ev_death_helper_full
