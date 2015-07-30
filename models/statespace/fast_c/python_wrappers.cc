@@ -331,9 +331,10 @@ public:
   }
 
   boost::python::tuple marginals(const pyublas::numpy_vector<double> z) {
+    vector<double> step_ells(z.size());
     std::vector<vector<double> > cmeans;
     std::vector<vector<double> > cvars;
-    double ell = all_filtered_cssm_coef_marginals(*(this->ssm), z, cmeans, cvars);
+    double ell = all_filtered_cssm_coef_marginals(*(this->ssm), z, step_ells, cmeans, cvars);
 
     boost::python::list l;
     for(unsigned i=0; i < cmeans.size(); ++i) {
@@ -341,7 +342,8 @@ public:
       pyublas::numpy_vector<double> v(cvars[i]);
       l.append( boost::python::make_tuple(m,v) );
     }
-    return boost::python::make_tuple(ell, l);
+    pyublas::numpy_vector<double> ns(step_ells);
+    return boost::python::make_tuple(ell, l, ns   );
 
   }
 
