@@ -243,6 +243,7 @@ double tssm_component_vars(TransientCombinedSSM &tssm,
 			  std::vector<vector<double> > & vars);
 double all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 				      const vector<double> &z,
+				      vector<double> & step_ells,
 				      std::vector<vector<double> > & cmeans,
 				      std::vector<vector<double> > & cvars);
   void step_obs_likelihoods(StateSpaceModel &ssm, const vector<double> &z,

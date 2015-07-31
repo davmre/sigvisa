@@ -686,6 +686,7 @@ void prior_sample(StateSpaceModel &ssm, vector<double> & result, unsigned long s
 
 double all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 				      const vector<double> &z,
+				      vector<double> & step_ells,
 				      std::vector<vector<double> > & cmeans,
 				      std::vector<vector<double> > & cvars) {
   FilterState cache(ssm.max_dimension, 1e-10);
@@ -694,12 +695,14 @@ double all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 
   unsigned int N = z.size();
   double ell = 0;
-  ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
+  step_ells[0] = kalman_observe_sqrt(ssm, cache, 0, z(0));
+  ell += step_ells[0];
   compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
   ssm.extract_all_coefs(cache, 0, cmeans, cvars);
   for (unsigned k=1; k < N; ++k) {
     kalman_predict_sqrt(ssm, cache, k, false);
-    ell += kalman_observe_sqrt(ssm, cache, k, z(k));
+    step_ells[k] = kalman_observe_sqrt(ssm, cache, k, z(k));
+    ell += step_ells[k];
 
     compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
     ssm.extract_all_coefs(cache, k, cmeans, cvars);

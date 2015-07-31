@@ -10,7 +10,7 @@ from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.graph_utils import extract_sta_node, create_key, get_parent_value, parse_key
 from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel, ModelNotFoundError
-from sigvisa.infer.propose_hough_new import hough_location_proposal, visualize_hough_array
+from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough_array
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.propose_mb import propose_mb
 
