@@ -15,7 +15,7 @@ from sigvisa import Sigvisa
 from sigvisa.infer.autoregressive_mcmc import arnoise_gibbs_move
 from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_lp
-from sigvisa.infer.event_swap import swap_events_move_lstsqr, repropose_event_move_hough, swap_threeway_hough
+from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_death_move_hough, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
