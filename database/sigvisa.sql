@@ -77,7 +77,8 @@ create table sigvisa_coda_fit_phase (
  amp_transfer double precision,
  mult_wiggle_std double precision,
  wiggle_stime double precision,
- wiggle_fname varchar(255),
+ message_fname varchar(255),
+ wiggle_family varchar(20),
  primary key(fpid),
  foreign key (fitid) REFERENCES sigvisa_coda_fit(fitid)
 );
