@@ -229,7 +229,7 @@ def run_open_world_MH(sg, steps=10000,
 
 
     if enable_event_openworld:
-        global_moves = {'event_swap': swap_events_move_lstsqr,
+        global_moves = {'event_swap': swap_events_move_hough,
                         'event_repropose': repropose_event_move_hough,
                         'event_threeway_swap': swap_threeway_hough,
                         'event_birth_hough': ev_birth_move_hough,
@@ -240,8 +240,8 @@ def run_open_world_MH(sg, steps=10000,
         if enable_template_openworld:
             # swap moves leave behind uatemplates, so only allow them
             # if we have uatemplate birth/death moves
-            global_moves = {'event_swap': swap_events_move_lstsqr,
-                            'event_repropose': repropose_event_move_lstsqr}
+            global_moves = {'event_swap': swap_events_move_hough,
+                            'event_repropose': repropose_event_move_hough}
         else:
             global_moves = {}
 
