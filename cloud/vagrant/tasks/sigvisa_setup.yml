@@ -1,0 +1,47 @@
+---
+- name: setup bash profile
+  become_user: sigvisa
+  lineinfile: dest=/home/sigvisa/.bash_profile line="{{ item }}" state=present create=yes
+  with_items:
+    - 'export PYTHONPATH=$HOME/python:$PYTHONPATH'
+    - 'export SIGVISA_HOME=$HOME/python/sigvisa'
+- name: create python subdir
+  file: path=/home/sigvisa/python state=directory
+  become_user: sigvisa
+- name: create sigvisa subdir
+  file: path=/home/sigvisa/python/sigvisa state=directory
+  become_user: sigvisa
+- name: add repo key
+  copy:
+    src=repo_key
+    dest=/home/sigvisa/.ssh/repo_key
+    owner=sigvisa
+    mode=0400
+- name: checkout git repo
+  git: repo=git@github.com:davmre/sigvisa.git
+       dest=/home/sigvisa/python/sigvisa
+       recursive=true
+       force=yes
+  become_user: sigvisa
+- name: create db_cache subdir
+  file: path=/home/sigvisa/python/sigvisa/db_cache state=directory
+  become_user: sigvisa
+- name: build sigvisa
+  become_user: sigvisa
+  command: /home/sigvisa/.virtualenvs/sigvisa/bin/python setup.py build_ext  --inplace
+  args:
+    chdir: /home/sigvisa/python/sigvisa 
+    creates: /home/sigvisa/python/sigvisa/ssms_c.so
+- name: build treegp
+  become_user: sigvisa
+  command: /home/sigvisa/.virtualenvs/sigvisa/bin/python setup.py build_ext  --inplace
+  args:
+    chdir: /home/sigvisa/python/sigvisa/treegp
+    creates: /home/sigvisa/python/sigvisa/treegp/cover_tree.so
+- name: extract parameters
+  unarchive:
+    copy=no
+    src=/home/sigvisa/python/sigvisa/parameters.tgz
+    dest=/home/sigvisa/python/sigvisa
+    creates=/home/sigvisa/parameters
+    

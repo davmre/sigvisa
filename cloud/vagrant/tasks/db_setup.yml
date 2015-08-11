@@ -1,0 +1,24 @@
+---
+- name: upload csv files
+  become_user: sigvisa
+  unarchive:
+    copy=yes
+    dest=/home/sigvisa/
+    src=/home/dmoore/sigvisa_csv.tgz
+    creates=/home/sigvisa/sigvisa_csv
+- name: upload db configuration
+  become_user: sigvisa
+  copy:
+    src=db_setup_config
+    dest=/home/sigvisa/db_setup_config
+- name: set DB password
+  mysql_user: login_user=root login_password=55rontob name=root password=55rontob check_implicit_admin=yes
+- name: add leb data to db
+  become_user: sigvisa
+  shell: /home/sigvisa/.virtualenvs/sigvisa/bin/python database/setup_db.py /home/sigvisa/db_setup_config >> /home/sigvisa/db_log 2> /home/sigvisa/db_log_errs
+  environment: 
+    SIGVISA_HOME: /home/sigvisa/python/sigvisa
+  args:
+    creates: /home/sigvisa/python/sigvisa/database/setup_db_custom.sql
+    chdir: /home/sigvisa/python/sigvisa/
+  

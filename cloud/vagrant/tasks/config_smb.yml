@@ -1,0 +1,39 @@
+---
+- name: configure ssh forwarding
+  copy:
+    src=autossh.conf
+    dest=/etc/init/autossh.conf
+    owner=root
+- name: ensure .ssh dir exists
+  file: path=/home/sigvisa/.ssh state=directory
+- name: add patmos ssh key
+  copy:
+    src=id_rsa_patmos_smb
+    dest=/home/sigvisa/.ssh/id_rsa_patmos_smb
+    owner=sigvisa
+    mode=0400
+- name: sync known hosts
+  copy:
+    src=known_hosts
+    dest=/etc/ssh/ssh_known_hosts
+- name: sync ssh identities
+  copy:
+    src=ssh_config
+    dest=/home/sigvisa/.ssh/config
+    owner=sigvisa
+    mode=0400
+- name: start ssh forwarding
+  service: name=autossh state=started 
+- name: add smb authentication info
+  copy: 
+    src=smbauth 
+    dest=/home/sigvisa/smbauth
+    owner=sigvisa
+    mode=0400
+- name: mount ctbt_data over smb
+  mount:
+    name: "/home/sigvisa/ctbt_data"
+    src: "//localhost/signals"
+    fstype: "cifs"
+    opts: "uid=1002,user,noauto,ro,credentials=/home/sigvisa/smbauth,port=8139,sec=ntlm"
+    state: mounted

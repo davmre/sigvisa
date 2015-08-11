@@ -1,0 +1,42 @@
+---
+- hosts: all
+  sudo: true
+  tasks:
+    - name: create sigvisa user
+      user: name=sigvisa  uid=1002 shell=/bin/bash
+    - name: update apt cache
+      apt: update_cache=yes
+    - name: install required packages
+      apt: name={{ item }} state=present
+      with_items:
+        - mysql-server
+        - python-mysqldb
+        - libopenblas-base
+        - libopenblas-dev
+        - liblapack-dev
+        - python-pip
+        - libfreetype6-dev
+        - libpng12-dev
+        - libxml2-dev
+        - libxslt-dev
+        - libmysqlclient-dev  
+        - libatlas-base-dev
+        - libsparsehash-dev
+        - openssh-client
+        - git
+        - g++
+        - python-dev
+        - pkg-config 
+        - libboost-python-dev
+        - gfortran
+        - libgeos-3.4.2
+        - libgeos-c1
+        - libgeos-dev
+        - libsuitesparse-dev
+        - smbclient
+        - cifs-utils
+        - autossh
+    - include: tasks/config_smb.yml
+    - include: tasks/python_package_setup.yml
+    - include: tasks/sigvisa_setup.yml
+    - include: tasks/db_setup.yml
