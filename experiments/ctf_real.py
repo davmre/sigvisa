@@ -83,16 +83,8 @@ if __name__ == "__main__":
     
     (options, args) = parser.parse_args()
 
-    try:
-        if options.leb:
-            generate_leb_truth()
-        else:
-            main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid)
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print e
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        import pdb
-        pdb.post_mortem(tb)
+
+    if options.leb:
+        generate_leb_truth()
+    else:
+        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid)
