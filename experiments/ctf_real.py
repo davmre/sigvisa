@@ -15,12 +15,10 @@ stas = "ASAR,FITZ,ILAR,MKAR,WRA,YKA,KURK,SONM,BVAR,CTA,CMAR,ZALV,AKTO,INK,AAK,AK
 
 #stas="MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR".split(",")
 
-def generate_leb_truth():
-    runid=37
-    hz=2.0
+def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0):
     uatemplate_rate=1e-3
     rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training",
-                          hour=0.0, len_hours=2.0,
+                          hour=hour, len_hours=len_hours,
                           initialize_events="leb")
 
     ms1 = ModelSpec(template_model_type="param",
@@ -43,7 +41,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, resume_from=None):
 
     # python infer/run_mcmc.py --dataset=training --hour=0 --len_hours=2.0 --sites=MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR --runid=26 --phases=P,S --skip=10 --hz=2.0 --nm=ar --uatemplate_rate=1e-4 --steps=1000 --wiggle_family=iid --initialize_leb=yes --dummy_fallback
 
-    rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training", hour=0.0, len_hours=2.0)
+    rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training", hour=hour, len_hours=len_hours)
 
     ms1 = ModelSpec(template_model_type="param",
                     wiggle_family="iid",
@@ -85,6 +83,6 @@ if __name__ == "__main__":
 
 
     if options.leb:
-        generate_leb_truth()
+        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid)
     else:
         main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid)
