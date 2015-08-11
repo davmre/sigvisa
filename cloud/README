@@ -1,0 +1,56 @@
+Basic cloud setup:
+
+------------------------------------------
+Create new VMs using vagrant:
+
+cd cloud/vagrant
+deactivate # leave the sigvisa virtualenv before calling ansible
+vagrant up --provider=azure
+
+Edit the cloud/vagrant/Vagrantfile to determine the number of VMs
+created. VMs are provisioned using Ansible. The sigvisa_day95 image
+has been pre-provisioned, so the main effect of Ansible is to pull the
+latest code from git master. 
+
+-------------------------------------------
+To upload trained param models, use Fabric. Note the sigvisa_day95
+image already contains basic parameteric models for the top40
+stations, so you may not need to do this.  For some reason Fabric
+refuses to recognize the SSH key unless ssh-agent is up and running,
+so ensure that first:
+
+eval `ssh-agent -s`
+ssh-add ~/.ssh/azurevagrant.pem
+
+Then edit the hosts list in cloud/fabscripts/push_param_models.py, to
+match whatever you created with Vagrant (probably sigvisa1, ...,
+sigvisaN@cloudapp.net). Finally, run
+
+cd cloud/fabscripts/
+fab -f push_param_models.py  deploy_models:runid=1,dump_fname="whatever"
+
+--------------------------------------------
+
+To run independent inference on multiple time periods, create a file "cmds" of the form
+
+sudo su -c "bash /home/sigvisa/python/sigvisa/cloud/infer.sh --hour=0.0 --runid=1" sigvisa
+sudo su -c "bash /home/sigvisa/python/sigvisa/cloud/infer.sh --hour=2.0 --runid=1" sigvisa
+etc...
+
+and a file "machines" of the form
+
+vagrant@sigvisa1.cloudapp.net
+vagrant@sigvisa2.cloudapp.net
+vagrant@sigvisa3.cloudapp.net
+vagrant@sigvisa4.cloudapp.net
+
+Then run
+tail -f -n 100 cmds | parallel --tag --slf machines
+
+----------------------------------------------
+To monitor inference, use dsh:
+
+dsh -f machines "ps aux | grep python"
+dsh -f machines "hostname && tail /home/sigvisa/sigvisa_log.txt"
+dsh -f machines "hostname && tail /home/sigvisa/python/sigvisa/logs/mcmc/*/lp.txt"
+etc.

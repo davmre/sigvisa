@@ -36,6 +36,7 @@
         - smbclient
         - cifs-utils
         - autossh
+        - emacs24
     - include: tasks/config_smb.yml
     - include: tasks/python_package_setup.yml
     - include: tasks/sigvisa_setup.yml
