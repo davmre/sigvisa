@@ -71,7 +71,7 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps, ttimes_centered, ttim
     detection_lps = np.log(detection_probs)
     nodetection_lps =np.log(1-detection_probs)
 
-    null_ll = np.sum(nodetection_lps) + ua_poisson_lp_full + np.sum(ua_amp_lps)
+    null_ll = ua_poisson_lp_full + np.sum(ua_amp_lps)
 
     cdfs = """
     // cdf of Laplace(0.0, 5.0) computed for half-integer x values [-40, 40] inclusive
@@ -133,7 +133,16 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps, ttimes_centered, ttim
         full_assoc = np.zeros((1,), dtype=np.uint8)
 
 
-    sta_hough_array.fill(null_ll)
+    # null_ll is the likelihood of all templates under the
+    # all-uatemplate, no-event explanation.
+
+    # the thing we compute in the bins is the likelihood under an
+    # event-based explanation. the *default* event-based explanation
+    # is that no templates have been associated, so all phases of this
+    # event are undetected at the current station. so we have to start
+    # by paying the no-detection penalty in each bin. this gets
+    # canceled out below, if/when we *do* associate a template.
+    sta_hough_array.fill(null_ll + np.sum(nodetection_lps))
 
 
     timebins_used = np.empty((timebins,), dtype=np.int)
@@ -747,11 +756,17 @@ class HoughConfig(object):
 
     def coords_to_index(self, coords):
         lon, lat, depth, t, mb = coords
-        lonbin = int((lon-self.left_lon) / self.bin_width_deg)
-        latbin = int((lat-self.bottom_lat) / self.bin_width_deg)
-        depthbin = int((depth-self.min_depth) / self.depthbin_width_km)
-        timebin = int((t-self.stime) / self.time_tick_s)
-        mbbin = int((mb-self.min_mb) / self.mb_bin_width)
+
+        # subtract epsilon from the bin guesses so we don't give nonexistent bins.
+        # eg with two depth bins, width 350km, if depth==700 then
+        # this calculation gives int(2.0)=2 which fails, while
+        # returning int(2.0-1e-8) = 1 which is correct.
+        # on the other end, we'd have int(0-1e-8) = 0 which is fine.
+        lonbin = int((lon-self.left_lon) / self.bin_width_deg  - 1e-8)
+        latbin = int((lat-self.bottom_lat) / self.bin_width_deg - 1e-8)
+        depthbin = int((depth-self.min_depth) / self.depthbin_width_km - 1e-8)
+        timebin = int((t-self.stime) / self.time_tick_s - 1e-8)
+        mbbin = int((mb-self.min_mb) / self.mb_bin_width- 1e-8)
         return (lonbin, latbin, depthbin, timebin, mbbin)
 
     def index_to_coords(self, v):
@@ -1036,14 +1051,14 @@ class CTFProposer(object):
                          left_lon=left_lon, right_lon=right_lon)
         self.global_hc = hc
 
-    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None):
+    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None, one_event_semantics=False):
         if uatemplates_by_sta is None:
             uatemplates_by_sta = get_uatemplates(sg)
 
         hc = self.global_hc
 
         global_array,assocs, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
-        global_dist = normalize_global(global_array, nll, one_event_semantics=True)
+        global_dist = normalize_global(global_array, nll, one_event_semantics=one_event_semantics)
 
         if fix_result:
             ev = fix_result
@@ -1061,7 +1076,7 @@ class CTFProposer(object):
                              max_depth=max_depth, time_tick_s = 10.0,
                              mbbins=self.mbbins)
             array,assocs, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
-            dist = normalize_global(array, nll, one_event_semantics=True)
+            dist = normalize_global(array, nll, one_event_semantics=one_event_semantics)
             if fix_result:
                 v = hc.coords_to_index(coord)
             else:
@@ -1076,17 +1091,51 @@ class CTFProposer(object):
             ev, evlp = event_from_bin(hc, v)
             return ev, np.log(prob) + evlp, global_dist
 
-def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None, offset=False):
+def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
+                            offset=None, one_event_semantics=None):
     s = Sigvisa()
     if proposal_dist_seed is not None:
         np.random.seed(proposal_dist_seed)
 
+    if offset is None:
+        # random choice of proposal distribution, not based on current
+        # state so cancels out in the acceptance ratio
+        offset = np.random.choice([True, False])
+    if one_event_semantics is None:
+        one_event_semantics = np.random.choice([True, False])
+
+
     try:
         ctf = s.hough_proposer[offset]
     except:
-        ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=10, offset=offset)
+        ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=12, offset=offset)
         s.hough_proposer[offset] = ctf
-    return ctf.propose_event(sg, fix_result=fix_result)
+
+    r = ctf.propose_event(sg, fix_result=fix_result,
+                          one_event_semantics=one_event_semantics)
+    return r
+
+def august_debug(sg):
+    uatemplates_by_sta = get_uatemplates(sg)
+    ctf = CTFProposer(sg, [5,], depthbins=2, mbbins=1, offset=False)
+    hc = ctf.global_hc
+    global_array,assocs, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
+    ga1 = global_array.copy()
+    ga2 = global_array.copy()
+    print nll
+    global_dist1 = normalize_global(ga1, nll, one_event_semantics=True)
+    global_dist2 = normalize_global(ga2, nll, one_event_semantics=False)
+    np.save("global_array", global_array)
+
+    visualize_hough_array(global_dist1, uatemplates_by_sta.keys(), fname="one_ev.png", ax=None, timeslice=None)
+    np.save("one_ev", global_dist1)
+    print "one_ev.png/npy"
+
+    visualize_hough_array(global_dist2, uatemplates_by_sta.keys(), fname="ev_prob.png", ax=None, timeslice=None)
+    np.save("ev_prob", global_dist2)
+    print "ev_prob.png/npy"
+
+
 
 def main():
     #sfile = "/home/dmoore/python/sigvisa/logs/mcmc/02135/step_000000/pickle.sg"
@@ -1095,17 +1144,21 @@ def main():
         sg = pickle.load(f)
     print "read sg"
 
+    august_debug(sg)
+
+    """
     np.random.seed(1)
     t0 = time.time()
-    ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=12, offset=False)
+    ctf = CTFProposer(sg, [5,], depthbins=2, mbbins=1, offset=False)
     ev, evlp, _ = ctf.propose_event(sg)
     t1 = time.time()
-    ev, evlp, _ = ctf.propose_event(sg)
+    #ev, evlp, _ = ctf.propose_event(sg)
     t2 = time.time()
 
     print "built in", t1-t0, "sampled in", t2-t1
     print ev
     print evlp
+    """
 
     #_, evlp2 = ctf.propose_event(sg, fix_result=ev)
     #print evlp2
