@@ -1,6 +1,7 @@
 numpy
 scipy
 cython
+pyublas
 scikit-learn
 scikits.sparse
 matplotlib
@@ -17,7 +18,6 @@ django-extensions
 django-debug-toolbar
 pytz
 nose
-pyublas
 pywavelets
 seaborn
 numdifftools
@@ -31,6 +31,3 @@ ipython
 
 # interactive debugger, "python manage.py runserver_plus" to enable
 # werkzeug
-
-# to manage cloud instances
-fabric

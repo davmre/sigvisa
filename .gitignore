@@ -4,6 +4,7 @@
 *.so
 parameters/*.txt
 parameters/noise_models/
+parameters/runs/
 eval/*
 bgjob*
 utils/bgjob
@@ -16,7 +17,7 @@ database/*.csv
 *.log
 *.tgz
 *.gz
-*.txt
+/*.txt
 *.csv
 *.npz
 *.png
@@ -90,3 +91,4 @@ demos/template_mcmc_dtra_080213/
 /experiments/template_mcmc
 /gp_tts
 /notebooks/.ipynb_checkpoints/
+cloud/vagrant/.vagrant

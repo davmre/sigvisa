@@ -465,6 +465,8 @@ class ARModel(NoiseModel):
         n_p = len(p)
         t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
 
+        std=float(std)
+
         grad = np.zeros((n,))
         code = """
         double d_prob = 0;

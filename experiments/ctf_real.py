@@ -8,17 +8,17 @@ from sigvisa.treegp.gp import GPCov
 
 import os, sys, traceback
 import cPickle as pickle
+from optparse import OptionParser
 
 
+stas = "ASAR,FITZ,ILAR,MKAR,WRA,YKA,KURK,SONM,BVAR,CTA,CMAR,ZALV,AKTO,INK,AAK,AKBB,ARCES,CPUP,DZM,FINES,JKA,KBZ,KSRS,LPAZ,NOA,NVAR,PETK,PLCA,PMG,STKA,TORD,URZ,USRK,VNDA".split(",")
 
-stas="MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR".split(",")
+#stas="MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR".split(",")
 
-def generate_leb_truth():
-    runid=37
-    hz=2.0
+def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0):
     uatemplate_rate=1e-3
     rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training",
-                          hour=0.0, len_hours=2.0,
+                          hour=hour, len_hours=len_hours,
                           initialize_events="leb")
 
     ms1 = ModelSpec(template_model_type="param",
@@ -35,15 +35,13 @@ def generate_leb_truth():
     do_inference(sg, ms1, rs, dump_interval=10, print_interval=10, model_switch_lp_threshold=None)
 
 
-def main():
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, resume_from=None):
 
-    runid=37
-    hz=2.0
-    uatemplate_rate=1e-6
+    uatemplate_rate=1e-3
 
     # python infer/run_mcmc.py --dataset=training --hour=0 --len_hours=2.0 --sites=MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR --runid=26 --phases=P,S --skip=10 --hz=2.0 --nm=ar --uatemplate_rate=1e-4 --steps=1000 --wiggle_family=iid --initialize_leb=yes --dummy_fallback
 
-    rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training", hour=0.0, len_hours=2.0)
+    rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training", hour=hour, len_hours=len_hours)
 
     ms1 = ModelSpec(template_model_type="param",
                     wiggle_family="iid",
@@ -53,8 +51,8 @@ def main():
                     dummy_fallback=True,
                     vert_only=True)
 
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], 'rb') as f:
+    if resume_from is not None:
+        with open(resume_from, 'rb') as f:
             sg = pickle.load(f)
         sg.uatemplate_rate = uatemplate_rate
     else:
@@ -66,18 +64,25 @@ def main():
     do_inference(sg, ms1, rs, dump_interval=10, print_interval=10, model_switch_lp_threshold=None)
 
 
-
 if __name__ == "__main__":
-    try:
-        if len(sys.argv) > 1 and sys.argv[1]=="leb":
-            generate_leb_truth()
-        else:
-            main()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print e
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        import pdb
-        pdb.post_mortem(tb)
+
+    parser = OptionParser()
+
+    parser.add_option("--leb", dest="leb", default=False, action="store_true",
+                      help="fix events to LEB bulletin")
+    parser.add_option("--hour", dest="hour", default=0.0, type=float,
+                      help="start time, relative to training dataset")
+    parser.add_option("--len_hours", dest="len_hours", default=2.0, type=float,
+                      help="length of signal to use")
+    parser.add_option("--resume_from", dest="resume_from", default=None, type=str,
+                      help="saved sg state to initialize inference")
+    parser.add_option("--runid", dest="runid", default=1, type=int,
+                      help="runid for models to load")
+    
+    (options, args) = parser.parse_args()
+
+
+    if options.leb:
+        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid)
+    else:
+        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid)
