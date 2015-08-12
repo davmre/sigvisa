@@ -13,6 +13,7 @@ from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.source.event import Event, get_event
+from sigvisa.util.geog import wrap_lonlat
 import sigvisa.source.brune_source as brune
 
 from matplotlib.figure import Figure
@@ -22,6 +23,7 @@ from sigvisa.plotting.plot import savefig
 
 import scipy.weave as weave
 from scipy.weave import converters
+
 
 
 """
@@ -483,6 +485,9 @@ def event_from_bin(hc, idx):
     depth = min_depth + np.random.rand()*depthwidth
     t = min_time + np.random.rand()*timewidth
     mb = min_mb + np.random.rand()*mbwidth
+
+    # make sure we return a valid lon/lat even if grid is offset
+    lon, lat = wrap_lonlat(lon, lat)
 
     evlp = -np.log(lonwidth) - np.log(latwidth) -np.log(depthwidth) -np.log(timewidth) -np.log(mbwidth)
     ev = Event(lon=lon, lat=lat, time=t, depth=depth, mb=mb, natural_source=True)
