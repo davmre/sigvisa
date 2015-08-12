@@ -96,3 +96,4 @@ web/*.txt
 matrices/
 /synthetic/worlds
 /web/matrices/
+notebooks/*.txt
