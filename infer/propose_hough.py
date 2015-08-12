@@ -13,7 +13,7 @@ from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.source.event import Event, get_event
-from sigvisa.util.geog import wrap_lonlat
+from sigvisa.utils.geog import wrap_lonlat
 import sigvisa.source.brune_source as brune
 
 from matplotlib.figure import Figure
