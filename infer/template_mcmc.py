@@ -2392,13 +2392,16 @@ def amp_decay_proposal_laplace_reparam(wn, tg, signal, true_srate, downsample_by
 
     # initialize optimization at sensible defaults:
     lw = safe_log_vec(w)
-    init_amp = lw[0]  # amplitude estimate is the height at the beginning of the window
+    try:
+        init_amp = lw[0]  # amplitude estimate is the height at the beginning of the window
+    except:
+        init_amp = np.nan
     if not np.isfinite(init_amp):
         init_amp = -2.0
 
     try:
         init_coda_decay = np.log(-(lw[-1]-lw[0])/tlen) # estimated decay rate is the empirical slope of the log signal
-    except FloatingPointError:
+    except:
         init_coda_decay = np.nan
 
     if not np.isfinite(init_coda_decay):
