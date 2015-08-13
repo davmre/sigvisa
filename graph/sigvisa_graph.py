@@ -12,7 +12,7 @@ from sigvisa import Sigvisa
 
 from sigvisa.database.signal_data import get_fitting_runid, ensure_dir_exists, RunNotFoundException
 
-from sigvisa.source.event import get_event
+from sigvisa.source.event import get_event, Event
 from sigvisa.learn.train_param_common import load_modelid as tpc_load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
@@ -1456,6 +1456,135 @@ class SigvisaGraph(DirectedGraphModel):
                     plot_with_fit(os.path.join(dump_path, "%s_%d_%s.png" % (sta, eid, phase)), wn,
                                   highlight_eid=eid, stime=stime, etime=etime)
 
+
+    def serialize_evs(self):
+        evdicts = []
+        for eid, evnodes in self.extended_evnodes.items():
+            evd = {}
+            for node in evnodes:
+                for key in node.keys():
+                    # remove the eid
+                    generic_key = ";".join(key.split(";")[1:])
+                    v = node.get_value(key=key)
+                    evd[generic_key]=v
+            evdicts.append(evd)
+        return evdicts
+
+    def deserialize_evs(self, evdicts):
+        for evdict in evdicts:
+            ev = Event(lon=evdict['lon'], lat=evdict['lat'], mb=evdict['mb'], time=evdict['time'], depth=evdict['depth'], natural_source=evdict['natural_source'])
+            self.add_event(ev)
+            for node in self.extended_evnodes[ev.eid]:
+                for key in node.keys():
+                    generic_key = ";".join(key.split(";")[1:])
+                    try:
+                        node.set_value(key=key, value=evdict[generic_key])
+                    except KeyError:
+                        print "WARNING: serialized state does not contain a value for required key %s, leaving unset" % key
+
+    def serialize_uatemplates(self):
+        uadicts_by_sta = {}
+        for (sta, chan, band), idset in self.uatemplate_ids.items():
+            ua_list = []
+            for tmid in idset:
+                node_dict = self.uatemplates[tmid]
+                val_dict = dict([(p, n.get_value()) for (p, n) in node_dict.items()])
+                ua_list.append(val_dict)
+            uadicts_by_sta[(sta, chan, band)] = ua_list
+        return uadicts_by_sta
+
+    def deserialize_uatemplates(self, uadicts_by_sta):
+
+        for (sta, chan, band), uadicts in uadicts_by_sta.items():
+            for uadict in uadicts:
+                atime = uadict['arrival_time']
+                if sta not in self.station_waves: continue
+                try:
+                    wn =  self.get_wave_node_by_atime(sta, band, chan, atime)
+                except:
+                    print "warning: could not get WN for serialized template %s,%s,%s,%s, skipping..."
+                    continue
+                self.create_unassociated_template(wn, atime, initial_vals=uadict)
+
+    def serialize_to_file(self, filename):
+        mkdir_p(filename)
+
+        import tarfile
+        tf = tarfile.TarFile.open(filename+".tgz", mode="w:gz")
+
+
+        evdicts = self.serialize_evs()
+        fname = "evstate.txt"
+        with open(os.path.join(filename, fname), 'w') as f:
+            for evdict in evdicts:
+                f.write(repr(evdict) + "\n")
+        tf.add(os.path.join(filename, fname), arcname=fname)
+
+        uadicts_by_sta = self.serialize_uatemplates()
+        for (sta, chan, band), uadicts in uadicts_by_sta.items():
+            fname = "ua_%s;%s;%s.txt" % (sta, chan, band)
+            with open(os.path.join(filename, fname), 'w') as f:
+                for uadict in uadicts:
+                    f.write(repr(uadict) + "\n")
+            tf.add(os.path.join(filename, fname), arcname=fname)
+
+        fname = "config.txt"
+        with open(os.path.join(filename, fname), 'w') as f:
+            f.write(self.config_str())
+        tf.add(os.path.join(filename, fname), arcname=fname)
+
+        tf.close()
+        print "wrote to", filename+".tgz"
+
+    def deserialize_from_tgz(self, tgzfile):
+
+
+        import tarfile
+        tf = tarfile.TarFile.open(tgzfile, mode="r:gz")
+
+        fnames  = tf.getnames()
+
+        uadicts_by_sta = dict()
+        for fname in fnames:
+            if not fname.startswith("ua"): continue
+            sta, chan, band = fname[3:-4].split(";")
+            f = tf.extractfile(fname)
+            uadicts = [eval(l) for l in f.readlines()]
+            uadicts_by_sta[(sta, chan, band)] = uadicts
+            f.close()
+
+        ev_f = tf.extractfile("evstate.txt")
+        evdicts = [eval(l) for l in ev_f.readlines()]
+        ev_f.close()
+        tf.close()
+
+        self.deserialize_evs(evdicts)
+        self.deserialize_uatemplates(uadicts_by_sta)
+
+
+    def config_str(self):
+        import socket
+
+        cs = ""
+        cs += "hostname: %s\n" % socket.gethostname()
+        cs += "cmd_str: %s\n" % " ".join(sys.argv)
+        cs += "template_model_type: %s\n" % self.template_model_type
+        cs += "template_shape: %s\n" % self.template_shape
+        cs += "wiggle_model_type: %s\n" % self.wiggle_model_type
+        cs += "wiggle_family: %s\n" % self.wiggle_family
+        cs += "base_srate: %s\n" % self.base_srate
+        cs += "assume_envelopes: %s\n" % self.assume_envelopes
+        cs += "smoothing: %s\n" % self.smoothing
+        cs += "dummy_fallback: %s\n" % self.dummy_fallback
+        cs += "nm_type: %s\n" % self.nm_type
+        cs += "phases: %s\n" % self.phases
+        cs += "runids: %s\n" % self.runids
+        cs += "start_time: %s\n" % self.start_time
+        cs += "event_start_time: %s\n" % self.event_start_time
+        cs += "end_time: %s\n" % self.end_time
+        cs += "uatemplate_rate: %s\n" % self.uatemplate_rate
+        cs += "event_rate: %s\n" % self.event_rate
+        return cs
 
     def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True, pickle_only=False):
 

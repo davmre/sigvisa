@@ -468,7 +468,14 @@ for (int i=0; i < lonbins; ++i) {
 
 def categorical_prob(a, idx):
     s = np.sum(a)
-    return a[idx]/s
+    try:
+        p = a[idx]/s
+    except IndexError:
+        # the Hough distribution is only supported within the
+        # time/space period defined by the array, so index out of
+        # bounds means zero probability
+        p = 0.0
+    return p
 
 
 def event_from_bin(hc, idx):
@@ -937,6 +944,7 @@ def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=F
     adj_time = 0
 
 
+
     mbbin_prior_dist = Exponential(rate=np.log(10.0), min_value=hc.min_mb)
     bin_centers = np.linspace(hc.min_mb+hc.mb_bin_width/2.0, hc.max_mb-hc.mb_bin_width/2.0, hc.mbbins)
     mbbin_prior_lps = [mbbin_prior_dist.log_p(mb) for mb in bin_centers]
@@ -946,7 +954,11 @@ def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=F
 
     for sta, uatemplates in uatemplates_by_sta.items():
 
-        wn = sg.station_waves[sta][0]
+        try:
+            wn = sg.station_waves[sta][0]
+        except KeyError:
+            continue
+
         t2 = time.time()
         sta_array, assocs, null_ll = station_hough(sg, hc, sta, uatemplates, wn.chan, wn.band)
         t3 = time.time()

@@ -567,7 +567,7 @@ def death_proposal_log_ratio(sg, eid):
                         lp_unass += lp_unass_tmpl
                         lp_ev += lp_ev_tmpl
     r = lp_unass - lp_ev
-    #assert(np.isfinite(r))
+    assert(np.isfinite(r))
     return r
 
 def death_proposal_distribution(sg):
@@ -577,10 +577,14 @@ def death_proposal_distribution(sg):
 
     c.normalize_from_logs()
 
+
     # with probability ~.1, just sample an event uniformly.
     # this way all events have some possibility to die.
     for k in c.keys():
-        c[k] += .1/len(c)
+        if np.isfinite(c[k]):
+            c[k] += .1/len(c)
+        else:
+            c[k] = .1/len(c)
     c.normalize()
 
     return c
@@ -699,12 +703,12 @@ def ev_death_helper_full(sg, eid, location_proposal, proposal_includes_mb=False)
         lqb = 0.0
 
     log_qforward, log_qbackward, revert_move = ev_death_helper(sg, eid, associate_using_mb=False)
-    try:
-        lp_loc = location_proposal(sg, fix_result=ev)
-        print "death helper", lqb, log_qbackward, lp_loc
-    except Exception as e:
-        print "exception in birth probability evaluation: ", e
-        lp_loc = -np.inf
+    #try:
+    lp_loc = location_proposal(sg, fix_result=ev)
+    print "death helper", lqb, log_qbackward, lp_loc
+    #except Exception as e:
+    #    print "exception in birth probability evaluation: ", e
+    #    lp_loc = -np.inf
 
     def revert():
         revert_move()

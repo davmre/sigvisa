@@ -35,7 +35,7 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0):
     do_inference(sg, ms1, rs, dump_interval=10, print_interval=10, model_switch_lp_threshold=None)
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, resume_from=None):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, resume_from=None, deserialize=None):
 
     uatemplate_rate=1e-3
 
@@ -57,7 +57,11 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, resume_from=None):
         sg.uatemplate_rate = uatemplate_rate
     else:
         sg = rs.build_sg(ms1)
-        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=500)
+
+        if deserialize is not None:
+            sg.deserialize_from_tgz(deserialize)
+        else:
+            ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=500)
 
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=1000)
 
@@ -76,13 +80,15 @@ if __name__ == "__main__":
                       help="length of signal to use")
     parser.add_option("--resume_from", dest="resume_from", default=None, type=str,
                       help="saved sg state to initialize inference")
+    parser.add_option("--deserialize", dest="deserialize", default=None, type=str,
+                      help="serialized (tgz) sg state to initialize inference")
     parser.add_option("--runid", dest="runid", default=1, type=int,
                       help="runid for models to load")
-    
+
     (options, args) = parser.parse_args()
 
 
     if options.leb:
         generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid)
     else:
-        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid)
+        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, deserialize=options.deserialize)
