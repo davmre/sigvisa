@@ -57,7 +57,7 @@
     mode=0400
 - name: update db for local data cache
   shell: mysql -u root -p55rontob -e "update idcx_wfdisc set dir='/home/sigvisa/local_data/ctbt_data/seismic/2009/095/' where dir='/home/sigvisa/ctbt_data/seismic/2009/095/'" ctbt3mos
-- name: web service
+- name: setup web service
   copy:
     src=sigvisa_web.conf
     dest=/etc/init/sigvisa_web.conf
