@@ -24,7 +24,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       azure.private_key_file = File.expand_path('~/.ssh/azurevagrant.pem')
       #azure.ssh_certificate_file = File.expand_path('~/.ssh/azurevagrant.cer')
 
-      #azure.tcp_endpoints = '8000'
+      azure.tcp_endpoints = '8001'
   end
 
   (1..4).each do |i|
