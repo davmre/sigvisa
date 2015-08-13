@@ -92,3 +92,8 @@ demos/template_mcmc_dtra_080213/
 /gp_tts
 /notebooks/.ipynb_checkpoints/
 cloud/vagrant/.vagrant
+web/*.txt
+matrices/
+/synthetic/worlds
+/web/matrices/
+notebooks/*.txt

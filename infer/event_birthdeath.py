@@ -826,13 +826,14 @@ def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
 
 def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=False):
     # propose a new ev location
-    try:
-        ev, lp_loc, extra = location_proposal(sg)
-        print "proposing new ev", ev
-    except Exception as e:
-        print "exception in birth proposal", e
-        def noop(): pass
-        return -np.inf, 0.0, noop, (None, 0, [])
+    #try:
+    ev, lp_loc, extra = location_proposal(sg)
+    print "proposing new ev", ev
+
+    #except Exception as e:
+    #    print "exception in birth proposal", e
+    #    def noop(): pass
+    #    return -np.inf, 0.0, noop, (None, 0, [])
 
     # propose its associations
     log_qforward, log_qbackward, revert_move, eid, associations = ev_birth_helper(sg, ev, associate_using_mb=proposal_includes_mb, eid=eid)
@@ -933,6 +934,7 @@ def log_event_birth(sg, hough_array, run_dir, eid, associations):
 
     # save Hough transform
     sites = sg.site_elements.keys()
-    print "visualizing hough array...",
-    visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'))
+    if hough_array is not None:
+        print "visualizing hough array...",
+        visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'))
     print "done"
