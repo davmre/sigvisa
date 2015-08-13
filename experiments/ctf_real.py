@@ -35,7 +35,9 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0):
     do_inference(sg, ms1, rs, dump_interval=10, print_interval=10, model_switch_lp_threshold=None)
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, resume_from=None, deserialize=None):
+
+
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None):
 
     uatemplate_rate=1e-3
 
@@ -58,12 +60,13 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, resume_from=None, deserializ
     else:
         sg = rs.build_sg(ms1)
 
+
         if deserialize is not None:
             sg.deserialize_from_tgz(deserialize)
         else:
-            ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=500)
+            ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=tmpl_steps)
 
-    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=1000)
+    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=ev_steps)
 
     do_inference(sg, ms1, rs, dump_interval=10, print_interval=10, model_switch_lp_threshold=None)
 
@@ -78,6 +81,10 @@ if __name__ == "__main__":
                       help="start time, relative to training dataset")
     parser.add_option("--len_hours", dest="len_hours", default=2.0, type=float,
                       help="length of signal to use")
+    parser.add_option("--tmpl_steps", dest="tmpl_steps", default=500, type=int,
+                      help="steps to take in tmpl-only inference")
+    parser.add_option("--ev_steps", dest="ev_steps", default=1000, type=int,
+                      help="steps to take in full inference ")
     parser.add_option("--resume_from", dest="resume_from", default=None, type=str,
                       help="saved sg state to initialize inference")
     parser.add_option("--deserialize", dest="deserialize", default=None, type=str,
@@ -91,4 +98,4 @@ if __name__ == "__main__":
     if options.leb:
         generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid)
     else:
-        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, deserialize=options.deserialize)
+        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize)

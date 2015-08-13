@@ -17,7 +17,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       azure.vm_name     = 'azurevagrantsmall'
       #azure.vm_image    = 'b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-14_04_2-LTS-amd64-server-20150506-en-us-30GB'
       azure.vm_image    = 'sigvisa_day95'
-      azure.vm_size     = 'Small'
+      azure.vm_size     = 'Basic_A3'
       azure.vm_location = 'West US'
 
       azure.ssh_port             = '22'
