@@ -667,6 +667,10 @@ class ARModel(NoiseModel):
             C[i:,i] = ac[:n-i]
         return C
 
+    def marginal_variance(self):
+        return self.autocovariances(1)[0]
+        
+
     def prec_matrix(alpha, n):
         # compute the precision matrix for the multivariate Gaussian
         # on n timesteps induced by an AR(alpha) process.
