@@ -60,7 +60,7 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
                        min_mb, bin_width_km, source_logamps,
                        uatemplate_rate, ua_amp_model, valid_len,
                        lognoise, save_assoc=False):
-    lonbins, latbins, depthbins, timebins, mbbins = sta_hough_array.shape
+    lonbins, latbins, depthbins, mbbins, timebins  = sta_hough_array.shape
     time_radius = time_tick_s / 2.0
     lonbin_deg = 360.0/lonbins
 
@@ -133,14 +133,14 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
     # background_cost_lp
     # detection
 
-    phase_score = np.empty((timebins, mbbins))
-    assoc = np.empty((nphases, timebins, mbbins), dtype=np.uint8)
+    phase_score = np.empty((mbbins, timebins))
+    assoc = np.empty((nphases, mbbins, timebins), dtype=np.uint8)
     timebin_lps = np.empty((timebins,))
 
     save_assoc = 1 if save_assoc else 0 # make c++ happy
     if save_assoc:
-        full_assoc = np.zeros((lonbins, latbins, depthbins, timebins, mbbins, nphases,), dtype=np.uint8)
-        phase_scores = np.zeros((lonbins, latbins, depthbins, timebins, mbbins, nphases,), dtype=np.float)
+        full_assoc = np.zeros((lonbins, latbins, depthbins, mbbins, timebins,  nphases,), dtype=np.uint8)
+        phase_scores = np.zeros((lonbins, latbins, depthbins, mbbins, timebins,  nphases,), dtype=np.float)
     else:
         full_assoc = np.zeros((1,), dtype=np.uint8)
         phase_scores = np.zeros((1,), dtype=np.float)
@@ -160,7 +160,7 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
     for phase_idx in range(nphases):
         adj = np.log(1 - detprobs[:,:,:,:,phase_idx])
         #print "adj min %f max %f" % (np.min(adj), np.max(adj))
-        sta_hough_array += adj[:,:,:,np.newaxis,:] 
+        sta_hough_array += adj[:,:,:,:,np.newaxis] 
     #sha = sta_hough_array.copy()
     
 
@@ -393,7 +393,7 @@ for (int i=0; i < lonbins; ++i) {
                             // been associated with other phases.
                             bool exclude_tmpl_from_bin = 0;
                             for (int oldphase = 0; oldphase < phaseidx; ++oldphase) {
-                                if (assoc(oldphase, timebin, mbbin) == t) {
+                                if (assoc(oldphase, mbbin, timebin) == t) {
                                     exclude_tmpl_from_bin = 1;
                                     break;
                                 }
@@ -401,15 +401,15 @@ for (int i=0; i < lonbins; ++i) {
                             if (exclude_tmpl_from_bin) { continue; }
 
                             double tmpl_score = logdet_odds + (mb_lp - ua_amp_lps(t)) + timebin_lps(timebin) - ua_poisson_lp_incr;
-                            double oldval = phase_score(timebin, mbbin);
+                            double oldval = phase_score(mbbin, timebin);
 /*
                             if (verbose) {
                                   printf("lon %d lat %d depth %d time %d mbbin %d phase %d processing template %d with score %f vs oldval %f (amp %.1f, bin_weight %f, atime_lp %f)\\n", i, j, k, timebin, mbbin, phaseidx, t, tmpl_score, oldval, amp, bin_weight, timebin_lps(timebin));
                             }
 */
                             if (tmpl_score > oldval) {
-                                phase_score(timebin, mbbin) = tmpl_score;
-                                assoc(phaseidx, timebin, mbbin) = t;
+                                phase_score(mbbin, timebin) = tmpl_score;
+                                assoc(phaseidx, mbbin, timebin) = t;
                             }
                         }
                         clock_gettime(CLOCK_REALTIME, &t1);
@@ -424,11 +424,11 @@ for (int i=0; i < lonbins; ++i) {
                     int timebin = timebins_used_phase(i_timebin);
                     timebins_used_flag_phase(timebin) = 0;
                     for (int mbbin=0; mbbin < mbbins; ++mbbin) {
-                        sta_hough_array(i,j,k,timebin,mbbin) +=   phase_score(timebin, mbbin);
+                        sta_hough_array(i,j,k,mbbin,timebin) +=   phase_score(mbbin, mbbin);
 
                         if (save_assoc) {
-                           full_assoc(i,j,k,timebin,mbbin, phaseidx) = assoc(phaseidx, timebin, mbbin)+1;
-                           phase_scores(i,j,k,timebin,mbbin, phaseidx) = phase_score(timebin, mbbin);
+                           full_assoc(i,j,k,mbbin,timebin, phaseidx) = assoc(phaseidx,  mbbin, timebin)+1;
+                           phase_scores(i,j,k,mbbin,timebin, phaseidx) = phase_score(mbbin, timebin);
                         }
                     }
                 }
@@ -444,13 +444,13 @@ for (int i=0; i < lonbins; ++i) {
                  for (int i_timebin=0; i_timebin < n_timebins_used; ++i_timebin) {
                     int timebin = timebins_used(i_timebin);
                     timebins_used_flag(timebin) = 0;
-                    double s1 = sta_hough_array(i,j,k,timebin,mbbin);
+                    double s1 = sta_hough_array(i,j,k,mbbin, timebin);
                     
                     double tmp = s1-base;
                     if (tmp > 0) {
-                       sta_hough_array(i,j,k,timebin,mbbin) = s1 + log1p(exp(-tmp));
+                       sta_hough_array(i,j,k,mbbin, timebin) = s1 + log1p(exp(-tmp));
                     } else {
-                       sta_hough_array(i,j,k,timebin,mbbin) = base + log1p(exp(tmp));
+                       sta_hough_array(i,j,k,mbbin,timebin) = base + log1p(exp(tmp));
                     }
                 }
              }
@@ -511,9 +511,9 @@ int done = 0;
 for (int i=0; i < lonbins; ++i) {
     for (int j=0; j < latbins; ++j) {
         for (int k=0; k < depthbins; ++k) {
+          for (int m=0; m < mbbins; ++m)  {
             for (int l=0; l < timebins; ++l)  {
-                for (int m=0; m < mbbins; ++m)  {
-                   accum += a(i,j,k,l,m);
+                   accum += a(i,j,k,m,l);
                     if (accum >= goal) {
                        v(0) = i;
                        v(1) = j;
@@ -533,7 +533,7 @@ for (int i=0; i < lonbins; ++i) {
     if (done) { break; }
 }
     """
-    weave.inline(code,['latbins', 'lonbins', 'depthbins', 'timebins', 'mbbins', 'a', 'u', 's', 'v'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+    weave.inline(code,['latbins', 'lonbins', 'depthbins','mbbins', 'timebins',  'a', 'u', 's', 'v'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
     return tuple(v)
 
@@ -584,7 +584,7 @@ def visualize_hough_array(hough_array, sites, fname=None, ax=None, timeslice=Non
     if location_array is not None:
         lonbins, latbins = location_array.shape
     else:
-        lonbins, latbins, depthbins, timebins, mbbins = hough_array.shape
+        lonbins, latbins, depthbins, mbbins, timebins = hough_array.shape
         
         if timeslice is None:
             location_array = np.sum(hough_array, axis=(2,3,4))
@@ -838,13 +838,11 @@ class HoughConfig(object):
         self.detprob_cache = {}
 
         if self.lonbins <= 2:
-            self.cached_ev_prior = self._compute_ev_prior()
+            self.cached_ev_prior_log, self.cached_noev_prior_log = self._compute_ev_prior()
         else:
             key = repr([left_lon, right_lon, 
                    bottom_lat, top_lat, 
                    self.bin_width_deg,
-                   self.time_tick_s,
-                   self.timebins,
                    min_mb,
                    max_mb,
                    mbbins,
@@ -852,29 +850,34 @@ class HoughConfig(object):
                    min_depth,
                    depthbins
                    ])
+
+            # TODO: don't keep the entire prior in memory with all timebins, when it's actually uniform over timebins. this would save a factor of hundreds in memory and disk space...
             hashkey = hashlib.md5(key).hexdigest()[:12]
-            cachefile = os.path.join(s.homedir, "db_cache", "ev_prior_grid_%s.npy" % hashkey)
+            cachefile = os.path.join(s.homedir, "db_cache", "ev_prior_grid_%s.npz" % hashkey)
             try:
-                ev_prior = np.load(cachefile)
-            except IOError:
-                ev_prior = self._compute_ev_prior()
-                np.save(cachefile, ev_prior)
+                c = np.load(cachefile)
+                ev_prior_log, noev_prior_log = c['ev_prior_log'], c['noev_prior_log']
+            except IOError as e:
+                ev_prior_log, noev_prior_log = self._compute_ev_prior()
+                np.savez(cachefile, ev_prior_log=ev_prior_log, noev_prior_log=noev_prior_log)
                 print "saved prior cache to", cachefile
-            self.cached_ev_prior = ev_prior
+            self.cached_ev_prior_log, self.cached_noev_prior_log = ev_prior_log, noev_prior_log
 
 
     def ev_prior(self):
-        return self.cached_ev_prior
+        return self.cached_ev_prior_log, self.cached_noev_prior_log
 
     def _compute_ev_prior(self):
+
         global_event_rate=0.00126599049
         unit_rate = global_event_rate / (360 * 180 * 700)
 
         bin_area = self.bin_width_deg**2 * self.depthbin_width_km * self.time_tick_s
         bin_prior = unit_rate * bin_area
 
-        ev_prior = self.create_array(fill_val=bin_prior)
-
+        #ev_prior = self.create_array(fill_val=bin_prior)
+        ev_prior = np.empty((self.lonbins, self.latbins, self.depthbins, self.mbbins), dtype=np.float)
+        ev_prior.fill(bin_prior)
 
         s = Sigvisa()
         for i in range(self.lonbins):
@@ -888,7 +891,7 @@ class HoughConfig(object):
                     return np.exp(s.sigmodel.event_location_prior_logprob(wlon, wlat, 0.0))
                 binp, binperr = scipy.integrate.dblquad(p, left_lon, right_lon, lambda x : bottom_lat, lambda x : top_lat, epsrel=1.49e-04, epsabs=1.49e-04)
 
-                ev_prior[i,j,:,:,:] *= binp / self.bin_width_deg**2
+                ev_prior[i,j,:,:] *= binp / self.bin_width_deg**2
 
 
         mbbin_prior_dist = scipy.stats.expon(loc=2.5, scale=1.0/np.log(10.0))
@@ -897,17 +900,19 @@ class HoughConfig(object):
 
         #bin_centers = np.linspace(self.min_mb+self.mb_bin_width/2.0, self.max_mb-self.mb_bin_width/2.0, self.mbbins)
         #mbbin_prior_probs = [self.mb_bin_width * np.exp(mbbin_prior_dist.log_p(mb)) for mb in bin_centers]
-        # somewhat dangerous hack since this relies on the number of mbbins being distinct from
-        # the bin counts of other dimensions
-        ev_prior[:,:,:,:,:] *= mbbin_prior_probs
-        return ev_prior
+        for mbbin in range(self.mbbins):
+            ev_prior[:,:,:,mbbin] *= mbbin_prior_probs[mbbin]
+
+        ev_prior_log = np.log(ev_prior)
+        noev_prior_log = np.log(1-ev_prior)
+        return ev_prior_log, noev_prior_log
 
 
     def create_array(self, with_phases=False, dtype=np.float, fill_val=None):
         if with_phases:
-            dims = (self.lonbins, self.latbins, self.depthbins, self.timebins, self.mbbins, len(self.phaseids))
+            dims = (self.lonbins, self.latbins, self.depthbins, self.mbbins, self.timebins, len(self.phaseids))
         else:
-            dims = (self.lonbins, self.latbins, self.depthbins, self.timebins, self.mbbins)
+            dims = (self.lonbins, self.latbins, self.depthbins, self.mbbins, self.timebins)
 
         array = np.empty(dims, dtype=dtype)
         if fill_val is not None:
@@ -915,7 +920,7 @@ class HoughConfig(object):
         return array
 
     def coords_to_index(self, coords):
-        lon, lat, depth, t, mb = coords
+        lon, lat, depth, mb, t = coords
 
         # subtract epsilon from the bin guesses so we don't give nonexistent bins.
         # eg with two depth bins, width 350km, if depth==700 then
@@ -927,7 +932,7 @@ class HoughConfig(object):
         depthbin = int((depth-self.min_depth) / self.depthbin_width_km - 1e-8)
         timebin = int((t-self.stime) / self.time_tick_s - 1e-8)
         mbbin = int((mb-self.min_mb) / self.mb_bin_width- 1e-8)
-        return (lonbin, latbin, depthbin, timebin, mbbin)
+        return (lonbin, latbin, depthbin, mbbin, timebin)
 
     def index_to_coords(self, v):
         left_lon = self.left_lon + v[0] * self.bin_width_deg
@@ -939,13 +944,14 @@ class HoughConfig(object):
         min_depth = self.min_depth + v[2] * self.depthbin_width_km
         max_depth = min_depth + self.depthbin_width_km
 
-        min_time = self.stime + v[3] * self.time_tick_s
-        max_time = min_time + self.time_tick_s
-
-        min_mb = self.min_mb + v[4] * self.mb_bin_width
+        min_mb = self.min_mb + v[3] * self.mb_bin_width
         max_mb = min_mb + self.mb_bin_width
 
-        return (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_time, max_time), (min_mb, max_mb)
+        min_time = self.stime + v[4] * self.time_tick_s
+        max_time = min_time + self.time_tick_s
+
+
+        return (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth),  (min_mb, max_mb), (min_time, max_time)
 
     def precompute_ttime_grid(self, sta):
         key = sta
@@ -1121,10 +1127,11 @@ def normalize_global(global_array, global_noev_ll, hc, one_event_semantics=False
     # take an array of p(templates | ev in bin) likelihoods, unnormalized,
     # and convert to p(ev in bin | templates)
 
-    ev_prior = hc.ev_prior()
+    ev_prior_log, noev_prior_log = hc.ev_prior()
         
-    ev_prior_log = np.log(ev_prior)
-    global_array += ev_prior_log
+    #ev_prior_log = np.log(ev_prior)
+
+    global_array += ev_prior_log[:,:,:,:,np.newaxis]
     armax = np.max(global_array)
     global_lik = np.exp(global_array-armax)
 
@@ -1134,9 +1141,11 @@ def normalize_global(global_array, global_noev_ll, hc, one_event_semantics=False
     else:
         # treat the array as probability that an event is in each bin,
         # independent of other bins
-        noev_prior_log = np.log(1-ev_prior)
+        #noev_prior_log = np.log(1-ev_prior)
         global_noev_lik = np.exp(global_noev_ll-armax + noev_prior_log)
-        global_lik /= (global_lik + global_noev_lik)
+        normalizer = global_lik.copy()
+        normalizer += global_noev_lik[:,:,:,:,np.newaxis]
+        global_lik /= normalizer
         return global_lik
 
 def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=False):
@@ -1228,7 +1237,7 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
     coords = hc.index_to_coords(bin_idx)
     left, right = zip(*coords)
     left, right = np.asarray(left), np.asarray(right)
-    clon, clat, cdepth, ctime, cmb = left + (right-left)/2.0
+    clon, clat, cdepth, cmb, ctime = left + (right-left)/2.0
     
     full_score = 0
     gnll = 0
@@ -1241,7 +1250,7 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
 
         wn = sg.station_waves[sta][0]
         detprobs = hc.precompute_detprob_grid(sg, sta, wn.chan, wn.band)
-        dbin = (bin_idx[0], bin_idx[1], bin_idx[2], bin_idx[4], 0)
+        dbin = (bin_idx[0], bin_idx[1], bin_idx[2], bin_idx[3], 0)
         detprob = detprobs[dbin]
 
 
@@ -1335,7 +1344,7 @@ class CTFProposer(object):
 
         if fix_result:
             ev = fix_result
-            coord = (ev.lon, ev.lat, ev.depth, ev.time, ev.mb)
+            coord = (ev.lon, ev.lat, ev.depth, ev.mb, ev.time)
             v = hc.coords_to_index(coord)
         else:
             v = categorical_sample_array(global_dist)
