@@ -497,7 +497,7 @@ def categorical_sample_array(a):
 
     """
 
-    lonbins, latbins, depthbins, timebins, mbbins = a.shape
+    lonbins, latbins, depthbins, mbbins, timebins = a.shape
     s = float(np.sum(a))
     u = float(np.random.rand())
 
@@ -518,8 +518,8 @@ for (int i=0; i < lonbins; ++i) {
                        v(0) = i;
                        v(1) = j;
                        v(2) = k;
-                       v(3) = l;
-                       v(4) = m;
+                       v(3) = m;
+                       v(4) = l;
                        done = 1;
                        break;
                     }
