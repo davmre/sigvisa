@@ -5,6 +5,7 @@ import traceback
 import itertools
 import pickle
 import time
+import hashlib
 
 from sigvisa.models.ttime import tt_predict
 from sigvisa.models.distributions import Laplacian, Exponential
@@ -24,7 +25,7 @@ from sigvisa.plotting.plot import savefig
 import scipy.weave as weave
 from scipy.weave import converters
 import scipy.stats
-
+import scipy.integrate
 
 """
 
@@ -836,7 +837,36 @@ class HoughConfig(object):
         self.amp_transfer_cache = {}
         self.detprob_cache = {}
 
+        if self.lonbins <= 2:
+            self.cached_ev_prior = self._compute_ev_prior()
+        else:
+            key = repr([left_lon, right_lon, 
+                   bottom_lat, top_lat, 
+                   self.bin_width_deg,
+                   self.time_tick_s,
+                   self.timebins,
+                   min_mb,
+                   max_mb,
+                   mbbins,
+                   max_depth,
+                   min_depth,
+                   depthbins
+                   ])
+            hashkey = hashlib.md5(key).hexdigest()[:12]
+            cachefile = os.path.join(s.homedir, "db_cache", "ev_prior_grid_%s.npy" % hashkey)
+            try:
+                ev_prior = np.load(cachefile)
+            except IOError:
+                ev_prior = self._compute_ev_prior()
+                np.save(cachefile, ev_prior)
+                print "saved prior cache to", cachefile
+            self.cached_ev_prior = ev_prior
+
+
     def ev_prior(self):
+        return self.cached_ev_prior
+
+    def _compute_ev_prior(self):
         global_event_rate=0.00126599049
         unit_rate = global_event_rate / (360 * 180 * 700)
 
@@ -844,6 +874,22 @@ class HoughConfig(object):
         bin_prior = unit_rate * bin_area
 
         ev_prior = self.create_array(fill_val=bin_prior)
+
+
+        s = Sigvisa()
+        for i in range(self.lonbins):
+            left_lon = self.left_lon + self.bin_width_deg * i
+            right_lon = left_lon + self.bin_width_deg
+            for j in range(self.latbins):
+                bottom_lat = self.bottom_lat + self.bin_width_deg * j
+                top_lat = bottom_lat + self.bin_width_deg
+                def p(lat, lon):
+                    wlon, wlat = wrap_lonlat(lon, lat)
+                    return np.exp(s.sigmodel.event_location_prior_logprob(wlon, wlat, 0.0))
+                binp, binperr = scipy.integrate.dblquad(p, left_lon, right_lon, lambda x : bottom_lat, lambda x : top_lat, epsrel=1.49e-04, epsabs=1.49e-04)
+
+                ev_prior[i,j,:,:,:] *= binp / self.bin_width_deg**2
+
 
         mbbin_prior_dist = scipy.stats.expon(loc=2.5, scale=1.0/np.log(10.0))
         mbbin_prior_probs = [mbbin_prior_dist.cdf( self.min_mb+(i+1)*self.mb_bin_width) - mbbin_prior_dist.cdf(self.min_mb+i*self.mb_bin_width) for i in range(self.mbbins) ]
@@ -1334,7 +1380,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
 
     try:
         ctf = s.hough_proposer[offset]
-    except:
+    except KeyError:
         ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=12, offset=offset)
         s.hough_proposer[offset] = ctf
 
