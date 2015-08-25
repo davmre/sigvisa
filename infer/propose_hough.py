@@ -424,7 +424,7 @@ for (int i=0; i < lonbins; ++i) {
                     int timebin = timebins_used_phase(i_timebin);
                     timebins_used_flag_phase(timebin) = 0;
                     for (int mbbin=0; mbbin < mbbins; ++mbbin) {
-                        sta_hough_array(i,j,k,mbbin,timebin) +=   phase_score(mbbin, mbbin);
+                        sta_hough_array(i,j,k,mbbin,timebin) +=   phase_score(mbbin, timebin);
 
                         if (save_assoc) {
                            full_assoc(i,j,k,mbbin,timebin, phaseidx) = assoc(phaseidx,  mbbin, timebin)+1;
