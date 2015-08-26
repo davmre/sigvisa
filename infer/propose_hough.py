@@ -550,7 +550,7 @@ def categorical_prob(a, idx):
 
 
 def event_from_bin(hc, idx):
-    (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_time, max_time), (min_mb, max_mb) = hc.index_to_coords(idx)
+    (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_mb, max_mb), (min_time, max_time) = hc.index_to_coords(idx)
 
     lonwidth=right_lon-left_lon
     latwidth = top_lat-bottom_lat
@@ -1368,7 +1368,7 @@ class CTFProposer(object):
 
         if fix_result:
             _, evlp = event_from_bin(hc, v)
-            return evlp
+            return evlp, global_dist
         else:
             ev, evlp = event_from_bin(hc, v)
             return ev, np.log(prob) + evlp, global_dist
@@ -1379,13 +1379,15 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     if proposal_dist_seed is not None:
         np.random.seed(proposal_dist_seed)
 
-    if offset is None:
-        # random choice of proposal distribution, not based on current
-        # state so cancels out in the acceptance ratio
-        offset = np.random.choice([True, False])
-    if one_event_semantics is None:
-        one_event_semantics = np.random.choice([True, False])
+    #if offset is None:
+    #    # random choice of proposal distribution, not based on current
+    #    # state so cancels out in the acceptance ratio
+    #    offset = np.random.choice([True, False])
+    #if one_event_semantics is None:
+    #    one_event_semantics = np.random.choice([True, False])
 
+    offset = False
+    one_event_semantics=False
 
     try:
         ctf = s.hough_proposer[offset]
@@ -1393,8 +1395,12 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
         ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=12, offset=offset)
         s.hough_proposer[offset] = ctf
 
-    r = ctf.propose_event(sg, fix_result=fix_result,
-                          one_event_semantics=one_event_semantics)
+    #r = ctf.propose_event(sg, fix_result=fix_result,
+    #                      one_event_semantics=one_event_semantics)
+
+    ev = Event(lon=23.41, lat=34.55, depth=0.0, time=1238905667.8, mb=4.0)
+    lp, global_dist = ctf.propose_event(sg, fix_result=ev,one_event_semantics=one_event_semantics)
+    r = ev, lp, global_dist
     return r
 
 def august_debug(sg):

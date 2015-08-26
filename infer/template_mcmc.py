@@ -13,7 +13,7 @@ from sigvisa.utils.math import safe_log, safe_log_vec
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_event_station_chan
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.models.distributions import Gaussian
+from sigvisa.models.distributions import Gaussian, PiecewiseLinear
 from sigvisa.models.signal_model import extract_arrival_from_key, unify_windows
 from sigvisa.models.noise.armodel.model import ARGradientException
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing, mh_accept_util
@@ -52,6 +52,95 @@ def node_set_value(nodes, param, value):
 
 
 
+def get_signal_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_dist, tmvals, exclude_arr=None):
+
+    atime = tmvals['arrival_time']
+    peak_time = tmvals['arrival_time'] + np.exp(tmvals['peak_offset'])
+
+    if exclude_arr is None:
+        pred_signal = wn.assem_signal()
+        unexplained = wn.get_value().data - wn.assem_signal()
+    else:
+        eid, phase = exclude_arr
+        unexplained = wn.unexplained_signal(eid, phase)
+
+
+    peak_idx = int((peak_time - wn.st) * wn.srate)
+
+    start_idx_true = int((atime - wn.st) * wn.srate)
+    end_idx_true = int(peak_idx + 60*wn.srate)
+    start_idx = max(0, start_idx_true)
+    end_idx = min(wn.npts, end_idx_true)
+    start_offset = start_idx - start_idx_true
+    if end_idx-start_idx < wn.srate:
+        # if less than 1s of available signal, don't even bother
+        return None
+
+    unexplained_local = unexplained[start_idx:end_idx]
+    n = len(unexplained_local)
+
+    peak_height = float(unexplained[peak_idx])
+    env_height = max(peak_height - wn.nm.c, wn.nm.c/1000.0)
+
+    data_min = np.log(env_height) - 2
+    data_max = np.log(env_height) + 2
+    prior_min = min(prior_min, 1)
+    prior_max = max(prior_max, prior_min+1, -2)
+    if np.isfinite(data_min):
+        min_c = min(data_min, prior_min)
+        max_c = max(data_max, prior_max)
+        candidates = np.linspace(max(min_c, -5), min(max_c, 5), 20)
+        candidates = np.array(sorted(list(candidates) + [np.log(env_height), np.log(env_height+wn.nm.c)]))
+    else:
+        candidates = np.linspace(max(prior_min, -4),  min(prior_max, 5), 20)
+        
+
+    tg = sg.template_generator("P")
+    lps = []
+    def proxylp(candidate):
+        tmvals['coda_height'] = candidate
+        l = tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=n+start_offset)
+        diff = unexplained_local - np.exp(l[start_offset:])
+        return wn.nm.log_p(diff) + prior_dist.log_p(candidate)
+
+    lps = np.array([proxylp(candidate) for candidate in candidates])
+
+    def bad_indices(lps):
+        best_idx = np.argmax(lps)
+        best_lp = np.max(lps)
+        lp_diff = np.abs(np.diff(lps))
+
+        thresh = best_lp - 3
+        significant_lps = ( lps[:-1] > thresh ) +  ( lps[1:] > thresh )
+        badsteps = significant_lps * (lp_diff > 1)
+        bad_idxs = np.arange(len(lps)-1)[badsteps]
+        return bad_idxs
+
+    bad_idxs = bad_indices(lps)
+    while len(bad_idxs) > 0:
+        new_candidates = []
+        new_lps = []
+        for idx in bad_idxs:
+            c1 = candidates[idx]
+            c2 = candidates[idx+1]
+            c = c1 + (c2-c1)/2.0
+            new_candidates.append(c)
+            new_lps.append( proxylp(c))
+        full_c = np.concatenate((candidates, new_candidates))
+        full_lps = np.concatenate((lps, new_lps))
+        perm = sorted(np.arange(len(full_c)), key = lambda i : full_c[i])
+        candidates = np.array(full_c[perm])
+        lps = np.array(full_lps[perm])
+        bad_idxs = bad_indices(lps)
+
+    assert( (np.diff(candidates) > 0).all() )
+
+    p = PiecewiseLinear(candidates, np.array(lps))
+
+
+    return p
+    
+
 def get_signal_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None, peak_period_s = 2.0, exclude_arr=None):
 
     if peak_time is None:
@@ -76,7 +165,8 @@ def get_signal_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None,
     if ma.count(peak_data) == 0:
         return None
 
-    peak_height = peak_data.mean()
+    #peak_height = peak_data.mean()
+    peak_height = unexplained[peak_idx]
 
     env_height = max(peak_height - wn.nm.c, wn.nm.c/1000.0)
 

@@ -14,7 +14,7 @@ from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.propose_mb import propose_mb
 
-from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution, peak_log_p
+from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, get_signal_based_amplitude_distribution2, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution, peak_log_p
 from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
@@ -368,10 +368,10 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
     # acknowldege the possibility that the event is not currently
     # in the correct location
     #tt_spread = np.random.choice((2.0, 10.0, 30.0, 80.0))
-    tt_spread = 4.0
+    tt_spread = 3.0
 
-    peak_prior = np.exp(-np.abs(t - pred_atime)/tt_spread)
-    hard_cutoff = np.abs(t-pred_atime) < 25
+    peak_prior = np.exp(-np.abs(t - pred_peak_time)/tt_spread)
+    hard_cutoff = np.abs(t-pred_peak_time) < 25
     peak_prior *= hard_cutoff
 
     peak_cdf = merge_distribution(signal_diff_pos, peak_prior, smoothing=3)
@@ -383,7 +383,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
             # if the window doesn't contain signal near the predicted arrival time,
             # we can't do a data-driven proposal, so just sample from (something like)
             # the prior
-            peak_dist = Laplacian(pred_atime, tt_spread)
+            peak_dist = Laplacian(pred_peak_time, tt_spread)
             peak_time = peak_dist.sample()
             peak_lp = peak_dist.log_p(peak_time)
         else:
@@ -407,7 +407,48 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
         assert(not np.isnan(peak_lp))
         return peak_lp
 
+
 def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
+    """
+    Construct an amplitude proposal distribution by combining the signal likelihood with
+    the prior conditioned on the event location.
+
+    This is especially necessary when proposing phases that don't appear to be
+    present in the signal (i.e., are below the noise floor). If the prior predicts
+    a log-amplitude of -28, and the likelihood predicts a log-amplitude of -4 (because
+    it's impossible for the likelihood to distinguish amplitudes below the noise floor), then
+    proposals from the likelihood alone would ultimately be rejected.
+
+    """
+
+
+    k_ampt = create_key("amp_transfer", eid=eid, sta=wn.sta, chan=":", band=":", phase=phase)
+    try:
+        n_ampt = sg.all_nodes[k_ampt]
+    except:
+        import pdb; pdb.set_trace()
+
+    ev = sg.get_event(eid)
+    source_amp = brune.source_logamp(ev.mb, phase=phase, band=wn.band)
+
+    prior_mean = float(n_ampt.model.predict(cond=n_ampt._parent_values())) + source_amp
+    prior_var = float(n_ampt.model.variance(cond=n_ampt._parent_values(), include_obs=True))
+    prior_std = np.sqrt(prior_var)
+    prior_dist = Gaussian(prior_mean, prior_std)
+
+    prior_min = prior_mean - 3*prior_std
+    prior_max = prior_mean + 3*prior_std
+
+    amp_dist_signal = get_signal_based_amplitude_distribution2(sg, wn, 
+                                                               prior_min=prior_min, 
+                                                               prior_max=prior_max, 
+                                                               prior_dist=prior_dist, 
+                                                               tmvals=tmvals, 
+                                                               exclude_arr=(eid, phase))
+    return amp_dist_signal
+
+
+def heuristic_amplitude_posterior_old(sg, wn, tmvals, eid, phase, debug=False):
     """
     Construct an amplitude proposal distribution by combining the signal likelihood with
     the prior conditioned on the event location.
@@ -432,7 +473,7 @@ def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
     source_amp = brune.source_logamp(ev.mb, phase=phase, band=wn.band)
 
     prior_mean = float(n_ampt.model.predict(cond=n_ampt._parent_values())) + source_amp
-    prior_var = float(n_ampt.model.variance(cond=n_ampt._parent_values())) + 1
+    prior_var = float(n_ampt.model.variance(cond=n_ampt._parent_values(), include_obs=True))
     prior_dist = Gaussian(prior_mean, np.sqrt(prior_var))
 
     if debug:
@@ -453,18 +494,24 @@ def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
             # won't affect signal probabilities anyway, so we should just maximize probability
             # under the prior.
             heuristic_posterior = prior_dist
-        elif prior_mean > np.log(wn.nm.c) + 2:
+        #elif prior_mean > np.log(wn.nm.c) + 2:
             # if the prior thinks there *should* be a visible arrival
             # here, but that's not supported by the signal, we propose
             # to fit the signal (paying the cost under the prior) since
             # this is almost certainly cheaper than believing the prior
             # at the cost of not fitting the signal.
-            heuristic_posterior = amp_dist_signal
         else:
-            heuristic_posterior = amp_dist_signal.product(prior_dist)
+            #heuristic_posterior = amp_dist_signal
+            heuristic_posterior = Gaussian(-5, 1.0)
+        #else:
+        #    heuristic_posterior = amp_dist_signal.product(prior_dist)
     else:
         # otherwise, combine the likelihood and prior for a heuristic posterior
         heuristic_posterior = amp_dist_signal.product(prior_dist)
+    #heuristic_posterior = Gaussian(-2.0, 0.5)
+
+
+    #nstd = np.sqrt(wn.nm.marginal_variance())
 
 
     return heuristic_posterior
@@ -730,10 +777,32 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, **kwargs)
     log_qforward, log_qbackward, revert_move = ev_death_helper_full(sg, eid, location_proposal, **kwargs)
     lp_new = sg.current_log_p()
 
+
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        hough_array, eid, associations = proposal_extra
+        log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
+
+        # proposed event should be the most recently created
+        try:
+            proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
+        except:
+            proposed_ev = None
+
+        with open(log_file, 'a') as f:
+            f.write("proposed ev: %s\n" % proposed_ev)
+            f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            for (sta, phase, assoc) in associations:
+                if assoc:
+                    f.write(" associated %s at %s\n" % (phase, sta))
+            f.write("\n")
+
+
     log_qforward += move_logprob
     log_qbackward += reverse_logprob
 
     print "death move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
+
+
 
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)
 
@@ -866,6 +935,10 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
     log_qforward += birth_position_lp
     log_qbackward += death_proposal_logprob(sg, eid)
 
+    sg.current_log_p_breakdown()
+
+    import pdb; pdb.set_trace()
+
     def revert():
         if revert_action is not None:
             revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
@@ -881,8 +954,27 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
 def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
 
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        hough_array, eid, associations = proposal_extra
+        log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
+
+        # proposed event should be the most recently created
+        try:
+            proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
+        except:
+            proposed_ev = None
+
+        with open(log_file, 'a') as f:
+            f.write("proposed ev: %s\n" % proposed_ev)
+            f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            for (sta, phase, assoc) in associations:
+                if assoc:
+                    f.write(" associated %s at %s\n" % (phase, sta))
+            f.write("\n")
+
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, associations = proposal_extra
+        log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
         if np.random.rand() < 0.1:
             sites = sg.site_elements.keys()
             print "saving hough array picture...",
@@ -891,6 +983,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
 
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, associations = proposal_extra
+        log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
         if log_to_run_dir is not None:
             log_event_birth(sg, hough_array, log_to_run_dir, eid, associations)
         else:

@@ -381,3 +381,71 @@ class Negate(Distribution):
 
     def deriv_log_p(self, x, *args, **kwargs):
         return self.dist.deriv_log_p(-x, *args, **kwargs)
+
+class PiecewiseLinear(Distribution):
+    def __init__(self, xs, lps, mix_dist=None, mix_weight=0.0):
+        self.mix_dist = mix_dist
+        self.mix_weight = mix_weight
+        self.ps = np.exp(lps - np.max(lps))
+        self.xs = xs
+        self._normalize()
+
+    def _normalize(self):
+        pts = len(self.xs)
+        areas = np.empty((pts-1,))
+        for i in range(pts-1):
+            gap = self.xs[i+1]-self.xs[i]
+            areas[i] = gap * (self.ps[i+1]+self.ps[i])/2.0
+        Z = np.sum(areas)
+
+        self.areas = areas / Z
+        self.ps /= Z
+
+    def log_p(self, x, *args, **kwargs):
+        idx = np.searchsorted(self.xs, x)
+        if idx == 0:
+            p = 0
+        elif idx==len(self.xs):
+            p = 0
+        else:
+            p1 = self.ps[idx-1]
+            p2 = self.ps[idx]
+            z = x-self.xs[idx-1]
+            gap = self.xs[idx]-self.xs[idx-1]
+
+            p = (1.0 - z/gap) * p1 + (z/gap)*p2
+
+        if self.mix_weight > 0:
+            mix_p = np.exp(self.mix_dist.log_p(x))
+            p = p*(1.0-self.mix_weight) + self.mix_weight * mix_p
+
+        return np.log(p)
+
+    def sample(self, *args, **kwargs):
+        if self.mix_weight > 0:
+            u = np.random.rand()
+            if u < self.mix_weight:
+                return self.mix_dist.sample(*args, **kwargs)
+
+        pts = len(self.xs)
+        segment = np.random.choice(np.arange((pts-1),), p=self.areas)
+        area = self.areas[segment]
+        gap = self.xs[segment+1] - self.xs[segment]
+        p1 = self.ps[segment]
+        p2 = self.ps[segment+1]
+
+        u = np.random.rand() * area
+        if p1==p2:
+            z = (u/area) * gap
+        else:
+            z = (np.sqrt(p1**2 * gap**2 + 2*(p2-p1)*u*gap) - p1*gap) / (p2-p1)
+
+        if np.isnan(z):
+            import pdb; pdb.set_trace()
+        
+        if z > gap:
+            import pdb; pdb.set_trace()
+
+        x =  self.xs[segment] + z
+        return x
+
