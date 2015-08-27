@@ -1309,7 +1309,12 @@ class CTFProposer(object):
         # precompute ttime and amp_transfer patterns
         global_bin_width = bin_widths[0]
         stime = sg.event_start_time
-        etime = sg.end_time
+
+        try:
+            etime = sg.event_end_time
+        except AttributeError:
+            print "WARNING: no event end time specified"
+            etime = sg.end_time
 
         self.bin_widths = bin_widths
         self.stime = stime
@@ -1368,7 +1373,7 @@ class CTFProposer(object):
 
         if fix_result:
             _, evlp = event_from_bin(hc, v)
-            return evlp, global_dist
+            return evlp
         else:
             ev, evlp = event_from_bin(hc, v)
             return ev, np.log(prob) + evlp, global_dist
@@ -1395,12 +1400,12 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
         ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=12, offset=offset)
         s.hough_proposer[offset] = ctf
 
-    #r = ctf.propose_event(sg, fix_result=fix_result,
-    #                      one_event_semantics=one_event_semantics)
+    r = ctf.propose_event(sg, fix_result=fix_result,
+                          one_event_semantics=one_event_semantics)
 
-    ev = Event(lon=23.41, lat=34.55, depth=0.0, time=1238905667.8, mb=4.0)
-    lp, global_dist = ctf.propose_event(sg, fix_result=ev,one_event_semantics=one_event_semantics)
-    r = ev, lp, global_dist
+    #ev = Event(lon=23.41, lat=34.55, depth=0.0, time=1238905667.8, mb=4.0)
+    #lp, global_dist = ctf.propose_event(sg, fix_result=ev,one_event_semantics=one_event_semantics)
+    #r = ev, lp, global_dist
     return r
 
 def august_debug(sg):

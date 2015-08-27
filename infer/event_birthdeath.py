@@ -806,8 +806,24 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, **kwargs)
 
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)
 
-def ev_death_move_hough(sg, **kwargs):
-    return ev_death_move_abstract(sg, hough_location_proposal, proposal_includes_mb=True, **kwargs)
+def ev_death_move_hough(sg, hough_kwargs={}, **kwargs):
+    hlp = lambda sg : hough_location_proposal(sg, **hough_kwargs)
+    return ev_death_move_abstract(sg, hlp, proposal_includes_mb=True, **kwargs)
+
+
+def ev_death_move_hough_offset(sg, **kwargs):
+    hough_kwargs = {"offset": True}
+    return ev_death_move_hough(sg, hough_kwargs, **kwargs)
+
+def ev_death_move_hough_oes(sg, **kwargs):
+    hough_kwargs = {"one_event_semantics": True}
+    return ev_death_move_hough(sg, hough_kwargs, **kwargs)
+
+def ev_death_move_hough_oes_offset(sg, **kwargs):
+    hough_kwargs = {"one_event_semantics": True, "offset": True}
+    return ev_death_move_hough(sg, hough_kwargs, **kwargs)
+
+
 
 def ev_death_move_lstsqr(sg, **kwargs):
     return ev_death_move_abstract(sg, overpropose_new_locations, **kwargs)
@@ -937,8 +953,6 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
     sg.current_log_p_breakdown()
 
-    import pdb; pdb.set_trace()
-
     def revert():
         if revert_action is not None:
             revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
@@ -952,7 +966,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert)
 
-def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
+def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, associations = proposal_extra
@@ -966,7 +980,8 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s\n" % proposed_ev)
-            f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            f.write(" hough args %s\n" % repr(hough_kwargs))
+            f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
             for (sta, phase, assoc) in associations:
                 if assoc:
                     f.write(" associated %s at %s\n" % (phase, sta))
@@ -978,7 +993,8 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
         if np.random.rand() < 0.1:
             sites = sg.site_elements.keys()
             print "saving hough array picture...",
-            visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, 'last_hough.png'))
+            fname = 'last_hough%s.png' % ("_".join(["",] + hough_kwargs.keys()) 
+            visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, fname)))
             print "done"
 
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
@@ -989,7 +1005,24 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, **kwargs):
         else:
             raise Exception("why are we not logging?")
 
-    return ev_birth_move_abstract(sg, location_proposal=hough_location_proposal, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=True, **kwargs)
+    hlp = lambda sg : hough_location_proposal(sg, **hough_kwargs)
+
+    return ev_birth_move_abstract(sg, location_proposal=hlp, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=True, **kwargs)
+
+
+def ev_birth_move_hough_offset(sg, **kwargs):
+    hough_kwargs = {"offset": True}
+    return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, **kwargs)
+
+def ev_birth_move_hough_oes(sg, **kwargs):
+    hough_kwargs = {"one_event_semantics": True}
+    return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, **kwargs)
+
+def ev_birth_move_hough_oes_offset(sg, **kwargs):
+    hough_kwargs = {"one_event_semantics": True, "offset": True}
+    return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, **kwargs)
+
+
 
 def ev_birth_move_lstsqr(sg, log_to_run_dir=None, **kwargs):
 
