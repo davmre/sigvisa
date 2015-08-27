@@ -1160,6 +1160,8 @@ def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=F
     adj_time = 0
 
 
+    
+    
     for sta, uatemplates in uatemplates_by_sta.items():
 
         try:
@@ -1331,8 +1333,8 @@ class CTFProposer(object):
             bottom_lat += global_bin_width/2.0
 
         hc = HoughConfig(stime, etime-stime, bin_width_deg=global_bin_width,
-                         phases=phases, depthbins=depthbins, time_tick_s = 20.0,
-                         mbbins=mbbins,
+                         phases=phases, depthbins=depthbins[0], time_tick_s = 20.0,
+                         mbbins=mbbins[0],
                          top_lat=top_lat, bottom_lat=bottom_lat,
                          left_lon=left_lon, right_lon=right_lon,
                          uatemplate_rate=sg.uatemplate_rate)
@@ -1356,12 +1358,14 @@ class CTFProposer(object):
         prob = categorical_prob(global_dist, v)
         (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), _, _ = hc.index_to_coords(v)
 
-        for fine_width in self.bin_widths[1:]:
+        for i, fine_width in enumerate(self.bin_widths[1:]):
+            depth_bins = self.depthbins[i+1]
+            mb_bins = self.mbbins[i+1]
             hc = HoughConfig(self.stime, self.etime-self.stime, bin_width_deg=fine_width, phases=self.phases,
-                             depthbins=self.depthbins, top_lat=top_lat, bottom_lat=bottom_lat,
+                             depthbins=depth_bins, top_lat=top_lat, bottom_lat=bottom_lat,
                              left_lon=left_lon, right_lon=right_lon, min_depth=min_depth,
                              max_depth=max_depth, time_tick_s = 10.0,
-                             mbbins=self.mbbins)
+                             mbbins=mb_bins)
             array,debug, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
             dist = normalize_global(array, nll, one_event_semantics=one_event_semantics, hc=hc)
             if fix_result:
@@ -1397,7 +1401,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     try:
         ctf = s.hough_proposer[offset]
     except KeyError:
-        ctf = CTFProposer(sg, [10,5,2], depthbins=2, mbbins=12, offset=offset)
+        ctf = CTFProposer(sg, [10,5,2], depthbins=[7,2,2], mbbins=[12,2,2], offset=offset)
         s.hough_proposer[offset] = ctf
 
     r = ctf.propose_event(sg, fix_result=fix_result,
