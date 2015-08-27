@@ -822,10 +822,10 @@ def swap_params(t1nodes, t2nodes):
             atime1, atime2 = v1, v2
     return atime1, atime2
 
-def swap_association_move(sg, wave_node, repropose_events=False, debug_probs=False, stas=None):
+def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, stas=None):
 
     # sample from all pairs of adjacent templates
-    arr1, arr2, pair_prob = sample_uniform_pair_to_swap(sg, wave_node)
+    arr1, arr2, pair_prob = sample_uniform_pair_to_swap(sg, wn)
     if arr1 is None:
         return False
 
@@ -835,8 +835,8 @@ def swap_association_move(sg, wave_node, repropose_events=False, debug_probs=Fal
 
 
     # get all relevant nodes for the arrivals we sampled
-    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wn.sta, band=wn.band, chan=wn.chan)
+    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wn.sta, band=wn.band, chan=wn.chan)
     rn = set(relevant_nodes_hack(t1nodes) + relevant_nodes_hack(t2nodes))
     if repropose_events:
         if arr1[1] > 0:
@@ -942,7 +942,7 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
     params_over_time = defaultdict(list)
 
     for wn in wn_list:
-        wave_env = wn.get_value() if wn.env else wn.get_wave().filter('env').data
+        wave_env = wn.get_env()
         wn.cdf = preprocess_signal_for_sampling(wave_env)
 
         arrivals = wn.arrivals()
@@ -958,7 +958,7 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
 
             n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["tt_residual"],
                                                            offset_node=tmnodes["peak_offset"],
-                                                             wave_node=wn, std=stds['peak_offset'])
+                                                             wn=wn, std=stds['peak_offset'])
             n_tried["peak_offset"] += 1
 
             for param in ("tt_residual","amp_transfer","coda_decay"):
@@ -1022,33 +1022,6 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
     """
 
 
-def main():
-
-    parser = OptionParser()
-    register_svgraph_cmdline(parser)
-    register_svgraph_event_based_signal_cmdline(parser)
-    (options, args) = parser.parse_args()
-
-    sg = setup_svgraph_from_cmdline(options, args)
-
-    evnodes = load_event_based_signals_from_cmdline(sg, options, args)
-
-    key_prefix = "%d;" % (evnodes['mb'].eid)
-
-    evnodes['natural_source'].fix_value(key = key_prefix + "natural_source")
-    evnodes['lon'].set_value(key = key_prefix + "lon", value=124.3)
-    evnodes['lat'].set_value(key = key_prefix + "lat", value=44.5)
-    evnodes['depth'].set_value(key = key_prefix + "depth", value = 10.0)
-    evnodes['time'].set_value(key = key_prefix + "time", value=ev_true.time+5.0)
-    evnodes['mb'].set_value(key = key_prefix + "mb", value=3.0)
-
-    np.random.seed(1)
-    run_event_MH(sg, evnodes, wave_nodes)
-
-    #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
-    print ll
-
-    #plot_with_fit("unass.png", wn)
 
 if __name__ == "__main__":
     try:

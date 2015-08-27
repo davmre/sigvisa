@@ -11,11 +11,12 @@ import cPickle as pickle
 from optparse import OptionParser
 
 
-stas = "ASAR,FITZ,ILAR,MKAR,WRA,YKA,KURK,SONM,BVAR,CTA,CMAR,ZALV,AKTO,INK,AAK,AKBB,ARCES,CPUP,DZM,FINES,JKA,KBZ,KSRS,LPAZ,NOA,NVAR,PETK,PLCA,PMG,STKA,TORD,URZ,USRK,VNDA".split(",")
+#stas = "ASAR,FITZ,ILAR,MKAR,WRA,YKA,KURK,SONM,BVAR,CTA,CMAR,ZALV,AKTO,INK,AAK,AKBB,ARCES,CPUP,DZM,FINES,JKA,KBZ,KSRS,LPAZ,NOA,NVAR,PETK,PLCA,PMG,STKA,TORD,URZ,USRK,VNDA".split(",")
+stas = "ASAR,MKAR,FITZ".split(",")
 
 #stas="MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR".split(",")
 
-def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatemplates=False, uatemplate_rate=4e-4):
+def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatemplates=False, uatemplate_rate=4e-4, raw_signals=False):
 
     rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training",
                           hour=hour, len_hours=len_hours,
@@ -25,6 +26,7 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatempl
                     wiggle_family="iid",
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
+                    raw_signals=raw_signals,
                     phases="leb",
                     dummy_fallback=True,
                     vert_only=True)
@@ -37,7 +39,7 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatempl
 
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False):
 
     
 
@@ -51,6 +53,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     max_hz=hz,
                     phases=["P",],
                     dummy_fallback=True,
+                    raw_signals=raw_signals,
                     vert_only=True)
 
     if resume_from is not None:
@@ -75,6 +78,12 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
 if __name__ == "__main__":
 
     parser = OptionParser()
+
+
+    parser.add_option("--raw", dest="raw", default=False, action="store_true",
+                      help="use raw signals instead of envelopes")
+    parser.add_option("--hz", dest="hz", default=2.0, type=float,
+                      help="downsample signals to this rate")
 
     parser.add_option("--leb", dest="leb", default=False, action="store_true",
                       help="fix events to LEB bulletin")
@@ -101,6 +110,6 @@ if __name__ == "__main__":
 
 
     if options.leb:
-        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid, enable_uatemplates=options.leb_uatemplates, uatemplate_rate=options.uatemplate_rate)
+        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid, enable_uatemplates=options.leb_uatemplates, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz)
     else:
-        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate)
+        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz)

@@ -159,8 +159,8 @@ def atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase,
     return xcdist, idx_to_atime, atime_to_idx
 
 
-def xc_move(sg, wave_node, eid, phase, tmnodes, propose_peak=False, **kwargs):
-    wn_target = wave_node
+def xc_move(sg, wn, eid, phase, tmnodes, propose_peak=False, **kwargs):
+    wn_target = wn
     eid_target = eid
 
     k_atime, n_atime = tmnodes['arrival_time']
@@ -187,14 +187,14 @@ def xc_move(sg, wave_node, eid, phase, tmnodes, propose_peak=False, **kwargs):
 
     return current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v
 
-def atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
+def atime_xc_move(sg, wn, eid, phase, tmnodes, **kwargs):
     """
     Propose a new arrival time based on cross-correlation with a random
     source event.
     """
 
     try:
-        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
+        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wn, eid, phase, tmnodes, **kwargs)
     except Exception as e:
         print e
         return False
@@ -207,7 +207,7 @@ def atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
                      node_list = (n_atime,),
                      relevant_nodes = relevant_nodes,)
 
-def constpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
+def constpeak_atime_xc_move(sg, wn, eid, phase, tmnodes, **kwargs):
     """
     Propose a new arrival time from cross-correlation, while also
     adjusting the offset to leave the peak time constant. The hope is
@@ -216,7 +216,7 @@ def constpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
     """
 
     try:
-        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
+        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wn, eid, phase, tmnodes, **kwargs)
     except Exception as e:
         print e
         return False
@@ -241,7 +241,7 @@ def constpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
                      node_list = (n_atime,n_offset),
                      relevant_nodes = relevant_nodes,)
 
-def adjpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
+def adjpeak_atime_xc_move(sg, wn, eid, phase, tmnodes, **kwargs):
     """
     Propose a new arrival time from cross-correlation, while also
     adjusting the offset to leave the peak time constant. The hope is
@@ -250,7 +250,7 @@ def adjpeak_atime_xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs):
     """
 
     try:
-        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wave_node, eid, phase, tmnodes, **kwargs)
+        current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wn, eid, phase, tmnodes, **kwargs)
     except Exception as e:
         print e
         return False

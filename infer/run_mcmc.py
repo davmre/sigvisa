@@ -188,7 +188,7 @@ def single_template_MH(sg, wn, tmnodes, phase, steps=1000, rw=True, hamiltonian=
         # special template moves
         for (move_name, fn) in template_moves_special.iteritems():
             run_move(move_name=move_name, fn=fn,
-                     sg=sg, wave_node=wn, tmnodes=tmnodes,
+                     sg=sg, wn=wn, tmnodes=tmnodes,
                      n_attempted=n_attempted, n_accepted=n_accepted,
                      std=stds[move_name] if move_name in stds else None,
                      window_lps=window_lps)
@@ -359,7 +359,7 @@ def run_open_world_MH(sg, steps=10000,
                         run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                  n_accepted=n_accepted, move_times=move_times,
                                  move_prob=move_prob, cyclic=cyclic_template_moves,
-                                 sg=sg, wave_node=wn)
+                                 sg=sg, wn=wn)
 
                     for (eid, phase) in wn.arrivals():
 
@@ -377,13 +377,13 @@ def run_open_world_MH(sg, steps=10000,
 
                         window_lps = None
                         if use_proxy_lp:
-                            window_lps = wn.cache_latent_signal_for_template_optimization(eid, phase, force_bounds=False)
+                            window_lps = wn.cache_latent_env_for_template_optimization(eid, phase, force_bounds=False)
 
                         # special template moves
                         for (move_name, fn) in template_moves_special.iteritems():
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                      n_accepted=n_accepted, move_times=move_times,
-                                     sg=sg, wave_node=wn, tmnodes=tmnodes,
+                                     sg=sg, wn=wn, tmnodes=tmnodes,
                                      eid=eid, phase=phase,
                                      std=stds[move_name] if move_name in stds else None,
                                      window_lps = window_lps)

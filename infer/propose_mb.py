@@ -55,6 +55,8 @@ def ev_mb_posterior_laplace(sg, eid):
     coda_heights = [nn.get_value() for nn in ch_nodes]
     ch_node_labels = [nn.label for nn in ch_nodes]
 
+    assert(len(amp_nodes) > 0)
+
     def reset_coda_heights():
         for ch, label in zip(coda_heights, ch_node_labels):
             nn = sg.all_nodes[label]

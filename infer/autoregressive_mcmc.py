@@ -2,76 +2,9 @@ import numpy as np
 
 from sigvisa.models.distributions import Gaussian, InvGamma
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
-from sigvisa.infer.latent_arrival_mcmc_c import gibbs_sweep_c
-from sigvisa.infer.latent_arrival_mcmc_stupid import gibbs_sweep_python
 
 import scipy.weave as weave
 from scipy.weave import converters
-
-def wiggle_param_step(sg, wave_node, tmnodes):
-    k_latent, n_latent = tmnodes['latent_arrival']
-
-    noise_std = n_latent.arwm.em.std
-    params = n_latent.arwm.params
-
-    proposed_std = float(np.exp(np.log(noise_std) + np.random.normal(0, 0.1, 1)))
-    #proposed_params = params + np.random.normal(0, 0.1, len(params))
-
-    lp_old = n_latent.log_p()
-
-    old_wm = n_latent.arwm
-
-    em = ErrorModel(mean=0.0, std=proposed_std)
-    n_latent.arwm = ARModel(params=params, c=1.0, em = em, sf=n_latent.srate)
-
-    lp_new = n_latent.log_p()
-
-    u = np.random.uniform()
-    if lp_new - lp_old > np.log(u):
-        print "updated wiggle params:", proposed_std, params, lp_new-lp_old
-        return True
-    else:
-        n_latent.arwm = old_wm
-        return False
-
-def latent_arrival_block_gibbs(sg, wave_node, tmnodes):
-    k_latent, n_latent = tmnodes['latent_arrival']
-
-    gibbs_sweep(n_latent)
-
-    return True
-
-def gibbs_sweep(latent, **kwargs):
-    return gibbs_sweep_c(latent, **kwargs)
-
-"""
-def noise_param_step(wn):
-    noise_mean = wn.nm.c
-    noise_std = wn.nm.em.std
-    params = wn.nm.params
-
-    proposed_mean = float(np.exp(np.log(noise_mean) + np.random.normal(0, 0.1, 1)))
-    proposed_std = float(np.exp(np.log(noise_std) + np.random.normal(0, 0.1, 1)))
-    #proposed_params = params + np.random.normal(0, 0.1, len(params))
-
-    lp_old = wn.log_p()
-
-    old_nm = wn.nm
-
-    em = ErrorModel(mean=0.0, std=proposed_std)
-    wn.nm = ARModel(params=params, c=proposed_mean, em = em, sf=wn.srate)
-
-    lp_new = wn.log_p()
-
-    u = np.random.uniform()
-    if lp_new - lp_old > np.log(u):
-        print "updated noise params:", proposed_mean, proposed_std, params, lp_new-lp_old
-        print "   previous:", noise_mean, noise_std, params
-        return True
-    else:
-        wn.nm = old_nm
-        return False
-"""
 
 def ar_param_posterior(signal, signal_vars, armodel, prior_mean, prior_cov):
     # warning: this method has accumulated hacks, I don't think I have a good
@@ -208,23 +141,23 @@ def sample_posterior_armodel_from_signal(signal_mean, signal_var, arm_prior, arm
 
     return arm
 
-def arnoise_gibbs_move(sg, wave_node):
+def arnoise_gibbs_move(sg, wn):
 
-    means = wave_node.signal_component_means()
+    means = wn.signal_component_means()
     noise_mean = means['noise']
-    noise_var = wave_node.signal_component_means(return_stds_instead=True)['noise']**2
+    noise_var = wn.signal_component_means(return_stds_instead=True)['noise']**2
 
-    arm = sample_posterior_armodel_from_signal(noise_mean, noise_var, wave_node.prior_nm)
+    arm = sample_posterior_armodel_from_signal(noise_mean, noise_var, wn.prior_nm)
 
     # TODO: should really do a MH step here because the noise model we sample
     # isn't really a Gibbs move.
     # (though need to be careful: the prior on noise models is not currently
-    # part of the graph logp. really the noise model should be its owave_node
+    # part of the graph logp. really the noise model should be its own
     # separate node...)
 
     #lp1 = wave_node.log_p()
-    wave_node.set_noise_model(arm)
-    wave_node.cached_logp = None
+    wn.set_noise_model(arm)
+    wn.cached_logp = None
     #lp2 = wave_node.log_p()
 
     return True

@@ -1,6 +1,5 @@
 import numpy as np
 from functools32 import lru_cache
-from sigvisa.infer.autoregressive_mcmc import gibbs_sweep
 from sigvisa.models.signal_model import ObservedSignalNode
 
 @lru_cache(maxsize=2048)

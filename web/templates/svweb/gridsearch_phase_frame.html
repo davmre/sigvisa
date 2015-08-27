@@ -1,5 +1,0 @@
-{% load url from future %}
-{% for phase,arrival in phase_arrivals %}
-<strong>{{phase}}</strong>: {{ arrival }} <br/><a href="{% url 'gs_pickled_wave' gswid=gswid %}?lon={{lon}};lat={{lat}};xmin={{arrival|add:-5}};xmax={{arrival|add:10}}">
-<img src="{% url 'gs_pickled_wave' gswid=gswid %}?lon={{lon}};lat={{lat}};xmin={{arrival|add:-5}};xmax={{arrival|add:10}}" width=350 height=218.75></a><br/>
-{% endfor %}

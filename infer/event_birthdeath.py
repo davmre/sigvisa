@@ -14,7 +14,7 @@ from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.propose_mb import propose_mb
 
-from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, get_signal_based_amplitude_distribution2, get_signal_diff_positive_part, sample_peak_time_from_signal, merge_distribution, peak_log_p
+from sigvisa.infer.template_mcmc import get_env_based_amplitude_distribution, get_env_based_amplitude_distribution2, get_env_diff_positive_part, sample_peak_time_from_cdf, merge_distribution, peak_log_p
 from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
@@ -277,9 +277,9 @@ def unassociate_template(sg, sta, eid, phase, tmid=None, remove_event_phase=Fals
     ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
 
     assert(len(sg.station_waves[sta]) == 1)
-    wave_node = sg.station_waves[sta][0]
+    wn = sg.station_waves[sta][0]
     atime = ev_tmvals['arrival_time']
-    tmnodes = sg.create_unassociated_template(wave_node, atime, nosort=True,
+    tmnodes = sg.create_unassociated_template(wn, atime, nosort=True,
                                            tmid=tmid, initial_vals=ev_tmvals)
     tmid = tmnodes.values()[0].tmid
     if node_lps is not None:
@@ -319,15 +319,15 @@ def deassociation_logprob(sg, sta, eid, phase, deletion_prob=False, min_logprob=
     try:
         wns = sg.get_arrival_wn(sta, eid, phase, band=None, chan=None, revert_to_atime=False)
         assert(len(wns)==1) # don't yet know how to handle the case with multiple bands/chans
-        wave_node = wns[0]
+        wn = wns[0]
     except KeyError:
         return 0.0
 
-    #wave_node = sg.station_waves[sta][0]
-    signal_lp_with_template = wave_node.log_p()
-    arrivals = copy.copy(wave_node.arrivals())
+    #wn = sg.station_waves[sta][0]
+    signal_lp_with_template = wn.log_p()
+    arrivals = copy.copy(wn.arrivals())
     arrivals.remove((eid, phase))
-    signal_lp_without_template = wave_node.log_p(arrivals=arrivals)
+    signal_lp_without_template = wn.log_p(arrivals=arrivals)
     deletion_ratio_log = signal_lp_without_template - signal_lp_with_template
 
     log_normalizer = np.logaddexp(deassociation_ratio_log, deletion_ratio_log)
@@ -361,7 +361,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
 
     arrivals = wn.arrivals()
     other_arrivals = [a for a in arrivals if a != (eid, phase)]
-    signal_diff_pos = get_signal_diff_positive_part(wn, other_arrivals) + wn.nm.c
+    env_diff_pos = get_env_diff_positive_part(wn, other_arrivals) + wn.nm_env.c
     t = np.linspace(wn.st, wn.et, wn.npts)
 
     # consider using a vague travel-time prior to
@@ -374,7 +374,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
     hard_cutoff = np.abs(t-pred_peak_time) < 25
     peak_prior *= hard_cutoff
 
-    peak_cdf = merge_distribution(signal_diff_pos, peak_prior, smoothing=3)
+    peak_cdf = merge_distribution(env_diff_pos, peak_prior, smoothing=3)
 
 
     if not fix_result:
@@ -387,7 +387,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
             peak_time = peak_dist.sample()
             peak_lp = peak_dist.log_p(peak_time)
         else:
-            peak_time, peak_lp = sample_peak_time_from_signal(peak_cdf, wn.st, wn.srate, return_lp=True)
+            peak_time, peak_lp = sample_peak_time_from_cdf(peak_cdf, wn.st, wn.srate, return_lp=True)
 
 
         proposed_atime = peak_time - np.exp(tmvals['peak_offset'])
@@ -410,7 +410,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, fix_result=
 
 def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
     """
-    Construct an amplitude proposal distribution by combining the signal likelihood with
+    Construct an amplitude proposal distribution by combining the env likelihood with
     the prior conditioned on the event location.
 
     This is especially necessary when proposing phases that don't appear to be
@@ -439,18 +439,18 @@ def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
     prior_min = prior_mean - 3*prior_std
     prior_max = prior_mean + 3*prior_std
 
-    amp_dist_signal = get_signal_based_amplitude_distribution2(sg, wn, 
+    amp_dist_env = get_env_based_amplitude_distribution2(sg, wn, 
                                                                prior_min=prior_min, 
                                                                prior_max=prior_max, 
                                                                prior_dist=prior_dist, 
                                                                tmvals=tmvals, 
                                                                exclude_arr=(eid, phase))
-    return amp_dist_signal
+    return amp_dist_env
 
 
 def heuristic_amplitude_posterior_old(sg, wn, tmvals, eid, phase, debug=False):
     """
-    Construct an amplitude proposal distribution by combining the signal likelihood with
+    Construct an amplitude proposal distribution by combining the env likelihood with
     the prior conditioned on the event location.
 
     This is especially necessary when proposing phases that don't appear to be
@@ -461,7 +461,7 @@ def heuristic_amplitude_posterior_old(sg, wn, tmvals, eid, phase, debug=False):
 
     """
 
-    amp_dist_signal = get_signal_based_amplitude_distribution(sg, wn, tmvals, exclude_arr=(eid, phase))
+    amp_dist_env = get_env_based_amplitude_distribution(sg, wn, tmvals, exclude_arr=(eid, phase))
 
     k_ampt = create_key("amp_transfer", eid=eid, sta=wn.sta, chan=":", band=":", phase=phase)
     try:
@@ -479,39 +479,39 @@ def heuristic_amplitude_posterior_old(sg, wn, tmvals, eid, phase, debug=False):
     if debug:
         import pdb; pdb.set_trace()
 
-    if amp_dist_signal is None:
+    if amp_dist_env is None:
         return prior_dist
 
-    if amp_dist_signal.mean < np.log(wn.nm.c):
+    if amp_dist_env.mean < np.log(wn.nm_env.c):
         # the Gaussian model of log-amplitude isn't very good at the noise floor
         # (it should really be a model of non-log amplitude, since noise is additive).
         # so we hack in some special cases:
         # TODO: find a better solution here.
 
-        if prior_mean < amp_dist_signal.mean:
-            # if the prior thinks the signal needs to be *really* small, vs just kind of small,
+        if prior_mean < amp_dist_env.mean:
+            # if the prior thinks the env needs to be *really* small, vs just kind of small,
             # we believe the prior. Since we're proposing below the noise floor, our proposal
-            # won't affect signal probabilities anyway, so we should just maximize probability
+            # won't affect env probabilities anyway, so we should just maximize probability
             # under the prior.
             heuristic_posterior = prior_dist
-        #elif prior_mean > np.log(wn.nm.c) + 2:
+        #elif prior_mean > np.log(wn.nm_env.c) + 2:
             # if the prior thinks there *should* be a visible arrival
-            # here, but that's not supported by the signal, we propose
-            # to fit the signal (paying the cost under the prior) since
+            # here, but that's not supported by the env, we propose
+            # to fit the env (paying the cost under the prior) since
             # this is almost certainly cheaper than believing the prior
-            # at the cost of not fitting the signal.
+            # at the cost of not fitting the env.
         else:
-            #heuristic_posterior = amp_dist_signal
+            #heuristic_posterior = amp_dist_env
             heuristic_posterior = Gaussian(-5, 1.0)
         #else:
-        #    heuristic_posterior = amp_dist_signal.product(prior_dist)
+        #    heuristic_posterior = amp_dist_env.product(prior_dist)
     else:
         # otherwise, combine the likelihood and prior for a heuristic posterior
-        heuristic_posterior = amp_dist_signal.product(prior_dist)
+        heuristic_posterior = amp_dist_env.product(prior_dist)
     #heuristic_posterior = Gaussian(-2.0, 0.5)
 
 
-    #nstd = np.sqrt(wn.nm.marginal_variance())
+    #nstd = np.sqrt(wn.nm_env.marginal_variance())
 
 
     return heuristic_posterior
@@ -915,7 +915,7 @@ def ev_birth_helper(sg, proposed_ev, associate_using_mb=True, eid=None):
 
     return log_qforward, log_qbackward, revert_move, eid, associations
 
-def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=False):
+def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=True):
     # propose a new ev location
     #try:
     ev, lp_loc, extra = location_proposal(sg)

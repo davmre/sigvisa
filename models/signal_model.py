@@ -73,6 +73,14 @@ def unify_windows(w1, w2):
     end_idx = max(end_idx1, end_idx2)
     return (start_idx, end_idx)
 
+def nan_under_mask(md):
+    d = np.array(md.data, dtype=np.float64)
+    m = md.mask
+    if isinstance(m, np.ndarray):
+        d[m] = np.nan
+    return ma.masked_array(d, m)
+
+
 class ObservedSignalNode(Node):
     """
 
@@ -83,17 +91,12 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, **kwargs):
+    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, mw_env=None, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
         # maintain the invariant that masked data is always NaN
-        wave_data = model_waveform.data
-        d = np.array(wave_data.data, dtype=np.float64)
-        m = wave_data.mask
-        if isinstance(m, np.ndarray):
-            d[m] = np.nan
-        wd = ma.masked_array(d, m)
+        wd = nan_under_mask(model_waveform.data)
 
         super(ObservedSignalNode, self).__init__(model=None, initial_value=wd, keys=[key,], fixed=observed, **kwargs)
 
@@ -107,10 +110,16 @@ class ObservedSignalNode(Node):
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
         self.valid_len = model_waveform['valid_len']
-        self.env = 'env' in self.filter_str
+        self.is_env = 'env' in self.filter_str
 
-        self.signal_diff = np.empty((self.npts,))
-        self.pred_signal = np.empty((self.npts,))
+        self.env_diff = np.empty((self.npts,))
+        self.pred_env = np.empty((self.npts,))
+        if not self.is_env:
+            if mw_env is not None:
+                self.mw_env = model_waveform.filter("env")
+            else:
+                self.mw_env = mw_env
+            self._cached_env = nan_under_mask(self.mw_env.data)
 
         self.init_noise_model(nm_type=nm_type, nmid=nmid)
 
@@ -168,6 +177,12 @@ class ObservedSignalNode(Node):
     def get_wave(self):
         return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
 
+    def get_env(self):
+        if self.is_env:
+            return self.get_value()
+        else:
+            return self._cached_env
+
     def init_noise_model(self, nm_type="ar", nmid=None):
         if nmid is None:
             self.nm_type = nm_type
@@ -177,11 +192,18 @@ class ObservedSignalNode(Node):
             self.prior_nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.prior_nmid)
             self.nm_type = self.prior_nm.noise_model_type()
 
+        if self.is_env:
+            self.nm_env = self.prior_nm.copy()
+        else:
+            self.nm_env, nmid_env, _ = get_noise_model(waveform=self.mw_env, model_type=self.nm_type, return_details=True)
+            
+
         assert(self.nm_type=="ar")
         self.noise_arssm = ARSSM(np.array(self.prior_nm.params, dtype=np.float), self.prior_nm.em.std**2, 0.0, self.prior_nm.c)
         self.nm = self.prior_nm.copy()
         self.nmid = self.prior_nmid
 
+        """
         ten_seconds = int(self.srate * 10.0)
         d = self.get_value().data
         for i in np.arange(0, self.npts, ten_seconds):
@@ -189,7 +211,7 @@ class ObservedSignalNode(Node):
             window_sum_10s = np.sum(d[i:i+ten_seconds])
             #if np.isfinite(window_sum_10s) and window_max_10s < self.nm.c:
             #    raise Exception("signal max of %.3f between %d,%d is less than noise mean %.3f! Noise model is probably wrong." % (window_max_10s, i, i+ten_seconds, self.nm.c))
-
+        """
 
 
     def set_noise_model(self, arm, nmid=None):
@@ -213,10 +235,10 @@ class ObservedSignalNode(Node):
         return start_idx
 
 
-    def assem_signal(self, arrivals=None, window_start_idx=0, npts=None):
+    def assem_env(self, arrivals=None, window_start_idx=0, npts=None):
         """
 
-        WARNING: returns a pointer to self.pred_signal, which will be
+        WARNING: returns a pointer to self.pred_env, which will be
         overwritten on future calls. So if you want the returned value
         to persist, you need to make a copy. (np.copy())
 
@@ -250,10 +272,9 @@ class ObservedSignalNode(Node):
 
         npts = self.npts-window_start_idx if not npts else int(npts)
         n = len(arrivals)
-        envelope = int(self.env)
-        signal = self.pred_signal
+        env = self.pred_env
         code = """
-      for(int i=window_start_idx; i < window_start_idx+npts; ++i) signal(i) = 0;
+      for(int i=window_start_idx; i < window_start_idx+npts; ++i) env(i) = 0;
     for (int i = 0; i < n; ++i) {
         int start_idx = sidxs(i);
 
@@ -277,17 +298,17 @@ class ObservedSignalNode(Node):
 
         int j = early;
         for(j=early; j < len_logenv - overshoot; ++j) {
-               signal(j + start_idx) += exp(logenv[j]);
+               env(j + start_idx) += exp(logenv[j]);
         }
     }
 
 """
-        weave.inline(code,['n', 'window_start_idx', 'npts', 'sidxs', 'logenvs', 'signal', 'envelope'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['n', 'window_start_idx', 'npts', 'sidxs', 'logenvs', 'env',],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-        if not np.isfinite(signal).all():
-            raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
+        if not np.isfinite(env).all():
+            raise ValueError("invalid (non-finite) env generated for %s!" % self.mw)
 
-        return signal
+        return env
 
 
     """
@@ -514,7 +535,7 @@ class ObservedSignalNode(Node):
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
         envs = [None] * n
-        min_logenv = max(-7.0, np.log(self.nm.c)-2)
+        min_logenv = max(-7.0, np.log(self.nm_env.c)-2)
 
         if self.wavelet_basis is not None:
             try:
@@ -573,8 +594,9 @@ class ObservedSignalNode(Node):
                 components.append((self.iid_arssm, start_idx, len(env), mn_scale))
                 tssm_components.append((eid, phase, mn_scale, start_idx, len(env), "multnoise"))
 
-            components.append((None, start_idx, len(env), env))
-            tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
+            if self.is_env:
+                components.append((None, start_idx, len(env), env))
+                tssm_components.append((eid, phase, env, start_idx, len(env), "template"))
 
         if save_components:
             self.tssm_components=tssm_components
@@ -729,29 +751,6 @@ class ObservedSignalNode(Node):
 
         return lp
 
-    def ___log_p_old(self, parent_values=None, return_grad=False, **kwargs):
-        parent_values = parent_values if parent_values else self._parent_values()
-        v = self.get_value()
-        value = v.data
-        mask = v.mask
-
-        pred_signal = self.assem_signal(**kwargs)
-        signal_diff = self.signal_diff
-        npts = self.npts
-        code = """
-for(int i=0; i < npts; ++i) {
-signal_diff(i) =value(i) - pred_signal(i);
-}
-"""
-        weave.inline(code,['npts', 'signal_diff', 'value', 'pred_signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
-
-        if return_grad:
-            lp, grad = self.nm.argrad(signal_diff)
-            return lp, grad, pred_signal, signal_diff.copy()
-        else:
-            lp = self.nm.log_p(signal_diff, mask=mask)
-            return lp
-
     def deriv_log_p(self, parent_key=None, lp0=None, eps=1e-4):
         parent_values = self._parent_values()
         lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
@@ -825,7 +824,7 @@ signal_diff(i) =value(i) - pred_signal(i);
         return arrival_info
 
 
-    def cache_latent_signal_for_template_optimization(self, eid, phase, force_bounds=True, return_llgrad=False):
+    def cache_latent_env_for_template_optimization(self, eid, phase, force_bounds=True, return_llgrad=False):
 
         def window_logp(w):
             start_idx, end_idx = w
@@ -843,19 +842,19 @@ signal_diff(i) =value(i) - pred_signal(i);
                     print "WARNING: template indices %s are out of bounds for cached indices %s" % ((t_start, t_end), w)
                     return np.float('-inf')
 
-            v = self._cached_latent_signal
+            v = self._cached_latent_env
             value = v.data
             mask = v.mask
-            pred_signal = self.assem_signal(arrivals=((eid, phase),), window_start_idx = start_idx, npts=end_idx-start_idx)
-            signal_diff = self.signal_diff
+            pred_env = self.assem_env(arrivals=((eid, phase),), window_start_idx = start_idx, npts=end_idx-start_idx)
+            env_diff = self.env_diff
             code = """
     for(int i=start_idx; i < end_idx; ++i) {
-    signal_diff(i) =value(i) - pred_signal(i);
+    env_diff(i) =value(i) - pred_env(i);
     }
     """
-            weave.inline(code,['signal_diff', 'value', 'pred_signal', 'start_idx', 'end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+            weave.inline(code,['env_diff', 'value', 'pred_env', 'start_idx', 'end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-            lp = self.nm.log_p(signal_diff[start_idx:end_idx], mask=mask[start_idx:end_idx] if isinstance(mask,collections.Sequence) else mask)
+            lp = self.nm_env.log_p(env_diff[start_idx:end_idx], mask=mask[start_idx:end_idx] if isinstance(mask,collections.Sequence) else mask)
 
             return lp
 
@@ -922,28 +921,28 @@ signal_diff(i) =value(i) - pred_signal(i);
                 pred_env = np.exp(pred_logenv)
 
                 window_len = end_idx-start_idx
-                pred_signal = self.pred_signal
-                pred_signal[start_idx:end_idx]=0
+                pred_env = self.pred_env
+                pred_env[start_idx:end_idx]=0
                 tmpl_start_idx_rel = tmpl_start_idx-start_idx
                 tmpl_end_idx = tmpl_start_idx + len(pred_env)
                 tmpl_end_idx_rel = tmpl_start_idx_rel + len(pred_env)
                 early = max(0, -tmpl_start_idx_rel)
                 overshoot = max(0, tmpl_end_idx_rel - window_len)
                 if tmpl_end_idx-overshoot > early + tmpl_start_idx:
-                    pred_signal[early + tmpl_start_idx:tmpl_end_idx-overshoot] = pred_env[early:len(pred_env)-overshoot]
+                    pred_env[early + tmpl_start_idx:tmpl_end_idx-overshoot] = pred_env[early:len(pred_env)-overshoot]
 
-                v = self._cached_latent_signal
+                v = self._cached_latent_env
                 value = v.data
                 mask = v.mask
-                signal_diff = self.signal_diff
+                env_diff = self.env_diff
                 code = """
                 for(int i=start_idx; i < end_idx; ++i) {
-                  signal_diff(i) =value(i) - pred_signal(i);
+                  env_diff(i) =value(i) - pred_env(i);
                 }
                 """
-                weave.inline(code,['signal_diff', 'value', 'pred_signal', 'start_idx', 'end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+                weave.inline(code,['env_diff', 'value', 'pred_env', 'start_idx', 'end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-                lp, grad = self.nm.argrad(signal_diff[start_idx:end_idx])
+                lp, grad = self.nm_env.argrad(env_diff[start_idx:end_idx])
                 shifted_jacobian = np.zeros((window_len, 5))
                 if tmpl_end_idx-overshoot > early + tmpl_start_idx:
                     shifted_jacobian[early + tmpl_start_idx_rel:tmpl_end_idx_rel-overshoot, :] = jacobian[early:len(pred_env)-overshoot,:]
@@ -958,18 +957,18 @@ signal_diff(i) =value(i) - pred_signal(i);
                 import pdb; pdb.set_trace()
             return lp, param_grad
 
-        self._cached_latent_signal = self.unexplained_signal(eid, phase)
-        self._cache_latent_signal_arrival = (eid, phase)
+        self._cached_latent_env = self.unexplained_env(eid, phase)
+        self._cache_latent_env_arrival = (eid, phase)
         self._cached_window_logp_grad_vals = None
         if return_llgrad:
             return window_logp, window_logp_deriv_caching, window_logp_llgrad
         else:
             return window_logp, window_logp_deriv_caching
 
-    def unexplained_signal(self, eid, phase):
+    def unexplained_env(self, eid, phase):
         arrivals = self.arrivals()
         other_arrivals = [a for a in arrivals if a != (eid, phase)]
-        return self.get_value() - self.assem_signal(arrivals=other_arrivals)
+        return self.get_env() - self.assem_env(arrivals=other_arrivals)
 
     def template_idx_window(self, eid=None, phase=None, vals=None, pre_arrival_slack_s = 10.0, post_fade_slack_s = 10.0):
         if vals is not None:

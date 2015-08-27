@@ -20,8 +20,8 @@ class RunSpec(object):
 
         sg = SigvisaGraph(runids=self.runids, **kwargs)
         waves = self.get_waves(modelspec)
-        for wave in waves:
-            sg.add_wave(wave)
+        for (wave, wave_env) in waves:
+            sg.add_wave(wave, wave_env=wave_env)
 
         try:
             sg.seed = self.seed
@@ -38,7 +38,7 @@ class SyntheticRunSpec(RunSpec):
 
     def get_waves(self, modelspec):
         w = self.sw.waves
-        waves = [w[evid][sta] for evid in w.keys() for sta in w[evid].keys()]
+        waves = [(w[evid][sta], None) for evid in w.keys() for sta in w[evid].keys()]
         return waves
 
     def get_init_events(self):
@@ -97,8 +97,13 @@ class EventRunSpec(RunSpec):
                         bands = modelspec.signal_params['bands']
                         hz = modelspec.signal_params['max_hz']
                         assert(len(bands)==1)
-                        wave = wave.filter("%s;env;hz_%.1f" % (bands[0], hz))
-                        waves.append(wave)
+
+                        wave_env = wave.filter("%s;env;hz_%.1f" % (bands[0], hz))
+                        if modelspec.signal_params['raw_signals']:
+                            wave = wave.filter("%s;hz_%.1f" % (bands[0], hz))
+                            waves.append((wave, wave_env))
+                        else:
+                            waves.append((wave_env, None))
                     except MissingWaveform as e:
                         print e
                         continue
@@ -160,14 +165,23 @@ class TimeRangeRunSpec(RunSpec):
         waves = []
         for seg in segments:
             for band in modelspec.signal_params['bands']:
-                filtered_seg = seg.with_filter(band).with_filter("env")
+                filtered_seg = seg.with_filter(band)
                 if modelspec.signal_params['smooth'] is not None:
                     filtered_seg = filtered_seg.with_filter("smooth_%d" % modelspec.signal_params['smooth'])
                 filtered_seg = filtered_seg.with_filter("hz_%.3f" % modelspec.signal_params['max_hz'])
 
+
+                filtered_seg_env = filtered_seg.with_filter("env")
+
+
                 for chan in filtered_seg.get_chans():
-                    wave = filtered_seg[chan]
-                    waves.append(wave)
+                    if modelspec.signal_params['raw_signals']:
+                        wave = filtered_seg[chan]
+                        wave_env = filtered_seg_env[chan]
+                        waves.append((wave, wave_env))
+                    else:
+                        wave = filtered_seg[chan]
+                        waves.append((wave, None))
 
         return waves
 
@@ -217,6 +231,7 @@ class ModelSpec(object):
         }
         signal_params = {
             'max_hz': 5.0,
+            'raw_signals': False,
             'bands': ["freq_0.8_4.5",],
             'chans': None, # need to set this
             'smooth': None

@@ -716,7 +716,7 @@ def synth_templates(sg, n_events=3, phases=("P", "S")):
                 at = model.sample(cond=ev)
                 amp = source_logamp+at
 
-                if amp < np.log(wn_prototype.nm.c)-1: continue
+                if amp < np.log(wn_prototype.nm_env.c)-1: continue
 
                 tmid += 1
                 atimes.append(atime)
@@ -992,7 +992,7 @@ class HoughConfig(object):
             wn = sg.get_wave_node_by_atime(sta, band, chan, self.stime, allow_out_of_bounds=True)
 
             # assume we detect iff the energy is one stddev above the noise mean
-            noise_base = np.log(wn.nm.c + np.sqrt(wn.nm.marginal_variance()))
+            noise_base = np.log(wn.nm_env.c + np.sqrt(wn.nm_env.marginal_variance()))
 
             detprobs = np.zeros((self.lonbins, self.latbins, self.depthbins, self.mbbins, len(self.phases)), dtype=float)
 
@@ -1083,7 +1083,7 @@ def station_hough(sg, hc, sta, uatemplates, chan, band, fill_assoc=False):
     wn = sg.station_waves[sta][0]
 
     tg = sg.template_generator(phase="UA")
-    ua_amp_model = tg.unassociated_model(param="coda_height", nm=wn.nm)
+    ua_amp_model = tg.unassociated_model(param="coda_height", nm=wn.nm_env)
 
     source_logamps = np.array([[brune.source_logamp(mb=mb, band=band, phase=phase) for phase in hc.phases ] for mb in np.linspace(hc.min_mb, hc.max_mb, hc.mbbins+1) ], dtype=np.float)
 
@@ -1099,7 +1099,7 @@ def station_hough(sg, hc, sta, uatemplates, chan, band, fill_assoc=False):
     #source_logamps[0] = -np.inf
     #source_logamps[-1] = np.inf
 
-    lognoise = float(np.log(wn.nm.c))
+    lognoise = float(np.log(wn.nm_env.c))
     null_ll, full_assoc, phase_scores = generate_sta_hough(sta, array,
                                                            atimes, amps,
                                                            ttimes_centered,

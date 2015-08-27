@@ -2,7 +2,6 @@ from django.conf.urls import patterns, url
 from svweb.views import *
 from svweb.wiggle_views import *
 from svweb.model_views import *
-from svweb.gridsearch_views import *
 from svweb.mcmc_views import *
 from svweb.event_views import *
 from svweb.site_views import *
@@ -56,12 +55,6 @@ urlpatterns = patterns('',
                        url(r'^mcmc/(?P<dirname>.*?)/(?P<sta>.*?)/align_(?P<phase>.*?).png$', mcmc_alignment_posterior, name='mcmc_alignment_posterior'),
                        url(r'^mcmc/(?P<dirname>.*?)/(?P<sta>.*?)/condwiggle_(?P<phase>.*?).png$', conditional_wiggle_posterior, name='conditional_wiggle_posterior'),
                        url(r'^mcmc/(?P<dirname>.*?)/(?P<sta>.*?)/(?P<hparam>.*?).png$', mcmc_hparam_posterior, name='mcmc_hparam_posterior'),
-                       url(r'^gridsearch/$', gridsearch_list_view, name='gridsearch_list'),
-                       url(r'^gridsearch/(?P<gsid>\d+)/$', gridsearch_detail_view, name='gsrun_detail'),
-                       url(r'^gridsearch/(?P<gsid>\d+)/heatmap.png$', gs_heatmap_view, name='gs_heatmap'),
-                       url(r'^gridsearch/(?P<gsid>\d+)/delete$', delete_gsrun, name='gsrun_delete'),
-                       url(r'^gsdebug/(?P<gswid>\d+)/pickled_wave.png$', gs_pickled_env_view, name='gs_pickled_wave'),
-                       url(r'^gsdebug/(?P<gswid>\d+)/phase_frame$', gs_wave_phase_frame_view, name='gs_phase_frame'),
                        url(r'^event/(?P<evid>\d+)/$', event_view, name='event'),
                        url(r'^event/(?P<evid>\d+)/context.png$', event_context_img_view, name='event_context_img'),
                        url(r'^event/(?P<evid>\d+)/wave_view$', event_wave_view, name='event_wave'),
