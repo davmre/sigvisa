@@ -15,8 +15,8 @@ stas = "ASAR,FITZ,ILAR,MKAR,WRA,YKA,KURK,SONM,BVAR,CTA,CMAR,ZALV,AKTO,INK,AAK,AK
 
 #stas="MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR".split(",")
 
-def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0):
-    uatemplate_rate=1e-3
+def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatemplates=False, uatemplate_rate=4e-4):
+
     rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training",
                           hour=hour, len_hours=len_hours,
                           initialize_events="leb")
@@ -28,7 +28,7 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0):
                     phases="leb",
                     dummy_fallback=True,
                     vert_only=True)
-    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], steps=500)
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=enable_uatemplates, enable_template_moves=True, disable_moves=['atime_xc'], steps=500)
 
     sg = rs.build_sg(ms1)
     initialize_sg(sg, ms1, rs)
@@ -78,6 +78,8 @@ if __name__ == "__main__":
 
     parser.add_option("--leb", dest="leb", default=False, action="store_true",
                       help="fix events to LEB bulletin")
+    parser.add_option("--leb_uatemplates", dest="leb_uatemplates", default=False, action="store_true",
+                      help="enable uatemplate births in LEB inference")
     parser.add_option("--hour", dest="hour", default=0.0, type=float,
                       help="start time, relative to training dataset")
     parser.add_option("--len_hours", dest="len_hours", default=2.0, type=float,
@@ -99,6 +101,6 @@ if __name__ == "__main__":
 
 
     if options.leb:
-        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid)
+        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid, enable_uatemplates=options.leb_uatemplates, uatemplate_rate=options.uatemplate_rate)
     else:
         main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate)

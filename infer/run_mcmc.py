@@ -249,6 +249,7 @@ def run_open_world_MH(sg, steps=10000,
             # if we have uatemplate birth/death moves
             global_moves = {'event_swap': swap_events_move_hough,
                             'event_repropose': repropose_event_move_hough}
+            global_moves = {}
         else:
             global_moves = {}
 
