@@ -37,9 +37,9 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0):
 
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4):
 
-    uatemplate_rate=1e-3
+    
 
     # python infer/run_mcmc.py --dataset=training --hour=0 --len_hours=2.0 --sites=MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR --runid=26 --phases=P,S --skip=10 --hz=2.0 --nm=ar --uatemplate_rate=1e-4 --steps=1000 --wiggle_family=iid --initialize_leb=yes --dummy_fallback
 
@@ -49,13 +49,14 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     wiggle_family="iid",
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
-                    phases=["P", "S"],
+                    phases=["P",],
                     dummy_fallback=True,
                     vert_only=True)
 
     if resume_from is not None:
         with open(resume_from, 'rb') as f:
             sg = pickle.load(f)
+        #sg.phases=["P",]
         sg.uatemplate_rate = uatemplate_rate
     else:
         sg = rs.build_sg(ms1)
@@ -83,6 +84,8 @@ if __name__ == "__main__":
                       help="length of signal to use")
     parser.add_option("--tmpl_steps", dest="tmpl_steps", default=500, type=int,
                       help="steps to take in tmpl-only inference")
+    parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=4e-4, type=float,
+                      help="")
     parser.add_option("--ev_steps", dest="ev_steps", default=1000, type=int,
                       help="steps to take in full inference ")
     parser.add_option("--resume_from", dest="resume_from", default=None, type=str,
@@ -98,4 +101,4 @@ if __name__ == "__main__":
     if options.leb:
         generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid)
     else:
-        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize)
+        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate)
