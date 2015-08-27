@@ -1304,6 +1304,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.start_time = min(self.start_time, wave_node.st)
         self.event_start_time = self.start_time - MAX_TRAVEL_TIME
         self.end_time = max(self.end_time, wave_node.et)
+        self.event_end_time = self.end_time - MAX_TRAVEL_TIME
 
         self.add_node(wave_node)
         self._topo_sort()

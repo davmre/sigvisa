@@ -12,7 +12,7 @@ from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event, Event
 
-from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.sigvisa_graph import SigvisaGraph, MAX_TRAVEL_TIME
 
 class RunSpec(object):
     def build_sg(self, modelspec):
@@ -153,8 +153,9 @@ class TimeRangeRunSpec(RunSpec):
 
         stas = s.sites_to_stas(self.sites, refsta_only=not modelspec.sg_params['arrays_joint'])
 
+        etime = self.end_time + MAX_TRAVEL_TIME
 
-        segments = load_segments(cursor, stas, self.start_time, self.end_time, chans = modelspec.signal_params['chans'])
+        segments = load_segments(cursor, stas, self.start_time, etime, chans = modelspec.signal_params['chans'])
 
         waves = []
         for seg in segments:
