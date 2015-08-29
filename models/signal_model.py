@@ -115,7 +115,7 @@ class ObservedSignalNode(Node):
         self.env_diff = np.empty((self.npts,))
         self.pred_env = np.empty((self.npts,))
         if not self.is_env:
-            if mw_env is not None:
+            if mw_env is None:
                 self.mw_env = model_waveform.filter("env")
             else:
                 self.mw_env = mw_env
@@ -446,7 +446,7 @@ class ObservedSignalNode(Node):
             d = self.get_value().data
             if len(prior_means) > 0:
                 prior_means, prior_vars = np.concatenate(prior_means), np.concatenate(prior_vars)
-                ell, marginals = self.tssm.all_filtered_cssm_coef_marginals(d)
+                ell, marginals, step_ells = self.tssm.all_filtered_cssm_coef_marginals(d)
                 posterior_means, posterior_vars = zip(*marginals)
                 posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
                 assert( np.min(posterior_vars) >= 0 )

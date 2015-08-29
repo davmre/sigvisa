@@ -424,12 +424,12 @@ class SigvisaGraph(DirectedGraphModel):
 
     def ntemplates_log_p(self):
         lp = 0
-        for (site, elements) in self.site_elements.items():
-            for sta in elements:
-                lp += self.ntemplates_sta_log_p(sta)
+        for (sta, wns) in self.station_waves.items():
+            for wn in wns:
+                lp += self.ntemplates_sta_log_p(wn)
         return lp
 
-    def ntemplates_sta_log_p(self, sta, n=None):
+    def ntemplates_sta_log_p(self, wn, n=None):
         """
 
         Return the log probability of having n unassociated templates
@@ -444,20 +444,10 @@ class SigvisaGraph(DirectedGraphModel):
         """
 
         if n is None:
-
-            s = Sigvisa()
-            site = s.get_array_site(sta)
-            assert (len(list(self.site_bands[site])) == 1)
-            band = list(self.site_bands[site])[0]
-            assert (len(list(self.site_chans[site])) == 1)
-            chan = list(self.site_chans[site])[0]
-
-            n = len(self.uatemplate_ids[(sta, chan, band)])
+            n = len([eid for (eid, phase) in wn.arrivals() if phase=="UA"])
 
 
-        valid_len = 0
-        for wn in self.station_waves[sta]:
-            valid_len += wn.valid_len
+        valid_len = wn.valid_len
 
         #n_template_dist = Poisson(self.uatemplate_rate * wn.valid_len)
         #poisson_lp = n_template_dist.log_p(n)
@@ -1302,7 +1292,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.station_waves[sta].append(wave_node)
 
         self.start_time = min(self.start_time, wave_node.st)
-        self.event_start_time = self.start_time - MAX_TRAVEL_TIME
+        self.event_start_time = self.start_time
         self.end_time = max(self.end_time, wave_node.et)
         self.event_end_time = self.end_time - MAX_TRAVEL_TIME
 
@@ -1646,6 +1636,15 @@ class SigvisaGraph(DirectedGraphModel):
 
             try:
                 for wn in self.station_waves[sta]:
+                    
+                    try:
+                        wn.nm_env
+                    except:
+                        wn.nm_env = wn.nm
+                        wn.env_diff = wn.signal_diff
+                        wn.pred_env = wn.pred_signal
+                        wn.is_env = True
+
                     for k in ks:
                         jgp, hparam_nodes = gpmodels[k]
 

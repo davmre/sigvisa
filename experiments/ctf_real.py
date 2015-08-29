@@ -16,7 +16,7 @@ stas = "ASAR,MKAR,FITZ".split(",")
 
 #stas="MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR".split(",")
 
-def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatemplates=False, uatemplate_rate=4e-4, raw_signals=False):
+def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatemplates=False, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"]):
 
     rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training",
                           hour=hour, len_hours=len_hours,
@@ -28,6 +28,7 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatempl
                     max_hz=hz,
                     raw_signals=raw_signals,
                     phases="leb",
+                    bands=bands,
                     dummy_fallback=True,
                     vert_only=True)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=enable_uatemplates, enable_template_moves=True, disable_moves=['atime_xc'], steps=500)
@@ -39,7 +40,7 @@ def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatempl
 
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"]):
 
     
 
@@ -52,6 +53,8 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
                     phases=["P",],
+                    bands=bands,
+                    #bands=["freq_1.0_2.0","freq_2.0_3.0"],
                     dummy_fallback=True,
                     raw_signals=raw_signals,
                     vert_only=True)
@@ -84,7 +87,8 @@ if __name__ == "__main__":
                       help="use raw signals instead of envelopes")
     parser.add_option("--hz", dest="hz", default=2.0, type=float,
                       help="downsample signals to this rate")
-
+    parser.add_option("--bands", dest="bands", default="freq_0.8_4.5", type=str,
+                      help="comma-separated frequency bands")
     parser.add_option("--leb", dest="leb", default=False, action="store_true",
                       help="fix events to LEB bulletin")
     parser.add_option("--leb_uatemplates", dest="leb_uatemplates", default=False, action="store_true",
@@ -108,8 +112,9 @@ if __name__ == "__main__":
 
     (options, args) = parser.parse_args()
 
+    bands = options.bands.split(",")
 
     if options.leb:
-        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid, enable_uatemplates=options.leb_uatemplates, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz)
+        generate_leb_truth(hour=options.hour, len_hours=options.len_hours, runid=options.runid, enable_uatemplates=options.leb_uatemplates, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands)
     else:
-        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz)
+        main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands)

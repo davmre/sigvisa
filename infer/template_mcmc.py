@@ -477,8 +477,8 @@ def get_atime_index(sorted_arrs, atime):
             break
     return k
 
-def tmpl_move_logp(sg, sta, relevant_nodes, n=None):
-    return sg.ntemplates_sta_log_p(sta, n=n) + sg.joint_logprob_keys(relevant_nodes)
+def tmpl_move_logp(sg, wn, relevant_nodes, n=None):
+    return sg.ntemplates_sta_log_p(wn, n=n) + sg.joint_logprob_keys(relevant_nodes)
 
 
 def split_move_old(sg, wn, return_probs=False, force_accept=False, atime_width=MERGE_PROPOSAL_WIDTH_S):
@@ -496,7 +496,7 @@ def split_move_old(sg, wn, return_probs=False, force_accept=False, atime_width=M
         relevant_parent = [n.parents[n.default_parent_key()],]
     else:
         relevant_parent = [n,]
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_parent)
+    lp_old = tmpl_move_logp(sg, wn, [wn,] + relevant_parent)
 
     # create the new uatemplate, with arrival time sampled uniformly
     current_atime = tnodes['arrival_time'][1].get_value()
@@ -516,7 +516,7 @@ def split_move_old(sg, wn, return_probs=False, force_accept=False, atime_width=M
     new_tmpl['coda_height'].set_value(new_logheight)
     n.set_value( key=k, value=np.log(1-u) + coda_height)
 
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_parent + new_tmpl.values())
+    lp_new = tmpl_move_logp(sg, wn, [wn,] + relevant_parent + new_tmpl.values())
 
     new_tmpl_priorsampled = [n for (p, n) in new_tmpl.items() if p not in ['coda_height', 'tt_residual', 'arrival_time']]
     log_qforward += sg.joint_logprob_keys(new_tmpl_priorsampled)  - np.log(n_arrs)
@@ -560,49 +560,6 @@ def split_move_old(sg, wn, return_probs=False, force_accept=False, atime_width=M
             return False
 
 
-#def arrivals_merge_distribution(sg, sta, sorted_arrs=None):
-#    """
-#
-#    We consider merging any two adjacent arrivals, as long as at least
-#    one of them is unassociated.  The proposal probability for merging
-#    any particular pair of arrivals is inversely proportional to the
-#    difference in arrival times.
-#
-#    """
-#    assert(len(sg.station_waves[sta]) == 1)
-#    wn = list(sg.station_waves[sta])[0]
-
-#    if sorted_arrs is None:
-#        sorted_arrs = get_sorted_arrivals(wn)
-#    n = len(sorted_arrs)
-#    if n < 2:
-#        return None, sorted_arrs
-
-#    c = Counter()
-#    for k in range(n-1):
-#        if sorted_arrs[k][1] >= 0 and sorted_arrs[k+1][1] >= 0:
-#            # can't merge two event arrivals
-#            continue
-#        c[k] = 1.0 / (sorted_arrs[k+1][0]['arrival_time'] - sorted_arrs[k][0]['arrival_time'] + 1.0/wn.srate)
-#    c.normalize()
-
-#    return c, sorted_arrs
-
-"""
-def sample_arrivals_to_merge(sg, sta, **kwargs):
-    c, sorted_arrs = arrivals_merge_distribution(sg, sta, **kwargs)
-    if c is None or len(c) == 0:
-        return None, None, None
-
-    k = c.sample()
-    return sorted_arrs[k], sorted_arrs[k+1], c[k]
-
-def arrival_merge_prob(sg, sta, k, **kwargs):
-    c, sorted_arrs = arrivals_merge_distribution(sg, sta, **kwargs)
-    if c is None:
-        return None
-    return c[k]
-"""
 
 def relevant_nodes_hack(tnodes):
     return [n if not n.deterministic() else n.parents[n.default_parent_key()] for (k,n) in tnodes.values()]
@@ -624,7 +581,7 @@ def merge_move_old(sg, wn, return_probs=False, split_atime_width=MERGE_PROPOSAL_
     # save the probability before we actually make the move
     log_qforward = 0.0
     ntemplates = len(sg.uatemplate_ids[(wn.sta, wn.chan, wn.band)])
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_nodes_hack(t1nodes) + relevant_nodes_hack(t2nodes), n=ntemplates)
+    lp_old = tmpl_move_logp(sg, wn, [wn,] + relevant_nodes_hack(t1nodes) + relevant_nodes_hack(t2nodes), n=ntemplates)
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
 
     # combine the amplitudes of the two arrivals
@@ -662,7 +619,7 @@ def merge_move_old(sg, wn, return_probs=False, split_atime_width=MERGE_PROPOSAL_
         sg.remove_node(node)
         sg._topo_sorted_list[node._topo_sorted_list_index] = None
 
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_nodes_hack(keep_nodes), n=ntemplates-1)
+    lp_new = tmpl_move_logp(sg, wn, [wn,] + relevant_nodes_hack(keep_nodes), n=ntemplates-1)
 
     log_qforward += np.log(merge_choice_prob)
 
@@ -759,7 +716,7 @@ def birth_proposal(sg, wn, fix_result):
 
 def birth_helper(sg, wn,  **kwargs):
     #lp_old1 = sg.current_log_p()
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,])
+    lp_old = tmpl_move_logp(sg, wn, [wn,])
 
     cdf = get_current_conditional_cdf(wn, arrival_set=wn.arrivals())
     peak_time, atime_proposal_lp =  sample_peak_time_from_cdf(cdf, wn.st,
@@ -784,7 +741,7 @@ def birth_helper(sg, wn,  **kwargs):
     tmpl["coda_height"].set_value(proposed_logamp)
 
     eid = -tmpl["arrival_time"].tmid
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,] + tmpl.values())
+    lp_new = tmpl_move_logp(sg, wn, [wn,] + tmpl.values())
 
     # probability of this birth move is the product of probabilities
     # of all sampled params (including arrival time)
@@ -834,7 +791,7 @@ def death_helper(sg, wn, tmpl_to_destroy):
     tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wn.sta, band=wn.band, chan=wn.chan)
 
     ntemplates = len(sg.uatemplate_ids[(wn.sta, wn.chan, wn.band)])
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,] + [n for (k, n) in tnodes.values()], n=ntemplates)
+    lp_old = tmpl_move_logp(sg, wn, [wn,] + [n for (k, n) in tnodes.values()], n=ntemplates)
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
 
     # it's debatable whether this should be log(1) or
@@ -873,7 +830,7 @@ def death_helper(sg, wn, tmpl_to_destroy):
                          peak_time = current_peak)
     log_qbackward += peak_lp
 
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,], n=ntemplates-1)
+    lp_new = tmpl_move_logp(sg, wn, [wn,], n=ntemplates-1)
 
     def accept_move():
         uaid = -tmpl_to_destroy[0]
@@ -1559,7 +1516,7 @@ def merge_helper(sg, wn, arr1, arr2, merge_choice_prob, split_atime_width, split
     v2 = [n2[p][1].get_value() for p in sp2]
 
     #lp_old_full = sg.current_log_p()
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_nodes_hack(n1) + relevant_nodes_hack(n2), n=n_arrs)
+    lp_old = tmpl_move_logp(sg, wn, [wn,] + relevant_nodes_hack(n1) + relevant_nodes_hack(n2), n=n_arrs)
 
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
 
@@ -1576,7 +1533,7 @@ def merge_helper(sg, wn, arr1, arr2, merge_choice_prob, split_atime_width, split
         log_qforward += proposal.logpdf(proposed_vals)
         set_template_values(n1, proposed_vals, sp1)
 
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_nodes_hack(n1), n=n_arrs-1)
+    lp_new = tmpl_move_logp(sg, wn, [wn,] + relevant_nodes_hack(n1), n=n_arrs-1)
     #lp_new_full = sg.current_log_p() - sg.ntemplates_sta_log_p(sta, n=n_arrs) + sg.ntemplates_sta_log_p(sta, n=n_arrs-1)
 
     proposed_atime = n1['arrival_time'][1].get_value()
@@ -1634,7 +1591,7 @@ def split_helper(sg, wn, arr, k, sorted_arrs, atime_width, t1_values=None, t2_va
     t1_is_event = tnodes['coda_height'][1].deterministic()
 
     #lp_old_full = sg.current_log_p()
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_nodes_hack(tnodes), n=n_arrs)
+    lp_old = tmpl_move_logp(sg, wn, [wn,] + relevant_nodes_hack(tnodes), n=n_arrs)
 
     # resample first template from prior
     assert(tnodes['coda_decay'][1].single_key) # array stations are not supported until
@@ -1683,7 +1640,7 @@ def split_helper(sg, wn, arr, k, sorted_arrs, atime_width, t1_values=None, t2_va
     log_qforward += sg.joint_logprob_keys(new_tmpl_priorsampled)
     log_qforward += atime_dist.log_p(new_time2)
 
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,] + relevant_nodes_hack(tnodes) + new_tmpl.values(), n=n_arrs+1)
+    lp_new = tmpl_move_logp(sg, wn, [wn,] + relevant_nodes_hack(tnodes) + new_tmpl.values(), n=n_arrs+1)
 
 
     # the reverse probability incorporates the prob that we would have chosen to merge these two templates
@@ -2670,7 +2627,7 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False, lapla
         return initial_vals, log_qforward
 
 def optimizing_birth_helper(sg, wn, return_debug=False, **kwargs):
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,])
+    lp_old = tmpl_move_logp(sg, wn, [wn,])
 
     if return_debug:
         r = optimizing_birth_proposal(sg, wn, return_debug=True, **kwargs)
@@ -2683,7 +2640,7 @@ def optimizing_birth_helper(sg, wn, return_debug=False, **kwargs):
     sg._gc_topo_sorted_nodes()
 
     eid = -tmpl["arrival_time"].tmid
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,] + tmpl.values())
+    lp_new = tmpl_move_logp(sg, wn, [wn,] + tmpl.values())
 
     log_qforward = tmpl_log_qforward
 
@@ -2745,7 +2702,7 @@ def death_helper_for_optimizing_birth(sg, wn, tmpl_to_destroy, kill_choice_prob)
     tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wn.sta, band=wn.band, chan=wn.chan)
 
     ntemplates = len(sg.uatemplate_ids[(wn.sta, wn.chan, wn.band)])
-    lp_old = tmpl_move_logp(sg, wn.sta, [wn,] + [n for (k, n) in tnodes.values() ], n=ntemplates)
+    lp_old = tmpl_move_logp(sg, wn, [wn,] + [n for (k, n) in tnodes.values() ], n=ntemplates)
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
 
     log_qforward = np.log(kill_choice_prob)
@@ -2762,7 +2719,7 @@ def death_helper_for_optimizing_birth(sg, wn, tmpl_to_destroy, kill_choice_prob)
     _, tmpl_log_qbackward = optimizing_birth_proposal(sg, wn, fix_result=tvals)
     log_qbackward = tmpl_log_qbackward
 
-    lp_new = tmpl_move_logp(sg, wn.sta, [wn,], n=ntemplates-1)
+    lp_new = tmpl_move_logp(sg, wn, [wn,], n=ntemplates-1)
 
     def accept_move():
         uaid = -tmpl_to_destroy[0]

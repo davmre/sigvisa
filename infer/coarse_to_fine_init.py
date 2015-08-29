@@ -175,13 +175,12 @@ class TimeRangeRunSpec(RunSpec):
 
 
                 for chan in filtered_seg.get_chans():
+                    wave_env = filtered_seg_env[chan]
                     if modelspec.signal_params['raw_signals']:
                         wave = filtered_seg[chan]
-                        wave_env = filtered_seg_env[chan]
                         waves.append((wave, wave_env))
                     else:
-                        wave = filtered_seg[chan]
-                        waves.append((wave, None))
+                        waves.append((wave_env, None))
 
         return waves
 
@@ -232,7 +231,7 @@ class ModelSpec(object):
         signal_params = {
             'max_hz': 5.0,
             'raw_signals': False,
-            'bands': ["freq_0.8_4.5",],
+            'bands': ["freq_0.8_4.5"],
             'chans': None, # need to set this
             'smooth': None
         }

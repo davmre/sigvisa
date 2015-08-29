@@ -24,7 +24,8 @@ def get_hough_bins(sg, hc, uatemplates_by_sta):
         matches = 0
         pmatches = 0
         pmatch_stas = []
-        for sta, (atimes, amps, tmids) in uatemplates_by_sta.items():
+        for wn, (atimes, amps, tmids) in uatemplates_by_sta.items():
+            sta = wn.sta
             evtimes = np.array([n.get_value() for n in evnodes if "arrival_time" in n.label and sta in n.label])
             for evtime in evtimes:
                 diffs = [np.abs(at-evtime) for at in atimes]
@@ -58,7 +59,7 @@ def get_hough_bins(sg, hc, uatemplates_by_sta):
     arr = hc.create_array(dtype=np.float32, fill_val=0.0)
     for bin in bins:
         arr[bin] += 1.0
-    visualize_hough_array(arr, uatemplates_by_sta.keys(), fname="/home/dmoore/public_html/true_array.png", ax=None, timeslice=None)
+    visualize_hough_array(arr, sg.station_waves.keys(), fname="/home/dmoore/public_html/true_array.png", ax=None, timeslice=None)
 
 
     return bins, evs
@@ -68,7 +69,7 @@ def get_hough_array(sg, hc, uatemplates_by_sta):
     global_array,assocs, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=True)
     global_dist = normalize_global(global_array.copy(), nll, one_event_semantics=False, hc=hc)
 
-    visualize_hough_array(global_dist, uatemplates_by_sta.keys(), fname="/home/dmoore/public_html/hough_array.png", ax=None, timeslice=None)
+    visualize_hough_array(global_dist, sg.station_waves.keys(), fname="/home/dmoore/public_html/hough_array.png", ax=None, timeslice=None)
     np.save("hough_array", global_dist)
     print "hough_array.png/npy"
     return global_array, global_dist, assocs, nll
@@ -90,7 +91,7 @@ def proposal_likelihood(dist, bins):
     return lp
 
 sg_inferred.uatemplate_rate = 0.001
-ctf = CTFProposer(sg_inferred, [5,], depthbins=2, mbbins=12, offset=True, phases=["P",])
+ctf = CTFProposer(sg_inferred, [5,], depthbin_bounds=[0,10,50,150,400,700], mbbins=[12,], offset=False, phases=["P",])
 uatemplates_by_sta_full = get_uatemplates(sg_inferred)
 
 #stas =  ['AKBB', 'MK31', 'KBZ', 'SONA0', 'AAK', 'AKTO', 'ZAA0', 'INK', 'USA0', 'TOA0', 'NB200', "LPAZ"]

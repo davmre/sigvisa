@@ -173,7 +173,7 @@ def compute_wavelet_messages(sg, wn):
     gp_posteriors = dict()
 
     wn._parent_values() # update the SSM to include current templates
-    ell, marginals = wn.tssm.all_filtered_cssm_coef_marginals(wn.get_value().data)
+    ell, marginals, step_ells = wn.tssm.all_filtered_cssm_coef_marginals(wn.get_value().data)
 
     for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(wn.tssm_components):
 

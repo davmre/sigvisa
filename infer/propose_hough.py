@@ -181,16 +181,10 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
     #print "source logamps"
     #print source_logamps
 
-    debug_lon= None
-    debug_lat= None
-    debug_depth = None
     debug_lonbin = -1
     debug_latbin = -1
     debug_depthbin = -1
-    if debug_lon is not None:
-        debug_lonbin = int(np.floor((debug_lon + 180) / bin_width_deg))
-        debug_latbin = int(np.floor((debug_lat + 90) / bin_width_deg))
-        debug_depthbin  = int(np.floor(debug_depth / bin_width_km))
+        
 
     code = """
 long init_time = 0;
@@ -673,17 +667,17 @@ def get_uatemplates(sg, stas=None, tmid_whitelist=None):
 
     uatemplates_by_sta = {}
     for sta in stas:
-        atimes = []
-        amps = []
-        tmids = []
         for wn in sg.station_waves[sta]:
+            atimes = []
+            amps = []
+            tmids = []
             for i, (eid, phase) in enumerate(wn.arrivals()):
                 if tmid_whitelist is not None and -i not in tmid_whitelist: continue
                 v, _ = wn.get_template_params_for_arrival(eid, phase)
                 atimes.append(v['arrival_time'])
                 amps.append(v['coda_height'])
                 tmids.append(-i)
-        uatemplates_by_sta[sta]= (atimes, amps, tmids)
+            uatemplates_by_sta[wn]= (atimes, amps, tmids)
 
     return uatemplates_by_sta
 
@@ -694,34 +688,34 @@ def synth_templates(sg, n_events=3, phases=("P", "S")):
     uatemplates_by_sta = {}
     tmid = 0
     detection_probs = {"P": 0.8, "S": 0.1}
-    for sta in sg.station_waves.keys():
-        wn_prototype = sg.station_waves[sta][0]
-        atimes = []
-        amps = []
-        tmids = []
-        for phase in phases:
-            model = get_amp_transfer_model(sg, sta, phase, wn_prototype.chan, wn_prototype.band)
-            detection_prob = detection_probs[phase]
-            for ev in evs:
-                ev.depth = 0
-                if np.random.rand() > detection_prob: continue
+    for (sta, wns) in sg.station_waves.items():
+        for wn in wns:
+            atimes = []
+            amps = []
+            tmids = []
+            for phase in phases:
+                model = get_amp_transfer_model(sg, wn.sta, phase, wn.chan, wn.band)
+                detection_prob = detection_probs[phase]
+                for ev in evs:
+                    ev.depth = 0
+                    if np.random.rand() > detection_prob: continue
 
-                try:
-                    tt = tt_predict(ev, sta, phase=phase)
-                except:
-                    continue
+                    try:
+                        tt = tt_predict(ev, sta, phase=phase)
+                    except:
+                        continue
 
-                atime = ev.time + tt + Laplacian(0.0, 3.0).sample()
-                source_logamp = brune.source_logamp(mb=ev.mb, band="freq_0.8_4.5", phase=phase)
-                at = model.sample(cond=ev)
-                amp = source_logamp+at
+                    atime = ev.time + tt + Laplacian(0.0, 3.0).sample()
+                    source_logamp = brune.source_logamp(mb=ev.mb, band="freq_0.8_4.5", phase=phase)
+                    at = model.sample(cond=ev)
+                    amp = source_logamp+at
 
-                if amp < np.log(wn_prototype.nm_env.c)-1: continue
+                    if amp < np.log(wn.nm_env.c)-1: continue
 
-                tmid += 1
-                atimes.append(atime)
-                amps.append(amp)
-                tmids.append(tmid)
+                    tmid += 1
+                    atimes.append(atime)
+                    amps.append(amp)
+                    tmids.append(tmid)
 
         uatemplates_by_sta[sta]=(atimes, amps, tmids)
     return uatemplates_by_sta, evs
@@ -799,7 +793,7 @@ def iterative_mixture_hough(sg, hc):
     print fname
 
 class HoughConfig(object):
-    def __init__(self, stime, len_s, phases = ("P", "S"), bin_width_deg=2.0, min_mb=2.5, max_mb=8.5, mbbins=1, depthbins=1, uatemplate_rate=1e-3, left_lon=-180, right_lon=180, bottom_lat=-90, top_lat=90, min_depth=0, max_depth=700, time_tick_s=10.0):
+    def __init__(self, stime, len_s, phases = ("P", "S"), bin_width_deg=2.0, min_mb=2.5, max_mb=8.5, mbbins=1, depthbin_bounds=[0, 10, 50, 150, 400, 700], uatemplate_rate=1e-3, left_lon=-180, right_lon=180, bottom_lat=-90, top_lat=90, min_depth=0, max_depth=700, time_tick_s=10.0):
 
         self.left_lon = left_lon
         self.right_lon = right_lon
@@ -822,11 +816,9 @@ class HoughConfig(object):
         self.mbbins = mbbins
         self.mb_bin_width = float(max_mb-min_mb)/mbbins
 
-        self.max_depth=max_depth
-        self.min_depth = min_depth
-
-        self.depthbins = depthbins #int(np.ceil(max_depth / bin_width_km))
-        self.depthbin_width_km = (self.max_depth-self.min_depth)/float(depthbins)
+        self.depthbin_bounds = depthbin_bounds
+        self.n_depthbins = len(depthbin_bounds)-1
+        self.depthbin_widths = np.diff(depthbin_bounds)
 
         self.phases = phases
         s = Sigvisa()
@@ -846,9 +838,7 @@ class HoughConfig(object):
                    min_mb,
                    max_mb,
                    mbbins,
-                   max_depth,
-                   min_depth,
-                   depthbins
+                   depthbin_bounds
                    ])
 
             # TODO: don't keep the entire prior in memory with all timebins, when it's actually uniform over timebins. this would save a factor of hundreds in memory and disk space...
@@ -870,29 +860,39 @@ class HoughConfig(object):
     def _compute_ev_prior(self):
 
         global_event_rate=0.00126599049
-        unit_rate = global_event_rate / (360 * 180 * 700)
-
-        bin_area = self.bin_width_deg**2 * self.depthbin_width_km * self.time_tick_s
-        bin_prior = unit_rate * bin_area
 
         #ev_prior = self.create_array(fill_val=bin_prior)
-        ev_prior = np.empty((self.lonbins, self.latbins, self.depthbins, self.mbbins), dtype=np.float)
-        ev_prior.fill(bin_prior)
+        ev_prior = np.empty((self.lonbins, self.latbins, self.n_depthbins, self.mbbins), dtype=np.float)
+
 
         s = Sigvisa()
+        depthbin_probs = []
+        for k in range(self.n_depthbins):
+            min_depth = self.depthbin_bounds[k]
+            max_depth = self.depthbin_bounds[k+1]
+            dp = lambda depth : np.exp(s.sigmodel.event_depth_prior_logprob(depth))
+            binp, binperr = scipy.integrate.quad(dp, min_depth, max_depth, epsabs=1e-6)
+            depthbin_probs.append(binp)
+        #depth_0_lp = s.sigmodel.event_depth_prior_logprob(0.0)
+
+
         for i in range(self.lonbins):
             left_lon = self.left_lon + self.bin_width_deg * i
             right_lon = left_lon + self.bin_width_deg
+            print left_lon
             for j in range(self.latbins):
                 bottom_lat = self.bottom_lat + self.bin_width_deg * j
                 top_lat = bottom_lat + self.bin_width_deg
                 def p(lat, lon):
                     wlon, wlat = wrap_lonlat(lon, lat)
-                    return np.exp(s.sigmodel.event_location_prior_logprob(wlon, wlat, 0.0))
-                binp, binperr = scipy.integrate.dblquad(p, left_lon, right_lon, lambda x : bottom_lat, lambda x : top_lat, epsrel=1.49e-04, epsabs=1.49e-04)
+                    return np.exp(s.sigmodel.event_location_prior_logprob(wlon, wlat, -1))
 
-                ev_prior[i,j,:,:] *= binp / self.bin_width_deg**2
+                binp, binperr = scipy.integrate.dblquad(p, left_lon, right_lon, lambda x : bottom_lat, lambda x : top_lat, epsrel=1.49e-02, epsabs=1.49e-06)
 
+                ev_prior[i,j,:,:] = binp
+                
+        # normalize to give a prior prior over event location for a single event
+        ev_prior /= np.sum(ev_prior[:,:,0,0])
 
         mbbin_prior_dist = scipy.stats.expon(loc=2.5, scale=1.0/np.log(10.0))
         mbbin_prior_probs = [mbbin_prior_dist.cdf( self.min_mb+(i+1)*self.mb_bin_width) - mbbin_prior_dist.cdf(self.min_mb+i*self.mb_bin_width) for i in range(self.mbbins) ]
@@ -903,6 +903,12 @@ class HoughConfig(object):
         for mbbin in range(self.mbbins):
             ev_prior[:,:,:,mbbin] *= mbbin_prior_probs[mbbin]
 
+        for depthbin in range(self.n_depthbins):
+            ev_prior[:,:,depthbin,:] *= depthbin_probs[depthbin]
+
+        # scale the location prior by the probability of an event ocurring worldwide in this time period
+        ev_prior *= self.time_tick_s * global_event_rate
+
         ev_prior_log = np.log(ev_prior)
         noev_prior_log = np.log(1-ev_prior)
         return ev_prior_log, noev_prior_log
@@ -910,9 +916,9 @@ class HoughConfig(object):
 
     def create_array(self, with_phases=False, dtype=np.float, fill_val=None):
         if with_phases:
-            dims = (self.lonbins, self.latbins, self.depthbins, self.mbbins, self.timebins, len(self.phaseids))
+            dims = (self.lonbins, self.latbins, self.n_depthbins, self.mbbins, self.timebins, len(self.phaseids))
         else:
-            dims = (self.lonbins, self.latbins, self.depthbins, self.mbbins, self.timebins)
+            dims = (self.lonbins, self.latbins, self.n_depthbins, self.mbbins, self.timebins)
 
         array = np.empty(dims, dtype=dtype)
         if fill_val is not None:
@@ -929,9 +935,13 @@ class HoughConfig(object):
         # on the other end, we'd have int(0-1e-8) = 0 which is fine.
         lonbin = int((lon-self.left_lon) / self.bin_width_deg  - 1e-8)
         latbin = int((lat-self.bottom_lat) / self.bin_width_deg - 1e-8)
-        depthbin = int((depth-self.min_depth) / self.depthbin_width_km - 1e-8)
         timebin = int((t-self.stime) / self.time_tick_s - 1e-8)
         mbbin = int((mb-self.min_mb) / self.mb_bin_width- 1e-8)
+
+        depthbin = np.searchsorted(self.depthbin_bounds, depth, side="right") - 1
+        if depth == self.depthbin_bounds[-1]:
+            depthbin = self.n_depthbins-1
+
         return (lonbin, latbin, depthbin, mbbin, timebin)
 
     def index_to_coords(self, v):
@@ -941,15 +951,14 @@ class HoughConfig(object):
         bottom_lat = self.bottom_lat + v[1] * self.bin_width_deg
         top_lat = bottom_lat + self.bin_width_deg
 
-        min_depth = self.min_depth + v[2] * self.depthbin_width_km
-        max_depth = min_depth + self.depthbin_width_km
+        min_depth = self.depthbin_bounds[v[2]]
+        max_depth = self.depthbin_bounds[v[2]+1]
 
         min_mb = self.min_mb + v[3] * self.mb_bin_width
         max_mb = min_mb + self.mb_bin_width
 
         min_time = self.stime + v[4] * self.time_tick_s
         max_time = min_time + self.time_tick_s
-
 
         return (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth),  (min_mb, max_mb), (min_time, max_time)
 
@@ -994,7 +1003,7 @@ class HoughConfig(object):
             # assume we detect iff the energy is one stddev above the noise mean
             noise_base = np.log(wn.nm_env.c + np.sqrt(wn.nm_env.marginal_variance()))
 
-            detprobs = np.zeros((self.lonbins, self.latbins, self.depthbins, self.mbbins, len(self.phases)), dtype=float)
+            detprobs = np.zeros((self.lonbins, self.latbins, self.n_depthbins, self.mbbins, len(self.phases)), dtype=float)
 
             rv = scipy.stats.norm()
             source_logamps = self.source_logamps(band)
@@ -1022,8 +1031,8 @@ class HoughConfig(object):
         return np.array([[brune.source_logamp(mb=mb, band=band, phase=phase) for phase in self.phases ] for mb in np.linspace(self.min_mb, self.max_mb, self.mbbins+1) ], dtype=np.float)
 
     def _amp_transfers(self, model):
-        at_means = np.zeros((self.lonbins, self.latbins, self.depthbins), dtype=float)
-        at_vars = np.zeros((self.lonbins, self.latbins, self.depthbins), dtype=float)
+        at_means = np.zeros((self.lonbins, self.latbins, self.n_depthbins), dtype=float)
+        at_vars = np.zeros((self.lonbins, self.latbins, self.n_depthbins), dtype=float)
 
         d = {'lon': 0.0, 'lat': 0.0, 'depth': 0.0, 'mb': 4.0}
         for i in range(self.lonbins):
@@ -1032,9 +1041,8 @@ class HoughConfig(object):
             for j in range(self.latbins):
                 lat = self.bottom_lat + (j+.5) * self.bin_width_deg
                 d['lat'] = lat
-                for k in range(self.depthbins):
-                    #depth = 0 + (k+.5)*depthbin_km
-                    depth = self.min_depth + k*self.depthbin_width_km
+                for k in range(self.n_depthbins):
+                    depth = self.depthbin_bounds[k] + .5* self.depthbin_widths[k]
                     d['depth'] = depth
                     at_means[i,j, k] = model.predict(d)
                     at_vars[i,j, k] = model.variance(d, include_obs=True)
@@ -1046,14 +1054,16 @@ class HoughConfig(object):
         offset = .5 if centered else 0.0
         extra_bin = 0 if centered else 1
 
-        times = np.zeros((self.lonbins+extra_bin, self.latbins+extra_bin, self.depthbins+extra_bin), dtype=float)
+        times = np.zeros((self.lonbins+extra_bin, self.latbins+extra_bin, self.n_depthbins+extra_bin), dtype=float)
 
         for i in range(self.lonbins+extra_bin):
             lon = self.left_lon + (i+offset) * self.bin_width_deg
             for j in range(self.latbins+extra_bin):
                 lat = self.bottom_lat + (j+offset) * self.bin_width_deg
-                for k in range(self.depthbins+extra_bin):
-                    depth = self.min_depth + (k+offset) * self.depthbin_width_km
+                for k in range(self.n_depthbins+extra_bin):
+                    depth = self.depthbin_bounds[k] 
+                    if centered:
+                        depth += offset * self.depthbin_widths[k]
                     try:
                         meantt = s.sigmodel.mean_travel_time(lon, lat, depth, 0.0, sta, phaseid - 1)
                         if meantt < 0:
@@ -1066,9 +1076,9 @@ class HoughConfig(object):
 
 
 
-def station_hough(sg, hc, sta, uatemplates, chan, band, fill_assoc=False):
+def station_hough(sg, hc, wn, uatemplates, fill_assoc=False):
 
-
+    sta, chan, band = wn.sta, wn.chan, wn.band
     atimes, amps, tmids = uatemplates
     array = hc.create_array(dtype=np.float32)
 
@@ -1080,7 +1090,6 @@ def station_hough(sg, hc, sta, uatemplates, chan, band, fill_assoc=False):
     t2 = time.time()
 
     valid_len = np.sum([wn.valid_len for wn in sg.station_waves[sta]])
-    wn = sg.station_waves[sta][0]
 
     tg = sg.template_generator(phase="UA")
     ua_amp_model = tg.unassociated_model(param="coda_height", nm=wn.nm_env)
@@ -1161,20 +1170,14 @@ def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=F
 
 
     
-    
-    for sta, uatemplates in uatemplates_by_sta.items():
-
-        try:
-            wn = sg.station_waves[sta][0]
-        except KeyError:
-            continue
-
+    for wn, uatemplates in uatemplates_by_sta.items():
+        sta = wn.sta
         t2 = time.time()
-        sta_array, assocs, phase_scores, null_ll = station_hough(sg, hc, sta, uatemplates, wn.chan, wn.band, fill_assoc=save_debug)
+        sta_array, assocs, phase_scores, null_ll = station_hough(sg, hc, wn, uatemplates, fill_assoc=save_debug)
         t3 = time.time()
         sta_hough_time += t3-t2
 
-        global_debug[sta]=(assocs, phase_scores, null_ll)
+        global_debug[wn.label]=(assocs, phase_scores, null_ll)
         global_array += sta_array
         global_noev_ll += null_ll
         t4 = time.time()
@@ -1191,12 +1194,12 @@ def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=F
     if save_debug:
         global_lik = normalize_global(global_array.copy(), global_noev_ll, one_event_semantics=False, hc=hc)
         fname = "newhough_%d_global.png" % hc.bin_width_deg
-        visualize_hough_array(global_lik, uatemplates_by_sta.keys(), fname=fname, ax=None, timeslice=None)
+        visualize_hough_array(global_lik, sg.station_waves.keys(), fname=fname, ax=None, timeslice=None)
         print "wrote to", fname
 
         global_dist = normalize_global(global_array.copy(), global_noev_ll, one_event_semantics=True, hc=hc)
         fname = "newhough_%d_global_norm.png" % hc.bin_width_deg
-        visualize_hough_array(global_dist, uatemplates_by_sta.keys(), fname=fname, ax=None, timeslice=None)
+        visualize_hough_array(global_dist, sg.station_waves.keys(), fname=fname, ax=None, timeslice=None)
         print "wrote to", fname
 
     t5 = time.time()
@@ -1217,7 +1220,7 @@ def debug_assocs(sg, hc):
 
     def print_bin(bin):
         print "bin", bin, "center", "score", array[bin]-nll, "(%f-%f)" % (array[bin], nll)
-        print " center ", (bin[0]+.5)*hc.bin_width_deg+hc.left_lon, (bin[1]+.5)*hc.bin_width_deg+hc.bottom_lat, (bin[2]+.5)*hc.depthbin_width_km+hc.min_depth, (bin[3]+.5)*hc.time_tick_s+hc.stime
+        print " center ", (bin[0]+.5)*hc.bin_width_deg+hc.left_lon, (bin[1]+.5)*hc.bin_width_deg+hc.bottom_lat, hc.depthbin_bounds[bin[2]] + .5*hc.depthbin_widths[bin[2]], (bin[3]+.5)*hc.time_tick_s+hc.stime
         for sta in debug.keys():
             print " ", sta + ": ",
             for phaseidx in range(2):
@@ -1243,14 +1246,15 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
     
     full_score = 0
     gnll = 0
-    for sta in debug.keys():
+    for wn_label in debug.keys():
+        wn = sg.all_nodes[wn_label]
+        sta = wn.sta
 
-        assocs, scores, nll = debug[sta]
+        assocs, scores, nll = debug[wn_label]
         tm_idx = int(assocs[bin_idx])-1
         score = scores[bin_idx][0]
 
 
-        wn = sg.station_waves[sta][0]
         detprobs = hc.precompute_detprob_grid(sg, sta, wn.chan, wn.band)
         dbin = (bin_idx[0], bin_idx[1], bin_idx[2], bin_idx[3], 0)
         detprob = detprobs[dbin]
@@ -1289,25 +1293,9 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
     print "full score", full_score
     print "predicted total", full_score+gnll
 
-def visualize_coarse_to_fine(sg, centers, stas):
-    hc = HoughConfig(sg.event_start_time, 7200, bin_width_deg=1.0, phases=("P", "S"), depthbins=1, time_tick_s=7200)
-    array = hc.create_array(dtype=np.float32, fill_val=0.0)
-    for center in centers:
-        lonbin = int(center[0]+180)
-        latbin = int(center[1]+90)
-        array[lonbin, latbin, 0, 0, 0] += 1
-
-    fname = "newhough_ctf_%d" % (len(centers))
-    visualize_hough_array(array, stas, fname=fname+".png", ax=None, timeslice=None)
-    print fname
-
-
-
-
-
 class CTFProposer(object):
 
-    def __init__(self, sg, bin_widths, depthbins, mbbins, phases=("P", "S"), offset=False):
+    def __init__(self, sg, bin_widths, depthbin_bounds, mbbins, phases=("P", "S"), offset=False):
         # precompute ttime and amp_transfer patterns
         global_bin_width = bin_widths[0]
         stime = sg.event_start_time
@@ -1322,7 +1310,7 @@ class CTFProposer(object):
         self.stime = stime
         self.etime = etime
         self.phases = phases
-        self.depthbins = depthbins
+        self.depthbin_bounds = depthbin_bounds
         self.mbbins = mbbins
 
         left_lon, right_lon, bottom_lat, top_lat = -180, 180, -90, 90
@@ -1333,7 +1321,7 @@ class CTFProposer(object):
             bottom_lat += global_bin_width/2.0
 
         hc = HoughConfig(stime, etime-stime, bin_width_deg=global_bin_width,
-                         phases=phases, depthbins=depthbins[0], time_tick_s = 20.0,
+                         phases=phases, depthbin_bounds=depthbin_bounds, time_tick_s = 20.0,
                          mbbins=mbbins[0],
                          top_lat=top_lat, bottom_lat=bottom_lat,
                          left_lon=left_lon, right_lon=right_lon,
@@ -1359,10 +1347,11 @@ class CTFProposer(object):
         (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), _, _ = hc.index_to_coords(v)
 
         for i, fine_width in enumerate(self.bin_widths[1:]):
-            depth_bins = self.depthbins[i+1]
+            depth_bounds = [min_depth, min_depth + (max_depth-min_depth)/2.0, max_depth]
+
             mb_bins = self.mbbins[i+1]
             hc = HoughConfig(self.stime, self.etime-self.stime, bin_width_deg=fine_width, phases=self.phases,
-                             depthbins=depth_bins, top_lat=top_lat, bottom_lat=bottom_lat,
+                             depthbin_bounds=depth_bounds, top_lat=top_lat, bottom_lat=bottom_lat,
                              left_lon=left_lon, right_lon=right_lon, min_depth=min_depth,
                              max_depth=max_depth, time_tick_s = 10.0,
                              mbbins=mb_bins)
@@ -1401,7 +1390,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     try:
         ctf = s.hough_proposer[offset]
     except KeyError:
-        ctf = CTFProposer(sg, [10,5,2], depthbins=[7,2,2], mbbins=[12,2,2], offset=offset)
+        ctf = CTFProposer(sg, [10,5,2], depthbin_bounds=[0,10,50,150,400,700], mbbins=[12,2,2], offset=offset)
         s.hough_proposer[offset] = ctf
 
     r = ctf.propose_event(sg, fix_result=fix_result,
@@ -1412,25 +1401,6 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     #r = ev, lp, global_dist
     return r
 
-def august_debug(sg):
-    uatemplates_by_sta = get_uatemplates(sg)
-    ctf = CTFProposer(sg, [5,], depthbins=2, mbbins=1, offset=False)
-    hc = ctf.global_hc
-    global_array,debug, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
-    ga1 = global_array.copy()
-    ga2 = global_array.copy()
-    print nll
-    global_dist1 = normalize_global(ga1, nll, one_event_semantics=True,hc=hc)
-    global_dist2 = normalize_global(ga2, nll, one_event_semantics=False, hc=hc)
-    np.save("global_array", global_array)
-
-    visualize_hough_array(global_dist1, uatemplates_by_sta.keys(), fname="one_ev.png", ax=None, timeslice=None)
-    np.save("one_ev", global_dist1)
-    print "one_ev.png/npy"
-
-    visualize_hough_array(global_dist2, uatemplates_by_sta.keys(), fname="ev_prob.png", ax=None, timeslice=None)
-    np.save("ev_prob", global_dist2)
-    print "ev_prob.png/npy"
 
 
 

@@ -58,6 +58,8 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
 double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
                                   double lon, double lat, double depth);
 
+double depth_lp(double depth);
+
 void EventLocationPrior_Sample(const EventLocationPrior_t * dist,
                                double * p_lon, double * p_lat, 
                                double * p_depth);

@@ -881,8 +881,6 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
     subplot_waveform(wn.get_wave(), axes, color='black', linewidth=signal_lw, plot_dets=None)
-    print wn.filter_str
-    print wn.mw_env['filter_str']
 
     import matplotlib.cm as cm
     shape_colors = dict([(eid, cm.get_cmap('jet')(np.random.rand()*.5)) for (eid, phase) in wn.arrivals()])
@@ -899,7 +897,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
 
         if plot_pred_signal:
             wn._parent_values()
-            pred_env = wn.assem_env()
+            pred_env = wn.assem_env() + wn.nm_env.c
             #pred_signal = wn.tssm.mean_obs(wn.npts)
             w = Waveform(pred_env, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
             subplot_waveform(w, axes, color='green', linewidth=2.5)
