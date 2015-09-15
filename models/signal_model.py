@@ -152,7 +152,7 @@ class ObservedSignalNode(Node):
 
         self.cached_logp = None
         self._coef_message_cache = None
-
+        self._unexplained_cache = None
 
     def __str__(self):
         try:
@@ -172,6 +172,7 @@ class ObservedSignalNode(Node):
         v = ma.masked_array(d, m)
         self.cached_logp = None
         self._coef_message_cache = None
+        self._unexplained_cache = None
         super(ObservedSignalNode, self).set_value(value=v, key=self.single_key)
 
     def get_wave(self):
@@ -215,6 +216,7 @@ class ObservedSignalNode(Node):
 
 
     def set_noise_model(self, arm, nmid=None):
+        print "WARNING: THIS METHOD DOENS'T KNWO ABOUT ENVS YET"
         self.nm.params = arm.params
         self.nm.c = arm.c
         self.nm.sf = arm.sf
@@ -407,6 +409,7 @@ class ObservedSignalNode(Node):
         if len(new_arrivals) > 0 or len(removed_arrivals) > 0 or len(parent_keys_changed) > 0:
             self.tssm = self.transient_ssm(arrivals=self._arrivals, parent_values=pv)
             self.cached_logp = None
+            self._unexplained_cache = None
             self._coef_message_cache = None
 
         del parent_keys_removed
@@ -970,6 +973,21 @@ class ObservedSignalNode(Node):
         other_arrivals = [a for a in arrivals if a != (eid, phase)]
         return self.get_env() - self.assem_env(arrivals=other_arrivals)
 
+    def unexplained_kalman(self):
+        # return the kalman filter's posterior mean estimate of the
+        # unexplained signal.  in the envelope case, this should be
+        # similar to unexplained_env except that it also subtracts out
+        # the inferred wiggles. (not just the prior mean wiggles: if
+        # we have an iid wiggle model with mean 1 but nonzero
+        # variance, much of the signal will be explaiend as
+        # multiplicative wiggle and only a small amount will be left
+        # as noise).
+        if self._unexplained_cache is None:
+            d = self.get_value().data
+            means = self.tssm.component_means(d)
+            self._unexplained_cache = means[0]
+        return self._unexplained_cache
+
     def template_idx_window(self, eid=None, phase=None, vals=None, pre_arrival_slack_s = 10.0, post_fade_slack_s = 10.0):
         if vals is not None:
             v = vals
@@ -1055,6 +1073,7 @@ class ObservedSignalNode(Node):
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)
         self.cached_logp = None
+        self._unexplained_cache = None
         self._coef_message_cache = None
         # don't try to regenerate other SSMs here because we might still be in
         # the middle of the unpickling process and can't depend on other program

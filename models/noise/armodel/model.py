@@ -13,72 +13,73 @@ from sigvisa.models.noise.noise_model import NoiseModel
 class ARGradientException(Exception):
     pass
 
-class ARModel(NoiseModel):
 
-    # params: array of parameters
-    # p: number of parametesr
-    # em: error model
-    # sf: sampling frequency in Hz.
-    def __init__(self, params, em, c=0, sf=40):
-        self.params = params
-        self.p = len(params)
-        self.em = em
-        self.c = c
-        self.sf = sf
+fastar_support =  """
+        void updateK(blitz::Array<double, 2> &K, blitz::Array<double, 2> &tmp, blitz::Array<double, 1> p, int n_p) {
 
-        self.nomask = np.array([False,] * 5000, dtype=bool)
+               // here we propagate the covariance matrix K through
+               // the transition operator A, yielding a new covariance
+               // of AKA^T.
 
-    def copy(self):
-        em = ErrorModel(self.em.mean, self.em.std)
-        arm  = ARModel(np.array(self.params, copy=True), em, self.c, self.sf)
-        return arm
+               // the transition matrix A consists of the AR params on
+               // the first row (the current timestep is a linear
+               // combination of the variables from previous timesteps),
+               // and of a shifted identity matrix on all other rows (all
+               // previous timesteps just move one step back in time, and
+               // the one at the end falls off). The special structure of
+               // this matrix lets us do the update in O(n^2) time.
 
-    # samples based on the defined AR Model
-    def sample(self, n):
-        data = np.zeros(n + self.p)
+               // tmp = K * A.T
+               for (int i=0; i < n_p; ++i){  // row of K
 
-        # initialize with iid samples
-        for t in range(self.p):
-            data[t] = self.c + self.em.sample()
+                 // first row of A contains the AR params
+                 tmp(i,0) = 0;
+                 for (int j=0; j < n_p; ++j){
+                  tmp(i,0) += K(i,j) * p(j);
+                 }
 
-        for t in range(self.p, n+self.p):
-            s = self.c
-            for i in range(self.p):
-                s += self.params[i] * (data[t - i - 1] - self.c)
-            data[t] = s + self.em.sample()
+                 // all the other rows are just the shifted identity matrix
+                 for (int j=1; j < n_p; ++j){
+                    tmp(i,j) = K(i,j-1);
+                 }
+               }
 
-        return data[self.p:]
+               // K = A * tmp
+               for (int i=0; i < n_p; ++i){  // col of tmp
 
-    def fastAR_missingData(self, d, c, std, mask=None):
-        n = len(d)
+                 // first row of A contains the AR params
+                 K(0, i) = 0;
+                 for (int j=0; j < n_p; ++j){
+                  K(0, i) += tmp(j,i) * p(j);
+                 }
 
-        if isinstance(d, ma.masked_array):
-            mm = d.mask
-            d = d.data - c
+                 // the other rows are the shifted identity
+                 for (int j=1; j < n_p; ++j){
+                    K(j,i) = tmp(j-1,i);
+                 }
+               }
+             }
 
-        else:
-            d = d - c
-            mm = mask if mask is not None else np.isnan(d)
 
-        try:
-            mm[0]
-            m = mm
-        except (TypeError,IndexError,AttributeError):
-            if len(d) > len(self.nomask):
-                self.nomask = np.array([False,] * (len(self.nomask)*2), dtype=bool)
-            m = self.nomask
+         void update_u(blitz::Array<double, 1> &u, blitz::Array<double, 1> &p, int n_p) {
+               double newpred = 0;
+               for (int i=0; i < n_p; ++i) {
+                   newpred += u(i) * p(i);
+               }
+               for (int i=n_p-1; i > 0; --i) {
+                   u(i) = u(i-1);
+               }
+               u(0) = newpred;
+          }
 
-        p = np.array(self.params)
-        n_p = len(p)
-
-        tmp = np.zeros((n_p, n_p))
-
-        K = np.eye(n_p) * 1.0e4
-        u = np.zeros((n_p,))
-
-        var = float(std**2)
-
-        code = """
+    double compute_ar(int n_p, blitz::Array<bool, 1> m, blitz::Array<double, 1> d, 
+                      double var, blitz::Array<double, 1> p, blitz::Array<double, 2> tmp, 
+                       int start_idx,
+                       int end_idx,
+                       blitz::Array<double, 2> K, 
+                       blitz::Array<double, 1> u, 
+                       blitz::Array<double, 1> llarray, 
+                       int return_llarray) {
         int t_since_mask = 0;
         double v = var;
         double t1 = 0.5 * log(2 * 3.141592653589793 * v);
@@ -86,7 +87,8 @@ class ARModel(NoiseModel):
         int converged_to_stationary = 0;
 
         double d_prob = 0;
-        for (int t=0; t < n; ++t) {
+        int st = start_idx > n_p ? start_idx - n_p : 0;
+        for (int t=st; t < end_idx; ++t) {
             if (m(t)) {
                if (converged_to_stationary) continue;
 
@@ -146,7 +148,12 @@ class ARModel(NoiseModel):
 
             double err = d(t) - expected;
             double ll = t1 + 0.5 * err*err/v;
-            d_prob -= ll;
+            if (return_llarray) {
+               llarray(t) = -ll;
+            }
+            if (t >= start_idx) {
+               d_prob -= ll;
+            }
 
         // printf("cm %d err = %.10f d(t) = %.10f expected %f std %f ll = %.10f d_prob=%.10f\\n", t, err, d(t), expected, sqrt(v), ll, d_prob);
 
@@ -163,75 +170,89 @@ class ARModel(NoiseModel):
             }
         }
 
-        return_val = d_prob;
-        """
-
-        support = """
-
-
-        void updateK(blitz::Array<double, 2> &K, blitz::Array<double, 2> &tmp, blitz::Array<double, 1> p, int n_p) {
-
-               // here we propagate the covariance matrix K through
-               // the transition operator A, yielding a new covariance
-               // of AKA^T.
-
-               // the transition matrix A consists of the AR params on
-               // the first row (the current timestep is a linear
-               // combination of the variables from previous timesteps),
-               // and of a shifted identity matrix on all other rows (all
-               // previous timesteps just move one step back in time, and
-               // the one at the end falls off). The special structure of
-               // this matrix lets us do the update in O(n^2) time.
-
-               // tmp = K * A.T
-               for (int i=0; i < n_p; ++i){  // row of K
-
-                 // first row of A contains the AR params
-                 tmp(i,0) = 0;
-                 for (int j=0; j < n_p; ++j){
-                  tmp(i,0) += K(i,j) * p(j);
-                 }
-
-                 // all the other rows are just the shifted identity matrix
-                 for (int j=1; j < n_p; ++j){
-                    tmp(i,j) = K(i,j-1);
-                 }
-               }
-
-               // K = A * tmp
-               for (int i=0; i < n_p; ++i){  // col of tmp
-
-                 // first row of A contains the AR params
-                 K(0, i) = 0;
-                 for (int j=0; j < n_p; ++j){
-                  K(0, i) += tmp(j,i) * p(j);
-                 }
-
-                 // the other rows are the shifted identity
-                 for (int j=1; j < n_p; ++j){
-                    K(j,i) = tmp(j-1,i);
-                 }
-               }
-             }
-
-
-         void update_u(blitz::Array<double, 1> &u, blitz::Array<double, 1> &p, int n_p) {
-               double newpred = 0;
-               for (int i=0; i < n_p; ++i) {
-                   newpred += u(i) * p(i);
-               }
-               for (int i=n_p-1; i > 0; --i) {
-                   u(i) = u(i-1);
-               }
-               u(0) = newpred;
-          }
+        return d_prob;
+   }
 
 """
 
+
+class ARModel(NoiseModel):
+
+    # params: array of parameters
+    # p: number of parametesr
+    # em: error model
+    # sf: sampling frequency in Hz.
+    def __init__(self, params, em, c=0, sf=40):
+        self.params = params
+        self.p = len(params)
+        self.em = em
+        self.c = c
+        self.sf = sf
+
+        self.nomask = np.array([False,] * 5000, dtype=bool)
+
+    def copy(self):
+        em = ErrorModel(self.em.mean, self.em.std)
+        arm  = ARModel(np.array(self.params, copy=True), em, self.c, self.sf)
+        return arm
+
+    # samples based on the defined AR Model
+    def sample(self, n):
+        data = np.zeros(n + self.p)
+
+        # initialize with iid samples
+        for t in range(self.p):
+            data[t] = self.c + self.em.sample()
+
+        for t in range(self.p, n+self.p):
+            s = self.c
+            for i in range(self.p):
+                s += self.params[i] * (data[t - i - 1] - self.c)
+            data[t] = s + self.em.sample()
+
+        return data[self.p:]
+
+    def fastAR_missingData(self, d, c, std, llarray=None, mask=None):
+        n = len(d)
+
+        if isinstance(d, ma.masked_array):
+            mm = d.mask
+            d = d.data - c
+
+        else:
+            d = d - c
+            mm = mask if mask is not None else np.isnan(d)
+
+        try:
+            mm[0]
+            m = mm
+        except (TypeError,IndexError,AttributeError):
+            if len(d) > len(self.nomask):
+                self.nomask = np.array([False,] * (len(self.nomask)*2), dtype=bool)
+            m = self.nomask
+
+        p = np.array(self.params)
+        n_p = len(p)
+
+        tmp = np.zeros((n_p, n_p))
+
+        K = np.eye(n_p) * 1.0e4
+        u = np.zeros((n_p,))
+
+        var = float(std**2)
+
+        if llarray is None:
+            llarray = np.zeros((1,), dtype=np.float)
+            return_llarray = int(0)
+        else:
+            return_llarray = int(1)
+
+        code = "return_val = compute_ar(n_p, m, d, var, p, tmp, 0, n, K, u, llarray, return_llarray);"
+
         ll = weave.inline(code,
-                          ['n', 'n_p', 'm', 'd', 'var', 'p', 'tmp', 'K', 'u'],
+                          ['n', 'n_p', 'm', 'd', 'var', 'p', 'tmp', 'K', 'u', 'llarray', 'return_llarray'],
                           type_converters=converters.blitz,
-                          support_code=support,
+                          support_code=fastar_support,
                           compiler='gcc')
         return ll
 
@@ -671,7 +692,7 @@ class ARModel(NoiseModel):
         return self.autocovariances(1)[0]
         
 
-    def prec_matrix(alpha, n):
+    def prec_matrix(self, n):
         # compute the precision matrix for the multivariate Gaussian
         # on n timesteps induced by an AR(alpha) process.
         # should be equal to inv(cov_matrix), up to numeric precision,
@@ -689,6 +710,8 @@ class ARModel(NoiseModel):
         # on *all* timesteps. these notions are equivalent at the edges of the
         # precision matrix, but different in the interior).
 
+        # notation is confusing and should be fixed
+        alpha = self.params
         p = len(alpha)
         sqAlpha = np.asarray(alpha)**2
 
