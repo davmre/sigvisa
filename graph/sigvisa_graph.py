@@ -924,17 +924,6 @@ class SigvisaGraph(DirectedGraphModel):
     def get_param_model_id(self, *args, **kwargs):
         return get_param_model_id(*args, **kwargs)
 
-    def load_node_from_modelid(self, modelid, label, **kwargs):
-        model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
-        node = Node(model=model, label=label, **kwargs)
-        node.modelid = modelid
-        return node
-
-    def load_array_node_from_modelid(self, modelid, label, **kwargs):
-        model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
-        node = ArrayNode(model=model, label=label, st=self.start_time, **kwargs)
-        node.modelid = modelid
-        return node
 
     def setup_site_param_node(self, **kwargs):
         if self.arrays_joint:
@@ -948,18 +937,7 @@ class SigvisaGraph(DirectedGraphModel):
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
 
-        if not model_type.startswith("dummy") and modelid is None:
-            try:
-                modelid = self.get_param_model_id(runids=self.runids, sta=site,
-                                             phase=phase, model_type=model_type,
-                                             param=param, template_shape=self.template_shape,
-                                             chan=chan, band=band)
-            except ModelNotFoundError:
-                if self.dummy_fallback:
-                    print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
-                    model_type = "dummyPrior"
-                else:
-                    raise
+        model, modelid = self.get_model(param, site, phase, model_type, chan=chan, band=band, modelid=modelid)
         label = create_key(param=param, sta="%s_arr" % site,
                            phase=phase, eid=parents[0].eid,
                            chan=chan, band=band)
@@ -972,11 +950,38 @@ class SigvisaGraph(DirectedGraphModel):
                 initial_value = 0.0
             if type(initial_value) != dict:
                 initial_value = dict([(k, initial_value) for k in sk])
-            node = self.load_array_node_from_modelid(modelid=modelid, parents=parents, children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, sorted_keys=sk, label=label)
+            node = ArrayNode(model=model, parents=parents, children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, sorted_keys=sk, label=label)
+            node.modelid = modelid
             self.add_node(node, **kwargs)
             return node
 
 
+    def get_model(self, param, sta, phase, model_type=None, chan=None, band=None, modelid=None):
+        modelid = None
+        if model_type is None:
+            model_type = self._tm_type(param=param, site=sta)
+
+        if not model_type.startswith("dummy") and modelid is None and model_type != "gp_joint":
+            try:
+                modelid = self.get_param_model_id(runids=self.runids, sta=sta,
+                                                  phase=phase, model_type=model_type,
+                                                  param=param, 
+                                                  template_shape=self.template_shape,
+                                                  chan=chan, band=band)
+            except ModelNotFoundError:
+                if self.dummy_fallback:
+                    print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
+                    model_type = "dummyPrior"
+                else:
+                    raise
+        if model_type.startswith("dummy"):
+            model = self.dummy_prior[param]
+        elif model_type == "gp_joint":
+            model = None
+        else:
+            model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+
+        return model, modelid
 
     def setup_site_param_node_indep(self, param, site, phase, parents, model_type,
                               chan=None, band=None,
@@ -989,44 +994,21 @@ class SigvisaGraph(DirectedGraphModel):
         # appropriate parameter model.
         nodes = dict()
         for sta in self.site_elements[site]:
-            if not model_type.startswith("dummy") and modelid is None and model_type != "gp_joint":
-                try:
-                    modelid = self.get_param_model_id(runids=self.runids, sta=sta,
-                                                      phase=phase, model_type=model_type,
-                                                      param=param, template_shape=self.template_shape,
-                                                      chan=chan, band=band)
-                except ModelNotFoundError:
-                    if self.dummy_fallback:
-                        print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
-                        model_type = "dummyPrior"
-                    else:
-                        raise
+            model, modelid = self.get_model(param, sta, phase, model_type, chan=chan, band=band, modelid=modelid)
             label = create_key(param=param, sta=sta,
                                phase=phase, eid=parents[0].eid,
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
-            if model_type.startswith("dummy") or model_type=="gp_joint":
-                if model_type=="dummyPrior":
-                    model = self.dummy_prior[param]
-                elif model_type == "gp_joint":
-                    model = None
-                else:
-                    if "tt_residual" in label:
-                        model = Gaussian(mean=0.0, std=10.0)
-                    elif "amp" in label:
-                        model = Gaussian(mean=0.0, std=0.25)
-                    else:
-                        model = DummyModel(default_value=initial_value)
 
-                node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
-                if model_type=="gp_joint":
-                    jgp, hparam_nodes = self.joint_gpmodel(sta=sta, param=param, chan=chan, band=band, phase=phase)
-                    node.params_modeled_jointly.add(jgp)
-                    for n in hparam_nodes.values():
-                        node.addParent(n)
-            else:
-                node = self.load_node_from_modelid(modelid, label, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
+            node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
+            node.modelid = modelid
 
+            if model_type=="gp_joint":
+                jgp, hparam_nodes = self.joint_gpmodel(sta=sta, param=param, chan=chan, band=band, phase=phase)
+                node.params_modeled_jointly.add(jgp)
+                for n in hparam_nodes.values():
+                    node.addParent(n)
+                    
             nodes[sta] = node
             self.add_node(node, **kwargs)
         return nodes

@@ -126,8 +126,8 @@ class EventRunSpec(RunSpec):
 
         sg = SigvisaGraph(runids=self.runids, **kwargs)
         waves = self.get_waves(modelspec)
-        for wave in waves:
-            sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking)
+        for (wave, wave_env) in waves:
+            sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking, wave_env=wave_env)
         return sg
 
 

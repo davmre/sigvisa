@@ -84,16 +84,10 @@ def atime_block_update_dist(sg, eid, old_ev, new_ev):
 
     fix_atime_probs = {}
 
-    for site in sg.site_elements.keys():
-        # TODO: implement multiple bands/chans
-        assert (len(list(sg.site_bands[site])) == 1)
-        band = list(sg.site_bands[site])[0]
-
-        assert (len(list(sg.site_chans[site])) == 1)
-        chan = list(sg.site_chans[site])[0]
-
-        for phase in sg.ev_arriving_phases(eid, site=site):
-            for sta in sg.site_elements[site]:
+    for sta, wns in sg.station_waves.items():
+        for wn in wns:
+            band, chan = wn.band, wn.chan
+            for phase in sg.ev_arriving_phases(eid, sta=sta):
                 tmnodes = sg.get_template_nodes(eid, sta, phase, band, chan)
                 atime_key, atime_node = tmnodes['arrival_time']
                 ttr_key, ttr_node = tmnodes['tt_residual']
@@ -113,7 +107,6 @@ def atime_block_update_dist(sg, eid, old_ev, new_ev):
                 new_tt_residual = current_tt_residual - atime_diff
 
                 try:
-                    wn = sg.get_wave_node_by_atime(sta, band, chan, current_pred_atime)
                     wave_lp1 = wn.log_p()
                     atime_node.set_value(new_pred_atime)
                     wave_lp2 = wn.log_p()
@@ -159,7 +152,9 @@ def clear_node_caches(sg, eid):
         except KeyError:
             pass
 
-def add_phase_template(sg, sta, eid, phase, vals=None, node_lps=None):
+def add_phase_template(sg, wn, eid, phase, vals=None, node_lps=None):
+    sta, band, chan = wn.sta, wn.band, wn.chan
+
     tg = sg.template_generator(phase)
 
     phase_added = False
@@ -171,14 +166,8 @@ def add_phase_template(sg, sta, eid, phase, vals=None, node_lps=None):
         sg.add_event_site_phase(tg, site, phase, sg.evnodes[eid], sample_templates=True)
         phase_added=True
 
-    tmvals, lp = propose_phase_template(sg, sta, eid, phase)
-
+    tmvals, lp = propose_phase_template(sg, wn, eid, phase)
     s = Sigvisa()
-    site = s.get_array_site(sta)
-    assert (len(list(sg.site_bands[site])) == 1)
-    band = list(sg.site_bands[site])[0]
-    assert (len(list(sg.site_chans[site])) == 1)
-    chan = list(sg.site_chans[site])[0]
     tmnodes = sg.get_template_nodes(eid, sta, phase, band, chan)
     for p, (k, n) in tmnodes.items():
         if p in tmvals:
@@ -213,6 +202,8 @@ def phases_changed(sg, eid, ev):
 
 
 class UpdatedNodeLPs(object):
+    # TODO: make sure this does the right thing with multiple bands/chans. Right now some pieces are keyed by wn and some by site/band/chan and this might break horribly. 
+
     def __init__(self, old_ev):
         self.nodes_added = set()
         self.nodes_removed = dict()
@@ -236,8 +227,8 @@ class UpdatedNodeLPs(object):
             print "  %s: %.2f" % (n.label, lp)
 
         print "uatemplate counts:"
-        for k, delta in self.uatemplate_count_delta.items():
-            print k, delta
+        for wn, delta in self.uatemplate_count_delta.items():
+            print wn.label, delta
 
     def dump_detected_changes(self, lps_old, lps_new, relevant_nodes):
         rn_labels = [n.label for n in relevant_nodes]
@@ -258,16 +249,16 @@ class UpdatedNodeLPs(object):
         tmnodes = sg.uatemplates[tmid]
         for n in tmnodes.values():
             self.nodes_removed[n] = n.log_p()
-        eid, phase, sta, chan, band, param = parse_key(tmnodes.values()[0].label)
-        self.uatemplate_count_delta[(sta, chan, band)] -= 1
+        wn = list(tmnodes['coda_height'].children)[0]
+        self.uatemplate_count_delta[wn] -= 1
 
     def register_new_uatemplate(self, sg, tmid, wn_invariant=True):
         assert(wn_invariant)
         tmnodes = sg.uatemplates[tmid]
+        wn = list(tmnodes['coda_height'].children)[0]
         for n in tmnodes.values():
             self.nodes_added.add(n)
-        eid, phase, sta, chan, band, param = parse_key(tmnodes.values()[0].label)
-        self.uatemplate_count_delta[(sta, chan, band)] += 1
+        self.uatemplate_count_delta[wn] += 1
 
     def __register_phase_helper(self, sg, site, phase, eid, d, f_lp):
         for sta in sg.site_elements[site]:
@@ -395,12 +386,11 @@ class UpdatedNodeLPs(object):
             lp_delta += self.nodes_changed_new[n] - self.nodes_changed_old[n]
 
         # also account for the uatemplate Poisson process prior
-        for k, delta in self.uatemplate_count_delta.items():
-            sta, chan, band = k
-            new_count = len(sg.uatemplate_ids[k])
+        for wn, delta in self.uatemplate_count_delta.items():
+            new_count = len(sg.uatemplate_ids[(wn.sta, wn.band, wn.chan)])
             old_count = new_count - delta
-            old_lp = sg.ntemplates_sta_log_p(sta, n=old_count)
-            new_lp = sg.ntemplates_sta_log_p(sta, n=new_count)
+            old_lp = sg.ntemplates_sta_log_p(wn, n=old_count)
+            new_lp = sg.ntemplates_sta_log_p(wn, n=new_count)
             lp_delta += new_lp-old_lp
 
         return lp_delta
@@ -504,7 +494,7 @@ def ev_phasejump(sg, eid, new_ev, params_changed, adaptive_blocking=False, birth
                     else:
                         # propose a new template from scratch
                         forward_fns.append( lambda wn=wn,phase=phase,eid=eid: add_phase_template(sg, wn, eid, phase, node_lps=node_lps)[1] )
-                        inverse_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, wn, phase))
+                        inverse_fns.append(lambda eid=eid,wn=wn,phase=phase: sg.delete_event_phase(eid, wn.sta, phase))
                         associations.append((wn, phase, False))
                         print "proposing new template for %d %s at %s" % (eid, phase, wn.sta),
 
@@ -527,12 +517,12 @@ def ev_phasejump(sg, eid, new_ev, params_changed, adaptive_blocking=False, birth
                         tmid_i += 1
                         print "proposing to deassociate %s for %d at %s (lp %.1f)" % (phase, eid, sta, deassociate_logprob),
                     else:
-                        template_param_array = sg.get_template_vals(eid, sta, phase, band, chan)
+                        template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
 
                         forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_pre(sg, site, phase, eid))
                         forward_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, sta, phase))
                         forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_post(sg, site, phase, eid))
-                        inverse_fns.append( lambda sta=sta,phase=phase,eid=eid: add_phase_template(sg, sta, eid, phase) )
+                        inverse_fns.append( lambda wn=wn,phase=phase,eid=eid: add_phase_template(sg, wn, eid, phase) )
                         inverse_fns.append(lambda wn=wn,phase=phase,template_param_array=template_param_array : sg.set_template(eid,wn.sta, phase, wn.band, wn.chan, template_param_array))
                         tmp = propose_phase_template(sg, wn, eid, phase, template_param_array, fix_result=True, ev=old_ev)
                         reverse_logprob += tmp

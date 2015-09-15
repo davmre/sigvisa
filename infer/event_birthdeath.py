@@ -925,9 +925,9 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
             f.write("proposed ev: %s\n" % proposed_ev)
             f.write(" hough args %s\n" % repr(hough_kwargs))
             f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
-            for (sta, phase, assoc) in associations:
+            for (wn, phase, assoc) in associations:
                 if assoc:
-                    f.write(" associated %s at %s\n" % (phase, sta))
+                    f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
 
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):

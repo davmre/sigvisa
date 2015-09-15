@@ -435,7 +435,7 @@ class PiecewiseLinear(Distribution):
         p2 = self.ps[segment+1]
 
         u = np.random.rand() * area
-        if p1==p2:
+        if np.abs(p1-p2) < 1e-10:
             z = (u/area) * gap
         else:
             z = (np.sqrt(p1**2 * gap**2 + 2*(p2-p1)*u*gap) - p1*gap) / (p2-p1)
