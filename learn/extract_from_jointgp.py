@@ -27,19 +27,16 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 
 #with open("/home/dmoore/python/sigvisa/logs/mcmc/01962/step_000019/pickle.sg", 'rb') as f:
 #    sg_joint = pickle.load(f)
-with open("/home/dmoore/python/sigvisa/logs/mcmc/01963/step_000099/pickle.sg", 'rb') as f:
+with open("logs/mcmc/00189/step_000019/pickle.sg", 'rb') as f:
      sg_joint = pickle.load(f)
 
 s = Sigvisa()
 holdout_eid = dbl1
-sta = "FITZ" #"AS12"#"MK31"
 target_phase="P"
-chan= "BHZ"
 band="freq_0.8_4.5"
-#wiggle_family = "db4_2.0_3_30.0"
-wiggle_family = "db4_2.0_3_10.0"
+wiggle_family = "db4_2.0_3_15.0"
 
-run_name = "aftershock_joint_P_10s_33" # "aftershock_joint_P"
+run_name = "kampos_init_phases" # "aftershock_joint_P"
 run_iter = 1
 cursor = s.dbconn.cursor()
 runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=True)

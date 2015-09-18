@@ -347,7 +347,7 @@ class ObservedSignalNode(Node):
         for (eid, phase) in new_arrivals:
             tg = self.graph.template_generator(phase=phase)
             self._tmpl_params[(eid,phase)] = dict()
-            for p in tg.params() + ('arrival_time',):
+            for p in tg.params(env=self.is_env) + ('arrival_time',):
                 k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
                 self._tmpl_params[(eid,phase)][p] = float(v)
                 self._keymap[k] = (True, eid, phase, p)
@@ -511,9 +511,10 @@ class ObservedSignalNode(Node):
             return None
 
         try:
-            (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+            (start_idxs, end_idxs, identities, basis_prototypes, levels, N) = self.wavelet_basis
         except ValueError:
-            (start_idxs, end_idxs, identities, basis_prototypes, n_steps), _ = self.wavelet_basis
+            (start_idxs, end_idxs, identities, basis_prototypes, levels) = self.wavelet_basis
+            self.wavelet_basis = (start_idxs, end_idxs, identities, basis_prototypes, levels, 150)
         n_basis = len(start_idxs)
 
         prior_means = np.zeros((n_basis,))
@@ -542,9 +543,9 @@ class ObservedSignalNode(Node):
 
         if self.wavelet_basis is not None:
             try:
-                (start_idxs, end_idxs, identities, basis_prototypes, n_steps) = self.wavelet_basis
+                (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps) = self.wavelet_basis
             except ValueError:
-                (start_idxs, end_idxs, identities, basis_prototypes, n_steps), _ = self.wavelet_basis
+                (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps), _ = self.wavelet_basis
             n_basis = len(start_idxs)
         else:
             n_steps = 0
@@ -577,24 +578,24 @@ class ObservedSignalNode(Node):
 
             npts = min(len(env), n_steps)
 
-            try:
-                wiggle_std = np.abs(v['mult_wiggle_std'])
-            except KeyError:
-                wiggle_std = 0.5
+            if self.is_env:
+                try:
+                    wiggle_std = np.abs(v['mult_wiggle_std'])
+                except KeyError:
+                    wiggle_std = 0.5
+            else:
+                # in the raw signal case, wiggle std is unidentifiable with coda_height. 
+                wiggle_std = 1.0
 
-            iid_std = np.empty(env.shape)
-            iid_std[:npts] = 0.05
-            iid_std[npts:] = np.sqrt(wiggle_std**2+0.05**2)
 
-            mn_scale = env*iid_std
             if wssm is not None:
                 components.append((wssm, start_idx, npts, env*wiggle_std))
                 tssm_components.append((eid, phase, env*wiggle_std, start_idx, npts, "wavelet"))
 
-                components.append((self.iid_arssm, start_idx, len(env), mn_scale))
-                tssm_components.append((eid, phase, mn_scale, start_idx, len(env), "multnoise"))
-            else:
-                components.append((self.iid_arssm, start_idx, len(env), mn_scale))
+            if len(env) > npts:
+                n_tail = len(env)-npts
+                mn_scale = env[npts:] * wiggle_std
+                components.append((self.iid_arssm, start_idx+npts, len(env)-npts, mn_scale))
                 tssm_components.append((eid, phase, mn_scale, start_idx, len(env), "multnoise"))
 
             if self.is_env:
@@ -1024,12 +1025,14 @@ class ObservedSignalNode(Node):
         proxy_lps = {self.label: (lpw, deriv_lp_w)}
         return proxy_lps
 
-    def plot(self, ax=None):
+    def plot(self, ax=None, **kwargs):
         from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes
         if ax is None:
             f = plt.figure(figsize=(15,5))
             ax=f.add_subplot(111)
-        shape_colors = plot_with_fit_shapes(fname=None, wn=self, axes=ax, plot_wave=True)
+        plot_dict = {"plot_wave": True}
+        plot_dict.update(kwargs)
+        shape_colors = plot_with_fit_shapes(fname=None, wn=self, axes=ax, **plot_dict)
         atimes = dict([("%d_%s" % (eid, phase), self.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in self.arrivals()])
         colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in self.arrivals()])
         plot_pred_atimes(dict(atimes), self.get_wave(), axes=ax, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)

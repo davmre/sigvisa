@@ -81,7 +81,7 @@ def construct_implicit_basis_simple(N, family, pad, level=None):
             end_times.append(st+length)
             identities.append(i)
 
-    return start_times, end_times, identities, prototypes, level_sizes
+    return start_times, end_times, identities, prototypes, level_sizes, N
 
 
 def construct_full_basis(srate, wavelet_str=None, wavelet_family='db4', wiggle_len_s=30.0, decomp_levels=99):
@@ -114,7 +114,7 @@ def level_sizes(srate, wavelet_str):
 # in the format required by the fast C++ implementation of
 # the CompactSupportSSM
 def implicit_basis_to_C_format(basis):
-    start_times, end_times, identities, prototypes, levels = basis
+    start_times, end_times, identities, prototypes, levels, N = basis
     starray = np.asarray(start_times, dtype=np.int32)
     etarray = np.asarray(end_times, dtype=np.int32)
     idarray = np.asarray(identities, dtype=np.int32)
@@ -125,11 +125,10 @@ def implicit_basis_to_C_format(basis):
     for i, p in enumerate(prototypes):
         m[i,:len(p)] = p
 
-    return starray, etarray, idarray, m, levels
+    return starray, etarray, idarray, m, levels, N
 
-def implicit_to_explicit(start_times, end_times, identities, prototypes, levels):
+def implicit_to_explicit(start_times, end_times, identities, prototypes, levels, N):
     m = len(start_times)
-    N = m
     basis = []
     for i in range(m):
         st = max(start_times[i], 0)

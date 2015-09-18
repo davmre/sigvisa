@@ -81,7 +81,10 @@ def do_gp_hparam_moves(sg, stds, n_attempted=None, n_accepted=None,
 
         def lp(v):
             node.set_value(v)
-            return node.log_p() + jgp.log_likelihood()
+            ll = node.log_p()
+            if np.isfinite(ll):
+                ll += jgp.log_likelihood()
+            return ll
 
         return mh_accept_lp(sg, lp, v1, v2)
 
@@ -104,7 +107,7 @@ def do_template_moves(sg, wn, tmnodes, tg, stds,
                       move_times=None, step=None, proxy_lps=None):
 
 
-    for param in tg.params():
+    for param in tg.params(env=wn.is_env):
 
         k, n = tmnodes[param]
 
@@ -274,16 +277,16 @@ def run_open_world_MH(sg, steps=10000,
             sta_moves = {'swap_association': swap_association_move}
             sta_moves = {'arnoise_gibbs': arnoise_gibbs_move}
 
-    template_moves_special = {'indep_peak': indep_peak_move,
-                              'peak_offset': improve_offset_move_gaussian,
-                              'arrival_time': improve_atime_move,
-                              'atime_xc': atime_xc_move,
-                              'arrival_time_big': improve_atime_move,
+    template_moves_special = {'indep_peak': (indep_peak_move, 1.0),
+                              'peak_offset': (improve_offset_move_gaussian, 1.0),
+                              'arrival_time': (improve_atime_move, 1.0),
+                              'atime_xc': (atime_xc_move, 0.1),
+                              'arrival_time_big': (improve_atime_move, 1.0),
                               #'constpeak_atime_xc': constpeak_atime_xc_move,
                               #'adjpeak_atime_xc': adjpeak_atime_xc_move,
                              } if enable_template_moves else {}
     if template_move_type in ("hamiltonian", "both"):
-        template_moves_special['hamiltonian_reversing'] = hamiltonian_template_move
+        template_moves_special['hamiltonian_reversing'] = (hamiltonian_template_move, 1.0)
 
     # allow the caller to disable specific moves by name
     for move in disable_moves:
@@ -380,11 +383,11 @@ def run_open_world_MH(sg, steps=10000,
                             window_lps = wn.cache_latent_env_for_template_optimization(eid, phase, force_bounds=False)
 
                         # special template moves
-                        for (move_name, fn) in template_moves_special.iteritems():
+                        for (move_name, (fn, move_prob)) in template_moves_special.iteritems():
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                      n_accepted=n_accepted, move_times=move_times,
                                      sg=sg, wn=wn, tmnodes=tmnodes,
-                                     eid=eid, phase=phase,
+                                     eid=eid, phase=phase, move_prob=move_prob,
                                      std=stds[move_name] if move_name in stds else None,
                                      window_lps = window_lps)
 

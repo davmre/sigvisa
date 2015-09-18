@@ -9,36 +9,45 @@ from sigvisa.treegp.gp import GPCov
 import os, sys, traceback
 import cPickle as pickle
 
-stas = ['ASAR', 'KURK', 'MKAR', 'SONM', 'BVAR', 'FITZ', 'CTA', 'CMAR', 'WRA', 'ZALV', 'MJAR', 'AKTO', 'INK']
+#stas = ['ASAR', 'KURK', 'MKAR', 'SONM', 'BVAR', 'FITZ', 'CTA', 'CMAR', 'WRA', 'ZALV', 'MJAR', 'AKTO', 'INK']
+stas=["MKAR",]
 
 evids = [5334501, 5334991, 5334726, 5335144, 5349684, 5335822, 5348178, 5334971, 5349536, 5335079, 5335116, 5335138, 5350499, 5336237, 5335425, 5335424, 5349441, 5336640, 5335577, 5350077, 5336889, 5335760, 5336967, 5337111, 5336015, 5337461, 5351821, 5351657, 5336724, 5351713, 5338302, 5338318, 5338388]
 
 
 def sigvisa_locate_ctf():
 
-    rs = EventRunSpec(evids=evids, stas=stas, runids=(37,), disable_conflict_checking=True)
+    rs = EventRunSpec(evids=evids, stas=stas, runids=(1,), disable_conflict_checking=True)
 
-    ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", max_hz=5.0)
+    ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", max_hz=10.0, raw_signals=True)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
-    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
+    #ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
 
-    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", inference_preset="closedworld")
+    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
+    ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
 
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4uvars_2.0_3_30.0", wiggle_model_type="dummy", inference_preset="closedworld")
+    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
+    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
 
-    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4uvars_2.0_3_30.0", wiggle_model_type="gp_joint", inference_preset="closedworld")
+    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0)
+    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
-    ms = [ms1, ms2, ms3, ms4]
+    ms = [ms1, ms2, ms3,]
     do_coarse_to_fine(ms, rs, max_steps_intermediate=100)
 
 
-def continue_from():
-    with open("/home/dmoore/python/sigvisa/logs/mcmc/01935/step_000019/pickle.sg", 'rb') as f:
+def continue_from(old_sgfile):
+    with open(old_sgfile, 'rb') as f:
         sg_old = pickle.load(f)
 
-    rs = EventRunSpec(evids=evids, stas=stas, runids=(37,), disable_conflict_checking=True)
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4uvars_2.0_3_30.0", wiggle_model_type="dummy", inference_preset="closedworld")
+    rs = EventRunSpec(evids=evids, stas=stas, runids=(1,), disable_conflict_checking=True)
+    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
+    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
+
+    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0)
+    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
+
 
     sg = rs.build_sg(ms3)
     initialize_from(sg, ms3, sg_old, None)
@@ -48,22 +57,22 @@ def continue_from():
     print sg.current_log_p()
     print sg.current_log_p()
 
-    with open("/home/dmoore/python/sigvisa/logs/mcmc/01936/step_000000/pickle.sg", 'wb') as f:
-        pickle.dump(sg, f, 2)
+    #with open("/home/dmoore/python/sigvisa/logs/mcmc/01936/step_000000/pickle.sg", 'wb') as f:
+    #    pickle.dump(sg, f, 2)
 
 
 
     #sg_old.current_log_p_breakdown()
     #sg.current_log_p_breakdown()
 
-    #do_inference(sg, ms3, rs, max_steps=1000, model_switch_lp_threshold=-1000)
+    do_inference(sg, ms3, rs, max_steps=1000, model_switch_lp_threshold=-1000, dump_interval=5)
 
 
 def main():
     if sys.argv[1]=="ctf":
         sigvisa_locate_ctf()
     if sys.argv[1]=="continue":
-        continue_from()
+        continue_from(sys.argv[2])
 
 """
 def relative_atimes():

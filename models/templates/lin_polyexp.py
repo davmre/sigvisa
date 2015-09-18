@@ -33,8 +33,11 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
         self.hack_force_mean = None
 
     @staticmethod
-    def params():
-        return ("peak_offset", "peak_decay", "coda_height", "coda_decay", "mult_wiggle_std")
+    def params(env=True):
+        if env:
+            return ("peak_offset", "peak_decay", "coda_height", "coda_decay", "mult_wiggle_std")
+        else:
+            return ("peak_offset", "peak_decay", "coda_height", "coda_decay",)
 
     @staticmethod
     def default_param_vals():

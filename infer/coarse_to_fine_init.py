@@ -17,6 +17,8 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph, MAX_TRAVEL_TIME
 class RunSpec(object):
     def build_sg(self, modelspec):
         kwargs = modelspec.sg_params.copy()
+        if modelspec.signal_params['raw_signals']:
+            kwargs["raw_signals"] = True
 
         sg = SigvisaGraph(runids=self.runids, **kwargs)
         waves = self.get_waves(modelspec)
@@ -123,6 +125,8 @@ class EventRunSpec(RunSpec):
     def build_sg(self, modelspec):
         kwargs = modelspec.sg_params.copy()
         kwargs['force_event_wn_matching'] = self.force_event_wn_matching
+        if modelspec.signal_params['raw_signals']:
+            kwargs["raw_signals"] = True
 
         sg = SigvisaGraph(runids=self.runids, **kwargs)
         waves = self.get_waves(modelspec)
@@ -252,6 +256,11 @@ class ModelSpec(object):
         self.seed = seed
 
         self.inference_rounds = []
+        if inference_preset == "closedtmpl":
+            self.add_inference_round(enable_template_openworld=False,
+                                     enable_event_openworld=False, 
+                                     enable_event_moves=False,
+                                     disable_moves=["atime_xc"])
         if inference_preset == "closedworld":
             self.add_inference_round(enable_template_openworld=False,
                                      enable_event_openworld=False, )
@@ -346,10 +355,14 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
         return diff < model_switch_lp_threshold
 
     step = 0
-    if max_steps is not None:
-        inference_params["steps"] = max_steps
+
 
     for inference_params in modelspec.inference_rounds:
+
+        if max_steps is not None:
+            inference_params["steps"] = max_steps
+
+
         run_open_world_MH(sg, logger=logger,
                           stop_condition=lp_change_threshold,
                           start_step=step,

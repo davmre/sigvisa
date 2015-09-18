@@ -67,7 +67,11 @@ def sample_xc_source_arrival(sg, eid_target, phase, sta, band, chan):
         tries -= 1
 
     tmnodes = sg.get_template_nodes(eid, sta, phase, band, chan)
-    wn = [n for n in tmnodes['coda_height'][1].children if isinstance(n, ObservedSignalNode)][0]
+    
+    try:
+        wn = [n for n in tmnodes['coda_height'][1].children if isinstance(n, ObservedSignalNode)][0]
+    except IndexError:
+        raise Exception("warning: trying to propose atime from source event %d at %s, %s, %s but no data is available." % (eid, sta, band, chan))
     return eid, wn
 
 def get_arrival_signal(sg, eid, phase, wn, pre_s, post_s, pred_atime=False, atime=None):
@@ -170,6 +174,7 @@ def xc_move(sg, wn, eid, phase, tmnodes, propose_peak=False, **kwargs):
     relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
 
     eid_src, wn_src = sample_xc_source_arrival(sg, eid_target, phase, wn_target.sta, wn_target.band, wn_target.chan)
+
     source_v, _ = wn_src.get_template_params_for_arrival(eid_src, phase)
 
     xcdist, idx_to_atime, atime_to_idx = atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase, wn_src, wn_target, temp=20.0)

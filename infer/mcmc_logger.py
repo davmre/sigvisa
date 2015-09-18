@@ -88,14 +88,17 @@ class MCMCLogger(object):
                             lbl = "%d_%s_%s" % (eid, wn.label, phase)
                             mkdir_p(os.path.join(self.run_dir, 'ev_%05d' % eid))
                             lbl_handle = open(os.path.join(self.run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
-
+                            try:
+                                mws = tmvals['mult_wiggle_std']
+                            except:
+                                mws = -1.0
                             lbl_handle.write('%06d %f %f %f %f %f %f\n' % (step,
                                                                      tmvals['arrival_time'],
                                                                      tmvals['peak_offset'],
                                                                      tmvals['coda_height'],
                                                                      tmvals['peak_decay'],
                                                                      tmvals['coda_decay'],
-                                                                     tmvals['mult_wiggle_std']))
+                                                                     mws))
                             lbl_handle.close()
 
             handle.close()

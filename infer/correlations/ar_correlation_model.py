@@ -31,6 +31,25 @@ def estimate_ar(S, n_p=10):
     nm = ARModel(p, em, l.c)
     return nm
 
+def iid_advantage(S, c):
+    iidcode = """
+    for (int k=0; k < N-n; ++k) {
+        double Bc=0;
+        for(int i=k; i < k+n; ++i) {
+           if (mask(i)) continue;
+           Bc += S(i)*c(i-k);
+        }
+        result(k) = Bc > 0 ? Bc*Bc : 0;
+    }
+    """
+    S, mask = unmask(S)
+    c = np.array(c/np.linalg.norm(c))
+    N = len(S)
+    n = len(c)
+    result = np.empty((N-n),)
+    weave.inline(iidcode,['S', 'mask', 'c', 'N', 'n', 'result',],type_converters = converters.blitz,
+                     verbose=2,compiler='gcc',)
+    return result
 
 def ar_advantage(S, c, nm):
     from sigvisa.models.noise.armodel.model import fastar_support
@@ -99,10 +118,12 @@ def ar_advantage(S, c, nm):
         double mdenom = (2*(f_a - f_0)); // - a' R^-1 a;
 
         double beta_hat =  mnum / mdenom;
+        // betas(k) = beta_hat;
 
+        beta_hat = beta_hat > 0 ? beta_hat : 0.0;
         double lp_delta = .5 * mdenom * beta_hat * beta_hat - mnum * beta_hat;
-
         result(k) = lp_delta;
+
     }
 
     """
@@ -120,6 +141,7 @@ def ar_advantage(S, c, nm):
     var = float(nm.em.std**2)
     llarray = np.zeros((1,), dtype=np.float)
     result = np.zeros((N-n),)
+
 
     weave.inline(arcode,['S', 'mask', 'c', 'N', 'n', 'result', 'n_p', 'var', 'p', 'tmpS', 'tmp', 'K', 'u', 'llarray'],type_converters = converters.blitz, verbose=2,compiler='gcc',support_code=fastar_support + local_support)
         

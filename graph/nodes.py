@@ -436,6 +436,13 @@ class Node(object):
     # can be large, and GP models can't be directly pickled anyway).
 
     def __getstate__(self):
+
+        # ground out parent_keys_changed, etc into self._pv_cache.
+        # this avoids recursive node pointers that cause pickle
+        # to hit the depth limit. 
+        self._parent_values()
+
+
         d = copy.copy(self.__dict__)
         try:
             self.modelid

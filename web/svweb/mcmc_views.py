@@ -171,13 +171,14 @@ def mcmc_run_detail(request, dirname):
         true_ev_strs = []
 
     if burnin < 0:
-        burnin = 100 if max_step > 150 else 10
+        burnin = 100 if max_step > 150 else 10 if max_step > 10 else 0
 
     X = []
     for eid in eids:
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
-
+        
+        
         llon, rlon, blat, tlat = event_bounds(trace)
         X.append([llon, tlat])
         X.append([llon, blat])
@@ -296,7 +297,10 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
     j = 0
     for wn in sg.station_waves[sta]:
         wn.pass_jointgp_messages()
-        ell, prior_means, prior_vars, posterior_means, posterior_vars = wn._coef_message_cache
+        try:
+            ell, prior_means, prior_vars, posterior_means, posterior_vars = wn._coef_message_cache
+        except:
+            import pdb; pdb.set_trace()
 
         for i, (eid, pphase, _, _, _, ctype) in enumerate(wn.tssm_components):
             if ctype != "wavelet": continue
@@ -552,16 +556,17 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
     srate = float(wn.srate)
 
     # analyze the wavelet basis to lay out the visualization
-    starray, etarray, idarray, M, N = wn.wavelet_basis
-    ids_by_length = {idarray[i]: etarray[i]-starray[i] for i in range(len(starray))}
+    if wn.wavelet_basis is not None:
+        starray, etarray, idarray, M, N = wn.wavelet_basis
+        ids_by_length = {idarray[i]: etarray[i]-starray[i] for i in range(len(starray))}
 
-    # longest basis elements first
-    ids_sorted = sorted(ids_by_length.keys(), key = lambda k : -ids_by_length[k])
+        # longest basis elements first
+        ids_sorted = sorted(ids_by_length.keys(), key = lambda k : -ids_by_length[k])
 
-    st_range = np.max(starray) - np.min(starray)
-    # time resolution of the shortest element
-    res = np.min(np.diff(starray[idarray==ids_sorted[-1]]))
-    nbins = int(st_range/res)+1
+        st_range = np.max(starray) - np.min(starray)
+        # time resolution of the shortest element
+        res = np.min(np.diff(starray[idarray==ids_sorted[-1]]))
+        nbins = int(st_range/res)+1
 
 
     # load hparam samples from file

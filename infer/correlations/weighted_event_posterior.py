@@ -3,7 +3,7 @@ from sigvisa.models.ttime import tt_predict
 import scipy.weave as weave
 from scipy.weave import converters
 
-from sigvisa.infer.correlations.ar_correlation_model import estimate_ar, ar_advantage
+from sigvisa.infer.correlations.ar_correlation_model import estimate_ar, ar_advantage, iid_advantage
 
 def build_ttr_model_array(sg, ev, sta, srate, K=None, phase="P"):
     tt_mean = tt_predict(ev, sta, phase) 
@@ -58,8 +58,8 @@ def wn_origin_posterior(sg, wn, ev, c, out_srate, temper=1):
         return np.array(()), 0.0, unobs_lp
 
 
-    nm = estimate_ar(sdata)
-    lls = ar_advantage(sdata, c, nm)
+    lls = ar_advantage(sdata, c, wn.nm)
+    #lls = iid_advantage(sdata, c)
     if temper != 1:
         lls /= temper
 
@@ -71,6 +71,8 @@ def ev_time_posterior_with_weight(sg, ev, signals, tau, global_stime=None, N=Non
     if global_stime  is None:
         global_stime = sg.event_start_time
         N = int((sg.event_end_time - global_stime)*global_srate)
+        if N < 0:
+            raise ValueError("cannot propose new events: event end time %f and start time %f are set inconsistently." % (sg.event_end_time, global_stime))
     global_ll = np.zeros((N,))
 
     if stas is None:

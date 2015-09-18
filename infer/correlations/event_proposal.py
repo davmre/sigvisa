@@ -109,44 +109,51 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
                                # candidates.
     proposal_weights /= np.sum(proposal_weights)
     n = len(proposal_weights)
-    if fix_result is None:
-        kernel = np.random.choice(xrange(n), p=proposal_weights)
-    else:
-        # TODO: kernel should be provided (sampled elsewhere from a
-        # uniuform). But it might not be. Which means we need to
-        # sample it from a uniform. And this probability should go
-        # inside of a log_qbackward. But that's not part of the
-        # interface of this function. So maybe we can just subtract it
-        # from log_qforward. But this is hacky and I just need to be
-        # sure I'm consistent about it, since if I'm doing this hack
-        # for death moves, I need to do the reverse of the hack for
-        # birth moves.
-        assert(False)
-    log_qforward = np.log(proposal_weights[kernel])
-    otime_dist = proposal_otime_posteriors[kernel]
-    ev, pm, tau, signals = proposals[kernel]
-    log_qforward += np.log(pm)
 
     # TODO: more intelligent choice of proposal stddev
     # 1deg ~= 100km
     # so stddev of 5km ~= 0.05deg
-    londist = Gaussian(ev.lon, 0.05)
-    latdist = Gaussian(ev.lat, 0.05)
-    depthdist = TruncatedGaussian(ev.depth, 10.0, a=0)
+
     if fix_result is None:
+        kernel = np.random.choice(xrange(n), p=proposal_weights)
+        otime_dist = proposal_otime_posteriors[kernel]        
+        ev, pm, tau, signals = proposals[kernel]
+
+        londist = Gaussian(ev.lon, 0.05)
+        latdist = Gaussian(ev.lat, 0.05)
+        depthdist = TruncatedGaussian(ev.depth, 10.0, a=0)
+
         plon, plat, pdepth = (londist.sample(), latdist.sample(), depthdist.sample())
         ptime = sample_time_from_pdf(otime_dist, global_stime, srate=1.0)
     else:
-        fev = fixed_result
+        fev = fix_result
         plon, plat, pdepth, ptime = fev.lon, fev.lat, fev.depth, fev.time
-    log_qforward += londist.log_p(plon)
-    log_qforward += latdist.log_p(plat)
-    log_qforward += depthdist.log_p(pdepth)
-    log_qforward += logp_from_time_pdf(otime_dist, global_stime, ptime, srate=1.0)
+
+    log_qforward = -np.inf
+
+    # compute proposal probability under the explicit mixture
+    # distribution of Gaussians centered on historical event.  this
+    # will need to be optimized, eventually. but as long as we're
+    # explicitly computing signal correlations for and atime
+    # posteriors for each historical event, it's not much extra work
+    # to compute logp under the resulting distribution.
+    for i in range(len(proposals)):
+        ev, pm, tau, signals = proposals[i]
+        otime_dist = proposal_otime_posteriors[i]
+        londist = Gaussian(ev.lon, 0.05)
+        latdist = Gaussian(ev.lat, 0.05)
+        depthdist = TruncatedGaussian(ev.depth, 10.0, a=0)
+        
+        lw = np.log(proposal_weights[i])
+        lw += londist.log_p(plon)
+        lw += latdist.log_p(plat)
+        lw += depthdist.log_p(pdepth)
+        lw += logp_from_time_pdf(otime_dist, global_stime, ptime, srate=1.0)
+        log_qforward = np.logaddexp(log_qforward, lw)
 
     if fix_result is None:
         proposed_ev = Event(lon=plon, lat=plat, depth=pdepth, time=ptime, mb=4.0)
-        return proposed_ev, log_qforward, (proposal_weights, proposal_otime_posteriors)
+        return proposed_ev, log_qforward, (proposal_weights, proposal_otime_posteriors, ev)
     else:
         return log_qforward
 

@@ -333,22 +333,24 @@ class JointGP(object):
 
     def _get_cov(self):
 
+        noise_var = self.hparam_nodes["noise_var"].get_value()
+
+        # the marginal variance of wavelet params on raw signals is 
+        # redundant with coda height and thus not identifiable. 
         try:
-            # for backwards compatibility, will never be
-            # set by new code.
-            return self.noise_var, self.cov
-        except AttributeError:
-
-            noise_var = self.hparam_nodes["noise_var"].get_value()
             signal_var = self.hparam_nodes["signal_var"].get_value()
-            depth_lscale = self.hparam_nodes["depth_lscale"].get_value()
-            horiz_lscale = self.hparam_nodes["horiz_lscale"].get_value()
-            #wfn_str = parent_values[param_prefix + "wfn_str"]
-            wfn_str = "se"
+        except:
+            assert(0 <= noise_var <= 1)
+            signal_var = 1 - noise_var
 
-            cov = GPCov(wfn_str=wfn_str, wfn_params=np.array((signal_var,)),
-                        dfn_str="lld", dfn_params=np.array((horiz_lscale, depth_lscale)))
-            return noise_var, cov
+        depth_lscale = self.hparam_nodes["depth_lscale"].get_value()
+        horiz_lscale = self.hparam_nodes["horiz_lscale"].get_value()
+        #wfn_str = parent_values[param_prefix + "wfn_str"]
+        wfn_str = "se"
+
+        cov = GPCov(wfn_str=wfn_str, wfn_params=np.array((signal_var,)),
+                    dfn_str="lld", dfn_params=np.array((horiz_lscale, depth_lscale)))
+        return noise_var, cov
 
 
 

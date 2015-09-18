@@ -115,7 +115,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
-                 wiggle_model_type="dummy", wiggle_family="dummy", skip_levels=1,
+                 wiggle_model_type="dummy", wiggle_family="dummy", skip_levels=2,
                  dummy_fallback=False,
                  nm_type="ar",
                  run_name=None, iteration=None, runids = None,
@@ -126,6 +126,7 @@ class SigvisaGraph(DirectedGraphModel):
                  uatemplate_rate=1e-3,
                  fixed_arrival_npts=None,
                  dummy_prior=None,
+                 raw_signals=False, 
                  jointgp_hparam_prior=None,
                  jointgp_param_run_init=None,
                  force_event_wn_matching=False):
@@ -164,8 +165,13 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_model_type = wiggle_model_type
         if self.wiggle_model_type=="gp_joint":
             self.jointgp = True
+        elif isinstance(self.template_model_type, dict) and any([v=="gp_joint" for v in self.template_model_type.values()]):
+            self.jointgp = True
+        elif isinstance(self.template_model_type, str) and  self.template_model_type=="gp_joint":
+            self.jointgp = True
         else:
             self.jointgp=False
+
         self.wiggle_family = wiggle_family
         self.wavelet_basis_cache = dict()
         self.skip_levels = skip_levels
@@ -222,33 +228,53 @@ class SigvisaGraph(DirectedGraphModel):
         self.evnodes = dict() # keys are eids, vals are attribute:node dicts
         self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
 
+        self.raw_signals = raw_signals
+
         self.fixed_arrival_npts = fixed_arrival_npts
 
         self._joint_gpmodels = defaultdict(dict)
-
         self.jointgp_hparam_prior=jointgp_hparam_prior
         self.jointgp_param_run_init=jointgp_param_run_init
 
         if self.jointgp_hparam_prior is None:
             # todo: different priors for different params
-            self.jointgp_hparam_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
-                                         'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
-                                         'signal_var': InvGamma(beta=3.0, alpha=4.0),
-                                         'noise_var': InvGamma(beta=1.0, alpha=3.0),
-                                         'level_var': InvGamma(beta=3.0, alpha=4.0),}
+            self.jointgp_hparam_prior = {}
+            if raw_signals:
+                self.jointgp_hparam_prior['wiggle'] = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
+                                                       'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
+                                                       'noise_var': Beta(beta=1.0, alpha=1.0)}
+            else:
+                self.jointgp_hparam_prior['wiggle'] = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
+                                                       'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
+                                                       'signal_var': InvGamma(beta=3.0, alpha=4.0),
+                                                       'noise_var': InvGamma(beta=1.0, alpha=3.0),
+                                                       'level_var': InvGamma(beta=3.0, alpha=4.0),}
+
+            self.jointgp_hparam_prior['param'] = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
+                                                  'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
+                                                  'signal_var': InvGamma(beta=3.0, alpha=4.0),
+                                                  'noise_var': InvGamma(beta=1.0, alpha=3.0),}
+            
 
         self.force_event_wn_matching = force_event_wn_matching
 
     def joint_gpmodel(self, sta, phase, band, chan, param):
         if (param, band, chan, phase) not in self._joint_gpmodels[sta]:
-            #if param.startswith("db"):
-            #    noise_var, gpcov = self.jointgp_prior['wiggle']
-            #else:
-            #    noise_var, gpcov = self.jointgp_prior[param]
+
+            if param.startswith("db"):
+                jgphpp = self.jointgp_hparam_prior["wiggle"]
+            else:
+                try:
+                    jgphpp = self.jointgp_hparam_prior[param]
+                except KeyError:
+                    jgphpp = self.jointgp_hparam_prior["param"]
 
             nodes = {}
             for hparam in ("noise_var", "signal_var", "horiz_lscale", "depth_lscale"):
-                prior = self.jointgp_hparam_prior[hparam]
+                try:
+                    prior = jgphpp[hparam]
+                except KeyError:
+                    continue
                 n = Node(label="gp;%s;%s;%s" % (sta, param, hparam), model=prior, initial_value=prior.predict())
                 nodes[hparam]=n
                 self.add_node(n)
@@ -272,23 +298,32 @@ class SigvisaGraph(DirectedGraphModel):
         return self._joint_gpmodels[sta][(param, band, chan, phase)]
 
     def level_coef_model(self, sta, phase, band, chan, param):
+
         if (param, band, chan, phase) not in self._joint_gpmodels[sta]:
-            #if param.startswith("db"):
-            #    noise_var, gpcov = self.jointgp_prior['wiggle']
-            #else:
-            #    noise_var, gpcov = self.jointgp_prior[param]
+
+            assert( param.startswith("db") )
+
+            jgphpp = self.jointgp_hparam_prior["wiggle"]
 
             nodes = {}
-            for hparam in ("level_var",):
-                prior = self.jointgp_hparam_prior[hparam]
-                n = Node(label="gp;%s;%s;%s" % (sta, param, hparam), model=prior, initial_value=prior.predict())
-                nodes[hparam]=n
-                self.add_node(n)
+            hparam = "level_var"
+            if hparam in jgphpp.keys():
+                prior = jgphpp[hparam]
+            else:
+                prior = DummyModel(1.0)
+                
+            n = Node(label="gp;%s;%s;%s" % (sta, param, hparam), model=prior, initial_value=prior.predict())
+            if hparam not in jgphpp.keys():
+                n.fix_value()
+
+            nodes[hparam]=n
+            self.add_node(n)
 
             model = None
             jgp = JointIndepGaussian(param, sta, 0.0, hparam_nodes=nodes, param_model=model)
 
             self._joint_gpmodels[sta][(param, band, chan, phase)] = jgp, nodes
+
         return self._joint_gpmodels[sta][(param, band, chan, phase)]
 
     def ev_arriving_phases(self, eid, sta=None, site=None):
@@ -884,7 +919,7 @@ class SigvisaGraph(DirectedGraphModel):
                                       initial_value=atime, children=(wave_node,),
                                       low_bound=wave_node.st, high_bound=wave_node.et)
         self.add_node(tnodes['arrival_time'], template=True)
-        for param in tg.params():
+        for param in tg.params(env=wave_node.is_env):
             label = create_key(param=param, sta=wave_node.sta,
                                phase=phase, eid=eid,
                                chan=wave_node.chan, band=wave_node.band)
@@ -1065,6 +1100,10 @@ class SigvisaGraph(DirectedGraphModel):
 
         child_wave_nodes = set()
 
+        # mult_wiggle_std only affects envelopes, so only bother adding it to the
+        # model if we're doing inference conditioned on an envelope
+        has_env_child = False
+
         ev_time = evnodes['time'].get_value()
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
@@ -1076,7 +1115,8 @@ class SigvisaGraph(DirectedGraphModel):
                     pred_time = ev.time + tt_predict(ev, sta, "P")
                     if pred_time < wave_node.st or pred_time > wave_node.et: continue
 
-
+                if wave_node.is_env:
+                    has_env_child = True
                 child_wave_nodes.add(wave_node)
 
                 # wave nodes depend directly on event location
@@ -1116,7 +1156,7 @@ class SigvisaGraph(DirectedGraphModel):
         # create all other shape param nodes, specific to each band and channel
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
-                for param in tg.params():
+                for param in tg.params(env=has_env_child):
 
                     if param == "coda_height":
                         model_type = None
@@ -1198,12 +1238,14 @@ class SigvisaGraph(DirectedGraphModel):
         hparam_nodes = set()
         has_jointgp = False
 
+        joint_params = []
         if basis is not None:
-            levels = basis[-1]
+            levels = basis[-2]
             n_params = len(basis[0])
             n_joint_params = np.sum(levels[:len(levels) - self.skip_levels])
             joint_params = [self.wiggle_family + "_%d" % i for i in range(n_joint_params)]
-        if self.jointgp:
+
+        if self.jointgp and basis is not None:
             for phase in self.phases:
                 param_models[phase] = []
                 for param in joint_params:
@@ -1211,7 +1253,7 @@ class SigvisaGraph(DirectedGraphModel):
                     param_models[phase].append(jgp)
                     hparam_nodes = hparam_nodes | set(nodes.values())
 
-                # if we're skipping two levels, start with level 2 since its params are listed first
+                # e.g. if we're skipping two levels, start with level 2 since its params are listed first
                 for level in range(self.skip_levels, 0, -1):
                     level_size = levels[-(level)]
                     jgp, nodes = self.level_coef_model(sta=wave['sta'], param=self.wiggle_family + "_level%d" % level, chan=wave['chan'], band=wave['band'], phase=phase)
@@ -1576,8 +1618,8 @@ class SigvisaGraph(DirectedGraphModel):
             with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
                 #spypickle = SpyingPickler(f, 2)
                 #spypickle.dump(self)
-                #import pickle as ppickle
-                pickle.dump(self, f, 2)
+                import pickle as ppickle
+                ppickle.dump(self, f, 2)
             print "saved pickled graph"
         if pickle_only:
             return

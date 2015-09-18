@@ -14,6 +14,7 @@ from sigvisa import Sigvisa
 import sigvisa.source.brune_source as brune
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, get_param_model_id
 from sigvisa.learn.train_param_common import load_modelid
+from sigvisa.models.distributions import TruncatedGaussian
 import numdifftools as nd
 
 def ev_mb_posterior_laplace_functional(sg, ev, targets, amps):
@@ -83,16 +84,16 @@ def ev_mb_posterior_laplace(sg, eid):
 
 def propose_mb(sg, eid, fix_result=None):
     z, v, reset_coda_heights = ev_mb_posterior_laplace(sg, eid)
-    rv = scipy.stats.norm(z, scale=np.sqrt(v))
+    d = TruncatedGaussian(z, np.sqrt(v), 2.5, 9.0)
 
     if fix_result is not None:
-        print "reverse dist", z, v, "old mb", fix_result, "lp", rv.logpdf(fix_result)
+        print "reverse dist", z, v, "old mb", fix_result, "lp", d.log_p(fix_result)
 
-        return rv.logpdf(fix_result), reset_coda_heights
+        return d.log_p(fix_result), reset_coda_heights
     else:
-        new_mb=rv.rvs(1)[0]
+        new_mb=d.sample()
         print "eid", eid, "proposing mb", new_mb, "from dist", z, np.sqrt(v)
         sg.evnodes[eid]["mb"].set_value(new_mb)
         reset_coda_heights()
 
-        return rv.logpdf(new_mb)
+        return d.log_p(new_mb)

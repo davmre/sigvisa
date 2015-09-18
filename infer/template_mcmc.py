@@ -213,6 +213,12 @@ def preprocess_signal_for_sampling(wave_env):
     d[~incr] = max(np.min(d), 1e-3)
     """
     s = np.sum(d)
+
+    if s <= 0:
+        print "WARNING: tried to sample from envelope with no positive part, using uniform distribution instead"
+        d = np.ones(wave_env.shape)
+        d = np.sum(d)
+
     normalized_env = d/s
     cdf = np.concatenate([np.array((0,)), np.cumsum(normalized_env)])
     return cdf
@@ -1227,18 +1233,24 @@ def propose_peak_offset(wn, tg, onset_env, signal_idx,
 
     return peak_offset, p
 
-def merge_distribution(peak_env, prior, return_debug=False,
-                       uniform_lik_mass=0.2, smoothing=None):
-    exp_peak_env = np.exp(peak_env - np.max(peak_env))
 
-    derivs = np.zeros(len(exp_peak_env))
-    derivs[1:] = np.diff(peak_env)
+
+def mask_increasing(env):
+    derivs = np.zeros(len(env))
+    derivs[1:] = np.diff(env)
     derivs[0] = 1 if np.max(derivs) <= 0 else derivs[1]
     positive_derivs = np.where(derivs>0, derivs, 0)
+    return env * positive_derivs
 
-    lik = exp_peak_env * positive_derivs
+
+def merge_distribution(peak_env, prior, return_debug=False, peak_detect=True,
+                       uniform_lik_mass=0.2, smoothing=None, return_pdf=False):
+    exp_peak_env = np.exp(peak_env - np.max(peak_env))
+    if peak_detect:
+        lik = mask_increasing(exp_peak_env)
+    else:
+        lik = exp_peak_env
     lik = lik / np.sum(lik)
-
     lik += uniform_lik_mass/float(len(lik))
     if smoothing is not None:
         window = np.ones((int(smoothing),))
@@ -1248,7 +1260,11 @@ def merge_distribution(peak_env, prior, return_debug=False,
     peak_dist = lik * prior
     peak_dist = peak_dist / np.sum(peak_dist)
 
-    peak_cdf = preprocess_signal_for_sampling(peak_dist)
+    if return_pdf:
+        peak_cdf = peak_dist
+    else:
+        peak_cdf = preprocess_signal_for_sampling(peak_dist)
+
     if return_debug:
         return peak_cdf, peak_dist, peak_env, exp_peak_env, positive_derivs, derivs, prior
     else:
