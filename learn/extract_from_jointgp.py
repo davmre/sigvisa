@@ -19,6 +19,21 @@ import cPickle as pickle
 dbl1 = 9 #6
 dbl2 = 17 #32
 
+def hparams_to_cov(hparam_nodes):
+     nv = hparam_nodes["noise_var"].get_value()
+     try:
+          sv = hparam_nodes["signal_var"].get_value()
+     except:
+          sv = 1 - nv
+     hls, dls = hparam_nodes["horiz_lscale"].get_value(), hparam_nodes["depth_lscale"].get_value()
+
+     nv = 0.3
+     sv = 0.7
+     hls, dls = 20.0, 10.0
+
+     cov_main = GPCov(wfn_str="matern32", wfn_params=[sv,], dfn_str="lld", dfn_params=[hls, dls])
+     return cov_main, nv
+
 
 from sigvisa.learn.fit_shape_params_mcmc import compute_wavelet_messages
 from sigvisa.learn.train_param_common import learn_gp, insert_model, load_model, get_model_fname, model_params
@@ -27,11 +42,11 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 
 #with open("/home/dmoore/python/sigvisa/logs/mcmc/01962/step_000019/pickle.sg", 'rb') as f:
 #    sg_joint = pickle.load(f)
-with open("logs/mcmc/00189/step_000019/pickle.sg", 'rb') as f:
+with open("logs/mcmc/00198/step_000999/pickle.sg", 'rb') as f:
      sg_joint = pickle.load(f)
 
 s = Sigvisa()
-holdout_eid = dbl1
+holdout_eid = None
 target_phase="P"
 band="freq_0.8_4.5"
 wiggle_family = "db4_2.0_3_15.0"
@@ -68,6 +83,9 @@ for sta in sg_joint.station_waves.keys():
              posterior_vars.append(gpp[1])
              ev = sg_joint.get_event(eid)
              X.append((ev.lon, ev.lat, ev.depth, ev.mb, dist_km((ev.lon, ev.lat), sta_loc)))
+
+
+
     X = np.array(X)
 
     evids = eids
@@ -80,8 +98,6 @@ for sta in sg_joint.station_waves.keys():
     print n_coefs, n_coefs_skipped, n_coefs_modeled
 
     targets = [wiggle_family + "_%d" % i for i in range(n_coefs_modeled)]
-    cov_main = GPCov(wfn_str="matern32", wfn_params=[0.3], dfn_str="lld", dfn_params=[10.0, 20.0])
-    nv = 0.3
 
     def save_model(model, st, et, target, y=[], yvars=[], model_type="gp_lld"):
         model_fname = get_model_fname(run_name, run_iter, sta, chan, band, target_phase,
@@ -115,15 +131,21 @@ for sta in sg_joint.station_waves.keys():
                                shrinkage=repr(shrinkage), **insert_options)
         print "inserted as", modelid, sta, chan, "ll", model.log_likelihood()
 
+
     for level in range(sg_joint.skip_levels):
-        model = ConstGaussianModel(sta=sta, mean=0.0, std=np.sqrt(0.6))
+        model = ConstGaussianModel(sta=sta, mean=0.0, std=1.0)
         save_model(model, 0.0, 0.01, wiggle_family + "_level%d" % (level+1), model_type="constant_gaussian")
 
     gps = []
+
     for i in range(n_coefs_modeled):
         y = np.array([mm[i] for mm in message_means])
         yvars = np.array([mv[i] for mv in message_vars])
         target = targets[i]
+
+        hparam_nodes = sg_joint._joint_gpmodels[sta][(target, band, chan, target_phase)][1]
+        cov_main, nv = hparams_to_cov(hparam_nodes)
+
         st = time.time()
         gp = learn_gp(X=X, y=y, y_obs_variances=yvars, sta=sta,
                       kernel_str="lld",

@@ -519,7 +519,10 @@ class SigvisaGraph(DirectedGraphModel):
                 ua_coda_height_lp += uanodes['coda_height'].log_p()
                 ua_peak_decay_lp += uanodes['peak_decay'].log_p()
                 ua_coda_decay_lp += uanodes['coda_decay'].log_p()
-                ua_mult_wiggle_std_lp += uanodes['mult_wiggle_std'].log_p()
+                try:
+                    ua_mult_wiggle_std_lp += uanodes['mult_wiggle_std'].log_p()
+                except:
+                    pass
 
 
         ev_prior_lp = 0.0

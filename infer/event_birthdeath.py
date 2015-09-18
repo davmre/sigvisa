@@ -318,8 +318,10 @@ def correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained):
     cssm = wn.arrival_ssms[(eid, phase)]
 
     pred_wavelet = cssm.mean_obs(n_steps)
+    sg.debug_dists[wn.label]["pred_wavelet"] = pred_wavelet
     env = np.exp(tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=n_steps))
     pred_signal = pred_wavelet * env
+    sg.debug_dists[wn.label]["pred_signal"] = pred_wavelet
     ll = ar_advantage(prebirth_unexplained, pred_signal, wn.nm)
 
     return ll
@@ -354,13 +356,13 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
     peak_prior *= hard_cutoff
 
 
-    #try:
-    #    sg.debug_dists
-    #except:
-    #    sg.debug_dists = {}
-    #sg.debug_dists[wn.label] = {}
-    #sg.debug_dists[wn.label]["prior"] = peak_prior.copy()
-    #sg.debug_dists[wn.label]["env_diff_pos"] = env_diff_pos
+    try:
+        sg.debug_dists
+    except:
+        sg.debug_dists = {}
+    sg.debug_dists[wn.label] = {}
+    sg.debug_dists[wn.label]["prior"] = peak_prior.copy()
+    sg.debug_dists[wn.label]["env_diff_pos"] = env_diff_pos
 
     if use_correlation and prebirth_unexplained is not None:
         atime_ll = correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained)
@@ -369,8 +371,9 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
         if maxll > 5:
             atime_ll /= maxll/5.0
         pidx = int(ptime * wn.srate)
-        peak_time_ll = atime_ll[pidx:]
-        #sg.debug_dists[wn.label]["peak_time_ll"] = peak_time_ll
+        peak_time_ll = np.zeros(atime_ll.shape)
+        peak_time_ll[pidx:] = atime_ll[:-pidx]
+        sg.debug_dists[wn.label]["peak_time_ll"] = peak_time_ll
         maxll = np.max(peak_time_ll)
         peak_prior[:len(peak_time_ll)] *= np.exp(peak_time_ll - maxll)
         peak_prior[len(peak_time_ll):] *= np.exp(-maxll)
@@ -379,7 +382,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
         peak_pdf = merge_distribution(env_diff_pos, peak_prior, smoothing=3, return_pdf=True, peak_detect=False)
     else:
         peak_pdf = merge_distribution(env_diff_pos, peak_prior, smoothing=3, return_pdf=True)
-    #sg.debug_dists[wn.label]["final"] = peak_pdf
+    sg.debug_dists[wn.label]["final"] = peak_pdf
     peak_cdf = preprocess_signal_for_sampling(peak_pdf)
 
 
@@ -396,7 +399,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
             peak_time, peak_lp = sample_peak_time_from_cdf(peak_cdf, wn.st, wn.srate, return_lp=True)
 
 
-        proposed_atime = peak_time - np.exp(tmvals['peak_offset'])
+        proposed_atime = peak_time - ptime
         proposed_tt_residual = proposed_atime - pred_atime
         tmvals["tt_residual"] = proposed_tt_residual
         tmvals["arrival_time"] = proposed_atime

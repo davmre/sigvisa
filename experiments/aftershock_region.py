@@ -42,15 +42,15 @@ def continue_from(old_sgfile):
         sg_old = pickle.load(f)
 
     rs = EventRunSpec(evids=evids, stas=stas, runids=(1,), disable_conflict_checking=True)
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
-    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
+    #ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
+    #ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
     ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
 
-    sg = rs.build_sg(ms3)
-    initialize_from(sg, ms3, sg_old, None)
+    sg = rs.build_sg(ms4)
+    initialize_from(sg, ms4, sg_old, None)
 
 
     #print sg_old.current_log_p(verbose=True)
@@ -65,7 +65,7 @@ def continue_from(old_sgfile):
     #sg_old.current_log_p_breakdown()
     #sg.current_log_p_breakdown()
 
-    do_inference(sg, ms3, rs, max_steps=1000, model_switch_lp_threshold=-1000, dump_interval=5)
+    do_inference(sg, ms4, rs, max_steps=1000, model_switch_lp_threshold=-1000, dump_interval=5)
 
 
 def main():

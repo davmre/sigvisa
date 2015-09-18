@@ -247,9 +247,9 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
     from sigvisa.models.wiggles.wavelets import implicit_to_explicit
 
 
-    (starray, etarray, idarray, M, N)= sg.station_waves.values()[0][0].wavelet_basis
+    (starray, etarray, idarray, M, levels, N)= sg.station_waves.values()[0][0].wavelet_basis
     prototypes = [np.asarray(m).flatten() for m in M]
-    basis = implicit_to_explicit(starray, etarray, idarray, prototypes, N)
+    basis = implicit_to_explicit(starray, etarray, idarray, prototypes, levels, N)
 
     def plot_wavelet_dist_samples(ax, srate, basis, wmeans, wvars, c="blue"):
         wmeans = np.asarray(wmeans).flatten()
