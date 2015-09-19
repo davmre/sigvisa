@@ -151,10 +151,12 @@ def mcmc_run_detail(request, dirname):
 
 
     stas = sg.station_waves.keys()
-    try:
-        gp_hparams = sg.jointgp_hparam_prior.keys()
-    except AttributeError:
-        gp_hparams = None
+    gp_hparams = []
+    if len(sg._jointgp_hparam_nodes) > 0:
+        gp_hparams = ["wiggles", "template"]
+
+    #except AttributeError:
+    #    gp_hparams = None
 
     wns = []
     for sta in sorted(sg.station_waves.keys()):
@@ -537,8 +539,7 @@ def safe_loadtxt(fname):
     inp = StringIO.StringIO("\n".join(lines[:-1]))
     return np.loadtxt(inp)
 
-def mcmc_hparam_posterior(request, dirname, sta, hparam):
-
+def mcmc_hparam_posterior(request, dirname, sta, target):
 
     def plot_dist(ax, samples):
         import seaborn as sns
@@ -552,87 +553,54 @@ def mcmc_hparam_posterior(request, dirname, sta, hparam):
 
 
     sg, max_step = final_mcmc_state(mcmc_run_dir)
-    wn = sg.station_waves[sta][0]
-    srate = float(wn.srate)
-
-    # analyze the wavelet basis to lay out the visualization
-    if wn.wavelet_basis is not None:
-        starray, etarray, idarray, M, N = wn.wavelet_basis
-        ids_by_length = {idarray[i]: etarray[i]-starray[i] for i in range(len(starray))}
-
-        # longest basis elements first
-        ids_sorted = sorted(ids_by_length.keys(), key = lambda k : -ids_by_length[k])
-
-        st_range = np.max(starray) - np.min(starray)
-        # time resolution of the shortest element
-        res = np.min(np.diff(starray[idarray==ids_sorted[-1]]))
-        nbins = int(st_range/res)+1
-
-
+    true_vals = None
     # load hparam samples from file
-    ffname = os.path.join(mcmc_run_dir, "gp_hparams", "%s_%s" % (sta, hparam))
-    a = safe_loadtxt(ffname)
-    if burnin < 0:
-        burnin = 100 if a.shape[0] > 150 else 10
     #import pdb; pdb.set_trace()
     #assert(a.shape[1]==len(starray))
-    keys = sorted(sg._joint_gpmodels[sta].keys())
-
-
-    true_vals = None
-    try:
-        # for each sta, for each hparam, for each param, we'll have a true hparam
-        with open(os.path.join(mcmc_run_dir, "gp_hparams", "true.pkl"), 'rb') as f:
-            true_dict = pickle.load(f)
-        true_vals = true_dict[sta][hparam]
-    except IOError:
-        pass
+    
+    if target == "wiggles":
+        targets = ["level%d" %i for i in range(10)]
+    elif target == "template":
+        targets = ("tt_residual", "amp_transfer", "coda_decay", "peak_decay", "peak_offset", "mult_wiggle_std")
+    else:
+        raise Exception("unrecognized target %s" % target)
+    
+    hkeys = []
+    keys = None
+    for hparam_key, hparam_nodes in sg._jointgp_hparam_nodes.items():
+        for target in targets:
+            if sta in hparam_key and target in hparam_key:
+                hkeys.append(hparam_key)
+                if keys is None:
+                    keys = sorted(hparam_nodes.keys())
+                else:
+                    assert(keys == sorted(hparam_nodes.keys()))
 
     f = Figure((16, 8))
     f.patch.set_facecolor('white')
-    gs = gridspec.GridSpec(len(ids_sorted), nbins)
+    gs = gridspec.GridSpec(len(hkeys), len(keys))
+    
+    for i, hkey in enumerate(sorted(hkeys)):
+        ffname = os.path.join(mcmc_run_dir, "gp_hparams", hkey)
+        a = safe_loadtxt(ffname)
+        if burnin < 0:
+            burnin = 100 if a.shape[0] > 150 else 10 if a.shape[0] > 10 else 0
 
-    firstax=dict()
-    j = 0
-    for i, k in enumerate(keys):
-        if k[0].startswith("db"):
-            st, et, pid = starray[j], etarray[j], idarray[j]
-            id_idx = ids_sorted.index(pid)
+        for j, k in enumerate(keys):
+            ax = f.add_subplot(gs[i,j:j+1])
+            #ax.patch.set_facecolor('white')
 
-            st_idx = (st-np.min(starray))/res
+            samples = a[burnin:, j]
+            if np.std(samples) > 0:
+                plot_dist(ax, samples)
+            #ax.set_xticks(np.linspace(0, np.max(a), 3))
 
-            my_id_sts = starray[idarray==idarray[j]]
-            width = (my_id_sts[1] - my_id_sts[0])/res
+            if true_vals is not None:
+                ax.axvline(true_vals[i], lw=1, color="green")
 
-        else:
-            continue
-
-        shared_ax = firstax[pid] if pid in firstax else None
-        ax = f.add_subplot(gs[id_idx,st_idx:st_idx+width],
-                           #sharey=shared_ax,
-                           sharex=shared_ax)
-        #ax.patch.set_facecolor('white')
-
-        samples = a[burnin:, i]
-        plot_dist(ax, samples)
-        ax.set_xticks(np.linspace(0, np.max(a), 3))
-
-        if true_vals is not None:
-            ax.axvline(true_vals[i], lw=1, color="green")
-
-        if pid not in firstax:
-            firstax[pid] = ax
-        else:
-            ax.get_yaxis().set_visible(False)
-
-
-        t_start = max(0, starray[j]/srate)
-        t_end = etarray[j]/srate
-        ax.set_title("%d" % i)
-        ax.annotate('%.1fs:%.1fs\nmean %.1f\nstd %.1f' % (t_start, t_end, np.mean(samples), np.std(samples)), (0.3, 0.85), xycoords='axes fraction', size=10)
-
-        if k[0].startswith("db"):
-            j += 1
+            hpclass = hkey.split(";")[-1]
+            ax.set_title("%s %s" % (hpclass, k))
+            ax.annotate('mean %.1f\nstd %.1f' % (np.mean(samples), np.std(samples)), (0.1, 0.1), xycoords='axes fraction', size=10)
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')

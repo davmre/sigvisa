@@ -10,6 +10,11 @@ def parse_wavelet_basis_str(s):
     len_s = float(len_s)
     return family, res, levels, len_s
 
+def wavelet_idx_to_level(idx, level_sizes):
+    boundaries = np.cumsum(level_sizes)
+    level_idx = np.searchsorted(boundaries, idx, side="right")
+    n_levels = len(level_sizes)
+    return n_levels - 1 - level_idx
 
 def construct_basis_simple(N, family, pad, level=None):
     z = np.zeros((N,))

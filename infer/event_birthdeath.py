@@ -331,19 +331,23 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
     # instead of sampling arrival time from the prior, sample
     # from the product of the prior with unexplained signal mass
     ptime = np.exp(tmvals['peak_offset'])
-
-    pred_peak_time = pred_atime + ptime
+    pidx = int(np.round(ptime * wn.srate))
+    discrete_ptime = float(pidx) / wn.srate
 
     arrivals = wn.arrivals()
     other_arrivals = [a for a in arrivals if a != (eid, phase)]
+    t = np.linspace(wn.st - discrete_ptime, wn.et-discrete_ptime, wn.npts)
+    # naively, env_diff_pos starts at wn.st and gives probabilities of peak times.
+    # but we can interpret it as giving probabilities of arrival times, starting
+    # at wn.st - discrete_ptime. 
+    # this will align better with the atime-based correlation proposal. 
     env_diff_pos = get_env_diff_positive_part(wn, other_arrivals) + wn.nm_env.c
-    t = np.linspace(wn.st, wn.et, wn.npts)
 
-    # control dynamic range of env_diff_pos_distribution: can't disrupt the prior by more than 3 nats
+    # control dynamic range of env_diff_pos_distribution: 
+    # don't disrupt the prior by more than 3 nats
     max_edp =  np.max(env_diff_pos)
     if max_edp > 3:
         env_diff_pos /= (max_edp/3.0)
-
 
     # consider using a vague travel-time prior to
     # acknowldege the possibility that the event is not currently
@@ -351,9 +355,9 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
     #tt_spread = np.random.choice((2.0, 10.0, 30.0, 80.0))
     tt_spread = 3.0
 
-    peak_prior = np.exp(-np.abs(t - pred_peak_time)/tt_spread)
-    hard_cutoff = np.abs(t-pred_peak_time) < 25
-    peak_prior *= hard_cutoff
+    atime_prior = np.exp(-np.abs(t - pred_atime)/tt_spread)
+    hard_cutoff = np.abs(t-pred_atime) < 25
+    atime_prior *= hard_cutoff
 
 
     try:
@@ -361,7 +365,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
     except:
         sg.debug_dists = {}
     sg.debug_dists[wn.label] = {}
-    sg.debug_dists[wn.label]["prior"] = peak_prior.copy()
+    sg.debug_dists[wn.label]["prior"] = atime_prior.copy()
     sg.debug_dists[wn.label]["env_diff_pos"] = env_diff_pos
 
     if use_correlation and prebirth_unexplained is not None:
@@ -370,51 +374,53 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
         # temper atime_ll to have dynamic range of 10 nats, so it doesn't overwhelm the prior
         if maxll > 5:
             atime_ll /= maxll/5.0
-        pidx = int(ptime * wn.srate)
-        peak_time_ll = np.zeros(atime_ll.shape)
-        peak_time_ll[pidx:] = atime_ll[:-pidx]
-        sg.debug_dists[wn.label]["peak_time_ll"] = peak_time_ll
-        maxll = np.max(peak_time_ll)
-        peak_prior[:len(peak_time_ll)] *= np.exp(peak_time_ll - maxll)
-        peak_prior[len(peak_time_ll):] *= np.exp(-maxll)
+            maxll = 5
+        sg.debug_dists[wn.label]["atime_ll"] = atime_ll
 
-        peak_pdf = peak_prior
-        peak_pdf = merge_distribution(env_diff_pos, peak_prior, smoothing=3, return_pdf=True, peak_detect=False)
+        sidx = pidx
+        eidx = len(atime_ll) 
+        atime_prior[sidx:eidx] *= np.exp(atime_ll[:-pidx] - maxll)
+        atime_prior[:sidx] *= np.exp(-maxll)
+        atime_prior[eidx:] *= np.exp(-maxll)
+
+
+        atime_pdf = merge_distribution(env_diff_pos, atime_prior, smoothing=3, return_pdf=True, peak_detect=False)
     else:
-        peak_pdf = merge_distribution(env_diff_pos, peak_prior, smoothing=3, return_pdf=True)
-    sg.debug_dists[wn.label]["final"] = peak_pdf
-    peak_cdf = preprocess_signal_for_sampling(peak_pdf)
+        atime_pdf = merge_distribution(env_diff_pos, atime_prior, smoothing=3, return_pdf=True)
+    sg.debug_dists[wn.label]["final"] = atime_pdf
+    atime_cdf = preprocess_signal_for_sampling(atime_pdf)
 
 
     if not fix_result:
 
-        if np.sum(peak_prior)==0:
+        if np.sum(atime_prior)==0:
             # if the window doesn't contain signal near the predicted arrival time,
             # we can't do a data-driven proposal, so just sample from (something like)
             # the prior
-            peak_dist = Laplacian(pred_peak_time, tt_spread)
-            peak_time = peak_dist.sample()
-            peak_lp = peak_dist.log_p(peak_time)
+            atime_dist = Laplacian(pred_atime, tt_spread)
+            proposed_atime = atime_dist.sample()
+            atime_lp = atime_dist.log_p(proposed_atime)
         else:
-            peak_time, peak_lp = sample_peak_time_from_cdf(peak_cdf, wn.st, wn.srate, return_lp=True)
+            proposed_atime, atime_lp = sample_peak_time_from_cdf(atime_cdf, wn.st-discrete_ptime, wn.srate, return_lp=True)
 
 
-        proposed_atime = peak_time - ptime
         proposed_tt_residual = proposed_atime - pred_atime
+
         tmvals["tt_residual"] = proposed_tt_residual
         tmvals["arrival_time"] = proposed_atime
-        assert(not np.isnan(peak_lp))
-        return peak_lp
+
+        assert(not np.isnan(atime_lp))
+        return atime_lp
     else:
-        peak_time = tmvals["arrival_time"] + np.exp(tmvals["peak_offset"])
-        if np.sum(peak_prior)==0:
-            peak_dist = Laplacian(pred_atime, tt_spread)
-            peak_lp = peak_dist.log_p(peak_time)
+        atime = tmvals["arrival_time"] 
+        if np.sum(atime_prior)==0:
+            atime_dist = Laplacian(pred_atime, tt_spread)
+            atime_lp = atime_dist.log_p(atime)
         else:
-            peak_lp = peak_log_p(peak_cdf, wn.st, wn.srate, peak_time)
-        print "peak_lp is", peak_lp, "for", peak_time
-        assert(not np.isnan(peak_lp))
-        return peak_lp
+            atime_lp = peak_log_p(atime_cdf, wn.st-discrete_ptime, wn.srate, atime)
+        print "atime_lp is", atime_lp, "for", atime
+        assert(not np.isnan(atime_lp))
+        return atime_lp
 
 
 def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):

@@ -72,33 +72,33 @@ def do_gp_hparam_moves(sg, stds, n_attempted=None, n_accepted=None,
       properties of the calculation of
     """
 
-    def hparam_move(node, jgp, std):
+    def hparam_move(node, std):
         v1 = node.get_value()
         v2 = v1 + np.random.randn()*std
 
         if v2 < 0:
             return False
 
+        #print "running hparam move on node %s with children %s" % (node.label, [n.param for n in node.child_jgps])
+
         def lp(v):
             node.set_value(v)
             ll = node.log_p()
             if np.isfinite(ll):
-                ll += jgp.log_likelihood()
+                for jgp in node.child_jgps:
+                    ll += jgp.log_likelihood()
             return ll
 
         return mh_accept_lp(sg, lp, v1, v2)
 
     for sta in sg._joint_gpmodels.keys():
-        for param in sg._joint_gpmodels[sta].keys():
-            jgp, hnodes = sg._joint_gpmodels[sta][param]
-
+        for hnodes in sg._jointgp_hparam_nodes.values():
             for (hparam, n) in hnodes.items():
-
                 try:
                     run_move(move_name=hparam, fn=hparam_move,
                              step=step, n_accepted=n_accepted,
                              n_attempted=n_attempted, move_times=move_times,
-                             node=n, std=stds[hparam], jgp=jgp)
+                             node=n, std=stds[hparam])
                 except KeyError:
                     continue
 

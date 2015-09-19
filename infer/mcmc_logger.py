@@ -103,26 +103,30 @@ class MCMCLogger(object):
 
             handle.close()
 
-            if sg.jointgp and self.write_gp_hparams:
-                gpdir = os.path.join(self.run_dir, 'gp_hparams')
-                mkdir_p(gpdir)
-                for (sta, pdicts) in sg._joint_gpmodels.items():
-                    for hparam in sg.jointgp_hparam_prior.keys():
-                        lbl = "%s_%s" % (sta, hparam)
-                        if lbl not in self.log_handles:
-                            self.log_handles[lbl] = open(os.path.join(gpdir, lbl), 'a')
+        if sg.jointgp and self.write_gp_hparams:
+            gpdir = os.path.join(self.run_dir, 'gp_hparams')
+            mkdir_p(gpdir)
+            for hparam_key, hparam_nodes in sg._jointgp_hparam_nodes.items():
+                lbl = hparam_key
 
-                        s = ""
-                        for param in sorted(pdicts.keys()):
-                            jgp, hnodes = pdicts[param]
-                            try:
-                                s += "%.4f " % hnodes[hparam].get_value()
-                            except KeyError:
-                                continue
+            #for (sta, pdicts) in sg._joint_gpmodels.items():
+            #    for hparam in sg.jointgp_hparam_prior.keys():
+            #        
+                if lbl not in self.log_handles:
+                    self.log_handles[lbl] = open(os.path.join(gpdir, lbl), 'a')
 
-                        handle = self.log_handles[lbl]
-                        handle.write(s + "\n")
-                        handle.flush()
+                s = ""
+
+                for hparam in sorted(hparam_nodes.keys()):
+
+                    try:
+                        s += "%.4f " % hparam_nodes[hparam].get_value()
+                    except KeyError:
+                        continue
+
+                handle = self.log_handles[lbl]
+                handle.write(s + "\n")
+                handle.flush()
 
 
         for move_name in move_times.keys():

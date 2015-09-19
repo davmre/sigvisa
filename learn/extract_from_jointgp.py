@@ -27,9 +27,9 @@ def hparams_to_cov(hparam_nodes):
           sv = 1 - nv
      hls, dls = hparam_nodes["horiz_lscale"].get_value(), hparam_nodes["depth_lscale"].get_value()
 
-     nv = 0.3
-     sv = 0.7
-     hls, dls = 20.0, 10.0
+     #nv = 0.3
+     #sv = 0.7
+     #hls, dls = 20.0, 10.0
 
      cov_main = GPCov(wfn_str="matern32", wfn_params=[sv,], dfn_str="lld", dfn_params=[hls, dls])
      return cov_main, nv
@@ -143,15 +143,23 @@ for sta in sg_joint.station_waves.keys():
         yvars = np.array([mv[i] for mv in message_vars])
         target = targets[i]
 
-        hparam_nodes = sg_joint._joint_gpmodels[sta][(target, band, chan, target_phase)][1]
+        jgp, hparam_nodes = sg_joint._joint_gpmodels[sta][(target, band, chan, target_phase)]
         cov_main, nv = hparams_to_cov(hparam_nodes)
+
+        # if the jointgp includes a parametric component,
+        # the trained GP should too. 
+        gpinit_params = {}
+        try:
+             gpinit_params = jgp._gpinit_params
+        except:
+             pass
 
         st = time.time()
         gp = learn_gp(X=X, y=y, y_obs_variances=yvars, sta=sta,
                       kernel_str="lld",
                       target=target, build_tree=False,
                       optimize=False, noise_var=nv,
-                      cov_main=cov_main)
+                      cov_main=cov_main, **gpinit_params)
         et = time.time()
         gps.append(gp)
 
