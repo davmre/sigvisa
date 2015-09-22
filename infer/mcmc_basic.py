@@ -110,10 +110,16 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
 
         return False
 
-def mh_accept_util(lp_old, lp_new, log_qforward=0, log_qbackward=0, jacobian_determinant=0, accept_move=None, revert_move=None):
+def mh_accept_util(lp_old, lp_new, log_qforward=0, log_qbackward=0, jacobian_determinant=0, accept_move=None, revert_move=None, force_outcome=None):
     # print lp_new, lp_old, log_qbackward, log_qforward, jacobian_determinant, "FINAL", (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant
-    u = np.random.rand()
-    if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
+    if force_outcome is None:
+        logu =  np.log(np.random.rand())
+    elif force_outcome == True:
+        logu = -np.inf
+    elif force_outcome == False:
+        logu = np.inf
+
+    if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > logu:
         if accept_move:
             accept_move()
         return True

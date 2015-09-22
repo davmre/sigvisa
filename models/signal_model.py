@@ -258,7 +258,7 @@ class ObservedSignalNode(Node):
         logenvs = [None] * n
         empty_array = np.reshape(np.array((), dtype=float), (0,))
 
-        for (i, (eid, phase)) in enumerate(arrivals):
+        for (i, (eid, phase)) in enumerate(set(arrivals)):
             v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
             start = (v['arrival_time'] - self.st) * self.srate
             start_idx = int(np.floor(start))
@@ -596,7 +596,7 @@ class ObservedSignalNode(Node):
                 n_tail = len(env)-npts
                 mn_scale = env[npts:] * wiggle_std
                 components.append((self.iid_arssm, start_idx+npts, len(env)-npts, mn_scale))
-                tssm_components.append((eid, phase, mn_scale, start_idx, len(env), "multnoise"))
+                tssm_components.append((eid, phase, mn_scale, start_idx+npts, len(env)-npts, "multnoise"))
 
             if self.is_env:
                 components.append((None, start_idx, len(env), env))
@@ -969,12 +969,15 @@ class ObservedSignalNode(Node):
         else:
             return window_logp, window_logp_deriv_caching
 
-    def unexplained_env(self, eid, phase):
+    def unexplained_env(self, eid, phase, addl_arrs=[]):
         arrivals = self.arrivals()
-        other_arrivals = [a for a in arrivals if a != (eid, phase)]
+        arrs = [(eid, phase)] + addl_arrs
+        other_arrivals = [a for a in arrivals if a not in arrs]
         return self.get_env() - self.assem_env(arrivals=other_arrivals)
 
-    def unexplained_kalman(self):
+    def unexplained_kalman(self, exclude_eids=[]):
+        self._parent_values()
+
         # return the kalman filter's posterior mean estimate of the
         # unexplained signal.  in the envelope case, this should be
         # similar to unexplained_env except that it also subtracts out
@@ -983,10 +986,17 @@ class ObservedSignalNode(Node):
         # variance, much of the signal will be explaiend as
         # multiplicative wiggle and only a small amount will be left
         # as noise).
-        if self._unexplained_cache is None:
+        if self._unexplained_cache is None or len(exclude_eids) > 0:
             d = self.get_value().data
-            means = self.tssm.component_means(d)
-            self._unexplained_cache = means[0]
+
+            arrivals_evonly = [(eid, phase) for (eid, phase) in self.arrivals() if phase !="UA" and eid not in exclude_eids]
+            tssm_evonly = self.transient_ssm(arrivals=arrivals_evonly, save_components=False)
+            means = tssm_evonly.component_means(d)
+
+            if len(exclude_eids) > 0:
+                return means[0]
+            else:
+                self._unexplained_cache = means[0]
         return self._unexplained_cache
 
     def template_idx_window(self, eid=None, phase=None, vals=None, pre_arrival_slack_s = 10.0, post_fade_slack_s = 10.0):

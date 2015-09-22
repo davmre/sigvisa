@@ -39,6 +39,7 @@ global_stds = {'coda_height': .7,
                'evdepth': 8.0,
                'signal_var': 0.4,
                'noise_var': 0.4,
+               'noise_var_small': 0.05,
                'depth_lscale': 15.0,
                'horiz_lscale': 15.0}
 
@@ -99,6 +100,11 @@ def do_gp_hparam_moves(sg, stds, n_attempted=None, n_accepted=None,
                              step=step, n_accepted=n_accepted,
                              n_attempted=n_attempted, move_times=move_times,
                              node=n, std=stds[hparam])
+                    if hparam=="noise_var":
+                        run_move(move_name=hparam, fn=hparam_move,
+                                 step=step, n_accepted=n_accepted,
+                                 n_attempted=n_attempted, move_times=move_times,
+                                 node=n, std=stds["noise_var_small"])
                 except KeyError:
                     continue
 

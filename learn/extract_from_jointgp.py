@@ -42,7 +42,7 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 
 #with open("/home/dmoore/python/sigvisa/logs/mcmc/01962/step_000019/pickle.sg", 'rb') as f:
 #    sg_joint = pickle.load(f)
-with open("logs/mcmc/00198/step_000999/pickle.sg", 'rb') as f:
+with open("logs/mcmc/00208/step_000024/pickle.sg", 'rb') as f:
      sg_joint = pickle.load(f)
 
 s = Sigvisa()

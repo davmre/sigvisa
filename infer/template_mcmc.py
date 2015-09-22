@@ -52,18 +52,17 @@ def node_set_value(nodes, param, value):
 
 
 
-def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_dist, tmvals, exclude_arr=None):
+def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_dist, tmvals, exclude_arrs=None):
 
     atime = tmvals['arrival_time']
     peak_time = tmvals['arrival_time'] + np.exp(tmvals['peak_offset'])
 
-    if exclude_arr is None:
+    if exclude_arrs is None:
         pred_env = wn.assem_env()
         unexplained = wn.get_env().data - pred_env
     else:
-        eid, phase = exclude_arr
-        unexplained = wn.unexplained_env(eid, phase)
-
+        eid, phase = exclude_arrs[0]
+        unexplained = wn.unexplained_env(eid, phase, addl_arrs=exclude_arrs[1:])
 
     peak_idx = int((peak_time - wn.st) * wn.srate)
 
@@ -95,6 +94,7 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
         candidates = np.linspace(max(prior_min, -4),  min(prior_max, 5), 20)
         
 
+    provided_coda_height = tmvals['coda_height']
     tg = sg.template_generator("P")
     lps = []
     def proxylp(candidate):
@@ -135,6 +135,7 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
 
     assert( (np.diff(candidates) > 0).all() )
 
+    tmvals['coda_height'] = provided_coda_height
     p = PiecewiseLinear(candidates, np.array(lps))
 
 
@@ -244,7 +245,8 @@ def peak_log_p(cdf, stime, srate, peak_time):
         return np.log(1.0/len(cdf))
 
     #return np.log(1.0/len(cdf))
-    return np.log(cdf[idx] - cdf[idx-1])
+    discrete_lp = np.log(cdf[idx] - cdf[idx-1])
+    return discrete_lp + np.log(srate)
 
 def get_env_diff_positive_part(wn, arrival_set, remove_noise=False):
     env = wn.get_env().data
@@ -279,10 +281,15 @@ def sample_peak_time_from_cdf(cdf, stime, srate, return_lp=False):
     u = np.random.rand()
     idx = np.searchsorted(cdf, u)
     peak_time = stime + float(idx-1)/srate
+    u2 = np.random.rand()
+    peak_time += u / srate
+
+    
 
     if return_lp:
         lp = np.log(cdf[idx]-cdf[idx-1])
         assert(not np.isnan(lp))
+        lp += np.log(srate)
         return peak_time, lp
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time

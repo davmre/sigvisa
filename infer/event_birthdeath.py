@@ -183,7 +183,9 @@ def template_association_distribution(sg, wn, eid, phase, ignore_mb=False, forbi
 
     return c
 
-def sample_template_to_associate(sg, wn, eid, phase, ignore_mb=False, forbidden=None):
+def sample_template_to_associate(sg, wn, eid, phase, 
+                                 ignore_mb=False, forbidden=None,
+                                 fix_result=None):
     """
     Propose associating an unassociate template at sta with the
     (eid,phase) arrival, with probability proportional to the odds
@@ -201,9 +203,11 @@ def sample_template_to_associate(sg, wn, eid, phase, ignore_mb=False, forbidden=
 
 
     c = template_association_distribution(sg, wn, eid, phase, ignore_mb=ignore_mb, forbidden=forbidden)
-    tmid = c.sample()
+    if fix_result is not None:
+        tmid = fix_result
+    else:
+        tmid = c.sample()
     assoc_logprob = np.log(c[tmid])
-
     return tmid, assoc_logprob
 
 def associate_template(sg, wn, tmid, eid, phase, create_phase_arrival=False, node_lps=None):
@@ -270,6 +274,16 @@ def unassociate_template(sg, wn, eid, phase, tmid=None, remove_event_phase=False
 def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-6):
 
     # return prob of deassociating (or of deleting, if deletion_prob=True).
+    arrivals = copy.copy(wn.arrivals())
+    try:
+        arrivals.remove((eid, phase))
+    except KeyError:
+        # if this arrival doesn't actually occur during the signal contained at the wn,
+        # delete it with probability 1. 
+        if deletion_prob:
+            return 0.0
+        else:
+            return -np.inf
 
     ev_tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
 
@@ -282,8 +296,7 @@ def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-
     deassociation_ratio_log = unass_lp + ntemplates_ratio_log
 
     signal_lp_with_template = wn.log_p()
-    arrivals = copy.copy(wn.arrivals())
-    arrivals.remove((eid, phase))
+
     signal_lp_without_template = wn.log_p(arrivals=arrivals)
     deletion_ratio_log = signal_lp_without_template - signal_lp_with_template
 
@@ -302,10 +315,13 @@ def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-
     else:
         return deassociation_ratio_log - log_normalizer
 
-def sample_deassociation_proposal(sg, wn, eid, phase):
+def sample_deassociation_proposal(sg, wn, eid, phase, fix_result=None):
     lp = deassociation_logprob(sg, wn, eid, phase)
-    u = np.random.rand()
-    deassociate = u < np.exp(lp)
+    if fix_result is not None:
+        deassociate = fix_result
+    else:
+        u = np.random.rand()
+        deassociate = u < np.exp(lp)
     deassociate_lp = lp if deassociate else np.log(1-np.exp(lp))
     return deassociate, deassociate_lp
 
@@ -327,20 +343,34 @@ def correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained):
     return ll
 
 def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, 
-                             prebirth_unexplained=None, use_correlation=False, fix_result=None):
+                             prebirth_unexplained=None, 
+                             use_correlation=False, 
+                             exclude_arrs=[], 
+                             fix_result=None):
     # instead of sampling arrival time from the prior, sample
     # from the product of the prior with unexplained signal mass
     ptime = np.exp(tmvals['peak_offset'])
     pidx = int(np.round(ptime * wn.srate))
     discrete_ptime = float(pidx) / wn.srate
 
-    arrivals = wn.arrivals()
-    other_arrivals = [a for a in arrivals if a != (eid, phase)]
+
+    # consider using a vague travel-time prior to
+    # acknowldege the possibility that the event is not currently
+    # in the correct location
+    #tt_spread = np.random.choice((2.0, 10.0, 30.0, 80.0))
+    tt_spread = 3.0
+
     t = np.linspace(wn.st - discrete_ptime, wn.et-discrete_ptime, wn.npts)
+    atime_prior = np.exp(-np.abs(t - pred_atime)/tt_spread)
+    hard_cutoff = np.abs(t-pred_atime) < 25
+    atime_prior *= hard_cutoff
+    arrivals = wn.arrivals()
+
     # naively, env_diff_pos starts at wn.st and gives probabilities of peak times.
     # but we can interpret it as giving probabilities of arrival times, starting
     # at wn.st - discrete_ptime. 
     # this will align better with the atime-based correlation proposal. 
+    other_arrivals = [a for a in arrivals if a not in exclude_arrs]
     env_diff_pos = get_env_diff_positive_part(wn, other_arrivals) + wn.nm_env.c
 
     # control dynamic range of env_diff_pos_distribution: 
@@ -349,27 +379,31 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
     if max_edp > 3:
         env_diff_pos /= (max_edp/3.0)
 
-    # consider using a vague travel-time prior to
-    # acknowldege the possibility that the event is not currently
-    # in the correct location
-    #tt_spread = np.random.choice((2.0, 10.0, 30.0, 80.0))
-    tt_spread = 3.0
-
-    atime_prior = np.exp(-np.abs(t - pred_atime)/tt_spread)
-    hard_cutoff = np.abs(t-pred_atime) < 25
-    atime_prior *= hard_cutoff
-
-
-    try:
-        sg.debug_dists
-    except:
-        sg.debug_dists = {}
-    sg.debug_dists[wn.label] = {}
-    sg.debug_dists[wn.label]["prior"] = atime_prior.copy()
-    sg.debug_dists[wn.label]["env_diff_pos"] = env_diff_pos
-
     if use_correlation and prebirth_unexplained is not None:
-        atime_ll = correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained)
+        try:
+            sg.debug_dists
+        except:
+            sg.debug_dists = {}
+        sg.debug_dists[wn.label] = {}
+
+
+        sg.debug_dists[wn.label]["prior"] = atime_prior.copy()
+        sg.debug_dists[wn.label]["env_diff_pos"] = env_diff_pos
+        pred_env = wn.assem_env(arrivals=other_arrivals)
+        env = wn.get_env().data
+        ed = env - pred_env
+        sg.debug_dists[wn.label]["env_diff"] = ed
+
+
+        pbu = prebirth_unexplained[wn.label]
+        sg.debug_dists[wn.label]["unexplained"] = pbu.copy()
+        try:
+            atime_ll = correlation_atime_ll(sg, wn, tmvals, eid, phase, pbu)
+        except KeyError:
+            # if the wn does not have an arrival from this eid, phase,
+            # then we can't do a data-driven propsal
+            atime_ll = np.zeros(env_diff_pos.shape)
+
         maxll = np.max(atime_ll)
         # temper atime_ll to have dynamic range of 10 nats, so it doesn't overwhelm the prior
         if maxll > 5:
@@ -385,9 +419,11 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
 
 
         atime_pdf = merge_distribution(env_diff_pos, atime_prior, smoothing=3, return_pdf=True, peak_detect=False)
+        sg.debug_dists[wn.label]["final"] = atime_pdf
+
     else:
         atime_pdf = merge_distribution(env_diff_pos, atime_prior, smoothing=3, return_pdf=True)
-    sg.debug_dists[wn.label]["final"] = atime_pdf
+
     atime_cdf = preprocess_signal_for_sampling(atime_pdf)
 
 
@@ -402,6 +438,8 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
             atime_lp = atime_dist.log_p(proposed_atime)
         else:
             proposed_atime, atime_lp = sample_peak_time_from_cdf(atime_cdf, wn.st-discrete_ptime, wn.srate, return_lp=True)
+            #idx = int(np.floor((proposed_atime - (wn.st-discrete_ptime)) * wn.srate +.00001)) + 1
+            #print "atime idx", idx, "lp",  np.log(atime_cdf[idx] - atime_cdf[idx-1]), "actual lp", atime_lp
 
 
         proposed_tt_residual = proposed_atime - pred_atime
@@ -418,12 +456,15 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
             atime_lp = atime_dist.log_p(atime)
         else:
             atime_lp = peak_log_p(atime_cdf, wn.st-discrete_ptime, wn.srate, atime)
-        print "atime_lp is", atime_lp, "for", atime
+            #idx = int(np.floor((atime - (wn.st-discrete_ptime)) * wn.srate +.00001)) + 1
+            #print "atime idx", idx, "lp",  np.log(atime_cdf[idx] - atime_cdf[idx-1])
+
+        #print "atime_lp is", atime_lp, "for", atime
         assert(not np.isnan(atime_lp))
         return atime_lp
 
 
-def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
+def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False, exclude_arrs = []):
     """
     Construct an amplitude proposal distribution by combining the env likelihood with
     the prior conditioned on the event location.
@@ -455,11 +496,11 @@ def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False):
     prior_max = prior_mean + 3*prior_std
 
     amp_dist_env = get_env_based_amplitude_distribution2(sg, wn, 
-                                                               prior_min=prior_min, 
-                                                               prior_max=prior_max, 
-                                                               prior_dist=prior_dist, 
-                                                               tmvals=tmvals, 
-                                                               exclude_arr=(eid, phase))
+                                                         prior_min=prior_min, 
+                                                         prior_max=prior_max, 
+                                                         prior_dist=prior_dist, 
+                                                         tmvals=tmvals, 
+                                                         exclude_arrs=exclude_arrs)
     return amp_dist_env
 
 
@@ -533,7 +574,10 @@ def heuristic_amplitude_posterior_old(sg, wn, tmvals, eid, phase, debug=False):
 
 def propose_phase_template(sg, wn, eid, phase, tmvals=None, 
                            smart_peak_time=True, use_correlation=False,
-                           prebirth_unexplained=None, fix_result=False, ev=None):
+                           include_presampled=True,
+                           prebirth_unexplained=None, 
+                           fix_result=False, ev=None, 
+                           exclude_arrs=[]):
     # sample a set of params for a phase template from an appropriate distribution (as described above).
     # return as an array.
 
@@ -544,6 +588,13 @@ def propose_phase_template(sg, wn, eid, phase, tmvals=None,
     if ev is None:
         ev = sg.get_event(eid)
 
+
+    if use_correlation:
+        uas = [(e, p) for (e, p) in wn.arrivals() if p=="UA"]
+        exclude_arrs = uas + exclude_arrs
+    exclude_arrs = [(eid, phase)] + exclude_arrs
+    exclude_arrs = list(set(exclude_arrs))
+
     pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
     lp = 0
     if smart_peak_time:
@@ -551,19 +602,26 @@ def propose_phase_template(sg, wn, eid, phase, tmvals=None,
                                            pred_atime, 
                                            use_correlation=use_correlation,
                                            prebirth_unexplained=prebirth_unexplained,
+                                           exclude_arrs=exclude_arrs,
                                            fix_result=fix_result)
 
         lp += peak_lp
-        proposed_tt_residual = tmvals["tt_residual"]
+        try:
+            proposed_tt_residual = tmvals["tt_residual"]
+        except KeyError:
+            proposed_tt_residual = None
         proposed_atime = tmvals["arrival_time"]
 
-    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase)
+    
+        
+    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, exclude_arrs=exclude_arrs)
 
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
     if smart_peak_time:
-        del tmvals["tt_residual"]
+        if "tt_residual" in tmvals:
+            del tmvals["tt_residual"]
         del tmvals["arrival_time"]
 
     if amp_dist is not None:
@@ -575,21 +633,24 @@ def propose_phase_template(sg, wn, eid, phase, tmvals=None,
         del tmvals['coda_height']
 
         # compute log-prob of non-amplitude parameters
-        param_lp = ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
-        lp += param_lp
+        if include_presampled:
+            param_lp = ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
+            lp += param_lp
 
         tmvals['coda_height'] = amplitude
-        lp += amp_dist.log_p(amplitude)
-
-        amp_log_p =  amp_dist.log_p(amplitude)
-        #print "amp_log_p", amp_log_p, "for", amplitude, "under", amp_dist
-
+        amp_lp = amp_dist.log_p(amplitude)
+        lp += amp_lp
 
     else:
-        lp += ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
+        if include_presampled:
+            lp += ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
+        else:
+            print "WARNING: no amp_dist to compute amplitude probability from, inference is incorrect"
 
     if smart_peak_time:
-        tmvals["tt_residual"] = proposed_tt_residual
+        if proposed_tt_residual is not None:
+            tmvals["tt_residual"] = proposed_tt_residual
+        
         tmvals["arrival_time"] = proposed_atime
 
     if np.isnan(np.array(tmvals.values(), dtype=float)).any():
@@ -662,7 +723,9 @@ def death_proposal_logprob(sg, eid):
     return lp
 
 
-def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True):
+def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True, fix_result=None):
+
+    # fix_result is a dict mapping (wn, phase) -> (disassociated, tmvals)
 
     ev = sg.get_event(eid)
 
@@ -678,23 +741,28 @@ def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True):
     tmids = []
     tmid_i = 0
 
-    deassociations = []
-    # loop over phase arrivals at each station and propose either
-    # associating an existing unass. template with the new event, or
-    # creating a new template.
-    # don't modify the graph, but generate a list of functions
-    # to execute the forward and reverse moves
+    death_record = {}
+
     for elements in sg.site_elements.values():
         for sta in elements:
             for wn in sg.station_waves[sta]:
 
                 s = Sigvisa()
                 site = s.get_array_site(sta)
-
-                reverse_proposed_tmids = []
+                template_param_array = None
                 for phase in sg.ev_arriving_phases(eid, sta):
-                    deassociate, deassociate_logprob = sample_deassociation_proposal(sg, wn, eid, phase)
-                    deassociations.append((wn, phase, deassociate, tmid_i))
+                    #if (eid, phase) not in wn.arrivals():
+                    #    continue
+
+                    if fix_result is not None:
+                        deassociate, fixed_tmvals = fix_result[(wn, phase)]
+                    else:
+                        deassociate = None
+                        fixed_tmvals = None
+                    deassociate, deassociate_logprob = sample_deassociation_proposal(sg, wn, eid, phase, fix_result = deassociate)
+
+                    move_logprob += deassociate_logprob
+
                     if deassociate:
                         # deassociation will produce a new uatemplated
                         # with incrementing tmid. We keep track of this
@@ -703,15 +771,57 @@ def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True):
                         # rejected.
                         forward_fns.append(lambda wn=wn,phase=phase: tmids.append(unassociate_template(sg, wn, eid, phase)))
                         inverse_fns.append(lambda wn=wn,phase=phase,tmid_i=tmid_i: associate_template(sg, wn, tmids[tmid_i], eid, phase))
-                        tmid_i += 1
+
                         print "proposing to deassociate at %s (lp %.1f)" % (sta, deassociate_logprob)
+                        if use_correlation:
+                            # since the correlation birth move can propose new atimes/amps for uatemplates, 
+                            # the death move needs to be able to reverse these changes. so we 
+                            # propose a new atime/amp conditioned on the event we're about to kill
+                            # (on the grounds that since the template we're trying to reproduce was
+                            # chosen to associate to this event, its parameters must be likely under
+                            # that distribution).
+                            
+                            if fix_result is not None:
+                                tmpl_lp = propose_phase_template(sg, wn, eid, phase, 
+                                                                 use_correlation=False, 
+                                                                 include_presampled=False,
+                                                                 tmvals = fixed_tmvals,
+                                                                 fix_result=True)
+                                #print "fixed death reproposal", fixed_tmvals, tmpl_lp
+                            else:
+                                tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+                                tmvals, tmpl_lp = propose_phase_template(sg, wn, eid, phase, 
+                                                                         use_correlation=False, 
+                                                                         include_presampled=False,
+                                                                         tmvals = tmvals,
+                                                                         fix_result=False)
+                                #print "live death reproposal", tmvals, tmpl_lp
+
+                                # after we unassociate the template from the event, we'll set its
+                                # values to our proposed ones. 
+                                forward_fns.append(lambda wn=wn,phase=phase,tmvals=tmvals,tmid_i=tmid_i : sg.set_template(-tmids[tmid_i], wn.sta, "UA", wn.band, wn.chan, tmvals))
+
+                                # to reverse this operation, we set the template to its original (associated)
+                                # params. 
+                                template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+                                inverse_fns.append(lambda wn=wn,phase=phase,template_param_array=template_param_array : sg.set_template(eid,wn.sta, phase, wn.band, wn.chan, template_param_array))
+
+
+                            move_logprob += tmpl_lp
 
                     else:
-                        template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-                        inverse_fns.append(lambda wn=wn,phase=phase,template_param_array=template_param_array : sg.set_template(eid,wn.sta, phase, wn.band, wn.chan, template_param_array))
-                        print "proposing to delete at %s (lp %f)"% (sta, deassociate_logprob)
+                        if fix_result is not None:
+                            template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+                            inverse_fns.append(lambda wn=wn,phase=phase,template_param_array=template_param_array : sg.set_template(eid,wn.sta, phase, wn.band, wn.chan, template_param_array))
+                            print "proposing to delete at %s (lp %f)"% (sta, deassociate_logprob)
+                            
+                    death_record[(wn, phase)] = (deassociate, template_param_array, tmid_i)
+                    #deassociations.append((wn, phase, deassociate, tmid_i, template_param_array))
+                    if deassociate:
+                        tmid_i += 1
 
-                    move_logprob += deassociate_logprob
+    if fix_result is not None:
+        return move_logprob
 
     # order of operations:
     # first, deassociate the templates we need to deassociate
@@ -719,38 +829,19 @@ def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True):
     # finally, kill the event
     for fn in forward_fns:
         fn()
+    sg._topo_sort()
+    
+    # now that the forward_fns have built up the list of tmids for dissassociated arrivals,
+    # we can update our records to replace the actual tmids. 
+    canonicalized_death_record = {}
+    for k, (deassociate, template_param_array, tmid_i) in death_record.items():
+        canonicalized_death_record[k] = (deassociate, template_param_array, tmids[tmid_i])
 
-    prebirth_unexplained = None
-    if use_correlation:
-        prebirth_unexplained = {}
-        for sta, wns in sg.station_waves.items():
-            for wn in wns:
-                prebirth_unexplained[wn.label] = wn.unexplained_kalman()
-
-    for (wn, phase, deassociate, tmid_i) in deassociations:
-        c = template_association_distribution(sg, wn, eid, phase, ignore_mb=not associate_using_mb)
-        if deassociate:
-            tmid = tmids[tmid_i]
-            tmp = np.log(c[tmid])
-            reverse_logprob += tmp
-            print "reverse deassociation %s %d %s lp %f" % (wn.sta, eid, phase, tmp)
-        else:
-            tmp = np.log(c[None])
-            reverse_logprob += tmp
-
-            template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-            tmp2 = propose_phase_template(sg, wn, eid, phase, template_param_array, 
-                                          use_correlation=use_correlation, 
-                                          prebirth_unexplained=prebirth_unexplained[wn.label], 
-                                          fix_result=True)
-            reverse_logprob += tmp2
-
-            print "reverse deletion %s %d %s lp %f %f" % (wn.sta, eid, phase, tmp, tmp2)
-
-
+    reverse_logprob = ev_birth_helper(sg, ev, use_correlation=use_correlation, 
+                                      associate_using_mb=associate_using_mb, eid=eid,
+                                      fix_result=canonicalized_death_record)
 
     sg.remove_event(eid)
-
 
     def revert_move():
         for fn in inverse_fns:
@@ -759,6 +850,8 @@ def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True):
         sg.next_uatemplateid = next_uatemplateid
 
     return move_logprob, reverse_logprob, revert_move
+
+
 
 def ev_death_helper_full(sg, eid, location_proposal, proposal_includes_mb=False, use_correlation=False):
     ev = sg.get_event(eid)
@@ -785,7 +878,7 @@ def ev_death_helper_full(sg, eid, location_proposal, proposal_includes_mb=False,
 
     return log_qforward, lqb + log_qbackward + lp_loc, revert
 
-def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, **kwargs):
+def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_outcome=None, **kwargs):
     eid, eid_logprob = sample_death_proposal(sg)
     if eid is None:
         return False
@@ -811,7 +904,7 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, **kwargs)
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s\n" % proposed_ev)
             f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
-            for (wn, phase, assoc) in associations:
+            for (wn, phase), (assoc, tmvals) in associations.items():
                 if assoc:
                     f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
@@ -824,7 +917,7 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, **kwargs)
 
 
 
-    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)
+    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move, force_outcome=force_outcome)
 
 def ev_death_move_hough(sg, hough_kwargs={}, **kwargs):
     def hlp(sg, fix_result=None, **kwargs):
@@ -852,24 +945,30 @@ def ev_death_move_lstsqr(sg, **kwargs):
 
 ##########################################################################################
 
-def ev_birth_helper(sg, proposed_ev, use_correlation=False, associate_using_mb=True, eid=None):
-
+def ev_birth_helper(sg, proposed_ev, use_correlation=False, 
+                            associate_using_mb=True, eid=None,
+                            fix_result=None):
     forward_fns = []
     inverse_fns = []
-    associations = []
+    birth_record = {}
 
     prebirth_unexplained = None
     if use_correlation:
+        if fix_result:
+            exclude_eids = [eid,]
+        else:
+            exclude_eids = []
         prebirth_unexplained = {}
         for sta, wns in sg.station_waves.items():
             for wn in wns:
-                prebirth_unexplained[wn.label] = wn.unexplained_kalman()
+                prebirth_unexplained[wn.label] = wn.unexplained_kalman(exclude_eids=exclude_eids)
 
     # add an event, WITH all its template nodes initialized to parent-sampled values.
     # we need to replace these values before computing any signal-based probabilities.
     # luckily,
-    evnodes = sg.add_event(proposed_ev, sample_templates=True, eid=eid)
-    eid = evnodes['mb'].eid
+    if fix_result is None:
+        evnodes = sg.add_event(proposed_ev, sample_templates=True, eid=eid)
+        eid = evnodes['mb'].eid
 
     # loop over phase arrivals at each station and propose either
     # associating an existing unass. template with the new event, or
@@ -888,37 +987,84 @@ def ev_birth_helper(sg, proposed_ev, use_correlation=False, associate_using_mb=T
 
                 proposed_tmids = set()
                 for phase in site_phases:
+                    #if (eid, phase) not in wn.arrivals():
+                    #    continue
+
                     # we should really do the associations one-by-one,
                     # instead of just keeping a list of tmids we've
                     # proposed to associate and then doing it all at the
                     # end.as it currently stands the death move doesn't
                     # quite compute the correct reverse probabilities.
-                    tmid, assoc_logprob = sample_template_to_associate(sg, wn, eid, phase, ignore_mb=not associate_using_mb, forbidden=proposed_tmids)
+
+                    if fix_result is not None:
+                        deassociate, fixed_tmvals, fixed_tmid = fix_result[(wn, phase)]
+                        if not deassociate:
+                            fixed_tmid = None
+                    else:
+                        fixed_tmid = None
+                    tmid, assoc_logprob = sample_template_to_associate(sg, wn, eid, phase, 
+                                                                       ignore_mb=not associate_using_mb, 
+                                                                       forbidden=proposed_tmids,
+                                                                       fix_result=fixed_tmid)
+
                     if tmid is not None:
                         forward_fns.append(lambda wn=wn,phase=phase,tmid=tmid: associate_template(sg, wn, tmid, eid, phase))
                         inverse_fns.append(lambda wn=wn,phase=phase,tmid=tmid: unassociate_template(sg, wn, eid, phase, tmid=tmid))
-                        associations.append((wn, phase, True))
                         proposed_tmids.add(tmid)
                         print "proposing to associate template %d at %s,%s with assoc lp %.1f" % (tmid, wn.sta, phase, assoc_logprob)
-                        tmpl_lp  = 0.0
-                    else:
-                        template_param_array, tmpl_lp = propose_phase_template(sg, wn, eid, phase, 
-                                                                               use_correlation=use_correlation, 
-                                                                               prebirth_unexplained=prebirth_unexplained[wn.label])
 
-                        if np.isnan(np.array(template_param_array.values(), dtype=float)).any():
-                            raise ValueError()
-                        forward_fns.append(lambda wn=wn,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, template_param_array))
+                    tmpl_lp  = 0.0
+                    tmvals = None
+                    tmvals_old = None
+                    if tmid is None or use_correlation:
+                        exclude_arrs = []
+                        if tmid is not None:
+                            tmvals_old = sg.get_template_vals(-tmid, wn.sta, "UA", wn.band, wn.chan)
+                            inverse_fns.append(lambda wn=wn,phase=phase,tmvals=tmvals_old : sg.set_template(-tmid, wn.sta, "UA", wn.band, wn.chan, tmvals))
 
-                        #inverse_fns.append(lambda : delete_template(sg, sta, eid, phase))
-                        associations.append((wn, phase, False))
+                            exclude_arrs = [(-tmid, "UA")]                            
+
+                        if fix_result is not None:
+                            #print "fix result: tmpl lp %f for %s, %s" % (tmpl_lp, tmid, fixed_tmvals)
+                            tmpl_lp = \
+                                 propose_phase_template(sg, wn, eid, phase, 
+                                                        use_correlation=use_correlation, 
+                                                        prebirth_unexplained=prebirth_unexplained, 
+                                                        include_presampled = (tmid is None), 
+                                                        tmvals = fixed_tmvals, 
+                                                        exclude_arrs=exclude_arrs,
+                                                        fix_result=True)
+                            #print "fix result: tmpl lp %f for %s, %s" % (tmpl_lp, tmid, fixed_tmvals)
+                        else:
+                            if tmid is None:
+                                # we are birthing anew, so use the parent-conditional event template
+                                tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+                            else:
+                                # we are modifying an existing template, so use those values
+                                tmvals = sg.get_template_vals(-tmid, wn.sta, "UA", wn.band, wn.chan)
+
+                            tmvals, tmpl_lp = \
+                                 propose_phase_template(sg, wn, eid, phase, 
+                                                        use_correlation=use_correlation, 
+                                                        prebirth_unexplained=prebirth_unexplained, 
+                                                        include_presampled = (tmid is None), 
+                                                        tmvals = tmvals, 
+                                                        exclude_arrs=exclude_arrs,
+                                                        fix_result=False)
+                            #print "true birth: tmpl lp %f for %s, %s" % (tmpl_lp, tmid, tmvals)
+                            #print "proposed values", tmvals
+                            if np.isnan(np.array(tmvals.values(), dtype=float)).any():
+                                raise ValueError()
+                            forward_fns.append(lambda wn=wn,phase=phase,tmvals=tmvals : sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, tmvals))
                         print "proposing to birth new phase %s,%s with assoc lp %.1f tmpl lp %f" % (sta, phase, assoc_logprob, tmpl_lp)
-
-
-
+                    
+                    birth_record[(wn, phase)] = (tmid is not None, tmvals_old)
                     sta_phase_logprob = assoc_logprob + tmpl_lp
                     log_qforward += sta_phase_logprob
+                    print "birth qforward + ", assoc_logprob, tmpl_lp, "=", log_qforward
 
+    if fix_result is not None:
+        return log_qforward
 
     inverse_fns.append(lambda : sg.remove_event(eid))
 
@@ -927,20 +1073,15 @@ def ev_birth_helper(sg, proposed_ev, use_correlation=False, associate_using_mb=T
         fn()
     sg._topo_sort()
 
-    # compute log probability of the reverse move.
-    # we have to do this in a separate loop so that
-    # we can execute all the forward moves first.
-    log_qbackward = 0
-    for (wn, phase, associated) in associations:
-        lp = deassociation_logprob(sg, wn, eid, phase, deletion_prob=not associated)
-        log_qbackward += lp
-        #print "deassociation logprob %.2f for %s" % (lp, (sta, phase, associated))
+    log_qbackward = ev_death_helper(sg, eid, use_correlation=use_correlation, associate_using_mb=associate_using_mb, fix_result=birth_record)
 
     def revert_move():
         for fn in inverse_fns:
             fn()
 
-    return log_qforward, log_qbackward, revert_move, eid, associations
+    return log_qforward, log_qbackward, revert_move, eid, birth_record
+    
+
 
 def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=True, use_correlation=False):
     # propose a new ev location
@@ -954,7 +1095,7 @@ def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=T
     #    return -np.inf, 0.0, noop, (None, 0, [])
 
     # propose its associations
-    log_qforward, log_qbackward, revert_move, eid, associations = ev_birth_helper(sg, ev, associate_using_mb=proposal_includes_mb, eid=eid, use_correlation=True)
+    log_qforward, log_qbackward, revert_move, eid, associations = ev_birth_helper(sg, ev, associate_using_mb=proposal_includes_mb, eid=eid, use_correlation=use_correlation)
 
     # propose its magnitude
     if not proposal_includes_mb:
@@ -962,11 +1103,11 @@ def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=T
     else:
         lqf = 0
 
-    print "birth helper", lqf, log_qforward, lp_loc
+    print "birth helper", lqf, log_qforward, lp_loc, log_qbackward
 
     return lp_loc + log_qforward + lqf, log_qbackward, revert_move, (extra, eid, associations)
 
-def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_action=None, **kwargs):
+def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_action=None, force_outcome=None, **kwargs):
 
     n_current_events = len(sg.evnodes)
     birth_position_lp = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
@@ -993,7 +1134,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
     print "birth move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
 
-    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert)
+    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert, force_outcome=force_outcome)
 
 def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
@@ -1011,7 +1152,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
             f.write("proposed ev: %s\n" % proposed_ev)
             f.write(" hough args %s\n" % repr(hough_kwargs))
             f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
-            for (wn, phase, assoc) in associations:
+            for (wn, phase), (assoc, tmvals) in associations.items():
                 if assoc:
                     f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
@@ -1089,9 +1230,6 @@ def log_event_birth(sg, hough_array, run_dir, eid, associations):
     # save post-birth signals and general state
     # sg.debug_dump(dump_path=log_dir, pickle_graph=False)
 
-    with open(os.path.join(log_dir, 'associations.txt'), 'w') as f:
-        for (sta, phase, associated) in associations:
-            f.write('%s %s %s\n' % (sta, phase, associated))
 
     # save Hough transform
     sites = sg.site_elements.keys()

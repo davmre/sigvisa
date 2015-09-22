@@ -580,6 +580,7 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
     f.patch.set_facecolor('white')
     gs = gridspec.GridSpec(len(hkeys), len(keys))
     
+    axes = [None,] * len(keys)
     for i, hkey in enumerate(sorted(hkeys)):
         ffname = os.path.join(mcmc_run_dir, "gp_hparams", hkey)
         a = safe_loadtxt(ffname)
@@ -587,7 +588,9 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
             burnin = 100 if a.shape[0] > 150 else 10 if a.shape[0] > 10 else 0
 
         for j, k in enumerate(keys):
-            ax = f.add_subplot(gs[i,j:j+1])
+            ax = f.add_subplot(gs[i,j:j+1], sharex=axes[j])
+            if axes[j] is None:
+                axes[j] = ax
             #ax.patch.set_facecolor('white')
 
             samples = a[burnin:, j]

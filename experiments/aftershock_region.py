@@ -26,15 +26,15 @@ def sigvisa_locate_ctf():
     ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
     ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
 
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
+    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_10.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
     ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
 
-    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0)
+    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_10.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
     ms = [ms1, ms2, ms3,]
-    do_coarse_to_fine(ms, rs, max_steps_intermediate=100)
+    do_coarse_to_fine(ms, rs, max_steps_intermediate=100, dump_interval=5)
 
 
 def continue_from(old_sgfile):
@@ -52,6 +52,12 @@ def continue_from(old_sgfile):
     sg = rs.build_sg(ms4)
     initialize_from(sg, ms4, sg_old, None)
 
+
+    for k, nodes in sg._jointgp_hparam_nodes.items():
+        if not k.startswith("level_var") and "level" in k:
+            nodes['horiz_lscale'].set_value(80.0)
+            nodes['depth_lscale'].set_value(20.0)
+            nodes['noise_var'].set_value(0.99)
 
     #print sg_old.current_log_p(verbose=True)
     print sg.current_log_p()

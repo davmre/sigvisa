@@ -241,9 +241,9 @@ class SigvisaGraph(DirectedGraphModel):
             # todo: different priors for different params
             self.jointgp_hparam_prior = {}
             if raw_signals:
-                wiggle_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
-                                'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
-                                'noise_var': Beta(beta=2.0, alpha=1.0)}
+                wiggle_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=1.0),
+                                'depth_lscale': LogNormal(mu=3.0, sigma=1.0),
+                                'noise_var': Beta(beta=1.0, alpha=2.0)}
             else:
                 wiggle_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
                                 'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
@@ -410,7 +410,10 @@ class SigvisaGraph(DirectedGraphModel):
 
     def set_template(self, eid, sta, phase, band, chan, values):
         for (param, value) in values.items():
-            if param in ("arrival_time", 'amp_transfer', 'tt_residual'):
+            if phase == "UA" and param in ('amp_transfer', 'tt_residual'):
+                continue
+
+            if param in ("arrival_time", 'amp_transfer', 'tt_residual') and phase != "UA":
                 b = None
                 c = None
             else:
@@ -418,8 +421,9 @@ class SigvisaGraph(DirectedGraphModel):
                 c = chan
             self.set_value(key=create_key(param=param, eid=eid,
                                           sta=sta, phase=phase,
-                                          band=b, chan=c),
-                           value=value)
+                                          band=b, chan=c), value=value)
+
+                
 
     def get_arrival_wn(self, sta, eid, phase, band, chan, revert_to_atime=False):
         # this method and the next (_by_atime) are super naive, we
