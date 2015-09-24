@@ -168,7 +168,7 @@ class SigvisaGraph(DirectedGraphModel):
             self.jointgp = True
         elif isinstance(self.template_model_type, dict) and any([v=="gp_joint" for v in self.template_model_type.values()]):
             self.jointgp = True
-        elif isinstance(self.template_model_type, str) and  self.template_model_type=="gp_joint":
+        elif isinstance(self.template_model_type, str) and  self.template_model_type.startswith("gp_joint"):
             self.jointgp = True
         else:
             self.jointgp=False
@@ -236,6 +236,7 @@ class SigvisaGraph(DirectedGraphModel):
         self._joint_gpmodels = defaultdict(dict)
         self.jointgp_hparam_prior=jointgp_hparam_prior
         self.jointgp_param_run_init=jointgp_param_run_init
+        
 
         if self.jointgp_hparam_prior is None:
             # todo: different priors for different params
@@ -313,8 +314,8 @@ class SigvisaGraph(DirectedGraphModel):
                                                       template_shape=self.template_shape,
                                                       chan=chan, band=band)
                     model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
-            if model is None and param.startswith("db"):
-                model = ConstGaussianModel(mean=0.0, std=10.0)
+            #if model is None and param.startswith("db"):
+            #    model = ConstGaussianModel(mean=0.0, std=10.0)
 
             jgp = JointGP(param, sta, 0.0, hparam_nodes=nodes, param_model=model)
             for node in nodes.values():
@@ -1032,7 +1033,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                   chan=chan, band=band)
             except ModelNotFoundError:
                 if self.dummy_fallback:
-                    print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
+                    print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (sta, chan, band, phase, param)
                     model_type = "dummyPrior"
                 else:
                     raise
@@ -1272,7 +1273,7 @@ class SigvisaGraph(DirectedGraphModel):
             n_joint_params = np.sum(levels[:len(levels) - self.skip_levels])
             joint_params = [self.wiggle_family + "_%d" % i for i in range(n_joint_params)]
 
-        if self.jointgp and basis is not None:
+        if self.wiggle_model_type=="gp_joint" and basis is not None:
             for phase in self.phases:
                 param_models[phase] = []
                 for param in joint_params:
@@ -1302,14 +1303,19 @@ class SigvisaGraph(DirectedGraphModel):
                     #    continue
                     model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
                     param_models[phase].append(model)
-                for level in range(self.skip_levels, 0, -1):
-                    level_size = levels[-(level)]
+
+                for level in range(self.skip_levels-1, -1, -1):
+                    level_size = levels[-(level+1)]
                     param = self.wiggle_family + "_level%d" % level
+
+                    """
                     modelid = self.get_param_model_id(runids=self.runids, sta=wave['sta'],
                                                       phase=phase, model_type="constant_gaussian",
                                                       param=param, template_shape=self.template_shape,
                                                       chan=wave['chan'], band=wave['band'])
                     model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+                """
+                    model = Gaussian(0.0, 1.0)
                     for i in range(level_size):
                         param_models[phase].append(model)
         else:

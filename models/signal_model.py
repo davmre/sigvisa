@@ -587,7 +587,6 @@ class ObservedSignalNode(Node):
                 # in the raw signal case, wiggle std is unidentifiable with coda_height. 
                 wiggle_std = 1.0
 
-
             if wssm is not None:
                 components.append((wssm, start_idx, npts, env*wiggle_std))
                 tssm_components.append((eid, phase, env*wiggle_std, start_idx, npts, "wavelet"))
@@ -800,6 +799,8 @@ class ObservedSignalNode(Node):
         arrival_info = collections.defaultdict(dict)
 
         for mean, (eid, phase, scale, sidx, npts, component_type) in zip(means[1:], self.tssm_components[1:]):
+            if component_type=="multnoise": continue
+
             if scale is not None:
                 arrival_info[(eid, phase)][component_type] = mean*scale[:len(mean)]
             else:

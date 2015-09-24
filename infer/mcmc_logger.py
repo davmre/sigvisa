@@ -9,7 +9,7 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in
 
 class MCMCLogger(object):
 
-    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=500, template_move_step=True, print_interval=20, transient=False, write_gp_hparams=False):
+    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=50, template_move_step=True, print_interval=20, transient=False, write_gp_hparams=False):
 
         s = Sigvisa()
 

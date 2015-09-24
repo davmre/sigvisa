@@ -26,14 +26,21 @@ def extract_template_from_leb(sta, evid, chan="auto", band="freq_2.0_4.5", len_s
     return A, w["chan"]
 
 
-def generate_historical_db(stas, evids, bands, chans,len_s=10.0, srate=10.0):
+def generate_historical_db(stas, evids, bands, chans,len_s=10.0, srate=10.0, evs=None):
     # return a list of tuples (ev, dict[(sta, chan, band)]: (c_tau, kappa_tau_1m))
     # where (c_tau, kappa_tau_1m) are defined as in the code, as 'intermediate' values
     # that will allow us to compute c_tau and kappa_tau_1m once tau is known (at runtime). 
 
     history = []
     for evid in evids:
-        ev = get_event(evid=evid)
+        if evs is None:
+            ev = get_event(evid=evid)
+        else:
+            try:
+                ev = evs[evid]
+            except KeyError:
+                print "warning: no ev provided for evid %d, skipping..." % evid
+                continue
         signals = dict()
         for sta in stas:
             for chan in chans:
@@ -119,8 +126,8 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
         otime_dist = proposal_otime_posteriors[kernel]        
         ev, pm, tau, signals = proposals[kernel]
 
-        londist = Gaussian(ev.lon, 0.05)
-        latdist = Gaussian(ev.lat, 0.05)
+        londist = Gaussian(ev.lon, 0.02)
+        latdist = Gaussian(ev.lat, 0.02)
         depthdist = TruncatedGaussian(ev.depth, 10.0, a=0)
 
         plon, plat, pdepth = (londist.sample(), latdist.sample(), depthdist.sample())
@@ -140,8 +147,8 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
     for i in range(len(proposals)):
         ev, pm, tau, signals = proposals[i]
         otime_dist = proposal_otime_posteriors[i]
-        londist = Gaussian(ev.lon, 0.05)
-        latdist = Gaussian(ev.lat, 0.05)
+        londist = Gaussian(ev.lon, 0.02)
+        latdist = Gaussian(ev.lat, 0.02)
         depthdist = TruncatedGaussian(ev.depth, 10.0, a=0)
         
         lw = np.log(proposal_weights[i])

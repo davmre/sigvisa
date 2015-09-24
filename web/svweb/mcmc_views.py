@@ -238,6 +238,129 @@ def rundir_eids(mcmc_run_dir):
             eids.append(eid)
     return eids
 
+def conditional_signal_posterior(request, dirname, sta, phase):
+    s = Sigvisa()
+
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+    from sigvisa.models.wiggles.wavelets import implicit_to_explicit
+
+
+    (starray, etarray, idarray, M, levels, N)= sg.station_waves.values()[0][0].wavelet_basis
+    prototypes = [np.asarray(m).flatten() for m in M]
+    basis = implicit_to_explicit(starray, etarray, idarray, prototypes, levels, N)
+    n_basis = np.sum(levels[:-1])
+    print n_basis
+
+    eids = sg.evnodes.keys()
+
+    eid_wiggle_posteriors = dict()
+
+    wiggle_gpmodels = dict([(k, v) for (k, v) in sg._joint_gpmodels[sta].items() if k[0].startswith("db")])
+
+    holdout_evidence = dict()
+    for eid in eids:
+        try:
+            holdout_evidence[eid] = np.sum([jgp.holdout_evidence(eid) for jgp, wnodes in wiggle_gpmodels.values()])
+        except KeyError:
+            continue
+
+    n = len(eids)
+    f = Figure((16, 4*n))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(n, 3)
+
+    j = 0
+    for wn in sg.station_waves[sta]:
+        wn._parent_values()
+
+        tssm = wn.transient_ssm()
+        npts = wn.npts
+        base_mean = tssm.mean_obs(npts)
+        base_var = tssm.obs_var(npts)
+
+        w = wn.get_value()
+        lp1, marginals, step_ells = wn.tssm.all_filtered_cssm_coef_marginals(w)
+        srate = wn.srate
+        stime = wn.st
+        timevals = np.arange(stime, stime + npts / srate, 1.0 / srate)[0:npts]
+
+        posterior_means, posterior_vars = zip(*marginals)
+        posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
+
+
+        for i, (eid, pphase, _, sidx, cnpts, ctype) in enumerate(wn.tssm_components):
+            if ctype != "wavelet": continue
+            if pphase != phase: continue
+            
+            cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
+            cond_means, cond_vars = np.asarray(cond_means, dtype=np.float64), np.asarray(cond_vars, dtype=np.float64)
+            cssm = wn.arrival_ssms[(eid, phase)]
+            cssm.set_coef_prior(cond_means, cond_vars)
+
+            pred_mean = tssm.mean_obs(npts)
+            pred_var = tssm.obs_var(npts)
+            lp2 = tssm.run_filter(w)
+
+
+            posterior_means[n_basis:] = 0.0
+            posterior_vars[n_basis:] = 1.0
+            cssm.set_coef_prior(posterior_means, posterior_vars)
+            post_mean = tssm.mean_obs(npts)
+            post_var = tssm.obs_var(npts)
+            lp3 = tssm.run_filter(w)
+
+
+            cstime = stime + sidx/srate - 5.0
+            cetime= cstime + cnpts / srate + 5.0
+
+            ax = f.add_subplot(gs[j, 0])
+            ax.plot(timevals, w)
+            ax.plot(timevals, pred_mean, lw=2)
+            #ax.plot(timevals, pred_mean+np.sqrt(pred_var))
+
+            ax.fill_between(timevals, pred_mean+2*np.sqrt(pred_var), 
+                            pred_mean-2*np.sqrt(pred_var), facecolor="green", alpha=0.2)
+
+            ax.set_xlim([cstime, cetime])
+            ax.set_ylim([np.min(w)-.5, np.max(w)+.5])
+
+            ax.set_title("lp %f" % (lp2))
+            ax = f.add_subplot(gs[j, 1])
+            #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
+            #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
+            ax.plot(timevals, w)
+            ax.plot(timevals, base_mean, lw=2)
+            ax.fill_between(timevals, base_mean+2*np.sqrt(base_var), 
+                            base_mean-2*np.sqrt(base_var), facecolor="green", alpha=0.2)
+
+            ax.set_xlim([cstime, cetime])
+            ax.set_ylim([np.min(w)-.5, np.max(w)+.5])            
+            ax.set_title("lp %f" % (lp1))
+
+
+            ax = f.add_subplot(gs[j, 2])
+            #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
+            #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
+            ax.plot(timevals, w)
+            ax.plot(timevals, post_mean, lw=2)
+            ax.fill_between(timevals, post_mean+2*np.sqrt(post_var), 
+                            post_mean-2*np.sqrt(post_var), facecolor="green", alpha=0.2)
+
+            ax.set_xlim([cstime, cetime])            
+            ax.set_title("lp %f" % (lp3))
+            ax.set_ylim([np.min(w)-.5, np.max(w)+.5])
+            j += 1
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
 def conditional_wiggle_posterior(request, dirname, sta, phase):
     s = Sigvisa()
 
@@ -591,6 +714,8 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
             ax = f.add_subplot(gs[i,j:j+1], sharex=axes[j])
             if axes[j] is None:
                 axes[j] = ax
+            if k=="noise_var" and "level" in hkey:
+                ax.set_xlim([0, 1])
             #ax.patch.set_facecolor('white')
 
             samples = a[burnin:, j]

@@ -189,7 +189,7 @@ def plot_with_fit_shapes(fname, wn, title="",
 
     cmeans = wn.signal_component_means()
 
-
+    
     for arrival in wn.arrivals():
         eid, phase = arrival
         if eid < 0:

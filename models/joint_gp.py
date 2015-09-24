@@ -1,5 +1,6 @@
 import numpy as np
-from sigvisa.treegp.gp import GP, GPCov
+from sigvisa.treegp.gp import GPCov
+from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel, ConstLaplacianModel
 from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
 import scipy.stats
@@ -98,8 +99,17 @@ class JointGP(object):
     def message_from_arrival(self, eid, evdict, prior_mean, prior_var, posterior_mean, posterior_var, coef=None):
         self.evs[eid] = evdict
         m, v, Z = multiply_scalar_gaussian(posterior_mean, posterior_var, prior_mean, -prior_var)
+        if eid in self.messages:
+            mm, vv, ZZ = self.messages[eid]
+            if np.abs(ZZ-Z) < 1e-8:
+                pass #print "unclear", (mm, m), (vv, v), (ZZ, Z)
+            else:
+                self._clear_cache()
+        else:
+            self._clear_cache()
+
         self.messages[eid] = m,v, Z
-        self._clear_cache()
+
         return m,v
 
     def get_message(self, eid):
@@ -201,7 +211,7 @@ class JointGP(object):
         except np.linalg.linalg.LinAlgError:
             return -np.inf
 
-    def train_gp(self, holdout_eid=None):
+    def train_gp(self, holdout_eid=None, force_ll=False):
 
         noise_var, cov = self._get_cov()
 
@@ -218,10 +228,18 @@ class JointGP(object):
                 X = X[mask,:]
                 y = y[mask]
                 yvar = yvar[mask]
-                compute_ll = False
+                compute_ll = force_ll
             else:
                 self.Z = np.sum([self.messages[eid][2] for eid in eids])
-            gp = GP(X=X, y=y, y_obs_variances=yvar, cov_main=cov, ymean=self.ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=noise_var, sort_events=False, **self._gpinit_params)
+
+            # discovery: empirical_mean does not work with just one source event... it totally circumvents the GP
+            #if (yvar > 0).all():
+            #    weights = 1.0/yvar 
+            #    empirical_ymean = np.sum(y*weights) / (np.sum(weights) + 1.0)
+            #else:
+            #    empirical_ymean = np.mean(y)
+            empirical_ymean = 0.0
+            gp = SparseGP(X=X, y=y, y_obs_variances=yvar, cov_main=cov, ymean=empirical_ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=noise_var, sort_events=False, sta=self.sta, **self._gpinit_params)
 
             self._cached_gp[k] = gp
         return self._cached_gp[k]
@@ -271,7 +289,7 @@ class JointGP(object):
             X = np.array([self._ev_features(self.evs[eid]) for eid in [eeid,]])
             y = np.array([self.messages[eid][0] for eid in [eeid,]])
             y_obs_variances = np.array([self.messages[eid][1] for eid in [eeid,]])
-            return GP(X=X, y=y, y_obs_variances=y_obs_variances, cov_main=cov, ymean=self.ymean, compute_ll=False, sparse_invert=False, noise_var=noise_var, sort_events=False, **self._gpinit_params)
+            return SparseGP(X=X, y=y, y_obs_variances=y_obs_variances, cov_main=cov, ymean=self.ymean, compute_ll=False, sparse_invert=False, noise_var=noise_var, sort_events=False, sta=self.sta, **self._gpinit_params)
 
         gp1 = single_input_gp(eid1)
         gp2 = single_input_gp(eid2)

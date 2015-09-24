@@ -10,6 +10,7 @@ from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.graph_utils import extract_sta_node, create_key, get_parent_value, parse_key
 from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel, ModelNotFoundError
+from sigvisa.ssms_c import TransientCombinedSSM
 from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough_array
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.propose_mb import propose_mb
@@ -19,7 +20,7 @@ from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
 from sigvisa.models.templates.coda_height import amp_transfer
-from sigvisa.models.distributions import Gaussian, Laplacian
+from sigvisa.models.distributions import Gaussian, Laplacian, PiecewiseLinear
 from sigvisa.utils.counter import Counter
 from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.source.event import get_event
@@ -334,6 +335,7 @@ def correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained):
     cssm = wn.arrival_ssms[(eid, phase)]
 
     pred_wavelet = cssm.mean_obs(n_steps)
+
     sg.debug_dists[wn.label]["pred_wavelet"] = pred_wavelet
     env = np.exp(tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=n_steps))
     pred_signal = pred_wavelet * env
@@ -341,6 +343,111 @@ def correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained):
     ll = ar_advantage(prebirth_unexplained, pred_signal, wn.nm)
 
     return ll
+
+def get_env_based_amplitude_distribution3(sg, wn, eid, phase, prior_min, prior_max, prior_dist, tmvals, unexplained):
+
+    # propose from a linearly interpolated version of the posterior density,
+    # using a very close approximation to the posterior, i.e. we actually
+    # run the full signal probability calculations for each candidate amplitude. 
+
+
+    atime = tmvals['arrival_time']
+    ev_offset_idx = int(5*wn.srate)
+    start_idx_true = int((atime - wn.st) * wn.srate) - ev_offset_idx
+    end_idx_true = int(start_idx_true + 60*wn.srate)
+    start_idx = max(0, start_idx_true)
+    end_idx = min(wn.npts, end_idx_true)
+    start_offset = start_idx - start_idx_true
+    end_offset = start_offset + (end_idx - start_idx)
+    if end_idx-start_idx < wn.srate:
+        # if less than 1s of available signal, don't even bother
+        return None
+
+    unexplained_local = unexplained[start_idx:end_idx]
+    n = len(unexplained_local)
+
+    env_height = np.max(np.abs(unexplained_local))
+
+    data_min = np.log(env_height) - 2
+    data_max = np.log(env_height) + 2
+    prior_min = min(prior_min, 1)
+    prior_max = max(prior_max, prior_min+1, -2)
+    if np.isfinite(data_min):
+        min_c = min(data_min, prior_min)
+        max_c = max(data_max, prior_max)
+        candidates = np.linspace(max(min_c, -5), min(max_c, 5), 20)
+        candidates = np.array(sorted(list(candidates) + [np.log(env_height), np.log(env_height+wn.nm_env.c)]))
+    else:
+        candidates = np.linspace(max(prior_min, -4),  min(prior_max, 5), 20)
+        
+
+    provided_coda_height = tmvals['coda_height']
+    tg = sg.template_generator("P")
+    lps = []
+
+    """
+    want to model what happens to the signal between start_idx_true and end_idx_true.
+    the event starts at ev_offset_idx.
+    the cssm generates signal of len n_steps
+    """
+
+    (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps) = wn.wavelet_basis
+    wn._set_cssm_priors_from_model(arrivals=[(eid, phase)])
+    cssm = wn.arrival_ssms[(eid, phase)] 
+    modeled_npts = end_idx_true-start_idx_true
+
+    d = np.ones((end_idx_true-start_idx_true,))*np.nan
+    v = wn.get_value()
+    d[start_offset:end_offset] = v[start_idx:end_idx]
+    def proxylp(candidate):
+        tmvals['coda_height'] = candidate
+        l = tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=end_idx_true-start_idx_true + ev_offset_idx)
+        env = np.exp(l)
+        components = [(wn.noise_arssm, 0, end_idx_true-start_idx_true, None)]
+        components.append((cssm, ev_offset_idx, n_steps, env))
+        components.append((wn.iid_arssm, ev_offset_idx+n_steps, len(env) - n_steps, env[n_steps:]))
+        tssm = TransientCombinedSSM(components, 1e-6)
+        lp = tssm.run_filter(d)
+        return lp + prior_dist.log_p(candidate)
+
+    lps = np.array([proxylp(candidate) for candidate in candidates])
+
+    def bad_indices(lps):
+        best_idx = np.argmax(lps)
+        best_lp = np.max(lps)
+        lp_diff = np.abs(np.diff(lps))
+
+        thresh = best_lp - 3
+        significant_lps = ( lps[:-1] > thresh ) +  ( lps[1:] > thresh )
+        badsteps = significant_lps * (lp_diff > 1)
+        bad_idxs = np.arange(len(lps)-1)[badsteps]
+        return bad_idxs
+
+    bad_idxs = bad_indices(lps)
+    while len(bad_idxs) > 0:
+        new_candidates = []
+        new_lps = []
+        for idx in bad_idxs:
+            c1 = candidates[idx]
+            c2 = candidates[idx+1]
+            c = c1 + (c2-c1)/2.0
+            new_candidates.append(c)
+            new_lps.append( proxylp(c))
+        full_c = np.concatenate((candidates, new_candidates))
+        full_lps = np.concatenate((lps, new_lps))
+        perm = sorted(np.arange(len(full_c)), key = lambda i : full_c[i])
+        candidates = np.array(full_c[perm])
+        lps = np.array(full_lps[perm])
+        bad_idxs = bad_indices(lps)
+
+    assert( (np.diff(candidates) > 0).all() )
+
+    tmvals['coda_height'] = provided_coda_height
+    p = PiecewiseLinear(candidates, np.array(lps))
+
+
+    return p
+
 
 def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime, 
                              prebirth_unexplained=None, 
@@ -464,7 +571,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
         return atime_lp
 
 
-def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False, exclude_arrs = []):
+def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False, exclude_arrs = [], unexplained=None, full_tssm_proposal=False):
     """
     Construct an amplitude proposal distribution by combining the env likelihood with
     the prior conditioned on the event location.
@@ -495,12 +602,20 @@ def heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, debug=False, exclu
     prior_min = prior_mean - 3*prior_std
     prior_max = prior_mean + 3*prior_std
 
-    amp_dist_env = get_env_based_amplitude_distribution2(sg, wn, 
-                                                         prior_min=prior_min, 
-                                                         prior_max=prior_max, 
-                                                         prior_dist=prior_dist, 
-                                                         tmvals=tmvals, 
-                                                         exclude_arrs=exclude_arrs)
+    if full_tssm_proposal:
+        amp_dist_env = get_env_based_amplitude_distribution3(sg, wn, eid, phase,
+                                                             prior_min=prior_min, 
+                                                             prior_max=prior_max, 
+                                                             prior_dist=prior_dist, 
+                                                             tmvals=tmvals, 
+                                                             unexplained=unexplained[wn.label])
+    else:
+        amp_dist_env = get_env_based_amplitude_distribution2(sg, wn, 
+                                                             prior_min=prior_min, 
+                                                             prior_max=prior_max, 
+                                                             prior_dist=prior_dist, 
+                                                             tmvals=tmvals, 
+                                                             exclude_arrs=exclude_arrs)
     return amp_dist_env
 
 
@@ -613,8 +728,7 @@ def propose_phase_template(sg, wn, eid, phase, tmvals=None,
         proposed_atime = tmvals["arrival_time"]
 
     
-        
-    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, exclude_arrs=exclude_arrs)
+    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, exclude_arrs=exclude_arrs, unexplained = prebirth_unexplained, full_tssm_proposal=use_correlation)
 
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']

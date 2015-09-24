@@ -8,14 +8,14 @@ from sigvisa.infer.correlations.ar_correlation_model import estimate_ar, ar_adva
 def build_ttr_model_array(sg, ev, sta, srate, K=None, phase="P"):
     tt_mean = tt_predict(ev, sta, phase) 
     model, modelid = sg.get_model("tt_residual", sta, phase)
-    pred_ttr  = model.predict(ev)
+    pred_ttr  = float(model.predict(ev))
     tt_mean += pred_ttr
 
     if K is None:
         K = int(15*srate)
 
     ttrs = np.linspace(-K/float(srate), K/float(srate), 2*K+1)
-    ll_array = np.array([model.log_p(ttr + pred_ttr, cond=ev, include_obs=True) for ttr in ttrs])
+    ll_array = np.array([model.log_p(ttr + pred_ttr, cond=ev, include_obs=True) for ttr in ttrs]).flatten()
     return np.exp(ll_array), tt_mean
 
 def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_model, out_srate):

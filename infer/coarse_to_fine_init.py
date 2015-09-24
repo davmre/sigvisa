@@ -11,7 +11,7 @@ from sigvisa.infer.run_mcmc import run_open_world_MH
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event, Event
-
+from sigvisa.models.ttime import tt_predict
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, MAX_TRAVEL_TIME
 
 class RunSpec(object):
@@ -59,13 +59,14 @@ class SyntheticRunSpec(RunSpec):
 
 class EventRunSpec(RunSpec):
 
-    def __init__(self, sites=None, stas=None, evids=None, runids=None, initialize_events=True,
+    def __init__(self, sites=None, stas=None, evids=None, evs=None, runids=None, initialize_events=True,
                  pre_s=10, post_s=120, force_event_wn_matching=True, disable_conflict_checking=False):
 
         self.sites = sites
         self.stas = stas
         self.runids = runids
         self.evids = evids
+        self.evs = evs
         self.pre_s = pre_s
         self.post_s = post_s
         self.initialize_events=initialize_events
@@ -87,37 +88,79 @@ class EventRunSpec(RunSpec):
             with open(cache_fname, 'rb') as f:
                 waves = pickle.load(f)
         except IOError:
-            waves = []
-            for evid in self.evids:
-                for sta in stas:
-                    try:
-                        wave=load_event_station_chan(evid, sta, chan="auto", cursor=cursor,
-                                                     pre_s=self.pre_s,
-                                                     post_s=self.post_s,
-                                                     exclude_other_evs=True,
-                                                     phases=modelspec.sg_params['phases'])
-                        bands = modelspec.signal_params['bands']
-                        hz = modelspec.signal_params['max_hz']
-                        assert(len(bands)==1)
 
-                        wave_env = wave.filter("%s;env;hz_%.1f" % (bands[0], hz))
-                        if modelspec.signal_params['raw_signals']:
-                            wave = wave.filter("%s;hz_%.1f" % (bands[0], hz))
-                            waves.append((wave, wave_env))
-                        else:
-                            waves.append((wave_env, None))
-                    except MissingWaveform as e:
-                        print e
-                        continue
+            if self.evids is not None:
+                waves = self._get_waves_from_evids(modelspec, stas, cursor)
+            else:
+                waves = self._get_waves_from_evs(modelspec, stas, cursor)
             cursor.close()
             with open(cache_fname, 'wb') as f:
                 pickle.dump(waves, f)
 
         return waves
 
+    def _get_waves_from_evs(self, modelspec, stas, cursor):
+        waves = []
+        for sta in stas:
+            ptimes = np.array([tt_predict(ev, sta, "P") + ev.time for ev in self.evs])
+            for i, ev in enumerate(self.evs):
+                ptime = ptimes[i]
+                stime = ptime - 10.0
+                etime = ptime + 150.0
+                try:
+                    next_ptime = np.min(ptimes[ptimes > ptime])
+                    etime = min(etime, next_ptime - 25)
+                except ValueError:
+                    pass
+
+                try:
+                    wave = fetch_waveform(sta, chan="auto", stime=stime, etime=etime, cursor=cursor)
+                    bands = modelspec.signal_params['bands']
+                    hz = modelspec.signal_params['max_hz']
+                    assert(len(bands)==1)
+
+                    wave_env = wave.filter("%s;env;hz_%.1f" % (bands[0], hz))
+                    if modelspec.signal_params['raw_signals']:
+                        wave = wave.filter("%s;hz_%.1f" % (bands[0], hz))
+                        waves.append((wave, wave_env))
+                    else:
+                        waves.append((wave_env, None))
+                except MissingWaveform as e:
+                    print e
+                    continue
+        return waves
+
+    def _get_waves_from_evids(self, modelspec, stas, cursor):
+        waves = []
+        for evid in self.evids:
+            for sta in stas:
+                try:
+                    wave=load_event_station_chan(evid, sta, chan="auto", cursor=cursor,
+                                                 pre_s=self.pre_s,
+                                                 post_s=self.post_s,
+                                                 exclude_other_evs=True,
+                                                 phases=modelspec.sg_params['phases'])
+                    bands = modelspec.signal_params['bands']
+                    hz = modelspec.signal_params['max_hz']
+                    assert(len(bands)==1)
+
+                    wave_env = wave.filter("%s;env;hz_%.1f" % (bands[0], hz))
+                    if modelspec.signal_params['raw_signals']:
+                        wave = wave.filter("%s;hz_%.1f" % (bands[0], hz))
+                        waves.append((wave, wave_env))
+                    else:
+                        waves.append((wave_env, None))
+                except MissingWaveform as e:
+                    print e
+                    continue
+        return waves
+
     def get_init_events(self):
         if self.initialize_events:
-            evs = [get_event(evid=evid) for evid in self.evids]
+            if self.evids is not None:
+                evs = [get_event(evid=evid) for evid in self.evids]
+            else:
+                evs = self.evs
         else:
             evs = []
         return evs
@@ -373,7 +416,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
 def do_coarse_to_fine(modelspecs, runspec,
                       model_switch_lp_threshold=1000,
                       max_steps_intermediate=100,
-                      max_steps_final=5000):
+                      max_steps_final=5000, **kwargs):
 
     sg_old, ms_old = None, None
 
@@ -387,14 +430,14 @@ def do_coarse_to_fine(modelspecs, runspec,
 
         do_inference(sg, modelspec, runspec,
                      model_switch_lp_threshold=model_switch_lp_threshold,
-                     max_steps = max_steps_intermediate)
+                     max_steps = max_steps_intermediate, **kwargs)
         sg_old, ms_old = sg, modelspec
 
     sg, modelspec = sgs[-1], modelspecs[-1]
     initialize_from(sg, modelspec, sg_old, ms_old)
     do_inference(sg, modelspec, runspec,
                  model_switch_lp_threshold=None,
-                 max_steps = max_steps_final)
+                 max_steps = max_steps_final, **kwargs)
 
 
 def synth_location_seq():

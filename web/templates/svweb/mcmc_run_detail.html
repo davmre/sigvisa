@@ -54,7 +54,7 @@
 <a href="{% url 'mcmc_hparam_posterior' dirname=dirname sta=sta target=hparam %}">{{ hparam }}</a>
 {% endfor %}
 {% endif %}
-<p>P waves: <a href="{% url 'mcmc_alignment_posterior' dirname=dirname sta=sta phase='P' %}">alignments</a>, <a href="{% url 'conditional_wiggle_posterior' dirname=dirname sta=sta phase='P' %}">conditional wiggles</a></p>
+<p>P waves: <a href="{% url 'mcmc_alignment_posterior' dirname=dirname sta=sta phase='P' %}">alignments</a>, <a href="{% url 'conditional_wiggle_posterior' dirname=dirname sta=sta phase='P' %}">conditional wiggles</a>, <a href="{% url 'conditional_signal_posterior' dirname=dirname sta=sta phase='P' %}">conditional signals</a></p>
 <p>Waveform posteriors:</p>
 <ol>
 {% for wn in stawns %}
