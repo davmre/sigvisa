@@ -277,8 +277,11 @@ class UpdatedNodeLPs(object):
         for sta in sg.site_elements[site]:
             for band in sg.site_bands[site]:
                 for chan in sg.site_chans[site]:
-                    wn = sg.get_arrival_wn(sta, eid, phase, band, chan, revert_to_atime=True)
-                    wns.append(wn)
+                    try:
+                        wn = sg.get_arrival_wn(sta, eid, phase, band, chan, revert_to_atime=True)
+                        wns.append(wn)
+                    except KeyError:
+                        continue
 
         return wns
 

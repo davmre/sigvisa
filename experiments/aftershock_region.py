@@ -69,13 +69,15 @@ def continue_from(old_sgfile):
         sg_old = pickle.load(f)
 
     isc_evs = [load_isc(evid) for evid in evids]
-    isc_evs = [ev for ev in isc_evs if ev is not None]
+    main_ev = isc_evs[0]
+    #main_ev = get_event(evid=5335822)
+    isc_evs = [ev for ev in isc_evs if ev is not None and dist_km((main_ev.lon, main_ev.lat), (ev.lon, ev.lat)) < 15]
 
     rs = EventRunSpec(evs=isc_evs, stas=stas, runids=(1,), disable_conflict_checking=True)
     #ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
     #ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
-    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_10.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0, phases=["P", "pP"])
+    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0, phases=["P", ], jointgp_param_run_init=1)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
 

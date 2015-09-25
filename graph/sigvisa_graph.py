@@ -80,7 +80,12 @@ def get_param_model_id(runids, sta, phase, model_type, param,
     cursor.close()
     raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid in %s and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runids, template_shape, param))
 
-
+default_parametric_tmtypes = {'tt_residual': 'constant_laplacian',
+                              'peak_offset': 'param_linear_mb',
+                              'coda_decay': 'param_linear_distmb',
+                              'peak_decay': 'param_linear_distmb',
+                              'mult_wiggle_std': 'constant_beta',
+                              'amp_transfer': 'param_sin1'}
 
 dummyPriorModel = {
 "tt_residual": TruncatedGaussian(mean=0.0, std=1.0, a=-25.0, b=25.0),
@@ -148,12 +153,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         if template_model_type=="param":
             # sensible defaults
-            self.template_model_type = {'tt_residual': 'constant_laplacian',
-                                        'peak_offset': 'param_linear_mb',
-                                        'coda_decay': 'param_linear_distmb',
-                                        'peak_decay': 'param_linear_distmb',
-                                        'mult_wiggle_std': 'constant_beta',
-                                        'amp_transfer': 'param_sin1'}
+            self.template_model_type = default_parametric_tmtypes
         else:
             self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -304,7 +304,11 @@ class SigvisaGraph(DirectedGraphModel):
 
             model = None
             if self.jointgp_param_run_init is not None:
-                runid, tmtypes = self.jointgp_param_run_init
+                try:
+                    runid, tmtypes = self.jointgp_param_run_init
+                except:
+                    runid = self.jointgp_param_run_init
+                    tmtypes = default_parametric_tmtypes
                 if param in tmtypes:
                     modelid = self.get_param_model_id(runids=(runid,),
                                                       sta=sta,
@@ -444,8 +448,12 @@ class SigvisaGraph(DirectedGraphModel):
 
         if revert_to_atime:
             ev = self.get_event(eid)
-            atime = ev.time + tt_predict(ev, sta, phase=phase)
-            return self.get_wave_node_by_atime(sta, band, chan, atime, allow_out_of_bounds=True)
+            try:
+                atime = ev.time + tt_predict(ev, sta, phase=phase)
+                return self.get_wave_node_by_atime(sta, band, chan, atime, allow_out_of_bounds=True)
+            except ValueError:
+                # if the phase doesn't exist at this station, just fail normally
+                pass
 
         raise KeyError("couldn't find wave node for eid %d phase %s at station %s chan %s band %s" % (eid, phase, sta, chan, band))
 

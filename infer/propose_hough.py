@@ -184,8 +184,9 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
     debug_lonbin = -1
     debug_latbin = -1
     debug_depthbin = -1
-        
 
+
+        
     code = """
 long init_time = 0;
 long plausible_time = 0;
@@ -294,7 +295,7 @@ for (int i=0; i < lonbins; ++i) {
                             if (!timebins_used_flag_phase(timebin)) {
                                timebins_used_flag_phase(timebin) = 1;
                                timebins_used_phase(n_timebins_used_phase++) = timebin;
-                               if (n_timebins_used_phase >= timebins) {
+                               if (n_timebins_used_phase > timebins) {
                                    printf("something went wildly wrong in propose_hough.py\\n");
                                   exit(0);
                                 }
@@ -302,7 +303,7 @@ for (int i=0; i < lonbins; ++i) {
                             if (!timebins_used_flag(timebin)) {
                                timebins_used_flag(timebin) = 1;
                                timebins_used(n_timebins_used++) = timebin;
-                               if (n_timebins_used >= timebins) {
+                               if (n_timebins_used > timebins) {
                                    printf("something went wildly wrong in propose_hough.py\\n");
                                   exit(0);
                                 }
@@ -456,6 +457,9 @@ for (int i=0; i < lonbins; ++i) {
 } // i (lonbin)
 //printf("times: init %ld plausible %ld laplace %ld mbscore %ld fullscore %ld copy %ld, total %ld\\n", init_time, plausible_time, laplace_time, mbscore_time, fullscore_time, copy_result_time, init_time+plausible_time+ laplace_time+ mbscore_time+ fullscore_time+ copy_result_time);
     """
+
+
+    stime = float(stime)
     weave.inline(code,['latbins', 'lonbins', 'depthbins', 'timebins', 'mbbins', 'nphases',
                        'sta_hough_array', 'ttimes_centered', 'ttimes_corners', 'amp_transfers', 'amp_transfer_stds',
                        'source_logamps', 'phase_score', 'assoc',
@@ -672,6 +676,7 @@ def get_uatemplates(sg, stas=None, tmid_whitelist=None):
             amps = []
             tmids = []
             for i, (eid, phase) in enumerate(wn.arrivals()):
+                if phase != "UA": continue
                 if tmid_whitelist is not None and -i not in tmid_whitelist: continue
                 v, _ = wn.get_template_params_for_arrival(eid, phase)
                 atimes.append(v['arrival_time'])
@@ -793,7 +798,7 @@ def iterative_mixture_hough(sg, hc):
     print fname
 
 class HoughConfig(object):
-    def __init__(self, stime, len_s, phases = ("P", "S"), bin_width_deg=2.0, min_mb=2.5, max_mb=8.5, mbbins=1, depthbin_bounds=[0, 10, 50, 150, 400, 700], uatemplate_rate=1e-3, left_lon=-180, right_lon=180, bottom_lat=-90, top_lat=90, min_depth=0, max_depth=700, time_tick_s=10.0):
+    def __init__(self, stime, len_s, phases = ("P",), bin_width_deg=2.0, min_mb=2.5, max_mb=8.5, mbbins=1, depthbin_bounds=[0, 10, 50, 150, 400, 700], uatemplate_rate=1e-3, left_lon=-180, right_lon=180, bottom_lat=-90, top_lat=90, min_depth=0, max_depth=700, time_tick_s=10.0):
 
         self.left_lon = left_lon
         self.right_lon = right_lon
@@ -1295,7 +1300,7 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
 
 class CTFProposer(object):
 
-    def __init__(self, sg, bin_widths, depthbin_bounds, mbbins, phases=("P", "S"), offset=False):
+    def __init__(self, sg, bin_widths, depthbin_bounds, mbbins, phases=("P",), offset=False):
         # precompute ttime and amp_transfer patterns
         global_bin_width = bin_widths[0]
         stime = sg.event_start_time

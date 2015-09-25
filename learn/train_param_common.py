@@ -129,7 +129,12 @@ def pre_featurizer(basisfn_str):
         basisfn_str = "mlinear"
         featurizer_recovery = {'means': np.array((3500,3.9,)), 'scales': np.array((1000,.5,)), 'extract_dim': (3,4)}
         extract_dim=None
+    elif basisfn_str == "bias":
+        basisfn_str = "mlinear"
+        featurizer_recovery = {'means': np.array(()), 'scales': np.array(()), 'extract_dim': ()}
+        extract_dim = None
     else:
+        raise Exception("not sure if this code is still doing the right thing.")
         featurizer_recovery = None
         extract_dim=3
     return basisfn_str, featurizer_recovery, extract_dim
@@ -307,15 +312,17 @@ def load_modelid(modelid, memoize=True, **kwargs):
     fname, model_type = cursor.fetchone()
     cursor.close()
     if memoize:
-        return load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
+        model = load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
     else:
-        return load_model_notmemoized(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
+        model = load_model_notmemoized(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
+    model.modelid = modelid
+    return model
 
 @lru_cache(maxsize=None)
 def load_model(*args, **kwargs):
     return load_model_notmemoized(*args, **kwargs)
 
-def load_model_notmemoized(fname, model_type, gpmodel_build_trees=True):
+def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
     if model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):

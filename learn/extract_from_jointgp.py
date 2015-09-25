@@ -42,14 +42,14 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 
 #with open("/home/dmoore/python/sigvisa/logs/mcmc/01962/step_000019/pickle.sg", 'rb') as f:
 #    sg_joint = pickle.load(f)
-with open("logs/mcmc/00306/step_000559/pickle.sg", 'rb') as f:
+with open("logs/mcmc/00347/step_000009/pickle.sg", 'rb') as f:
      sg_joint = pickle.load(f)
 
 s = Sigvisa()
 holdout_eid = None
 target_phase="P"
 band="freq_0.8_4.5"
-wiggle_family = "db4_2.0_3_30.0"
+
 
 run_name = "kampos_init_phases" # "aftershock_joint_P"
 run_iter = 1
@@ -100,10 +100,23 @@ for sta in sg_joint.station_waves.keys():
 
     if True: # has GP template models
          for (param, b, c, phase), (jgp, hnodes) in sg_joint._joint_gpmodels[sta].items():
-              #if param.startswith("db"): continue #why?
+              #if param.startswith("db"): continue 
               if isinstance(jgp, JointIndepGaussian): continue
               st = time.time()
               gp = jgp.train_gp(holdout_eid=holdout_eid, force_ll=True)
               et = time.time()
-              save_model(gp, st, et, param, y=gp.y, yvars=gp.y_obs_variances)
+              model_type = "gp_lld"
+              if gp.featurizer_recovery is not None:
+                   if gp.basis.startswith("poly"):
+                        modelstr = gp.basis
+                   elif len(gp.featurizer_recovery["extract_dim"]) == 1:
+                        modelstr = "linear_mb"
+                   elif len(gp.featurizer_recovery["extract_dim"]) == 2:
+                        modelstr = "linear_distmb"
+                   elif len(gp.featurizer_recovery["extract_dim"]) == 0:
+                        modelstr = "bias"
+                   else:
+                        raise Exception("unrecognized parametric model for param %s: %s" % (param, gp.featurizer_recovery))
+                   model_type = "gplocal+lld+%s" % modelstr
+              save_model(gp, st, et, param, y=gp.y, yvars=gp.y_obs_variances, model_type=model_type)
               print "saved", param

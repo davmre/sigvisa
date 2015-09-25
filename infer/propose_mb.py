@@ -56,20 +56,25 @@ def ev_mb_posterior_laplace(sg, eid):
     coda_heights = [nn.get_value() for nn in ch_nodes]
     ch_node_labels = [nn.label for nn in ch_nodes]
 
-    assert(len(amp_nodes) > 0)
 
     def reset_coda_heights():
         for ch, label in zip(coda_heights, ch_node_labels):
             nn = sg.all_nodes[label]
             nn.set_value(ch)
 
+    if len(amp_nodes) == 0:
+        # can happen if the event is in a location that doesn't
+        # produce any phase arrivals at the stations we're using.
+        return 4.0, 2.0, reset_coda_heights
+
     orig_mb = mb_node.get_value()
+    
 
     def amp_transfer_nlp(x):
         mb = x[0]
         mb_node.set_value(mb)
         reset_coda_heights()
-        return -np.sum([n.log_p() for n in amp_nodes])
+        return -np.sum([n.log_p() for n in amp_nodes]) - mb_node.log_p()
 
 
     x0 = [4.0,]

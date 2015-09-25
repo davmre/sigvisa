@@ -189,6 +189,11 @@ def mcmc_run_detail(request, dirname):
 
         results, txt = trace_stats(trace, true_evs)
         ev = sg.get_event(eid)
+        try:
+            enode = sg.extended_evnodes[eid][4].label
+        except:
+            enode = None
+
         evdict = {'eid': eid,
                   'evstr': str(ev),
                   'azgap': 0.0, #azimuth_gap(ev.lon, ev.lat, site_info),
@@ -199,7 +204,7 @@ def mcmc_run_detail(request, dirname):
                   'bottom_lat': blat,
                   'left_lon': llon,
                   'right_lon': rlon,
-                  'example_node': sg.extended_evnodes[eid][4].label,
+                  'example_node': enode,
         }
         evs.append(evdict)
 
@@ -944,6 +949,45 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
     canvas.print_png(response)
     return response
 
+def mcmc_wave_gpvis(request, dirname, wn_label):
+    zoom = float(request.GET.get("zoom", '1'))
+    vzoom = float(request.GET.get("vzoom", '1'))
+    samples = int(request.GET.get("samples", '0'))
+    step = request.GET.get("step", '-1')
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sg = graph_for_step(mcmc_run_dir, int(step))
+
+    wn = sg.all_nodes[wn_label]
+
+    f = Figure((10*zoom, 5*vzoom))
+    f.patch.set_facecolor('white')
+    ax = f.add_subplot(111)
+
+    wn._parent_values()
+    wn._set_cssm_priors_from_model()
+    tssm = wn.transient_ssm()
+
+    m1 = tssm.mean_obs(1700)
+    s1 = tssm.obs_var(1700)
+
+    ax.plot(wn.get_value(), color='black')
+    ax.plot(m1, lw=2, color='green')
+    ax.fill_between(np.arange(wn.npts), m1+2*np.sqrt(s1),  m1-2*np.sqrt(s1), facecolor="green", alpha=0.2)
+
+    for i in range(samples):
+        z = tssm.prior_sample(1700, i)
+        ax.plot(z, lw=1, color='blue', alpha=0.4)
+
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
 
 def mcmc_wave_posterior(request, dirname, wn_label):
 

@@ -718,7 +718,7 @@ class ObservedSignalNode(Node):
                 prior_means, prior_vars = np.asarray(prior_means, dtype=np.float64), np.asarray(prior_vars, dtype=np.float64)
             else:
                 prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]], dtype=np.float)
-                prior_vars = np.array([gp.variance(cond=evdict) for gp in self.wavelet_param_models[phase]], dtype=np.float)
+                prior_vars = np.array([gp.variance(cond=evdict, include_obs=True) for gp in self.wavelet_param_models[phase]], dtype=np.float)
             cssm.set_coef_prior(prior_means, prior_vars)
 
 

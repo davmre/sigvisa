@@ -15,6 +15,7 @@ from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.propose_mb import propose_mb
 from sigvisa.infer.correlations.ar_correlation_model import ar_advantage
+from sigvisa.infer.correlations.event_proposal import correlation_location_proposal
 from sigvisa.infer.template_mcmc import get_env_based_amplitude_distribution, get_env_based_amplitude_distribution2, get_env_diff_positive_part, sample_peak_time_from_cdf, merge_distribution, peak_log_p, preprocess_signal_for_sampling
 from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
@@ -445,7 +446,6 @@ def get_env_based_amplitude_distribution3(sg, wn, eid, phase, prior_min, prior_m
     tmvals['coda_height'] = provided_coda_height
     p = PiecewiseLinear(candidates, np.array(lps))
 
-
     return p
 
 
@@ -721,6 +721,7 @@ def propose_phase_template(sg, wn, eid, phase, tmvals=None,
                                            fix_result=fix_result)
 
         lp += peak_lp
+        print "peak_lp", peak_lp
         try:
             proposed_tt_residual = tmvals["tt_residual"]
         except KeyError:
@@ -749,12 +750,13 @@ def propose_phase_template(sg, wn, eid, phase, tmvals=None,
         # compute log-prob of non-amplitude parameters
         if include_presampled:
             param_lp = ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
+            print "param_lp", param_lp
             lp += param_lp
 
         tmvals['coda_height'] = amplitude
         amp_lp = amp_dist.log_p(amplitude)
         lp += amp_lp
-
+        print "amp_lp", amp_lp
     else:
         if include_presampled:
             lp += ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
@@ -949,7 +951,8 @@ def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True, fix
     # we can update our records to replace the actual tmids. 
     canonicalized_death_record = {}
     for k, (deassociate, template_param_array, tmid_i) in death_record.items():
-        canonicalized_death_record[k] = (deassociate, template_param_array, tmids[tmid_i])
+        canonicalized_death_record[k] = (deassociate, template_param_array, 
+                                         tmids[tmid_i] if deassociate else None)
 
     reverse_logprob = ev_birth_helper(sg, ev, use_correlation=use_correlation, 
                                       associate_using_mb=associate_using_mb, eid=eid,
@@ -1052,6 +1055,8 @@ def ev_death_move_hough_oes_offset(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": True, "offset": True}
     return ev_death_move_hough(sg, hough_kwargs, **kwargs)
 
+def ev_death_move_correlation(sg, **kwargs):
+    return ev_death_move_abstract(sg, correlation_location_proposal, proposal_includes_mb=False, **kwargs)
 
 
 def ev_death_move_lstsqr(sg, **kwargs):
@@ -1308,6 +1313,27 @@ def ev_birth_move_hough_oes_offset(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": True, "offset": True}
     return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, **kwargs)
 
+
+def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):
+
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        #hough_array, eid, associations = proposal_extra
+        log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
+
+
+    def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        #hough_array, eid, associations = proposal_extra
+        log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+
+    def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        #hough_array, eid, associations = proposal_extra
+        log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+        #if log_to_run_dir is not None:
+        #    log_event_birth(sg, None, log_to_run_dir, eid, associations)
+        #else:
+        #    raise Exception("why are we not logging?")
+
+    return ev_birth_move_abstract(sg, location_proposal=correlation_location_proposal, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=False, **kwargs)
 
 
 def ev_birth_move_lstsqr(sg, log_to_run_dir=None, **kwargs):
