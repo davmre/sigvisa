@@ -152,8 +152,11 @@ def mcmc_run_detail(request, dirname):
 
     stas = sg.station_waves.keys()
     gp_hparams = []
-    if len(sg._jointgp_hparam_nodes) > 0:
-        gp_hparams = ["wiggles", "template"]
+    try:
+        if len(sg._jointgp_hparam_nodes) > 0:
+            gp_hparams = ["wiggles", "template"]
+    except AttributeError:
+        pass
 
     #except AttributeError:
     #    gp_hparams = None

@@ -310,14 +310,7 @@ class SigvisaGraph(DirectedGraphModel):
                     runid = self.jointgp_param_run_init
                     tmtypes = default_parametric_tmtypes
                 if param in tmtypes:
-                    modelid = self.get_param_model_id(runids=(runid,),
-                                                      sta=sta,
-                                                      phase=phase,
-                                                      model_type=tmtypes[param],
-                                                      param=param,
-                                                      template_shape=self.template_shape,
-                                                      chan=chan, band=band)
-                    model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+                    model, modelid = self.get_model(param, sta, phase, model_type=tmtypes[param], chan=chan, band=band, runids=(runid,))
             #if model is None and param.startswith("db"):
             #    model = ConstGaussianModel(mean=0.0, std=10.0)
 
@@ -1027,14 +1020,16 @@ class SigvisaGraph(DirectedGraphModel):
             return node
 
 
-    def get_model(self, param, sta, phase, model_type=None, chan=None, band=None, modelid=None):
+    def get_model(self, param, sta, phase, model_type=None, chan=None, band=None, modelid=None, runids=None):
         modelid = None
         if model_type is None:
             model_type = self._tm_type(param=param, site=sta)
+        if runids is None:
+            runids = self.runids
 
         if not model_type.startswith("dummy") and modelid is None and model_type != "gp_joint":
             try:
-                modelid = self.get_param_model_id(runids=self.runids, sta=sta,
+                modelid = self.get_param_model_id(runids=runids, sta=sta,
                                                   phase=phase, model_type=model_type,
                                                   param=param, 
                                                   template_shape=self.template_shape,

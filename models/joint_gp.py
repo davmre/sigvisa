@@ -3,6 +3,7 @@ from sigvisa.treegp.gp import GPCov
 from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel, ConstLaplacianModel
 from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
+from sigvisa.models.distributions import Gaussian, TruncatedGaussian
 import scipy.stats
 from collections import defaultdict
 
@@ -436,6 +437,11 @@ def gpinit_from_model(model):
         gpinit_dict['extract_dim']=np.array((), dtype=int)
         gpinit_dict['param_mean']=model.mean
         gpinit_dict['param_cov']=np.asarray(model.variance(None)).reshape((1,1))
+    elif isinstance(model, Gaussian) or isinstance(model, TruncatedGaussian):
+        gpinit_dict['basis']="mlinear"
+        gpinit_dict['extract_dim']=np.array((), dtype=int)
+        gpinit_dict['param_mean']=model.predict()
+        gpinit_dict['param_cov']=np.asarray(model.variance()).reshape((1,1))
     elif isinstance(model, ConstLaplacianModel):
         gpinit_dict['basis']="mlinear"
         gpinit_dict['extract_dim']=np.array((), dtype=int)

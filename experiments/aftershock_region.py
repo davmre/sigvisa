@@ -77,7 +77,7 @@ def continue_from(old_sgfile):
     #ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_15.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0)
     #ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
-    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0, phases=["P", ], jointgp_param_run_init=1)
+    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0, phases=["P","pP" ], jointgp_param_run_init=1, dummy_fallback=True)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
 

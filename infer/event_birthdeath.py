@@ -14,6 +14,7 @@ from sigvisa.ssms_c import TransientCombinedSSM
 from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough_array
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.propose_mb import propose_mb
+from sigvisa.infer.propose_cheating import cheating_location_proposal
 from sigvisa.infer.correlations.ar_correlation_model import ar_advantage
 from sigvisa.infer.correlations.event_proposal import correlation_location_proposal
 from sigvisa.infer.template_mcmc import get_env_based_amplitude_distribution, get_env_based_amplitude_distribution2, get_env_diff_positive_part, sample_peak_time_from_cdf, merge_distribution, peak_log_p, preprocess_signal_for_sampling
@@ -1058,6 +1059,9 @@ def ev_death_move_hough_oes_offset(sg, **kwargs):
 def ev_death_move_correlation(sg, **kwargs):
     return ev_death_move_abstract(sg, correlation_location_proposal, proposal_includes_mb=False, **kwargs)
 
+def ev_death_move_cheating(sg, **kwargs):
+    return ev_death_move_abstract(sg, cheating_location_proposal, proposal_includes_mb=True, **kwargs)
+
 
 def ev_death_move_lstsqr(sg, **kwargs):
     return ev_death_move_abstract(sg, overpropose_new_locations, **kwargs)
@@ -1206,7 +1210,13 @@ def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=T
     # propose a new ev location
     #try:
     ev, lp_loc, extra = location_proposal(sg)
+    if ev is None:
+        return 0, 0, None, None
+
     print "proposing new ev", ev
+
+
+        
 
     #except Exception as e:
     #    print "exception in birth proposal", e
@@ -1233,6 +1243,10 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
     lp_old = sg.current_log_p()
     log_qforward, log_qbackward, revert_move, proposal_extra = ev_birth_helper_full(sg, location_proposal, **kwargs)
+    if revert_move is None:
+        # location proposal did not return an event
+        return False
+
     lp_new = sg.current_log_p()
 
     (extra, eid, associations) = proposal_extra
@@ -1317,6 +1331,43 @@ def ev_birth_move_hough_oes_offset(sg, **kwargs):
 def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        _, eid, associations = proposal_extra
+        #hough_array, eid, associations = proposal_extra
+        log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
+
+        # proposed event should be the most recently created
+        try:
+            proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
+        except:
+            proposed_ev = None
+
+        with open(log_file, 'a') as f:
+            f.write("proposed ev: %s\n" % proposed_ev)
+            f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            for (wn, phase), (assoc, tmvals) in associations.items():
+                if assoc:
+                    f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
+            f.write("\n")
+
+
+    def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        #hough_array, eid, associations = proposal_extra
+        log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+
+    def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        #hough_array, eid, associations = proposal_extra
+        log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+        #if log_to_run_dir is not None:
+        #    log_event_birth(sg, None, log_to_run_dir, eid, associations)
+        #else:
+        #    raise Exception("why are we not logging?")
+
+    return ev_birth_move_abstract(sg, location_proposal=correlation_location_proposal, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=False, **kwargs)
+
+
+def ev_birth_move_cheating(sg, log_to_run_dir=None, **kwargs):
+
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         #hough_array, eid, associations = proposal_extra
         log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
 
@@ -1333,7 +1384,7 @@ def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):
         #else:
         #    raise Exception("why are we not logging?")
 
-    return ev_birth_move_abstract(sg, location_proposal=correlation_location_proposal, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=False, **kwargs)
+    return ev_birth_move_abstract(sg, location_proposal=cheating_location_proposal, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=True, **kwargs)
 
 
 def ev_birth_move_lstsqr(sg, log_to_run_dir=None, **kwargs):

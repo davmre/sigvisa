@@ -5,7 +5,7 @@ import cPickle as pickle
 from sigvisa import Sigvisa
 from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.ssms_c import CompactSupportSSM
-
+from sigvisa.models.spatial_regression.SparseGP import SparseGP
 def get_historical_signals(sg, phase="P"):
     history = []
     try:
@@ -36,6 +36,9 @@ def merge_station_histories(h1, h2):
 
 def get_historical_signals_for_wn(wn, phase):
     s = Sigvisa()
+    if (phase not in wn.wavelet_param_models) or \
+       (not isinstance(wn.wavelet_param_models[phase][0], SparseGP)): 
+        return []
     modelid = wn.wavelet_param_models[phase][0].modelid
     fname = os.path.join(s.homedir, "db_cache", "history_%d.pkl" % modelid)
     if os.path.exists(fname):

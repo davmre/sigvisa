@@ -18,6 +18,12 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
     #But for right now I'll just use the trivial function that proposes at the historical locations. This means we generate a list of [ev, p(ev|m), tau, signals].
     proposals = get_historical_signals(sg, "P")
 
+    if len(proposals) == 0:
+        if fix_result is None:
+            return None, -np.inf, ()
+        else:
+            return -np.inf
+
     global_stime = sg.event_start_time
     N = sg.event_end_time - global_stime
     proposal_otime_likelihoods = [ev_time_posterior_with_weight(sg, x, signals,  

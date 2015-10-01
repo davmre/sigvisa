@@ -238,19 +238,21 @@ def run_open_world_MH(sg, steps=10000,
 
 
     if enable_event_openworld:
+        hough_rate = 0.1
+        correlation_rate = 0.0
         global_moves = {'event_swap': (swap_events_move_hough, 0.05),
                         'event_repropose': (repropose_event_move_hough, 0.05),
                         'event_threeway_swap': (swap_threeway_hough, 0.05),
-                        'event_birth_hough': (ev_birth_move_hough, 0.02),
-                        'event_birth_hough_offset': (ev_birth_move_hough_offset, 0.02),
-                        'event_birth_hough_oes': (ev_birth_move_hough_oes, 0.02),
-                        'event_birth_hough_oes_offset': (ev_birth_move_hough_oes_offset, 0.02),
-                        'event_death_hough': (ev_death_move_hough, 0.02),
-                        'event_death_hough_offset': (ev_death_move_hough_offset, 0.02),
-                        'event_death_hough_oes': (ev_death_move_hough_oes, 0.02),
-                        'event_death_hough_oes_offset': (ev_death_move_hough_oes_offset, 0.02),
-                        'event_birth_correlation': (ev_birth_move_correlation, 0.1),
-                        'event_death_correlation': (ev_death_move_correlation, 0.1),
+                        'event_birth_hough': (ev_birth_move_hough, hough_rate),
+                        'event_birth_hough_offset': (ev_birth_move_hough_offset, hough_rate),
+                        'event_birth_hough_oes': (ev_birth_move_hough_oes, hough_rate),
+                        'event_birth_hough_oes_offset': (ev_birth_move_hough_oes_offset, hough_rate),
+                        'event_death_hough': (ev_death_move_hough, hough_rate),
+                        'event_death_hough_offset': (ev_death_move_hough_offset, hough_rate),
+                        'event_death_hough_oes': (ev_death_move_hough_oes, hough_rate),
+                        'event_death_hough_oes_offset': (ev_death_move_hough_oes_offset, hough_rate),
+                        'event_birth_correlation': (ev_birth_move_correlation, correlation_rate),
+                        'event_death_correlation': (ev_death_move_correlation, correlation_rate),
         }
                         #'event_birth_lstsqr': ev_birth_move_lstsqr,
                         #'event_death_lstsqr': ev_death_move_lstsqr        }
