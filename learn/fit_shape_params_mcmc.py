@@ -203,12 +203,7 @@ def compute_wavelet_messages(sg, wn):
 
     return gp_messages, gp_posteriors
 
-def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_run_name, output_iteration, steps, burnin):
-
-    s = Sigvisa()
-    cursor = Sigvisa().dbconn.cursor()
-    output_runid = get_fitting_runid(cursor, output_run_name, output_iteration, create_if_new = True)
-    cursor.close()
+def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burnin):
 
     # initialize the MCMC by finding a good set of template params
     wn = sigvisa_graph.station_waves.values()[0][0]
@@ -374,6 +369,7 @@ def main():
     parser.add_option("--seed", dest="seed", default=0, type="int",
                       help="ranom seed for MCMC (0)")
     parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true", help="")
+    parser.add_option("--nocheck", dest="nocheck", default=False, action="store_true", help="don't check to see if we've already fit this arrival in this run")
 
 
     (options, args) = parser.parse_args()
@@ -411,6 +407,7 @@ def main():
         init_iteration = 1
         template_model = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'dummyPrior'}
 
+
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
                                 wm_family=options.wiggle_family, wm_type=options.wiggle_model,
@@ -420,12 +417,25 @@ def main():
                                 absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth,
                                 dummy_fallback=options.dummy_fallback)
 
+    runid = get_fitting_runid(cursor, options.run_name, options.run_iteration, create_if_new = True)
+    if not options.nocheck:
+        wn = sigvisa_graph.station_waves.values()[0][0]
+        sql_query = "select * from sigvisa_coda_fit where runid=%d and evid=%d and sta='%s' and chan='%s' and band='%s' and smooth=%d and hz=%d" % (runid, ev.evid, wn.sta, wn.chan, wn.band, options.smooth, options.hz)
+        cursor.execute(sql_query)
+        r = cursor.fetchall()
+        if len(r) > 0:
+            print "not fitting because a similar fit already exists in this runid"
+            print r
+            print "run with --nocheck flag to override"
+            return
+
+
     if options.seed >= 0:
         np.random.seed(options.seed)
 
     fitid = run_fit(sigvisa_graph,  fit_hz = options.hz,
                     tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
-                    output_run_name = options.run_name, output_iteration=options.run_iteration, steps=options.steps, burnin=options.burnin)
+                    output_runid = runid, steps=options.steps, burnin=options.burnin)
 
 
     print "fit id %d completed successfully." % fitid

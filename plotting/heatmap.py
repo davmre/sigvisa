@@ -225,7 +225,7 @@ class Heatmap(object):
                 self.fvals[loni, lati] = fvals[i]
                 i += 1
 
-    def init_bmap(self, coastlines = True, nofillcontinents=True, resolution="l", projection="cyl", axes=None, **kwargs):
+    def init_bmap(self, coastlines = True, nofillcontinents=True, resolution="l", projection="cyl", axes=None, coastline_color="k", **kwargs):
         if projection=="robin":
             bmap = Basemap(resolution = resolution, projection = projection, ax=axes, lon_0=0,
                            **kwargs)
@@ -234,7 +234,7 @@ class Heatmap(object):
                            llcrnrlon=self.left_lon, llcrnrlat=self.bottom_lat,
                            urcrnrlon=self.right_lon, urcrnrlat=self.top_lat,  **kwargs)
         if coastlines:
-            bmap.drawcoastlines(zorder=10)
+            bmap.drawcoastlines(zorder=10, color=coastline_color)
 
         if not nofillcontinents:
             # fill the continents with a greenish color

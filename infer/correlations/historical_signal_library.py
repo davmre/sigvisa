@@ -6,6 +6,8 @@ from sigvisa import Sigvisa
 from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.ssms_c import CompactSupportSSM
 from sigvisa.models.spatial_regression.SparseGP import SparseGP
+
+
 def get_historical_signals(sg, phase="P"):
     history = []
     try:
@@ -20,6 +22,7 @@ def get_historical_signals(sg, phase="P"):
         wn = wns[0]
         wn_history = get_historical_signals_for_wn(wn, phase)
         history = merge_station_histories(history, wn_history)
+    history = filter_history_to_region(sg, history)
     return history
 
 def merge_station_histories(h1, h2):
@@ -33,6 +36,12 @@ def merge_station_histories(h1, h2):
         else:
             h1_dict[k] = (x, s)
     return h1_dict.values()
+
+def filter_history_to_region(sg, history):
+    if sg.inference_region is None:
+        return history
+    else:
+        return [(x,s) for (x, s) in history if sg.inference_region.contains_event(lon=x[0,0], lat=x[0,1])]
 
 def get_historical_signals_for_wn(wn, phase):
     s = Sigvisa()

@@ -275,6 +275,7 @@ class ModelSpec(object):
             'jointgp_param_run_init': None,
             'hack_param_constraint': False,
             'absorb_n_phases': True,
+            'inference_region': None,
         }
         signal_params = {
             'max_hz': 5.0,
@@ -406,6 +407,10 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
         if max_steps is not None:
             inference_params["steps"] = max_steps
 
+        if "fix_outside_templates" in inference_params:
+            if inference_params["fix_outside_templates"]:
+                sg.fix_outside_region(fix_templates=True)
+            del inference_params["fix_outside_templates"]
 
         run_open_world_MH(sg, logger=logger,
                           stop_condition=lp_change_threshold,

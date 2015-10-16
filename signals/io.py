@@ -172,7 +172,8 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
 
     if s.earthmodel.site_info(station, stime)[3] == 1:
         cursor.execute("select refsta from static_site where sta='%s'" % station)
-        selection = cursor.fetchone()[0]
+        options = [v[0] for v in cursor.fetchall() if v[0] != station]
+        selection = options[0]
     else:
         selection = station
 

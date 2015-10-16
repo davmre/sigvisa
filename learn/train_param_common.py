@@ -134,7 +134,6 @@ def pre_featurizer(basisfn_str):
         featurizer_recovery = {'means': np.array(()), 'scales': np.array(()), 'extract_dim': ()}
         extract_dim = None
     else:
-        raise Exception("not sure if this code is still doing the right thing.")
         featurizer_recovery = None
         extract_dim=3
     return basisfn_str, featurizer_recovery, extract_dim

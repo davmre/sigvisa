@@ -782,7 +782,6 @@ def propose_phase_template(sg, wn, eid, phase, tmvals=None,
 #########################################################################################
 
 def death_proposal_log_ratio(sg, eid):
-
     lp_unass = 0
     lp_ev = 0
 
@@ -808,6 +807,7 @@ def death_proposal_log_ratio(sg, eid):
 def death_proposal_distribution(sg):
     c = Counter()
     for eid in sg.evnodes.keys():
+        if eid in sg.fixed_events: continue
         c[eid] = death_proposal_log_ratio(sg, eid)
 
     c.normalize_from_logs()
@@ -1001,7 +1001,7 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_out
     if eid is None:
         return False
     move_logprob = eid_logprob
-    n_current_events = len(sg.evnodes)
+    n_current_events = len(sg.evnodes) - len(sg.fixed_events)
     reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
 
     lp_old = sg.current_log_p()
@@ -1238,7 +1238,7 @@ def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=T
 
 def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_action=None, force_outcome=None, **kwargs):
 
-    n_current_events = len(sg.evnodes)
+    n_current_events = len(sg.evnodes) - len(sg.fixed_events)
     birth_position_lp = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
 
     lp_old = sg.current_log_p()
@@ -1297,7 +1297,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
             sites = sg.site_elements.keys()
             print "saving hough array picture...",
             fname = 'last_hough%s.png' % ("_".join(["",] + hough_kwargs.keys()))
-            visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, fname))
+            visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, fname), region=sg.inference_region)
             print "done"
 
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
@@ -1426,5 +1426,5 @@ def log_event_birth(sg, hough_array, run_dir, eid, associations):
     sites = sg.site_elements.keys()
     if hough_array is not None:
         print "visualizing hough array...",
-        visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'))
+        visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'), region=sg.inference_region)
     print "done"

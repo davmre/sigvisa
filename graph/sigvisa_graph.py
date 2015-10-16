@@ -25,6 +25,7 @@ from sigvisa.models.joint_gp import JointGP, JointIndepGaussian
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel, ParentConditionalNotDefined
 from sigvisa.graph.graph_utils import extract_sta_node, predict_phases_sta, create_key, get_parent_value, parse_key
+from sigvisa.graph.region import Region
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
@@ -96,6 +97,8 @@ dummyPriorModel = {
 "peak_decay": Gaussian(mean=0.0, std=1.0)
 }
 
+                
+
 class SigvisaGraph(DirectedGraphModel):
 
 
@@ -135,7 +138,8 @@ class SigvisaGraph(DirectedGraphModel):
                  raw_signals=False, 
                  jointgp_hparam_prior=None,
                  jointgp_param_run_init=None,
-                 force_event_wn_matching=False):
+                 force_event_wn_matching=False,
+                 inference_region=None):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -266,6 +270,12 @@ class SigvisaGraph(DirectedGraphModel):
         self._jointgp_hparam_nodes = {}
 
         self.force_event_wn_matching = force_event_wn_matching
+
+        self.inference_region = inference_region
+        self.fixed_events = set()
+        self.fully_fixed_events = set()
+        if inference_region is not None:
+            self.event_rate = inference_region.estimate_event_rate()
 
     def joint_gp_hparam_nodes(self, sta, phase, band, chan, param, srate=None):
         if param.startswith("db"):
@@ -476,7 +486,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def nevents_log_p(self, n=None):
         if n is None:
-            n = len(self.evnodes)
+            n = len(self.evnodes) - len(self.fixed_events)
 
         # Poisson cancellation here works similarly to in the
         # uatemplate case (described below in ntemplates_sta_log_p)
@@ -829,11 +839,27 @@ class SigvisaGraph(DirectedGraphModel):
         self._topo_sort()
 
     def event_is_fixed(self, eid):
-        return np.prod([n._fixed for n in self.evnodes[eid].values()])
+        return eid in self.fixed_events
 
-    def fix_event(self, eid):
-        for n in self.evnodes[eid].values():
-            n.fix_value()
+    def fix_event(self, eid, fix_templates=False):
+        self.fixed_events.add(eid)
+        if fix_templates:
+            self.fully_fixed_events.add(eid)
+            for n in self.extended_evnodes[eid]:
+                try:
+                    n.fix_value()
+                except AttributeError:
+                    pass
+        else:
+            for n in self.evnodes[eid].values():
+                n.fix_value()
+
+    def fix_outside_region(self, fix_templates=False):
+        for eid in self.evnodes.keys():
+            ev = self.get_event(eid)
+            if not self.inference_region.contains_event(ev):
+                self.fix_event(eid, fix_templates=fix_templates)
+
 
 
     def add_event(self, ev, tmshapes=None, sample_templates=False, fixed=False, eid=None,

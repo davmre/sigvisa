@@ -83,6 +83,9 @@ def run_fit_and_rename_output(args):
                 print "fit succeeded: moving %s to %s" % (tmp_output_file, success_output_file)
                 shutil.move(tmp_output_file, success_output_file)
                 break
+            if "not fitting" in line:
+                fitid = -1
+                break
 
         if fitid is None:
             failed_output_dir = os.path.join(base_output, "failed")
@@ -90,6 +93,9 @@ def run_fit_and_rename_output(args):
             ensure_dir_exists(failed_output_dir)
             print "fit failed: moving %s to %s" % (tmp_output_file, failed_output_file)
             shutil.move(tmp_output_file, failed_output_file)
+        elif fitid == -1:
+            print "skipping existing fit, deleting log %s" % tmp_output_file
+            os.remove(tmp_output_file)
 
     return result
 

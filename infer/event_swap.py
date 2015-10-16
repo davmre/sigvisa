@@ -33,7 +33,7 @@ def sample_events_to_swap(sg, n_events=2, fix_result=None):
     # if set, return lp
     # else, return eid1, eid2, lp
 
-    eids = sorted(sg.evnodes.keys())
+    eids = sorted([eid for eid in sg.evnodes.keys() if eid not in sg.fixed_events])
     n = len(eids)
 
     if len(eids) < n_events:

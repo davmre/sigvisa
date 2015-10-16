@@ -375,10 +375,8 @@ def run_open_world_MH(sg, steps=10000,
 
                     for (eid, phase) in wn.arrivals():
 
-                        #if sg.event_is_fixed(eid):
-                        #   print "skipping fixed eid %d at %s" % (eid, sta)
-                        #   continue
-
+                        if eid in sg.fully_fixed_events:
+                            continue
 
                         tg = sg.template_generator(phase)
                         if eid < 0:

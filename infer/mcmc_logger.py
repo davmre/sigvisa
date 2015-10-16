@@ -185,7 +185,7 @@ class MCMCLogger(object):
         for key in sorted(n_accepted.keys()):
             s += "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key])
         s += ", uatemplates: %d " % len(sg.uatemplates)
-        s += ", events: %d " % len(sg.evnodes)
+        s += ", events: %d " % (len(sg.evnodes) - len(sg.fixed_events))
         return s
 
     def __del__(self):

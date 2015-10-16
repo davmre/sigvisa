@@ -327,8 +327,8 @@ class Node(object):
                     lp -= np.exp(100*(v-1))
                 if v < 0:
                     lp -= np.exp(100*(-v))
-            #if 'tt_residual' in self.label and np.abs(v) > 25:
-            #    lp -= np.exp(  10*(np.abs(v)-15)  )
+            if 'tt_residual' in self.label and np.abs(v) > 25:
+                lp -= (10*(np.abs(v)-25))**4
             #elif 'peak_offset' in self.label and v > 3.0:
             #    lp -= np.exp(  100*(v-3)  )
             #elif 'coda_decay' in self.label and v < -9:

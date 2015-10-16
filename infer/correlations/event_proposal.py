@@ -24,12 +24,19 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
         else:
             return -np.inf
 
-    global_stime = sg.event_start_time
-    N = sg.event_end_time - global_stime
+    global_srate = 1.0
+    if sg.inference_region is not None:
+        global_stime = sg.inference_region.stime
+        N = int((sg.inference_region.etime - sg.inference_region.stime)*global_srate)
+    else:
+        global_stime = sg.event_start_time
+        N = int((sg.event_end_time - global_stime)*global_srate)
+
     proposal_otime_likelihoods = [ev_time_posterior_with_weight(sg, x, signals,  
                                                                 stas=stas,
                                                                 N=N, temper=temper,
-                                                                global_stime = global_stime) 
+                                                                global_stime = global_stime,
+                                                                global_srate = global_srate) 
                                   for (x, signals) in proposals]
     proposal_weights = []
     proposal_otime_posteriors = []
@@ -52,9 +59,11 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
                                # the effect of this is that roughly 5%
                                # of the time we will propose from a
                                # uniform distribution over all
-                               # candidates.
+                               # candidates.            
     proposal_weights /= np.sum(proposal_weights)
     n = len(proposal_weights)
+
+
 
     # TODO: more intelligent choice of proposal stddev
     # 1deg ~= 100km

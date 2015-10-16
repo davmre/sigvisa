@@ -570,7 +570,7 @@ def event_from_bin(hc, idx):
 
     return ev, evlp
 
-def visualize_hough_array(hough_array, sites, fname=None, ax=None, timeslice=None, normalize=True, location_array=None):
+def visualize_hough_array(hough_array, sites, fname=None, ax=None, timeslice=None, normalize=True, location_array=None, region=None):
     """
 
     Save an image visualizing the given Hough accumulator array. If
@@ -590,8 +590,22 @@ def visualize_hough_array(hough_array, sites, fname=None, ax=None, timeslice=Non
             location_array = hough_array[:,:,timeslice]
 
 
-    latbin_deg = 180.0/latbins
-    lonbin_deg = 360.0/lonbins
+    if region is not None:
+        left_lon = region.left_lon
+        right_lon = region.right_lon
+        bottom_lat = region.bottom_lat
+        top_lat = region.top_lat
+    else:
+        left_lon = -180
+        right_lon = 180
+        bottom_lat = -90
+        top_lat = 90
+
+    width_deg = float(right_lon - left_lon)
+    height_deg = float(top_lat - bottom_lat)
+
+    latbin_deg = height_deg/latbins
+    lonbin_deg = width_deg/lonbins
 
 
     # set up the map
@@ -599,12 +613,16 @@ def visualize_hough_array(hough_array, sites, fname=None, ax=None, timeslice=Non
         fig = Figure(figsize=(8, 5), dpi=300)
         ax = fig.add_subplot(111)
 
-    bmap = Basemap(resolution="c", projection = "robin", lon_0 = 0, ax=ax)
+    if width_deg == 360 and height_deg==180:
+        bmap = Basemap(resolution="c", projection = "robin", lon_0 = 0, ax=ax)
+    else:
+        bmap = Basemap(resolution="c", projection = "cyl", llcrnrlon=left_lon, urcrnrlon=right_lon, llcrnrlat=bottom_lat, urcrnrlat=top_lat, ax=ax)
+
     bmap.drawcoastlines(zorder=10)
     bmap.drawmapboundary()
-    parallels = [int(k) for k in np.linspace(-90, 90, 10)]
+    parallels = [int(k) for k in np.linspace(bottom_lat, top_lat, 10)]
     bmap.drawparallels(parallels, labels=[False, True, True, False], fontsize=8, zorder=4)
-    meridians = [int(k) for k in np.linspace(-180, 180, 10)]
+    meridians = [int(k) for k in np.linspace(left_lon, right_lon, 10)]
     bmap.drawmeridians(meridians, labels=[True, False, False, True], fontsize=5, zorder=4)
 
     # shade the bins according to their probabilities
@@ -619,9 +637,9 @@ def visualize_hough_array(hough_array, sites, fname=None, ax=None, timeslice=Non
         ax.add_patch(poly)
     m = np.max(location_array)
     for i in range(lonbins):
-        lon = max(-180 + i * lonbin_deg, -180)
+        lon = max(left_lon + i * lonbin_deg, left_lon)
         for j in range(latbins):
-            lat = max(-90 + j * latbin_deg, -90)
+            lat = max(bottom_lat + j * latbin_deg, bottom_lat)
 
             if normalize:
                 alpha = location_array[i,j]/m
@@ -1303,13 +1321,20 @@ class CTFProposer(object):
     def __init__(self, sg, bin_widths, depthbin_bounds, mbbins, phases=("P",), offset=False):
         # precompute ttime and amp_transfer patterns
         global_bin_width = bin_widths[0]
-        stime = sg.event_start_time
 
-        try:
-            etime = sg.event_end_time
-        except AttributeError:
-            print "WARNING: no event end time specified"
-            etime = sg.end_time
+        if sg.inference_region is not None:
+            stime = sg.inference_region.stime
+            etime = sg.inference_region.etime
+            left_lon, right_lon = sg.inference_region.left_lon, sg.inference_region.right_lon
+            bottom_lat, top_lat = sg.inference_region.bottom_lat, sg.inference_region.top_lat
+        else:
+            stime = sg.event_start_time
+            try:
+                etime = sg.event_end_time
+            except AttributeError:
+                print "WARNING: no event end time specified"
+                etime = sg.end_time
+                left_lon, right_lon, bottom_lat, top_lat = -180, 180, -90, 90
 
         self.bin_widths = bin_widths
         self.stime = stime
@@ -1318,7 +1343,7 @@ class CTFProposer(object):
         self.depthbin_bounds = depthbin_bounds
         self.mbbins = mbbins
 
-        left_lon, right_lon, bottom_lat, top_lat = -180, 180, -90, 90
+
         if offset:
             left_lon += global_bin_width/2.0
             right_lon += global_bin_width/2.0
@@ -1395,7 +1420,13 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     try:
         ctf = s.hough_proposer[offset]
     except KeyError:
-        ctf = CTFProposer(sg, [10,5,2], depthbin_bounds=[0,10,50,150,400,700], mbbins=[12,2,2], offset=offset)
+        bin_widths = [10,5,2]        
+        if sg.inference_region is not None:
+            bin_area = sg.inference_region.area_deg() / 500.
+            bw1 = np.sqrt(bin_area)
+            bin_widths = [bw1, bw1/2., bw1/4.]
+
+        ctf = CTFProposer(sg, bin_widths, depthbin_bounds=[0,10,50,150,400,700], mbbins=[12,2,2], offset=offset)
         s.hough_proposer[offset] = ctf
 
     r = ctf.propose_event(sg, fix_result=fix_result,
