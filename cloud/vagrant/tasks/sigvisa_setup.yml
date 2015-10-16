@@ -17,6 +17,10 @@
     dest=/home/sigvisa/.ssh/repo_key
     owner=sigvisa
     mode=0400
+- name: allow writing to known_hosts
+  file: path=/home/sigvisa/.ssh/
+        recurse=yes
+        owner=sigvisa
 - name: checkout git repo
   git: repo=git@github.com:davmre/sigvisa.git
        dest=/home/sigvisa/python/sigvisa
@@ -37,7 +41,7 @@
   command: /home/sigvisa/.virtualenvs/sigvisa/bin/python setup.py build_ext  --inplace
   args:
     chdir: /home/sigvisa/python/sigvisa/treegp
-    creates: /home/sigvisa/python/sigvisa/treegp/cover_tree.so
+    # creates: /home/sigvisa/python/sigvisa/treegp/cover_tree.so
 - name: extract parameters
   unarchive:
     copy=no

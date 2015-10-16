@@ -12,6 +12,12 @@ created. VMs are provisioned using Ansible. The sigvisa_day95 image
 has been pre-provisioned, so the main effect of Ansible is to pull the
 latest code from git master. 
 
+If using a lot of machines, Vagrant will be very slow to provision
+because it touches them all in sequence. Instead we can run ansible
+directly, which is smart about parallelizing:
+vagrant up --provider=azure --no-provision
+ansible-playbook -i .vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory -u vagrant playbook.yml
+
 -------------------------------------------
 To upload trained param models, use Fabric. Note the sigvisa_day95
 image already contains basic parameteric models for the top40
