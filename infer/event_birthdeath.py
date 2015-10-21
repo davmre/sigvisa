@@ -8,6 +8,7 @@ import os
 
 from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
+from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import extract_sta_node, create_key, get_parent_value, parse_key
 from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel, ModelNotFoundError
 from sigvisa.ssms_c import TransientCombinedSSM
@@ -102,6 +103,8 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val):
             model = sg.dummy_prior[param]
 
     lp = model.log_p(x = val, cond = cond)
+    if sg.hack_param_constraint:
+        lp += Node.param_truncation_penalty(param=param, value=val)
     return lp
 
 def ev_phase_template_logprob(sg, wn, eid, phase, template_dict, verbose=False, ignore_mb=False):
@@ -1242,12 +1245,18 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
     birth_position_lp = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
 
     lp_old = sg.current_log_p()
+    
+
+    #wn_logps_1 = dict([(sta, wn.log_p()) for (sta, wns) in sg.station_waves.items() for wn in wns])
+    sg.current_log_p_breakdown()
     log_qforward, log_qbackward, revert_move, proposal_extra = ev_birth_helper_full(sg, location_proposal, **kwargs)
     if revert_move is None:
         # location proposal did not return an event
         return False
 
     lp_new = sg.current_log_p()
+
+    #wn_logps_2 = dict([(sta, wn.log_p()) for (sta, wns) in sg.station_waves.items() for wn in wns])
 
     (extra, eid, associations) = proposal_extra
 
@@ -1266,6 +1275,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
             accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
 
     print "birth move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
+
 
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert, force_outcome=force_outcome)
 

@@ -305,6 +305,24 @@ class Node(object):
 
         return 0.0
 
+    @staticmethod
+    def param_truncation_penalty(param, value):
+        p = 0
+        if 'mult_wiggle_std' in param:
+            if value > 1:
+                p = -np.exp(100*(value-1))
+            if value < 0:
+                p = -np.exp(100*(-value))
+        if 'tt_residual' in param and np.abs(value) > 25:
+            p = -(10*(np.abs(value)-25))**4
+        elif 'peak_offset' in param and value > 3.0:
+            p = -(10*(value-3))**4
+        elif 'coda_decay' in param and value < -9:
+            p = -( 10 * -(value+9))**4
+
+        return p
+
+
     def log_p(self, parent_values=None, v=None):
         #  log probability of the values at this node, conditioned on all parent values
 
@@ -322,17 +340,7 @@ class Node(object):
 
         # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
-            if 'mult_wiggle_std' in self.label:
-                if v > 1:
-                    lp -= np.exp(100*(v-1))
-                if v < 0:
-                    lp -= np.exp(100*(-v))
-            if 'tt_residual' in self.label and np.abs(v) > 25:
-                lp -= (10*(np.abs(v)-25))**4
-            #elif 'peak_offset' in self.label and v > 3.0:
-            #    lp -= np.exp(  100*(v-3)  )
-            #elif 'coda_decay' in self.label and v < -9:
-            #    lp -= np.exp( 100 * -(v+5))
+            lp += self.param_truncation_penalty(self.label, v)
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))

@@ -1358,7 +1358,7 @@ class CTFProposer(object):
                          uatemplate_rate=sg.uatemplate_rate)
         self.global_hc = hc
 
-    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None, one_event_semantics=False):
+    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None, one_event_semantics=False, fixed_return_global_dist=False):
         if uatemplates_by_sta is None:
             uatemplates_by_sta = get_uatemplates(sg)
 
@@ -1396,13 +1396,15 @@ class CTFProposer(object):
 
         if fix_result:
             _, evlp = event_from_bin(hc, v)
+            if fixed_return_global_dist:
+                return evlp, global_dist
             return evlp
         else:
             ev, evlp = event_from_bin(hc, v)
             return ev, np.log(prob) + evlp, global_dist
 
 def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
-                            offset=None, one_event_semantics=None):
+                            offset=None, one_event_semantics=None, P_only=False):
     s = Sigvisa()
     if proposal_dist_seed is not None:
         np.random.seed(proposal_dist_seed)
@@ -1417,23 +1419,31 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     offset = False
     one_event_semantics=False
 
+    if P_only:
+        phases = ("P",)
+    else:
+        phases = sg.phases
+
     try:
         ctf = s.hough_proposer[offset]
     except KeyError:
         bin_widths = [10,5,2]        
         if sg.inference_region is not None:
-            bin_area = sg.inference_region.area_deg() / 500.
+            bin_area = sg.inference_region.area_deg() / 1500.
             bw1 = np.sqrt(bin_area)
             bin_widths = [bw1, bw1/2., bw1/4.]
 
-        ctf = CTFProposer(sg, bin_widths, depthbin_bounds=[0,10,50,150,400,700], mbbins=[12,2,2], offset=offset)
+        ctf = CTFProposer(sg, bin_widths, phases=phases,
+                          depthbin_bounds=[0,10,50,150,400,700], 
+                          mbbins=[12,2,2], offset=offset)
         s.hough_proposer[offset] = ctf
 
     r = ctf.propose_event(sg, fix_result=fix_result,
                           one_event_semantics=one_event_semantics)
 
-    #ev = Event(lon=23.41, lat=34.55, depth=0.0, time=1238905667.8, mb=4.0)
-    #lp, global_dist = ctf.propose_event(sg, fix_result=ev,one_event_semantics=one_event_semantics)
+
+    #ev = Event(lon=-105.427, lat=43.731, depth=0.0, time=1239041017.07, mb=4.0)
+    #lp, global_dist = ctf.propose_event(sg, fix_result=ev,one_event_semantics=one_event_semantics, fixed_return_global_dist=True)
     #r = ev, lp, global_dist
     return r
 

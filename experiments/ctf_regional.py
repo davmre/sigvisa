@@ -33,7 +33,7 @@ def relevant_events(region):
     return evs
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P")):
 
     rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training", hour=hour, len_hours=len_hours)
 
@@ -45,7 +45,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     wiggle_family="iid",
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
-                    phases=["P",],
+                    phases=phases,
                     bands=bands,
                     inference_region=region,
                     dummy_fallback=True,
@@ -57,7 +57,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
     if resume_from is not None:
         with open(resume_from, 'rb') as f:
             sg = pickle.load(f)
-        sg.phases=["P",]
+        sg.phases=phases
         sg.uatemplate_rate = uatemplate_rate
 
         try:
@@ -96,6 +96,8 @@ if __name__ == "__main__":
                       help="downsample signals to this rate")
     parser.add_option("--bands", dest="bands", default="freq_0.8_4.5", type=str,
                       help="comma-separated frequency bands")
+    parser.add_option("--phases", dest="phases", default="P", type=str,
+                      help="comma-separated phases")
     parser.add_option("--fix_outside_templates", dest="fix_outside_templates", default=False, action="store_true",
                       help="don't do inference over templates of events outside the region")
     parser.add_option("--hour", dest="hour", default=0.0, type=float,
@@ -118,5 +120,6 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
     bands = options.bands.split(",")
+    phases = options.phases.split(",")
 
-    main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates)
+    main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases)

@@ -1519,6 +1519,7 @@ class SigvisaGraph(DirectedGraphModel):
         wn.fix_value()
         return templates
 
+
     def dump_event_signals(self, eid, dump_path):
         mkdir_p(dump_path)
 

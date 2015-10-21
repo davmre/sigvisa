@@ -277,15 +277,15 @@ def run_open_world_MH(sg, steps=10000,
         sta_moves = template_openworld_custom
     else:
         if enable_template_openworld:
-            sta_moves = {'tmpl_birth': optimizing_birth_move,
-                         'tmpl_death': death_move_for_optimizing_birth,
-                         'tmpl_split': split_move,
-                         'tmpl_merge': merge_move,
-                         'swap_association': swap_association_move,
-                         'arnoise_gibbs': arnoise_gibbs_move}
+            sta_moves = {'tmpl_birth': (optimizing_birth_move, 0.5),
+                         'tmpl_death': (death_move_for_optimizing_birth, 0.5),
+                         'tmpl_split': (split_move, 0.05),
+                         'tmpl_merge': (merge_move, 0.05),
+                         'swap_association': (swap_association_move, 0.2),
+                         'arnoise_gibbs': (arnoise_gibbs_move, 0.0)}
         else:
-            sta_moves = {'swap_association': swap_association_move}
-            sta_moves = {'arnoise_gibbs': arnoise_gibbs_move}
+            sta_moves = {'swap_association': (swap_association_move, 0.05)}
+            #sta_moves ['arnoise_gibbs'] = (arnoise_gibbs_move, 0.05)
 
     template_moves_special = {'indep_peak': (indep_peak_move, 1.0),
                               'peak_offset': (improve_offset_move_gaussian, 1.0),
@@ -307,10 +307,6 @@ def run_open_world_MH(sg, steps=10000,
                 continue
 
     stds = global_stds
-
-    move_probs = defaultdict(lambda : 0.05)
-    move_probs["swap_association"] = 0.2
-    move_probs["arnoise_gibbs"] = 0.0
 
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
@@ -366,8 +362,7 @@ def run_open_world_MH(sg, steps=10000,
                 for wn in sg.station_waves[sta]:
 
                     # moves to birth/death/split/merge new unassociated templates
-                    for (move_name, fn) in sta_moves.items():
-                        move_prob = move_probs[move_name]
+                    for (move_name, (fn, move_prob)) in sta_moves.items():
                         run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                  n_accepted=n_accepted, move_times=move_times,
                                  move_prob=move_prob, cyclic=cyclic_template_moves,
