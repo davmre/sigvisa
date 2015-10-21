@@ -123,6 +123,33 @@ def mcmc_lp_posterior(request, dirname):
     canvas.print_png(response)
     return response
 
+def mcmc_ev_detail(request, dirname, eid):
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+    eid = int(eid)
+
+    r = []
+    for sta, wns in sg.station_waves.items():
+        for wn in wns:
+            arrs = [(eid2, phase) for (eid2, phase) in wn.arrivals() if eid2==eid]
+            if len(arrs) == 0: continue
+            tms = [wn.get_template_params_for_arrival(eid, phase)[0] for (eid, phase) in arrs]
+            atimes = [tm["arrival_time"] for tm in tms]
+            min_atime = np.min(atimes)
+            max_atime = np.max(atimes)
+            r.append((wn.label, min_atime-10, max_atime + 60, repr(tms)))
+
+    return render_to_response("svweb/mcmc_ev_detail.html",
+                              {'r': r,
+                               'dirname': dirname,
+                               'full_dirname': mcmc_run_dir,
+                               'eid': eid,
+                               'step': max_step,
+                               }, context_instance=RequestContext(request))
+
 def mcmc_run_detail(request, dirname):
     s = Sigvisa()
     burnin = int(request.GET.get('burnin', '-1'))
@@ -1004,6 +1031,9 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     model_lw = float(request.GET.get("model_lw", '2'))
     signal_lw = float(request.GET.get("signal_lw", '1.5'))
     step = request.GET.get("step", 'all')
+    stime = float(request.GET.get("stime", '-1'))
+    etime = float(request.GET.get("etime", '-1'))
+    
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
@@ -1036,6 +1066,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     alpha = 1.0/len(steps)
     for step in steps:
         wn = sgs[step].all_nodes[wn_label]
+
 
         try:
             wn.tssm
@@ -1073,6 +1104,24 @@ def mcmc_wave_posterior(request, dirname, wn_label):
         atimes = dict([("%d_%s" % (eid, phase), wn.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in wn.arrivals()])
         colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in wn.arrivals()])
         plot_pred_atimes(dict(atimes), wn.get_wave(), axes=axes, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
+
+    if stime > 0 and etime > 0:
+        sidx = max(int((stime - wn.st) * wn.srate), 0)
+        eidx = max(sidx, min(int((etime - wn.st) * wn.srate), wn.npts))
+        d = wn.get_value()[sidx:eidx]
+        dmax, dmin = np.max(d), np.min(d)
+
+        try:
+            pd = pred_env[sidx:eidx]
+            dmax = max(np.max(pd), dmax)
+            dmin = min(np.min(pd), dmin)
+        except:
+            pass
+
+        drange = dmax - dmin
+        slack = drange / 20.0
+        axes.set_xlim((stime, etime))
+        axes.set_ylim((dmin-slack, dmax+slack))
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')
