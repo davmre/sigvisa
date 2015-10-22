@@ -22,10 +22,10 @@ class NoiseModelNode(Node):
             self.prior_nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)
 
 
-        self.prior_mean_dist = Gaussian(self.prior_nm.c, std=0.1)
+        self.prior_mean_dist = Gaussian(self.prior_nm.c, std=0.2)
 
-        prior_alpha = 100
-        self.prior_var_dist = InvGamma(100, (self.prior_nm.em.std**2) * (prior_alpha - 1))
+        prior_alpha = 40
+        self.prior_var_dist = InvGamma(prior_alpha, (self.prior_nm.em.std**2) * (prior_alpha - 1))
 
         n_p = len(self.prior_nm.params)
         self.prior_param_dist = MultiGaussian(self.prior_nm.params, np.eye(n_p) * 0.01, pre_inv=True)

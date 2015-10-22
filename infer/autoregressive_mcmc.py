@@ -146,9 +146,10 @@ def posterior_armodel_from_signal(signal_mean, signal_var, nm_node):
 
     return c_dist, var_dist, param_mean, param_cov
 
-def arnoise_mean_rw_move(sg, wn, std=None):
+
+def arnoise_mean_rw_move(sg, wn, std=0.4):
     if std is None:
-        std = wn.nm_node.prior_nm.c / 10.0
+        std = wn.nm_node.prior_nm.c / 5.0
 
     nm1 = wn.nm_node.get_value()
     oldvals = (nm1)
@@ -164,9 +165,16 @@ def arnoise_mean_rw_move(sg, wn, std=None):
     def revert():
         wn.nm_node.set_value(nm1)
 
-    return mh_accept_util(lp_old, lp_new, revert_move=revert)
+    v = mh_accept_util(lp_old, lp_new, revert_move=revert)
+    #if "TX01" in wn.label:
+    #    if v:
+    #        print "TX01 accepted move from", nm1.c, "to", nm2.c
+    #    else:
+    #        print "TX01 rejected move from", nm1.c, "to", nm2.c
 
-def arnoise_std_rw_move(sg, wn, std=None):
+    return v
+
+def arnoise_std_rw_move(sg, wn, std=0.05):
     if std is None:
         std = wn.nm_node.prior_nm.em.std / 10.0
 
@@ -187,9 +195,9 @@ def arnoise_std_rw_move(sg, wn, std=None):
     return mh_accept_util(lp_old, lp_new, revert_move=revert)
 
 
-def arnoise_params_rw_move(sg, wn, std=None):
+def arnoise_params_rw_move(sg, wn, std=0.1):
     if std is None:
-        std = np.array(wn.nm_node.prior_nm.params) / 10.0
+        std = np.array(wn.nm_node.prior_nm.params) / 5.0
     n_p = len(wn.nm_node.prior_nm.params)
 
     nm1 = wn.nm_node.get_value()

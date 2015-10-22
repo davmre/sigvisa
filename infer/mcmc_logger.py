@@ -103,6 +103,16 @@ class MCMCLogger(object):
 
             handle.close()
 
+        for sta, wns in sg.station_waves.items():
+            for wn in wns:
+                lbl = '%s.txt' % wn.nm_node.label
+                if lbl not in self.log_handles:
+                    self.log_handles[lbl] = open(os.path.join(self.run_dir, lbl), 'a')
+                handle = self.log_handles[lbl]
+                nm = wn.nm_node.get_value()
+                nm_params = np.concatenate(((nm.c, nm.em.std), nm.params))
+                handle.write("%06d " % step + " ".join(["%.4f" % x for x in nm_params])  +"\n")
+
         if sg.jointgp and self.write_gp_hparams:
             gpdir = os.path.join(self.run_dir, 'gp_hparams')
             mkdir_p(gpdir)
