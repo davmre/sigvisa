@@ -15,7 +15,6 @@ from sigvisa.database.signal_data import *
 from sigvisa.database import db
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.run_mcmc import run_open_world_MH, MCMCLogger
-from sigvisa.infer.autoregressive_mcmc import sample_posterior_armodel_from_signal
 from sigvisa.models.signal_model import update_arrivals
 from sigvisa.models.noise.noise_util import model_path
 import sigvisa.utils.geog
@@ -30,7 +29,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False, smoothing=0, dummy_fallback=False):
+                init_run_name, init_iteration, fit_hz=5, absorb_n_phases=False, smoothing=0, dummy_fallback=False):
 
     """
     Set up the graph with the signal for a given training event.
@@ -48,7 +47,7 @@ def setup_graph(event, sta, chan, band,
 
     sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
-                      phases=phases, nm_type = nm_type,
+                      phases=phases, 
                       runids = runids,
                       absorb_n_phases=absorb_n_phases,
                       dummy_fallback=dummy_fallback)
@@ -70,7 +69,7 @@ def setup_graph(event, sta, chan, band,
 
 def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
 
-    nm1 = wn.prior_nm.copy(), wn.prior_nmid
+    nm1 = wn.nm_node.prior_nm.copy(), wn.nm_node.prior_nmid
     #means = wn.signal_component_means()
     #noise_mean = means['noise']
     #noise_var = wn.signal_component_means(return_stds_instead=True)['noise']**2
@@ -279,18 +278,17 @@ def save_template_params(sg, tmpl_optim_param_str,
         wiggle_optim_param_str = wiggle_optim_param_str.replace("'", "''")
         optim_log = wiggle_optim_param_str.replace("\n", "\\\\n")
 
-        if wave_node.nmid is None:
-            nm_fname = model_path(sta, chan, wave['filter_str'], wave_node.srate, wave_node.nm.p, window_stime=wave_node.st, model_type="ar") + "_inferred"
-            full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
-            ensure_dir_exists(os.path.dirname(full_fname))
-            wave_node.nm.dump_to_file(full_fname)
-            wave_node.nmid = wave_node.nm.save_to_db(dbconn=s.dbconn, sta=wave_node.sta, chan=wave_node.chan,
-                                                     band=wave_node.band, hz=wave_node.srate, env=True, smooth=smooth,
-                                                     window_stime=wave_node.st, window_len=wave_node.et-wave_node.st,
-                                                     fname=nm_fname, hour=-1)
-            print "saving inferred noise model as nmid", wave_node.nmid
+        nm_fname = model_path(sta, chan, wave['filter_str'], wave_node.srate, wave_node.nm.p, window_stime=wave_node.st, model_type="ar") + "_inferred"
+        full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
+        ensure_dir_exists(os.path.dirname(full_fname))
+        wave_node.nm.dump_to_file(full_fname)
+        wave_node.nmid = wave_node.nm.save_to_db(dbconn=s.dbconn, sta=wave_node.sta, chan=wave_node.chan,
+                                                 band=wave_node.band, hz=wave_node.srate, env=True, smooth=smooth,
+                                                 window_stime=wave_node.st, window_len=wave_node.et-wave_node.st,
+                                                 fname=nm_fname, hour=-1)
+        print "saving inferred noise model as nmid", wave_node.nmid
 
-        sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, sg.optim_log, 1 if wave_node.nm_type != 'ar' else 0, st, et, hz, sg.current_log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
+        sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, sg.optim_log, 1 , st, et, hz, sg.current_log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
 
         fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 
@@ -364,8 +362,6 @@ def main():
     parser.add_option("--steps", dest="steps", default=500, type=int, help="number of MCMC steps to run (500)")
     parser.add_option("--burnin", dest="burnin", default=50, type=int, help="number of initial MCMC steps to disregard (50)")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
-    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
-                      help="type of noise model to use (ar)")
     parser.add_option("--seed", dest="seed", default=0, type="int",
                       help="ranom seed for MCMC (0)")
     parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true", help="")
@@ -406,13 +402,16 @@ def main():
         init_run_name = "multiphase_wiggle"
         init_iteration = 1
         template_model = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'dummyPrior'}
+    if options.template_model == "param":
+        template_model = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'dummyPrior'}
+        
 
 
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
                                 wm_family=options.wiggle_family, wm_type=options.wiggle_model,
                                 phases=phases,
-                                fit_hz=options.hz, nm_type=options.nm_type,
+                                fit_hz=options.hz, 
                                 init_run_name = init_run_name, init_iteration = init_iteration,
                                 absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth,
                                 dummy_fallback=options.dummy_fallback)

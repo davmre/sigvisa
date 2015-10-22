@@ -303,10 +303,10 @@ def FitImageView(request, fitid):
 
     sg = load_sg_from_db_fit(fit.fitid)
     wave_node = list(sg.leaf_nodes)[0]
-    print wave_node.nmid
     obs_wave = wave_node.get_wave()
     wave_node.unfix_value()
     wave_node._parent_values()
+
 
     if noise:
         means = wave_node.tssm.component_means(wave_node.get_value().data)

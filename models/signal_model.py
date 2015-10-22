@@ -380,7 +380,7 @@ class ObservedSignalNode(Node):
             for phase in self._arrival_phases[eid]:
                 self.arrival_ssms[(eid, phase)] = self.arrival_ssm(eid, phase)
 
-        nm_changed = [k for k in parent_keys_changed if "nm" in k]
+        nm_changed = [k for (k, n) in parent_keys_changed if "nm" in k]
         if len(nm_changed) > 0:
             self.nm, self.nm_env = self.nm_node.get_value(), self.nm_node.nm_env
             self.noise_arssm.set_process(self.nm.params, self.nm.em.std**2, 0.0, self.nm.c)

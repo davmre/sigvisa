@@ -147,7 +147,7 @@ def posterior_armodel_from_signal(signal_mean, signal_var, nm_node):
     return c_dist, var_dist, param_mean, param_cov
 
 
-def arnoise_mean_rw_move(sg, wn, std=0.4):
+def arnoise_mean_rw_move(sg, wn, std=0.05):
     if std is None:
         std = wn.nm_node.prior_nm.c / 5.0
 
@@ -174,7 +174,7 @@ def arnoise_mean_rw_move(sg, wn, std=0.4):
 
     return v
 
-def arnoise_std_rw_move(sg, wn, std=0.05):
+def arnoise_std_rw_move(sg, wn, std=0.01):
     if std is None:
         std = wn.nm_node.prior_nm.em.std / 10.0
 
@@ -195,7 +195,7 @@ def arnoise_std_rw_move(sg, wn, std=0.05):
     return mh_accept_util(lp_old, lp_new, revert_move=revert)
 
 
-def arnoise_params_rw_move(sg, wn, std=0.1):
+def arnoise_params_rw_move(sg, wn, std=0.05):
     if std is None:
         std = np.array(wn.nm_node.prior_nm.params) / 5.0
     n_p = len(wn.nm_node.prior_nm.params)

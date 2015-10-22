@@ -248,7 +248,7 @@ class MultiGaussian(Distribution):
     def log_p(self, x, **kwargs):
         r = x-self.mean
 
-        if self.invL:
+        if self.invL is not None:
             l = np.dot(self.invL, r)
             rr = np.dot(l.T, l)
         else:

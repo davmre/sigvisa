@@ -2,7 +2,8 @@ import numpy as np
 import obspy.signal.filter
 
 from sigvisa.graph.nodes import Node
-from sigvisa.models.distributions import Gaussian, MultiGaussian, InvGamma
+from sigvisa import Sigvisa
+from sigvisa.models.distributions import TruncatedGaussian, MultiGaussian, InvGamma
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 from sigvisa.models.noise.armodel.learner import ARLearner
 from sigvisa.models.noise.noise_util import get_noise_model
@@ -15,16 +16,18 @@ class NoiseModelNode(Node):
 
     def __init__(self, waveform, nmid=None, is_env=False, **kwargs):
         self.is_env = is_env
-        if waveform is not None:
-            self.prior_nm, self.prior_nmid, _ = get_noise_model(waveform=waveform, model_type="ar", return_details=True)
-        else:
+        if nmid is not None:
             self.prior_nmid = nmid
-            self.prior_nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)
+            self.prior_nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)            
+        else:
+            self.prior_nm, self.prior_nmid, _ = get_noise_model(waveform=waveform, model_type="ar", return_details=True)
 
+        if is_env:
+            self.prior_mean_dist = TruncatedGaussian(self.prior_nm.c, std=0.1, a=0.0)
+        else:
+            self.prior_mean_dist = Gaussian(self.prior_nm.c, std=0.1)
 
-        self.prior_mean_dist = Gaussian(self.prior_nm.c, std=0.2)
-
-        prior_alpha = 40
+        prior_alpha = 100
         self.prior_var_dist = InvGamma(prior_alpha, (self.prior_nm.em.std**2) * (prior_alpha - 1))
 
         n_p = len(self.prior_nm.params)

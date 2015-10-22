@@ -1272,7 +1272,7 @@ class SigvisaGraph(DirectedGraphModel):
         return fullnodes
 
 
-    def add_wave(self, wave, fixed=True, disable_conflict_checking=False, wave_env=None, **kwargs):
+    def add_wave(self, wave, fixed=True, disable_conflict_checking=False, wave_env=None, nmid=None, **kwargs):
         """
         Add a wave node to the graph. Assume that all waves are added before all events.
         """
@@ -1358,7 +1358,7 @@ class SigvisaGraph(DirectedGraphModel):
                 pass
 
         nm_label = self._get_wave_label(wave=wave).replace("wave", "nm")
-        nm_node = NoiseModelNode(wave, label=nm_label, is_env="env" in wave['filter_str'])
+        nm_node = NoiseModelNode(wave, label=nm_label, is_env="env" in wave['filter_str'], nmid=nmid)
         self.add_node(nm_node)
 
         wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), **kwargs)

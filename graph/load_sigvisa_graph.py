@@ -48,7 +48,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
 
     sg = SigvisaGraph(template_model_type="dummy", wiggle_model_type="dummy",
                       template_shape=tmshapes, wiggle_family=wiggle_family,
-                      nm_type = nm_type, runids=(runid,), phases=phases,
+                      runids=(runid,), phases=phases,
                       base_srate=wave['srate'])
     wave_node = sg.add_wave(wave, nmid=nmid)
     sg.add_event(ev)
@@ -86,8 +86,6 @@ def register_svgraph_cmdline(parser):
                       help="model array stations with joint nodes (False)")
     parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true",
                       help="model Pn arrivals as P (false)")
-    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
-                      help="type of noise model to use (ar)")
     parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=1e-6, type=float, help="Poisson rate (per-second) for unassociated template prior (1e-6)")
 
 def register_svgraph_signal_cmdline(parser):
@@ -161,7 +159,7 @@ def setup_svgraph_from_cmdline(options, args):
 
     sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
                       wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
-                      dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
+                      dummy_fallback = options.dummy_fallback, 
                       runids=runids, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint,
                       absorb_n_phases=options.absorb_n_phases, uatemplate_rate=options.uatemplate_rate)
 

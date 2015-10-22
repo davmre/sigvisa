@@ -288,7 +288,11 @@ def run_open_world_MH(sg, steps=10000,
             }
 
         else:
-            sta_moves = {'swap_association': (swap_association_move, 0.05)}
+            sta_moves = {'swap_association': (swap_association_move, 0.2),
+                         'arnoise_mean': (arnoise_mean_rw_move, 0.2),
+                         'arnoise_std': (arnoise_std_rw_move, 0.2),
+                         'arnoise_params': (arnoise_params_rw_move, 0.2)
+            }
 
 
     template_moves_special = {'indep_peak': (indep_peak_move, 1.0),
