@@ -48,8 +48,6 @@ class MCMCLogger(object):
         if 'lp' not in self.log_handles:
             self.log_handles['lp'] = open(os.path.join(self.run_dir, 'lp.txt'), 'a')
         lp = sg.current_log_p()
-        if len(self.lps) > 0 and lp < self.lps[-1] - 1000:
-            import pdb; pdb.set_trace()
         self.lps.append(lp)
         self.log_handles['lp'].write('%f\n' % lp)
 

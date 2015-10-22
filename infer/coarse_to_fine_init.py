@@ -267,7 +267,6 @@ class ModelSpec(object):
             'wiggle_model_type': "dummy",
             'skip_levels': 1,
             'dummy_fallback': False,
-            'nm_type': "ar",
             'phases': ["P",],
             'arrays_joint': False,
             'uatemplate_rate': 1e-6,

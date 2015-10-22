@@ -1276,6 +1276,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 
     print "birth move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
 
+    import pdb; pdb.set_trace()
 
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert, force_outcome=force_outcome)
 

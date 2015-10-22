@@ -117,6 +117,14 @@ def mcmc_lp_posterior(request, dirname):
     ax.set_xlabel("step")
     ax.set_ylabel("log density")
 
+
+    n = len(lps)
+    recent_lps = lps[n/2:]
+    lpmin, lpmax = np.min(recent_lps), np.max(recent_lps)
+    lprange = lpmax-lpmin
+    print n, recent_lps, lpmin, lpmax, lprange
+    ax.set_ylim((lpmin-lprange/5.0, lpmax+lprange/5.0))
+
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')
     f.tight_layout()

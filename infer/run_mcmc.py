@@ -12,7 +12,7 @@ from optparse import OptionParser
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
-from sigvisa.infer.autoregressive_mcmc import arnoise_gibbs_move
+from sigvisa.infer.autoregressive_mcmc import arnoise_params_rw_move, arnoise_mean_rw_move, arnoise_std_rw_move
 from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
@@ -279,13 +279,17 @@ def run_open_world_MH(sg, steps=10000,
         if enable_template_openworld:
             sta_moves = {'tmpl_birth': (optimizing_birth_move, 0.5),
                          'tmpl_death': (death_move_for_optimizing_birth, 0.5),
-                         'tmpl_split': (split_move, 0.05),
-                         'tmpl_merge': (merge_move, 0.05),
+                         'tmpl_split': (split_move, 0.1),
+                         'tmpl_merge': (merge_move, 0.1),
                          'swap_association': (swap_association_move, 0.2),
-                         'arnoise_gibbs': (arnoise_gibbs_move, 0.0)}
+                         'arnoise_mean': (arnoise_mean_rw_move, 0.5),
+                         'arnoise_std': (arnoise_std_rw_move, 0.5),
+                         'arnoise_params': (arnoise_params_rw_move, 0.5)
+            }
+
         else:
             sta_moves = {'swap_association': (swap_association_move, 0.05)}
-            #sta_moves ['arnoise_gibbs'] = (arnoise_gibbs_move, 0.05)
+
 
     template_moves_special = {'indep_peak': (indep_peak_move, 1.0),
                               'peak_offset': (improve_offset_move_gaussian, 1.0),

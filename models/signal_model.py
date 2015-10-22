@@ -42,7 +42,7 @@ def extract_arrival_from_key(k, r):
 def get_new_arrivals(new_nodes, r):
     new_arrivals = set()
     for n in new_nodes:
-        if n.label.startswith("gp;") or "loc" in n.label or "mb" in n.label: continue
+        if n.label.startswith("gp;") or "loc" in n.label or "mb" in n.label or "nm" in n.label: continue
         for k in n.keys():
             new_arrivals.add(extract_arrival_from_key(k, r))
     return new_arrivals
@@ -61,7 +61,7 @@ def update_arrivals(parent_values):
     r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
     for k in parent_values.keys():
         if k=="prefix": continue
-        if "gp;" in k or "lon" in k or "lat" in k or "depth" in k or "mb" in k: continue
+        if "gp;" in k or "lon" in k or "lat" in k or "depth" in k or "mb" in k or "nm" in k: continue
         arrivals.add(extract_arrival_from_key(k, r))
     return arrivals
 
@@ -91,7 +91,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, mw_env=None, **kwargs):
+    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, mw_env=None, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -121,7 +121,12 @@ class ObservedSignalNode(Node):
                 self.mw_env = mw_env
             self._cached_env = nan_under_mask(self.mw_env.data)
 
-        self.init_noise_model(nm_type=nm_type, nmid=nmid)
+        nm_parents = [k for k in self.parents.keys() if "nm_" in k]
+        assert(len(nm_parents) == 1)
+        self.nm_node = self.parents[nm_parents[0]]
+        self.nm, self.nm_env = self.nm_node.get_value(), self.nm_node.nm_env
+        self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
+
 
         self._tmpl_params = dict()
         self._ev_params = dict()
@@ -184,37 +189,7 @@ class ObservedSignalNode(Node):
         else:
             return self._cached_env
 
-    def init_noise_model(self, nm_type="ar", nmid=None):
-        if nmid is None:
-            self.nm_type = nm_type
-            self.prior_nm, self.prior_nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
-        else:
-            self.prior_nmid = nmid
-            self.prior_nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.prior_nmid)
-            self.nm_type = self.prior_nm.noise_model_type()
-
-        if self.is_env:
-            self.nm_env = self.prior_nm.copy()
-        else:
-            self.nm_env, nmid_env, _ = get_noise_model(waveform=self.mw_env, model_type=self.nm_type, return_details=True)
-            
-
-        assert(self.nm_type=="ar")
-        self.noise_arssm = ARSSM(np.array(self.prior_nm.params, dtype=np.float), self.prior_nm.em.std**2, 0.0, self.prior_nm.c)
-        self.nm = self.prior_nm.copy()
-        self.nmid = self.prior_nmid
-
-        """
-        ten_seconds = int(self.srate * 10.0)
-        d = self.get_value().data
-        for i in np.arange(0, self.npts, ten_seconds):
-            window_max_10s = np.max(d[i:i+ten_seconds])
-            window_sum_10s = np.sum(d[i:i+ten_seconds])
-            #if np.isfinite(window_sum_10s) and window_max_10s < self.nm.c:
-            #    raise Exception("signal max of %.3f between %d,%d is less than noise mean %.3f! Noise model is probably wrong." % (window_max_10s, i, i+ten_seconds, self.nm.c))
-        """
-
-
+    """
     def set_noise_model(self, arm, nmid=None):
         print "WARNING: THIS METHOD DOENS'T KNWO ABOUT ENVS YET"
         self.nm.params = arm.params
@@ -225,7 +200,7 @@ class ObservedSignalNode(Node):
 
         self.noise_arssm.set_process(arm.params, arm.em.std**2, 0.0, arm.c)
         self.nmid = nmid
-
+    """
 
     def arrival_start_idx(self, eid, phase, skip_pv_call=False):
         if not skip_pv_call:
@@ -405,12 +380,18 @@ class ObservedSignalNode(Node):
             for phase in self._arrival_phases[eid]:
                 self.arrival_ssms[(eid, phase)] = self.arrival_ssm(eid, phase)
 
+        nm_changed = [k for k in parent_keys_changed if "nm" in k]
+        if len(nm_changed) > 0:
+            self.nm, self.nm_env = self.nm_node.get_value(), self.nm_node.nm_env
+            self.noise_arssm.set_process(self.nm.params, self.nm.em.std**2, 0.0, self.nm.c)
+
         # if any arrival times or templates might have changed, recompute the tssm
         if len(new_arrivals) > 0 or len(removed_arrivals) > 0 or len(parent_keys_changed) > 0:
             self.tssm = self.transient_ssm(arrivals=self._arrivals, parent_values=pv)
             self.cached_logp = None
             self._unexplained_cache = None
             self._coef_message_cache = None
+
 
         del parent_keys_removed
         del parent_keys_changed
@@ -1069,7 +1050,7 @@ class ObservedSignalNode(Node):
         # These are filled in upon reloading
         # by the setstate() method of SigvisaGraph.
 
-
+        d["nm_node"] = self.nm_node.label
         d["parents"] = dict()
         #d['parents'] = d['parents'].copy()
         #for k in self.parents.keys():
@@ -1083,6 +1064,7 @@ class ObservedSignalNode(Node):
         #if "uatemplate_wiggle_var" not in d:
         #    self.uatemplate_wiggle_var = 1.0
         #    self.graph.uatemplate_wiggle_var = self.uatemplate_wiggle_var
+
 
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)

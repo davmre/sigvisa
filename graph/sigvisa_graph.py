@@ -22,6 +22,7 @@ from sigvisa.models.conditional import ConditionalGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.models.joint_gp import JointGP, JointIndepGaussian
+from sigvisa.models.noise.nm_node import NoiseModelNode
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel, ParentConditionalNotDefined
 from sigvisa.graph.graph_utils import extract_sta_node, predict_phases_sta, create_key, get_parent_value, parse_key
@@ -126,7 +127,6 @@ class SigvisaGraph(DirectedGraphModel):
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="dummy", skip_levels=2,
                  dummy_fallback=False,
-                 nm_type="ar",
                  run_name=None, iteration=None, runids = None,
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True, smoothing=None,
@@ -191,7 +191,6 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.dummy_prior = dummy_prior if dummy_prior is not None else dummyPriorModel
 
-        self.nm_type = nm_type
         self.phases = phases
 
         self.phases_used = set()
@@ -600,8 +599,10 @@ class SigvisaGraph(DirectedGraphModel):
                     raise Exception('unexpected node %s' % node.label)
 
         signal_lp = 0.0
+        nm_lp = 0.0
         for (sta_, wave_list) in self.station_waves.items():
             for wn in wave_list:
+                nm_lp += wn.nm_node.log_p()
                 try:
                     signal_lp += wn.log_p()
                 except ParentConditionalNotDefined:
@@ -632,7 +633,8 @@ class SigvisaGraph(DirectedGraphModel):
         ua_total += nt_lp
         print "priors+params: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total + ua_total)
         print "station noise (observed signals): %.1f" % (signal_lp)
-        print "overall: %.1f" % (ev_total + ua_total + signal_lp)
+        print "noise model prior lp: %.1f" % (nm_lp)
+        print "overall: %.1f" % (ev_total + ua_total + signal_lp + nm_lp)
         print "official: %.1f" % self.current_log_p()
 
     def joint_gp_ll(self, verbose=False):
@@ -1355,8 +1357,11 @@ class SigvisaGraph(DirectedGraphModel):
             except TypeError:
                 pass
 
+        nm_label = self._get_wave_label(wave=wave).replace("wave", "nm")
+        nm_node = NoiseModelNode(wave, label=nm_label, is_env="env" in wave['filter_str'])
+        self.add_node(nm_node)
 
-        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, mw_env=wave_env, **kwargs)
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), **kwargs)
 
         for n in hparam_nodes:
             wave_node.addParent(n)
@@ -1654,7 +1659,6 @@ class SigvisaGraph(DirectedGraphModel):
         cs += "assume_envelopes: %s\n" % self.assume_envelopes
         cs += "smoothing: %s\n" % self.smoothing
         cs += "dummy_fallback: %s\n" % self.dummy_fallback
-        cs += "nm_type: %s\n" % self.nm_type
         cs += "phases: %s\n" % self.phases
         cs += "runids: %s\n" % self.runids
         cs += "start_time: %s\n" % self.start_time
@@ -1745,6 +1749,7 @@ class SigvisaGraph(DirectedGraphModel):
 
                         #for n in hparam_nodes.values():
                         #    wn.parents[n.single_key] = n
+                    wn.nm_node = self.all_nodes[wn.nm_node]
                 self.recover_parents_from_children()
             except TypeError:
                 # backwards compatibility if we're loading sggraphs with no hparams

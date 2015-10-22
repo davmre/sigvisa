@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 import scipy.stats as stats
+import scipy.linalg
 from scipy.misc import factorial
 from scipy.special import erf
 from sigvisa.models import Distribution
@@ -240,7 +241,7 @@ class MultiGaussian(Distribution):
         self.L = scipy.linalg.cholesky(cov, True)
 
         if pre_inv:
-            self.invL = np.linalg.inv(L)
+            self.invL = np.linalg.inv(self.L)
         else:
             self.invL = None
 
@@ -251,16 +252,17 @@ class MultiGaussian(Distribution):
             l = np.dot(self.invL, r)
             rr = np.dot(l.T, l)
         else:
-            tmp = scipy.linalg.chol_solve((self.L, True), r)
-            rr = np.dot(r.T, rr)
+            tmp = scipy.linalg.cho_solve((self.L, True), r)
+            rr = np.dot(r.T, tmp)
 
         logdet2 = np.log(np.diag(self.L)).sum()
         ll =  -.5 * (rr + len(self.mean) * np.log(2*np.pi)) - logdet2
         return ll
 
     def sample(self):
-        # why am I implementing this? use scipy.stats.multivariate_normal instead.
-        pass
+        n = len(self.mean)
+        z = np.random.randn(n)
+        return np.dot(self.L, z) + self.mean
 
 class Laplacian(Distribution):
     def __init__(self, center, scale):
