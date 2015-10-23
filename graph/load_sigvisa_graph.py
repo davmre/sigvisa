@@ -14,12 +14,13 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-    fit_sql_query = "select f.runid, f.evid, f.sta, f.chan, f.band, f.hz, f.smooth, f.stime, f.etime, nm.model_type, nm.nmid from sigvisa_coda_fit f, sigvisa_noise_model nm where f.fitid=%d and f.nmid=nm.nmid" % (fitid)
+    fit_sql_query = "select f.runid, f.evid, f.sta, f.chan, f.band, f.hz, f.smooth, f.stime, f.etime, nm.model_type, nm.nmid, f.env from sigvisa_coda_fit f, sigvisa_noise_model nm where f.fitid=%d and f.nmid=nm.nmid" % (fitid)
     cursor.execute(fit_sql_query)
     fit = cursor.fetchone()
     ev = get_event(evid=fit[1])
 
-    wave = fetch_waveform(fit[2], fit[3], fit[7], fit[8]).filter('%s;env;smooth_%d;hz_%.2f' % (fit[4], fit[6], fit[5]))
+    env = fit[11] == 't'
+    wave = fetch_waveform(fit[2], fit[3], fit[7], fit[8]).filter('%s%s;smooth_%d;hz_%.2f' % (fit[4], ";env" if env else "", fit[6], fit[5]))
     #wave = load_event_station_chan(fit[1], fit[2], fit[3], cursor=cursor, exclude_other_evs=True).filter('%s;env;smooth_%d;hz_%.2f' % (fit[4], fit[6], fit[5]))
     nm_type = fit[9]
     nmid = int(fit[10])
@@ -49,7 +50,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     sg = SigvisaGraph(template_model_type="dummy", wiggle_model_type="dummy",
                       template_shape=tmshapes, wiggle_family=wiggle_family,
                       runids=(runid,), phases=phases,
-                      base_srate=wave['srate'])
+                      base_srate=wave['srate'], raw_signals = not env)
     wave_node = sg.add_wave(wave, nmid=nmid)
     sg.add_event(ev)
 
@@ -57,6 +58,8 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
         sg.create_unassociated_template(wave_node, atime=uaparams['arrival_time'], initial_vals=uaparams)
 
     for phase in templates.keys():
+        if not env and "mult_wiggle_std" in templates[phase]:
+            del templates[phase]["mult_wiggle_std"]
         sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
                         chan=wave['chan'], phase=phase,
                         values = templates[phase])

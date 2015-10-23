@@ -57,6 +57,7 @@ create table sigvisa_coda_fit (
  timestamp double precision,
  elapsed   float(24),
  human_approved varchar(1) default 0,
+ env varchar(1) default 'f',
  nmid int not null,
  primary key(fitid),
  foreign key(runid) REFERENCES sigvisa_coda_fitting_run(runid),

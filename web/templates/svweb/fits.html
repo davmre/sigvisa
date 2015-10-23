@@ -77,7 +77,7 @@
                 <td>{{ fit.timestamp }}</td>
                 <td>{{ fit.elapsed }}</td>
                 <td>{{ fit.acost }}</td>
-                <td><a href="{% url 'fit_run_detail' fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url 'visual' fitid=fit.fitid %}?smooth=8;logscale=true;saveprefs=false" width=150 height=100></a></td>
+                <td><a href="{% url 'fit_run_detail' fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url 'visual' fitid=fit.fitid %}?smooth=0;logscale=false;saveprefs=false" width=150 height=100></a></td>
             </tr>
         {% endfor %}
     </table>

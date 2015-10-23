@@ -40,8 +40,9 @@ def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
                             pre_s = 10, post_s=200, exclude_other_evs=False,
                             phases=None, pad_seconds=20):
     close_cursor = False
+    s = Sigvisa()
     if cursor is None:
-        cursor = Sigvisa().dbconn.cursor()
+        cursor = s.dbconn.cursor()
         close_cursor = True
 
     try:
@@ -54,7 +55,8 @@ def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
             from sigvisa.source.event import get_event
             from sigvisa.models.ttime import tt_predict
             ev = get_event(evid)
-            arrival_times = np.array([ev.time + tt_predict(ev, sta, phase) for phase in phases])
+            arrphases = s.arriving_phases(ev, sta)
+            arrival_times = np.array([ev.time + tt_predict(ev, sta, phase) for phase in phases if phase in arrphases])
 
         st = np.min(arrival_times) - pre_s
         et = np.max(arrival_times) + post_s

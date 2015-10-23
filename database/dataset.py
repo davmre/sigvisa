@@ -201,6 +201,8 @@ def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[],
     print
     cursor.execute(sql_query)
 
+
+
     def test_only_phase_condition(cursor, evid):
         if len(only_phases) == 0:
             return True
@@ -220,6 +222,7 @@ def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[],
 
     cursor2 = dbconn.cursor()
     evids = set()
+
     for (i, row) in enumerate(cursor):
         t = row[1]
         if t > start_time and t < end_time:

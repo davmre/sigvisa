@@ -3,7 +3,7 @@ import obspy.signal.filter
 
 from sigvisa.graph.nodes import Node
 from sigvisa import Sigvisa
-from sigvisa.models.distributions import TruncatedGaussian, MultiGaussian, InvGamma
+from sigvisa.models.distributions import TruncatedGaussian, Gaussian, MultiGaussian, InvGamma
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 from sigvisa.models.noise.armodel.learner import ARLearner
 from sigvisa.models.noise.noise_util import get_noise_model

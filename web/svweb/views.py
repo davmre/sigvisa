@@ -10,6 +10,7 @@ from django_easyfilters import FilterSet
 from django_easyfilters.filters import NumericRangeFilter
 
 import numpy as np
+import numpy.ma as ma
 import sys
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
@@ -223,19 +224,24 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
     canvas.print_png(response)
     return response
 
-def custom_wave_plus_template_view(sta, st, et, chan, band, smooth, hz, fit_params, nmid, tmshape, **kwargs):
+def custom_wave_plus_template_view(sta, st, et, chan, band, smooth, hz, fit_params, nmid, tmshape, env, **kwargs):
 
     cursor = Sigvisa().dbconn.cursor()
-    wave = fetch_waveform(str(sta), str(chan), float(st), float(et), cursor=cursor).filter(str(band) + ";env;smooth_%d;hz_%d" % (smooth, hz))
+    wave = fetch_waveform(str(sta), str(chan), float(st), float(et), cursor=cursor).filter(str(band) + "%s;smooth_%d;hz_%d" % (";env" if env else "", smooth, hz))
     cursor.close()
 
     sg = setup_sigvisa_graph(evid=evid, tmshape=tmshape, wave=wave, fit_params=fit_params)
     wave_node = sg.get_wave_node(wave=wave)
     wave_node.set_noise_model(nmid=nmid)
     wave_node.unfix_value()
-    wave_node.parent_predict()
-    synth_wave = wave_node.get_wave()
-    synth_wave.data.mask = wave.data.mask
+    if wave_node.is_env:
+        wave_node.parent_predict()
+        synth_wave = wave_node.get_wave()
+        synth_wave.data.mask = wave.data.mask
+    else:
+        synth_wave = wave_node.assem_env() + wave_node.nm_env.c
+        synth_wave = ma.masked_array(synth_wave, wave.data.mask)
+
 
     return wave_plus_template_view(wave=wave, template=synth_wave, **kwargs)
 
@@ -275,7 +281,7 @@ def wave_from_fit(fit):
         stime = calendar.timegm(fit.stime.timetuple())
         etime = calendar.timegm(fit.etime.timetuple())
 
-    wave = fetch_waveform(str(fit.sta), str(fit.chan), stime, etime, cursor=cursor).filter(str(fit.band) + ";env" + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
+    wave = fetch_waveform(str(fit.sta), str(fit.chan), stime, etime, cursor=cursor).filter(str(fit.band) + (";env" if fit.env=="t" else "") + (';smooth_%d' % fit.smooth) + ';hz_%.2f' % fit.hz)
     cursor.close()
     return wave
 
@@ -307,11 +313,15 @@ def FitImageView(request, fitid):
     wave_node.unfix_value()
     wave_node._parent_values()
 
-
     if noise:
         means = wave_node.tssm.component_means(wave_node.get_value().data)
         pred_wave = Waveform(means[0], segment_stats=wave_node.mw.segment_stats.copy(), my_stats=wave_node.mw.my_stats.copy())
         pred_wave.data.mask = obs_wave.data.mask
+    elif not wave_node.is_env:
+        pred_wave = wave_node.assem_env() + wave_node.nm_env.c
+        pred_wave = Waveform(pred_wave, segment_stats=wave_node.mw.segment_stats.copy(), my_stats=wave_node.mw.my_stats.copy())
+        pred_wave.data.mask = obs_wave.data.mask
+
     elif components is not None:
         components = components.split(",")
         means = wave_node.tssm.component_means(wave_node.get_value().data)

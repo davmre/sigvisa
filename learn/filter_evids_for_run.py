@@ -41,6 +41,8 @@ def main():
         "--min_snr", dest="min_snr", default=5, type="float", help="exclude all events with snr less than this value (0)")
     parser.add_option("--max_snr", dest="max_snr", default=float('inf'), type="float",
                       help="exclude all events with snr greater than this value (inf)")
+    parser.add_option("--all_combinations", dest="all_combinations", action="store_true", default=False,
+                      help="output all pairs of events and stations, even those where LEB does not register a detection")
     parser.add_option("--dataset", dest="dataset", default="training", type="str",
                       help="use the start and end time of the given dataset (training)")
     parser.add_option("--start_time", dest="start_time", default=None, type="float",
@@ -68,29 +70,45 @@ def main():
 
     print st, et
 
-    required_phase_list = options.require_phases.split(',')
+    required_phase_list = options.require_phases.split(',') if options.only_phases else []
     only_phase_list = options.only_phases.split(',') if options.only_phases else []
     if options.output is None:
         raise Exception("must specify an output file")
 
     print "writing to", options.output, '...'
     with open(options.output, 'w') as f:
+        evids = dict()
         for sta in options.stations.split(','):
             # want to select all events, with certain properties, which have a P or S phase detected at this station
-            evids = read_evids_detected_at_station(s.dbconn, sta, st, et, phases=required_phase_list,
-                                                   min_mb=options.min_mb, max_mb=options.max_mb,
-                                                   min_snr=options.min_snr, max_snr=options.max_snr,
-                                                   only_phases=only_phase_list, time_filter_direct=True)
+            evids[sta] = read_evids_detected_at_station(s.dbconn, sta, st, et, phases=required_phase_list,
+                                                        min_mb=options.min_mb, max_mb=options.max_mb,
+                                                        min_snr=options.min_snr, max_snr=options.max_snr,
+                                                        only_phases=only_phase_list, time_filter_direct=True)
 
-            for evid in evids:
+        if options.all_combinations:
+            all_evids = set()
+            for sta in evids.keys():
+                all_evids.update(set(evids[sta]))
+            for sta in evids.keys():
                 if s.is_array_station(sta) and not options.array_refsta_only:
                     elements = [el for el in s.get_array_elements(sta) if has_signal_data_for_event(cursor, el, evid)]
                 else:
                     elements = [sta,]
                 for element in elements:
-                    f.write('%s %d\n' % (element, evid))
-
+                    for evid in all_evids:
+                        f.write('%s %d\n' % (element, evid))
+        else:
+            for sta in evids.keys():
+                if s.is_array_station(sta) and not options.array_refsta_only:
+                    elements = [el for el in s.get_array_elements(sta) if has_signal_data_for_event(cursor, el, evid)]
+                else:
+                    elements = [sta,]
+                for element in elements:
+                    for evid in evids[sta]:
+                        f.write('%s %d\n' % (element, evid))
+            
     print "done."
+
 
 if __name__ == "__main__":
     main()

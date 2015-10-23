@@ -240,6 +240,7 @@ class SigvisaCodaFit(models.Model):
     timestamp = UnixTimestampField(null=True, blank=True)
     elapsed = models.FloatField(null=True, blank=True)
     human_approved = models.IntegerField(default=0)
+    env = models.CharField(max_length=1)
 
     class Meta:
         db_table = u'sigvisa_coda_fit'

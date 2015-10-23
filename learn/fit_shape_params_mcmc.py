@@ -29,7 +29,8 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, absorb_n_phases=False, smoothing=0, dummy_fallback=False):
+                init_run_name, init_iteration, fit_hz=5, absorb_n_phases=False, 
+                smoothing=0, dummy_fallback=False, raw_signals=False):
 
     """
     Set up the graph with the signal for a given training event.
@@ -50,9 +51,14 @@ def setup_graph(event, sta, chan, band,
                       phases=phases, 
                       runids = runids,
                       absorb_n_phases=absorb_n_phases,
-                      dummy_fallback=dummy_fallback)
+                      dummy_fallback=dummy_fallback,
+                      raw_signals=raw_signals)
 
-    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True, phases=None if phases=="leb" else phases).filter("%s;env" % band)
+    filter_str = band
+    if not raw_signals:
+        filter_str += ";env"
+
+    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True, phases=None if phases=="leb" else phases).filter(filter_str)
     cursor.close()
     if smoothing > 0:
         wave = wave.filter('smooth_%d' % smoothing)
@@ -162,7 +168,7 @@ def compute_template_messages(sg, wn, logger, burnin=50):
             gp_messages[(eid, phase)][p+"_posterior"] = m, v
 
         best_lp_idx = np.argmax(lps)
-        best_vals[(eid, phase)] = (tvals[best_lp_idx,1:], [tnodes[lbl][1] for lbl in labels[1:]])
+        best_vals[(eid, phase)] = (tvals[best_lp_idx,1:], [tnodes[lbl][1] for lbl in labels[1:] if lbl in tnodes])
 
     return gp_messages, best_vals
 
@@ -267,6 +273,8 @@ def save_template_params(sg, tmpl_optim_param_str,
         et = wave['etime']
         event = get_event(evid=wave['evid'])
 
+        env_signals = "env" in wave["filter_str"]
+
         pv = wave_node._parent_values()
         arrivals = update_arrivals(pv)
 
@@ -283,12 +291,12 @@ def save_template_params(sg, tmpl_optim_param_str,
         ensure_dir_exists(os.path.dirname(full_fname))
         wave_node.nm.dump_to_file(full_fname)
         wave_node.nmid = wave_node.nm.save_to_db(dbconn=s.dbconn, sta=wave_node.sta, chan=wave_node.chan,
-                                                 band=wave_node.band, hz=wave_node.srate, env=True, smooth=smooth,
+                                                 band=wave_node.band, hz=wave_node.srate, env=env_signals, smooth=smooth,
                                                  window_stime=wave_node.st, window_len=wave_node.et-wave_node.st,
                                                  fname=nm_fname, hour=-1)
         print "saving inferred noise model as nmid", wave_node.nmid
 
-        sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, sg.optim_log, 1 , st, et, hz, sg.current_log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
+        sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid, env) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d, '%s')" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, sg.optim_log, 1 , st, et, hz, sg.current_log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid, 't' if env_signals else 'f')
 
         fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 
@@ -352,6 +360,7 @@ def main():
                       help="template model type to fit parameters under (lin_polyexp)")
     parser.add_option("--template_model", dest="template_model", default="dummyPrior", type="str", help="")
     parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true", help="")
+    parser.add_option("--raw_signals", dest="raw_signals", default=False, action="store_true", help="fit on raw signals instead of envelopes")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", type="str", help="")
 
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
@@ -414,7 +423,7 @@ def main():
                                 fit_hz=options.hz, 
                                 init_run_name = init_run_name, init_iteration = init_iteration,
                                 absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth,
-                                dummy_fallback=options.dummy_fallback)
+                                dummy_fallback=options.dummy_fallback, raw_signals=options.raw_signals)
 
     runid = get_fitting_runid(cursor, options.run_name, options.run_iteration, create_if_new = True)
     if not options.nocheck:
