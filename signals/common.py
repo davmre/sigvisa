@@ -173,18 +173,24 @@ class Waveform(object):
             return self.my_stats[key]
         # if we don't have arrivals for this waveform, look them up and cache them
         elif key == "event_arrivals":
+            cursor = Sigvisa().dbconn.cursor()
             event_arrivals = read_event_detections(
-                cursor=Sigvisa().dbconn.cursor(), evid=self['evid'], stations=[self['sta'], ], evtype="leb")
+                cursor=cursor, evid=self['evid'], stations=[self['sta'], ], evtype="leb")
+            cursor.close()
             self.segment_stats['event_arrivals'] = event_arrivals
             return event_arrivals
         elif key == "arrivals":  # default to LEB arrivals
-            arrivals = read_station_detections(cursor=Sigvisa().dbconn.cursor(
-            ), sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="leb_arrival")
+            cursor = Sigvisa().dbconn.cursor()
+            arrivals = read_station_detections(cursor=cursor,
+                sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="leb_arrival")
+            cursor.close()
             self.segment_stats['arrivals'] = arrivals
             return arrivals
         elif key == "arrivals_idcx":
-            arrivals = read_station_detections(cursor=Sigvisa().dbconn.cursor(
-            ), sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="idcx_arrival")
+            cursor = Sigvisa().dbconn.cursor()
+            arrivals = read_station_detections(cursor=cursor, 
+                sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="idcx_arrival")
+            cursor.close()
             self.segment_stats['arrivals_idcx'] = arrivals
             return arrivals
         elif key == "band":

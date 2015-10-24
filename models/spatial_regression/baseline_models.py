@@ -197,7 +197,7 @@ class ConstGaussianModel(ParamModel):
 
         return deriv
 
-    def variance(self, cond):
+    def variance(self, cond, **kwargs):
         return self.std**2
 
 
@@ -270,7 +270,7 @@ class ConstLaplacianModel(ParamModel):
             deriv = np.sum( [ 0.0 if z ==self.center else float(np.sign(self.center - z))/ self.scale for z in x ] )
         return deriv
 
-    def variance(self, cond):
+    def variance(self, cond, **kwargs):
         return 2 * self.scale**2
 
 class ConstBetaModel(ParamModel):
@@ -345,5 +345,5 @@ class ConstBetaModel(ParamModel):
             raise Exception("not implemented")
         return deriv
 
-    def variance(self, cond):
+    def variance(self, cond, **kwargs):
         return self.model.variance()

@@ -157,14 +157,14 @@ def compute_template_messages(sg, wn, logger, burnin=50):
 
             pv = n._parent_values()
             prior_mean = n.model.predict(cond=pv)
-            prior_var = n.model.variance(cond=pv)
+            prior_var = n.model.variance(cond=pv, include_obs=True)
 
             print "param", p, "prior", (prior_mean, prior_var), "posterior", (m, v)
             mm, mv = multiply_scalar_gaussian(m, v, prior_mean, -prior_var)
             if mv > 0:
-                gp_messages[(eid, phase)][p] = mm, mv
+                gp_messages[(eid, phase)][p] = float(mm), float(mv)
             else:
-                gp_messages[(eid, phase)][p] = mm, -mv
+                gp_messages[(eid, phase)][p] = float(mm), -float(mv)
             gp_messages[(eid, phase)][p+"_posterior"] = m, v
 
         best_lp_idx = np.argmax(lps)

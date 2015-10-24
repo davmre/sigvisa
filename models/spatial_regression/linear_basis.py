@@ -123,7 +123,7 @@ class LinearBasisModel(ParamModel):
     def log_likelihood(self):
         return self.ll
 
-    def covariance(self, cond, return_sqrt=False, include_obs=False, features=None, **kwargs):
+    def covariance(self, cond, return_sqrt=False, include_obs=True, features=None, **kwargs):
 
         if features is None:
             X1 = self.standardize_input_array(cond, **kwargs)
@@ -142,7 +142,7 @@ class LinearBasisModel(ParamModel):
             else:
                 return covar
 
-    def variance(self, cond, include_obs=False):
+    def variance(self, cond, include_obs=True):
         return np.diag(self.covariance(cond=cond, include_obs=include_obs))
 
     def log_p(self, x, cond, **kwargs):

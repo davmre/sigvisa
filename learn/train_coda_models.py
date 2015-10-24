@@ -67,7 +67,6 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
     ymeans = np.asarray(ymeans, dtype=np.float64).flatten()
     yvars = np.asarray(yvars, dtype=np.float64).flatten()
 
-
     # remove outliers
     bounds = {'tt_residual': (-20, 20),
               'amp_transfer': (-6, 10),

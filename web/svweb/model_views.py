@@ -59,18 +59,23 @@ def model_list_view(request):
 
 
 
-def plot_empirical_distance(request, xy_by_phase, axes):
+def plot_empirical_distance(request, xy_by_phase, alphas_by_phase, axes):
 
-    colors = ['r', 'g', 'b', 'y']
+    colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 1, 1)]
 
-    xmin = np.float('-inf')
-    xmax = np.float('inf')
+    xmin = np.float('inf')
+    xmax = np.float('-inf')
     for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
         X, y = xy_by_phase[phase]
-        alpha = float(request.GET.get('alpha', min(1, 4 / np.log(len(y)))))
-        axes.scatter(X[:, 3], y, alpha=alpha, c=colors[i], s=10, marker='.', edgecolors="none")
-        xmin = max(xmin, np.min(X[:, 3]))
-        xmax = min(xmax, np.max(X[:, 3]))
+        alphas = alphas_by_phase[phase]
+        #alpha = float(request.GET.get('alpha', min(1, 4 / np.log(len(y)))))
+
+        rgba_colors = np.zeros((X.shape[0],4))
+        rgba_colors[:, :3] = colors[i]
+        rgba_colors[:, 3] = alphas
+        axes.scatter(X[:, 3], y, c=rgba_colors, s=10, marker='.', edgecolors="none")
+        xmin = min(xmin, np.min(X[:, 3]))
+        xmax = max(xmax, np.max(X[:, 3]))
     r = xmax - xmin
     axes.set_xlim([xmin - r / 20.0, xmax + r / 20.0])
 
@@ -330,14 +335,16 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         run = SigvisaCodaFittingRun.objects.get(runid=runid)
 
         xy_by_phase = {}
+        alphas_by_phase = {}
         for phase in phases:
             X, y, yvars, evids = get_training_data(runid=runid,
-                                                   site=sta, chan=chan, band=band, phases=phases,
+                                                   site=sta, chan=chan, band=band, phases=(phase,),
                                                    target=param,require_human_approved=require_human_approved,
                                                    max_acost=max_acost, min_amp=min_amp, **d)
             if log_transform:
                 y = np.log(np.abs(y))
             xy_by_phase[phase] = (X, y)
+            alphas_by_phase[phase] = 1 - np.sqrt(yvars / np.max(yvars))
 
     if modelid is not None:
         if plot_type == "histogram":
@@ -377,7 +384,8 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         if plot_type == "histogram":
             plot_empirical_histogram(request=request, xy_by_phase=xy_by_phase, axes=axes)
         elif plot_type == "distance":
-            plot_empirical_distance(request=request, xy_by_phase=xy_by_phase, axes=axes)
+            plot_empirical_distance(request=request, xy_by_phase=xy_by_phase, 
+                                    alphas_by_phase=alphas_by_phase, axes=axes)
         elif plot_type == "mb":
             plot_empirical_mb(request=request, xy_by_phase=xy_by_phase, axes=axes)
         elif plot_type == "heatmap" and modelid is None:
