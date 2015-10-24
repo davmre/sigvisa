@@ -170,7 +170,7 @@ def read_isc_events(cursor, start_time, end_time, author):
     return events
 
 
-def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[], min_mb=0, max_mb=99999, min_snr=0, max_snr=99999, only_phases=[], min_distance=0, max_distance=999999, time_filter_direct=False):
+def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[], min_mb=0, max_mb=99999, min_snr=0, max_snr=99999, only_phases=[], min_distance=0, max_distance=999999, time_filter_direct=False, lonbounds=None, latbounds=None):
 
     cursor = dbconn.cursor()
 
@@ -179,6 +179,12 @@ def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[],
     else:
         phase_condition = ""
 
+    lon_condition = ""
+    if lonbounds is not None:
+        lon_condition = "and lebo.lon between %f and %f" % (lonbounds[0], lonbounds[1])
+    lat_condition = ""
+    if latbounds is not None:
+        lat_condition = "and lebo.lat between %f and %f" % (latbounds[0], latbounds[1])
 
     ev_condition = ""
     if max_snr > 99999:
@@ -192,8 +198,8 @@ def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[],
     if time_filter_direct:
         time_condition = "and lebo.time between %f and %f" % (start_time, end_time)
 
-    sql_query = "SELECT lebo.evid, l.time, lebo.lon, lebo.lat FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s %s" % (
-    phase_condition, sta, ev_condition, time_condition)
+    sql_query = "SELECT lebo.evid, l.time, lebo.lon, lebo.lat FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s %s %s %s" % (
+        phase_condition, sta, ev_condition, time_condition, lon_condition, lat_condition)
 
     print sql_query,
     if not time_filter_direct:

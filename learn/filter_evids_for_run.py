@@ -49,6 +49,10 @@ def main():
                       help="exclude all events with time less than this value (0)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float",
                       help="exclude all events with time greater than this value (1237680000)")
+    parser.add_option("--lonbounds", dest="lonbounds", default="", type="str",
+                      help="")
+    parser.add_option("--latbounds", dest="latbounds", default="", type="str",
+                      help="")
     parser.add_option("--require_phases", dest="require_phases", default='P', type="str",
                       help="exclude all ev/sta pairs not having arrivals for *all* phases in the specificed (comma-separated) list (P)")
     parser.add_option("--only_phases", dest="only_phases", default=None, type="str",
@@ -70,6 +74,12 @@ def main():
 
     print st, et
 
+    lonbounds, latbounds = None, None
+    if len(options.lonbounds) > 0:
+        lonbounds = [float(x) for x in options.lonbounds.split(",")]
+    if len(options.latbounds) > 0:
+        latbounds = [float(x) for x in options.latbounds.split(",")]
+
     required_phase_list = options.require_phases.split(',') if options.only_phases else []
     only_phase_list = options.only_phases.split(',') if options.only_phases else []
     if options.output is None:
@@ -83,7 +93,8 @@ def main():
             evids[sta] = read_evids_detected_at_station(s.dbconn, sta, st, et, phases=required_phase_list,
                                                         min_mb=options.min_mb, max_mb=options.max_mb,
                                                         min_snr=options.min_snr, max_snr=options.max_snr,
-                                                        only_phases=only_phase_list, time_filter_direct=True)
+                                                        only_phases=only_phase_list, time_filter_direct=True, 
+                                                        latbounds=latbounds, lonbounds=lonbounds)
 
         if options.all_combinations:
             all_evids = set()
