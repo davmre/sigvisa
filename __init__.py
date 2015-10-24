@@ -109,17 +109,21 @@ class Sigvisa(threading.local):
 
 
 #        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
-        self.bands = ("freq_2.0_3.0",)
+        self.bands = ("freq_0.8_4.5",)
 #        self.chans = ('BHZ', 'BHN', 'BHE')
         self.chans = ('BHZ', 'BHN', 'BHE')
         self.phases = ('P', 'Pn', 'Pg', 'PcP', 'pP', 'PKKPbc', 'S', 'Sn', 'ScP', 'Lg')
 
-        self.P_phases = ('P', 'Pn', 'PcP', 'pP', 'PKKPbc')
+        self.P_phases = ('P', 'Pn', 'Pg', 'PcP', 'pP', 'PKKPbc')
         self.S_phases = ('S', 'Sn', 'Lg', 'ScP')
 
         self.events = dict()
 
         self.global_dict_cache = dict() # cache a mapping of event dictionaries to arrays, used by ParamModels
+
+        # hold the cache of precomputed traveltime and amp_transfer
+        # on grid cells, used for fast event birth proposals
+        self.hough_proposer = dict()
 
     def __del__(self):
         self.dbconn.close()

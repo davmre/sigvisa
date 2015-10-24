@@ -1,0 +1,38 @@
+- name: Install gpy
+  become_user: sigvisa
+  pip: name=gpy virtualenv="/home/sigvisa/.virtualenvs/sigvisa/"
+- name: checkout git repo
+  git: repo=git@github.com:davmre/gprf.git
+       dest=/home/sigvisa/python/gprf
+       recursive=true
+       force=yes
+  become_user: sigvisa
+- name: treegp in pythonpath
+  become_user: sigvisa
+  lineinfile: dest=/home/sigvisa/.bash_profile line="{{ item }}" state=present create=yes
+  with_items:
+    - 'export PYTHONPATH=$PYTHONPATH:$HOME/python/sigvisa'
+    - 'export OPENBLAS_NUM_THREADS=1'
+- name: create synth examples directory
+  file: path=/home/sigvisa/gprf_experiments/synthetic_datasets/ state=directory recurse=yes
+  become_user: sigvisa
+- name: copy sampled synthetic grids
+  unarchive:
+    copy=yes
+    src=/home/dmoore/synth_grid3.tgz
+    dest=/home/sigvisa/gprf_experiments/synthetic_datasets/
+    creates=/home/sigvisa/gprf_experiments/synthetic_datasets/35500_35000_0.032071_0.010690_50_0.pkl
+    owner=sigvisa
+    mode=0644
+- name: add idc
+  copy:
+    src=/home/dmoore/python/gprf/idc.txt
+    dest=/home/sigvisa/python/gprf/idc.txt
+    owner=sigvisa
+    mode=0400
+- name: add isc
+  copy:
+    src=/home/dmoore/python/gprf/isc.txt
+    dest=/home/sigvisa/python/gprf/isc.txt
+    owner=sigvisa
+    mode=0400

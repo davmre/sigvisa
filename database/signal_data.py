@@ -9,6 +9,7 @@ import re
 import numpy as np
 import scipy
 import scipy.stats
+import cPickle as pickle
 
 from sigvisa.database.dataset import *
 from sigvisa.database import db
@@ -186,7 +187,7 @@ def execute_and_return_id(dbconn, query, idname, **kwargs):
     return lrid
 
 
-def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10):
+def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10, wiggle_family=None):
     """
 
     assumes "from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit"
@@ -198,113 +199,79 @@ def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=Non
     site_cond = "and fit.sta='%s'" % (site) if site is not None else ""
     run_cond = "and (" + " or ".join(["fit.runid = %d" % int(runid) for runid in runids]) + ")" if runids is not None else ""
     phase_cond = "and (" + " or ".join(["fp.phase = '%s'" % phase for phase in phases]) + ")" if phases is not None else ""
-    evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
+    evid_cond = "and (" + " or ".join(["fit.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(
-        ["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
+        ["fit.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
     approval_cond = "and human_approved=2" if require_human_approved else ""
     cost_cond = "and fit.acost<%f" % max_acost if np.isfinite(max_acost) else ""
 
-    cond = "fp.fitid = fit.fitid and fp.coda_height > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond)
+    wiggle_cond = "and fp.wiggle_family='%s'" % (wiggle_family) if wiggle_family is not None else ""
+
+    cond = "fp.fitid = fit.fitid and fp.coda_height > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond, wiggle_cond)
 
     return cond
 
 
-def load_wiggle_data(cursor, basisid, **kwargs):
+class SavedFit(object):
+    def __init__(self, ev, phase, sta, band,
+                 dist, azi, arrival_time,
+                 peak_offset, coda_height,
+                 peak_decay, coda_decay, messages):
+        self.ev = ev
+        self.phase = phase
+        self.sta = sta
+        self.band = band
+        self.dist = dist
+        self.azi = azi
+        self.arrival_time=arrival_time
+        self.peak_offset=peak_offset
+        self.coda_height=coda_height
+        self.peak_decay=peak_decay
+        self.coda_decay=coda_decay
+        self.messages=messages
 
-    from sigvisa.models.wiggles.wiggle_models import WiggleGenerator
 
+
+
+def read_messages(message_fname, runid):
+    s = Sigvisa()
+    messages = None
+    if message_fname is not None and message_fname.endswith("msg"):
+        message_dir = os.path.join(s.homedir, "training_messages", "runid_%d" % runid)
+        message_full_fname = os.path.join(message_dir, message_fname)
+        with open(message_full_fname, 'r') as f:
+            message_str = f.read()
+        messages = eval(message_str, {'array': np.array})
+    return messages
+
+def load_training_messages(cursor, **kwargs):
     cond = sql_param_condition(**kwargs)
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, wiggle.params from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit, sigvisa_wiggle wiggle  where wiggle.fpid=fp.fpid and wiggle.basisid=%d and %s" % (basisid, cond)
+    sql_query = "select distinct lebo.evid, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.peak_decay, fp.coda_decay, fit.runid, fp.message_fname from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
 
-    ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
-    fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
-    fname_sta = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s_sta.txt" % str(hashlib.md5(sql_query).hexdigest()))
+    s = Sigvisa()
+    ensure_dir_exists(os.path.join(s.homedir, "db_cache"))
+    fname = os.path.join(s.homedir, "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
     try:
-        wiggle_data = np.loadtxt(fname, dtype=float)
-        sta_data = np.loadtxt(fname_sta, dtype=str)
+        with open(fname, 'rb') as f:
+            fits = pickle.load(f)
     except:
         cursor.execute(sql_query)
-        wiggle_data = np.array(cursor.fetchall(), dtype=object)
-        print wiggle_data.size
+        message_data = np.array(cursor.fetchall(), dtype=object)
 
-        if wiggle_data.shape[0] > 0:
-            s = Sigvisa()
-            sta_data = np.array(wiggle_data[:, FIT_SITEID], dtype=str)
-            wiggle_data[:, FIT_SITEID] = -1
-            wiggle_data[:, FIT_PHASEID] = np.asarray([s.phaseids[phase] for phase in wiggle_data[:, FIT_PHASEID]])
-            wiggle_data[:, FIT_LOWBAND] = [b.split('_')[1] for b in wiggle_data[:, FIT_LOWBAND]]
+        fits = []
+        for row in message_data:
+            evid, phase, sta, dist, azi, band, atime, peak_offset, coda_height, peak_decay, coda_decay, runid, message_fname = row
 
-            wiggle_params = np.array([WiggleGenerator.decode_params(encoded = p) for p in wiggle_data[:, -1] ])
-            wiggle_data = np.array(wiggle_data[:, :-1], dtype=float)
-            wiggle_data = np.hstack([wiggle_data, wiggle_params])
-            np.savetxt(fname, wiggle_data)
-            np.savetxt(fname_sta, sta_data, "%s")
+            messages = read_messages(message_fname, runid)
+
+            ev = get_event(evid=evid, cursor=cursor)
+            fit = SavedFit(ev=ev, phase=phase, sta=sta, band=band, dist=dist,azi=azi, arrival_time=atime, peak_offset=peak_offset, coda_height=coda_height, peak_decay=peak_decay, coda_decay=coda_decay, messages=messages)
+            fits.append(fit)
+
+        if len(fits) > 0:
+            with open(fname, 'wb') as f:
+                pickle.dump(fits, f, 2)
         else:
             raise NoDataException("found no wiggle data matching query %s" % sql_query)
-    return wiggle_data, sta_data
-
-def load_shape_data(cursor, **kwargs):
-
-    cond = sql_param_condition(**kwargs)
-
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.peak_decay, fp.coda_decay, fp.amp_transfer from  leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
-
-    ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
-    fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
-    fname_sta = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s_sta.txt" % str(hashlib.md5(sql_query).hexdigest()))
-    try:
-        shape_data = np.loadtxt(fname, dtype=float).reshape((-1, FIT_NUM_COLS))
-        sta_data = np.loadtxt(fname_sta, dtype=str)
-        print "loaded from", fname
-    except:
-        print sql_query
-        cursor.execute(sql_query)
-        print "sql done"
-        shape_data = np.array(cursor.fetchall(), dtype=object).reshape((-1, FIT_NUM_COLS))
-        print shape_data.shape
-
-        if shape_data.shape[0] > 0:
-            s = Sigvisa()
-            sta_data = np.array(shape_data[:, FIT_SITEID], dtype=str)
-            shape_data[:, FIT_SITEID] = -1 #np.asarray([s.name_to_siteid_minus1[sta] + 1 for sta in shape_data[:, FIT_SITEID]])
-            shape_data[:, FIT_PHASEID] = np.asarray([s.phaseids[phase] for phase in shape_data[:, FIT_PHASEID]])
-            shape_data[:, FIT_LOWBAND] = [b.split('_')[1] for b in shape_data[:, FIT_LOWBAND]]
-            shape_data = np.array(shape_data, dtype=float)
-            np.savetxt(fname, shape_data)
-            np.savetxt(fname_sta, sta_data, "%s")
-        else:
-            raise NoDataException("found no shape data matching query %s" % sql_query)
-    return shape_data, sta_data
-
-
-def insert_wiggle(dbconn, p):
-    cursor = dbconn.cursor()
-    sql_query = "insert into sigvisa_wiggle (fpid, basisid, timestamp, params) values (:fpid, :basisid, :timestamp, :params)"
-
-    if "cx_Oracle" in str(type(dbconn)):
-        import cx_Oracle
-        binary_var = cursor.var(cx_Oracle.BLOB)
-        binary_var.setvalue(0, p['params'])
-        p['params'] = binary_var
-        wiggleid = cursor.var(cx_Oracle.NUMBER)
-        sql_query += " returning wiggleid into :x"
-        p['x'] = wiggleid
-        cursor.setinputsizes(params=cx_Oracle.BLOB)
-        cursor.execute(sql_query, p)
-        wiggleid = int(wiggleid.getvalue())
-
-    elif "MySQLdb" in str(type(dbconn)):
-        mysql_query = re.sub(r":(\w+)\s*([,)])", r"%(\1)s\2", sql_query)
-        cursor.execute(mysql_query, p)
-        wiggleid = cursor.lastrowid
-
-    cursor.close()
-
-    return wiggleid
-
-
-def read_wiggle(cursor, wiggleid):
-    sql_query = "select * from sigvisa_wiggle where wiggleid=%d" % (wiggleid)
-    cursor.execute(sql_query)
-    return cursor.fetchone()
+    return fits

@@ -1,0 +1,28 @@
+{% load url from future %}
+<html>
+<head>
+<title>eid {{ eid }} signals -- sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+<h2>eid {{ eid }} from MCMC run {{ dirname }} step {{ step }} </h2>
+
+
+<table width=100%>
+
+{% for wnlabel, stime, etime, tms in r %}
+<tr>
+<td>{{ wnlabel }}</td> 
+<td valign=top>
+<a href="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};pred_signal=True;stime={{ stime }};etime={{ etime }}"><img src="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};pred_signal=True;stime={{ stime }};etime={{ etime }}" width=400></a>
+</td>
+<td>{{ tms }}</td>
+</tr>
+{% endfor %}
+</table>
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>

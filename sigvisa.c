@@ -14,6 +14,8 @@ static PyObject * py_mean_travel_time_grad(SigModel_t * p_sigmodel,PyObject *arg
 static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,PyObject *args);
+static PyObject * py_event_depth_prior_logprob(SigModel_t * p_sigmodel, PyObject * args);
+
 static PyObject * py_srand(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_sample(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_mag_prior_logprob(SigModel_t * p_sigmodel, PyObject *args);
@@ -35,6 +37,9 @@ static PyMethodDef SigModel_methods[] = {
   {"event_location_prior_logprob", (PyCFunction)py_event_location_prior_logprob, METH_VARARGS,
    "event_location_prior_logprob(evlon, evlat, evdepth)"
    " -> log prior probability of event location"},
+  {"event_depth_prior_logprob", (PyCFunction)py_event_depth_prior_logprob, METH_VARARGS,
+   "event_depth_prior_logprob(evdepth)"
+   " -> log prior probability of event depth"},
   {"srand", (PyCFunction)py_srand, METH_VARARGS,
    "srand(int)"
    " -> seed the C rng"},
@@ -436,6 +441,21 @@ static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,
 				       lon, lat, depth);
   return Py_BuildValue("d", logprob);
 }
+
+static PyObject * py_event_depth_prior_logprob(SigModel_t * p_sigmodel,
+					       PyObject * args)
+{
+  double depth;
+
+  double logprob;
+
+  if (!PyArg_ParseTuple(args, "d", &depth))
+    return NULL;
+
+  logprob = depth_lp(depth);
+  return Py_BuildValue("d", logprob);
+}
+
 
 static PyObject * py_event_location_prior_sample(SigModel_t * p_sigmodel,
 						 PyObject * args)

@@ -13,7 +13,7 @@ class TransientCombinedSSM(StateSpaceModel):
     active.
     """
 
-    def __init__(self, components):
+    def __init__(self, components, obs_noise=0.0):
         """
         components: list of tuples (ssm, start_idx, npts, scale), where
           ssm: StateSpaceModel object
@@ -24,6 +24,7 @@ class TransientCombinedSSM(StateSpaceModel):
 
         # save basic info
         self.n_ssms = len(components)
+        self.obs_noise = obs_noise
         self.ssms = []
         self.ssm_starts = []
         self.ssm_ends = []
@@ -36,14 +37,14 @@ class TransientCombinedSSM(StateSpaceModel):
             self.ssm_ends.append(start_idx+npts)
             self.scales.append(scale)
 
-        # compute a list of changepoints, with ssms active at each point
+        # compute a list of changepoints, with the set of ssms active at each point
         self.changepoints = []
         self.active_sets = []
         starts = [(st, i, True) for (i, st) in enumerate(self.ssm_starts)]
         ends = [(et, i, False) for (i, et) in enumerate(self.ssm_ends)]
         events = sorted(starts+ends)
-        active_set = []
-        t_prev = 0
+        active_set = [ ]
+        t_prev = events[0][0]
         for (t, i_ssm, start) in events:
             if t != t_prev:
                 self.changepoints.append(t_prev)
@@ -82,8 +83,6 @@ class TransientCombinedSSM(StateSpaceModel):
         When the cache misses, we perform a binary search on the list
         of changepoints, so this is approximately O(log n) in the total
         number of ssms. It's probably possible to do better than this...
-        with some precomputation and more space, constant time should
-        be possible.
         """
 
         if k == self.active_ssm_cache1_k:
@@ -125,12 +124,14 @@ class TransientCombinedSSM(StateSpaceModel):
                 # (prior means will be added by the
                 #  transition_bias operator)
                 x_new[i:i+state_size] = 0.0
+                #print "   new ssm %d active from %d to %d" % (i_ssm, i, i+state_size)
             else:
                 # this ssm is persisting from the
                 # previous timestep, so just run the
                 # transition
                 j = self.ssm_tmp[i_ssm]
                 ssm.apply_transition_matrix(x[j:j+state_size], k-self.ssm_starts[i_ssm], x_new[i:i+state_size])
+                #print "   transitioning ssm %d, prev %d, in state %d to %d (sidx %d eidx %d)" % (i_ssm, j, i, i+state_size, self.ssm_starts[i_ssm], self.ssm_ends[i_ssm])
             i += state_size
         return i
 
@@ -159,8 +160,14 @@ class TransientCombinedSSM(StateSpaceModel):
             i += state_size
 
     def apply_observation_matrix(self, x, k, result=None):
+        """
+        We define the observation for the combined SSM as a (weighted) sum of the
+        observations from the currently active components.
+        """
+
         i = 0
 
+        # vector case
         ssm_indices = self.active_ssms(k)
         if len(x.shape)==1:
             r = 0
@@ -174,6 +181,8 @@ class TransientCombinedSSM(StateSpaceModel):
                     r += ri
                 i += state_size
             return r
+
+        # matrix case
         else:
             assert(len(x.shape)==2)
 
@@ -187,8 +196,8 @@ class TransientCombinedSSM(StateSpaceModel):
             for j in ssm_indices:
                 ssm, scale = self.ssms[j], self.scales[j]
                 state_size = ssm.max_dimension
-                ssm.apply_observation_matrix(x[i:i+state_size], k-self.ssm_starts[j], rr)
-                #print "%d: applied observation matrix to model %d (subj k %d), state %d:%d, result %s" % (k, j, k-self.ssm_starts[j], i, i+state_size, rr)
+                ssm.apply_observation_matrix(x[i:i+state_size,:], k-self.ssm_starts[j], rr)
+                #print "TSSM step %d applying obs matrix on ssm %d state_size %d n %d scale %f result[0] %f\n" % (k, j, state_size, len(result), scale[k-self.ssm_starts[j]] if scale is not None else 1.0, rr[0])
                 if scale is not None:
                     rr *= scale[k-self.ssm_starts[j]]
                 result += rr
@@ -206,11 +215,175 @@ class TransientCombinedSSM(StateSpaceModel):
             i += len(v)
         return H
 
+    def observation_bias(self, k):
+        bias = 0.0
+        ssm_indices = self.active_ssms(k)
+        for j in ssm_indices:
+            kk = k-self.ssm_starts[j]
+            b = self.ssms[j].observation_bias(kk)
+            if self.scales[j] is not None:
+                b *= self.scales[j][kk]
+            bias += b
+        return bias
+
     def observation_noise(self, k):
-        return 0.01
+        return self.obs_noise
+
+    def stationary(self, k):
+        """
+        The combined model is stationary as long as *all* active
+        models are stationary, the set of active models hasn't changed,
+        and there are no scaling factors active (since scaling factors
+        are nonstationary in general).
+        """
+        s1 = self.active_ssms(k)
+
+        if k > 0:
+            s2 = self.active_ssms(k-1)
+            if s2 != s1:
+                return False
+        for j in s1:
+            if self.scales[j] is not None:
+                return False
+            if not self.ssms[j].stationary(k-self.ssm_starts[j]):
+                return False
+        return True
+
+    def component_means(self, z):
+        """
+        Given an observed signal, decompose it into component signals
+        corresponding to the state space models. The return value
+        "means" is a list, indexed in the same way as the component
+        ssms, in which each entry is an array, of length equal to the
+        activation time for that component, containing the mean
+        observations from the (filtered) mean states of that
+        component.
+        """
+
+        # pre-allocate space by initializing each component to its prior mean.
+        # This is only really relevant if a component starts before time 0, in
+        # which case those unobserved timesteps will never be updated and so
+        # will remain at the prior mean.
+        means = []
+        for i in range(self.n_ssms):
+            means.append(self.ssms[i].mean_obs(self.ssm_ends[i]-self.ssm_starts[i]))
+
+        # run the Kalman filter, and compute the observation generated by each
+        # ssm at each timestep.
+        for k, (x, U, d) in enumerate(self.filtered_states(z)):
+            ssm_indices = self.active_ssms(k)
+            i=0
+            for j in ssm_indices:
+                ssm = self.ssms[j]
+                state_size = ssm.max_dimension
+                ix = k-self.ssm_starts[j]
+                means[j][ix] = ssm.apply_observation_matrix(x[i:i+state_size], ix)
+                means[j][ix] += ssm.observation_bias(ix)
+                i += state_size
+        return means
 
     def prior_mean(self):
-        return np.concatenate([self.ssms[i].prior_mean() for i in self.active_ssms(0)])
+        """
+        The prior mean of the combined model is just the concatenation
+        of prior mean for all submodels active at step 0. In the
+        special case that a model's start time is negative, we
+        propagate its prior mean through the transition model for
+        the appropriate number of steps to get the (exact) prior mean at stepx 0.
+        """
+
+        priors = []
+        for i in self.active_ssms(0):
+            ssm = self.ssms[i]
+            prior = ssm.prior_mean()
+            if self.ssm_starts[i] < 0:
+                p2 = prior.copy()
+                for k in range(-self.ssm_starts[i]):
+                    state_size = ssm.apply_transition_matrix(p2, k+1, prior)
+                    ssm.transition_bias(k, prior)
+                    p2 = prior
+            priors.append(prior)
+        return np.concatenate(priors)
 
     def prior_vars(self):
-        return np.concatenate([self.ssms[i].prior_vars() for i in self.active_ssms(0)])
+        """
+        The prior variance of the combined model is just the concatenation
+        of prior variances for all submodels active at step 0. In the
+        special case that a model's start time is negative, we
+        propagate its prior variance through the transition model for
+        the appropriate number of steps to get an (approximate)
+        diagonal variance at step 0.
+        """
+        priors = []
+        for i in self.active_ssms(0):
+            ssm = self.ssms[i]
+            prior = ssm.prior_vars()
+
+            if self.ssm_starts[i] < 0:
+                P = np.diag(prior)
+                P2 = P.copy()
+                for k in range(-self.ssm_starts[i]):
+                    ssm.transition_covariance(P2, k+1, P)
+                    ssm.transition_noise_diag(k+1, prior)
+                    np.fill_diagonal(P, np.diag(P) + prior)
+                    P2 = P
+
+                # since the interface only supports independent
+                # priors, return a diagonal approximation of the true
+                # prior
+                prior = np.diag(P)
+            priors.append(prior)
+        return np.concatenate(priors)
+
+    def component_state_indices(self, k, component_idx):
+        ssms = self.active_ssms(k)
+        i = 0
+        for ssm in ssms:
+            next_i = i + self.ssms[ssm].max_dimension
+            if ssm == component_idx:
+                return i, next_i
+            i = next_i
+        raise ValueError("component %d is not active at timestep %d" % (component_idx, k))
+
+    def filtered_cssm_coef_marginals(self, z, component_idx):
+        # return the marginal means and variances on the basis
+        # coefficients for a CompactSupportSSM component.
+
+        ssm = self.ssms[component_idx]
+        start = self.ssm_starts[component_idx]
+        end = self.ssm_ends[component_idx]
+        coef_means = np.empty((ssm.n_basis,))
+        coef_vars = np.empty((ssm.n_basis,))
+
+        for k, (x, U, d) in enumerate(self.filtered_states(z)):
+            if k < start: continue
+            if k >= end: break
+
+            i1, i2 = self.component_state_indices(k, component_idx)
+            P = np.dot(d*U, U.T)
+            ssm.extract_coefs(x[i1:i2], P[i1:i2,i1:i2], k-start, coef_means, coef_vars)
+
+        return coef_means, coef_vars
+
+    def all_filtered_cssm_coef_marginals(self, z):
+
+        cssms = []
+        marginals = dict()
+        for i, ssm in enumerate(self.ssms):
+            if "extract_coefs" in dir(ssm):
+                cssms.append(i)
+                # initialize marginals to the prior
+                marginals[i] = (ssm.coef_means.copy(), ssm.coef_vars.copy() )
+
+        for k, (x, U, d) in enumerate(self.filtered_states(z)):
+            for i in cssms:
+                ssm = self.ssms[i]
+                start = self.ssm_starts[i]
+                end = self.ssm_ends[i]
+
+                if k < start or k >= end: continue
+
+                i1, i2 = self.component_state_indices(k, i)
+                P = np.dot(d*U, U.T)
+                ssm.extract_coefs(x[i1:i2], P[i1:i2,i1:i2], k-start, marginals[i][0], marginals[i][1])
+
+        return marginals

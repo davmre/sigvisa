@@ -1,3 +1,4 @@
+{% load url from future %}
 <html>
 <head>
 <script>
@@ -27,11 +28,11 @@ window.location = url;
     {% for run in run_list %}
     <tr>
       <td>{{ run.runid }}</td>
-       <td><a href="{% url fit_list runid=run.runid  %}">{{ run.run_name }}</a></td>
+       <td><a href="{% url 'fit_list' runid=run.runid  %}">{{ run.run_name }}</a></td>
       <td>{{ run.iter }}</td>
       <td>{{ run.sigvisacodafit_set.count }}</td>
-      <td><a href="{% url fit_cost_quality runid=run.runid %}?good=true;bad=true;unknown=true;xmin=auto;xmax=auto;ymin=auto;ymax=auto">fit quality</a></td>
-       <td><input type="button" onclick="confirm_delete({{ run.runid }}, '{% url delete_run runid=run.runid %}')" value="delete run"/></td>
+      <td><a href="{% url 'fit_cost_quality' runid=run.runid %}?good=true;bad=true;unknown=true;xmin=auto;xmax=auto;ymin=auto;ymax=auto">fit quality</a></td>
+       <td><input type="button" onclick="confirm_delete({{ run.runid }}, '{% url 'delete_run' runid=run.runid %}')" value="delete run"/></td>
     {% endfor %}
     </td>
   </tr>

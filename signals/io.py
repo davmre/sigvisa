@@ -32,26 +32,51 @@ class MissingWaveform(Exception):
 class EventNotDetected(Exception):
     pass
 
-def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None, pre_s = 10, post_s=200):
+class ConflictingEvent(Exception):
+    pass
+
+def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
+                            pre_s = 10, post_s=200, exclude_other_evs=False,
+                            phases=None, pad_seconds=20):
     close_cursor = False
     if cursor is None:
         cursor = Sigvisa().dbconn.cursor()
         close_cursor = True
 
+    try:
+        arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
+        if phases is None:
+            if len(arrivals) == 0:
+                raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
+            arrival_times = arrivals[:, DET_TIME_COL]
+        else:
+            from sigvisa.source.event import get_event
+            from sigvisa.models.ttime import tt_predict
+            ev = get_event(evid)
+            arrival_times = np.array([ev.time + tt_predict(ev, sta, phase) for phase in phases])
 
-    arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
-    if len(arrivals) == 0:
-        raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
-    arrival_times = arrivals[:, DET_TIME_COL]
+        st = np.min(arrival_times) - pre_s
+        et = np.max(arrival_times) + post_s
 
-    wave = fetch_waveform(sta, chan, np.min(arrival_times) - pre_s, np.max(arrival_times) + post_s)
-    wave.segment_stats['evid'] = evid
-    wave.segment_stats['event_arrivals'] = arrivals
+        if exclude_other_evs:
+            other_assocs = read_misc_assocs_at_station(cursor, sta, st, et, evid)
+            for (other_t, other_evid) in other_assocs:
+                if other_t < np.max(arrival_times) + 5.0:
+                    raise ConflictingEvent("impossible to fit all phases of event %d at %s, detected at time %.1f-%.1f, due to evid %d arrival at %.1f." % (evid, sta, np.min(arrival_times), np.max(arrival_times), other_evid, other_t))
+                else:
+                    print "reducing signal window by %.1fs to avoid conflict with %d arrival at %.1f" % (et-other_t+5.0, other_evid, other_t)
+                    et = min(et, other_t-5.0)
 
 
 
-    if close_cursor:
-        cursor.close()
+        print st, et
+        wave = fetch_waveform(sta, chan, st, et, pad_seconds=pad_seconds)
+        wave.segment_stats['evid'] = evid
+        wave.segment_stats['event_arrivals'] = arrivals
+
+    finally:
+        if close_cursor:
+            cursor.close()
 
     return wave
 
@@ -146,7 +171,8 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
 
     if s.earthmodel.site_info(station, stime)[3] == 1:
         cursor.execute("select refsta from static_site where sta='%s'" % station)
-        selection = cursor.fetchone()[0]
+        options = [v[0] for v in cursor.fetchall() if v[0] != station]
+        selection = options[0]
     else:
         selection = station
 
@@ -197,12 +223,12 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
         # how many samples are actually available
         available_samples = waveform['nsamp'] - first_offset
         # grab the available and needed samples
-        try:
-            wave = _read_waveform_from_file(waveform, first_offset,
-                                            min(desired_samples, available_samples))
-        except IOError:
-            raise MissingWaveform("Can't find data for sta %s chan %s time %d"
-                                  % (station, chan, stime))
+        #try:
+        wave = _read_waveform_from_file(waveform, first_offset,
+                                        min(desired_samples, available_samples))
+        #except IOError:
+        #     raise MissingWaveform("Can't find data for sta %s chan %s time %d"
+        #                          % (station, chan, stime))
 
         # copy the data we loaded into the global array
         t_start = max(0, int((waveform['time'] - global_stime) * samprate))
@@ -241,7 +267,7 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
     # open the waveform file
     # filename = os.path.join(*(waveform['dir'].split("/")
     #                          + [waveform['dfile']]))
-    filename = waveform['dir'] + waveform['dfile']
+    filename = os.path.join(waveform['dir'], waveform['dfile'])
     try:
         datafile = open(filename, "rb")
     except IOError, e:

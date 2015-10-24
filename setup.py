@@ -44,10 +44,11 @@ else:
 print sys_includes
 print sys_libraries
 
-extra_compile_args = ['-std=c99', '-g', '-O0']
+extra_compile_args_cpp = ['-Wall', '-std=c++11', '-g', '-O3']
+extra_compile_args_c = ['-Wall', '-std=c99', '-g', '-O3']
 #extra_compile_args = ['-std=c99','-O3']
 #extra_link_args = ['-Wl,--strip-all']
-extra_link_args = ['-lrt',]
+extra_link_args = ['-lrt', '-lcblas',]
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c',
@@ -67,14 +68,34 @@ sigvisa_module = Extension('sigvisa_c',
                                     + [f for f in main_sources]),
                            library_dirs = sys_libraries,
                            runtime_library_dirs = sys_libraries,
-                           extra_compile_args = extra_compile_args,
+                           extra_compile_args = extra_compile_args_c,
                            extra_link_args = extra_link_args,
                            )
 
 
+ssm_sources = ['statespace.cc', 'python_wrappers.cc', 'transient_combined.cc',
+               'compact_support.cc',
+               'autoregression.cc']
+from imp import find_module
+f, pathname, descr = find_module("pyublas")
+ssm_include_dirs = [os.path.join(pathname, "include"),]
+#ssm_include_dirs = ["/home/dmoore/python/sigvisa/scratch/boost_1_57_0",] + ssm_include_dirs
+ssm_libs = sys_libraries
+#ssm_libs = ["/home/dmoore/python/sigvisa/scratch/boost_1_57_0/stage/lib",] + ssm_libs
+statespacemodel_module = Extension('ssms_c',
+                           sources=([os.path.join("models", "statespace", "fast_c", f)
+                                     for f in ssm_sources]
+                                    ),
+                           include_dirs=ssm_include_dirs,
+                           library_dirs = ssm_libs,
+                           libraries=['boost_python'],
+                           runtime_library_dirs = ssm_libs,
+                           extra_compile_args = extra_compile_args_cpp,
+                           extra_link_args = extra_link_args,
+                           )
 
 setup(name='sigvisa',
       version='1.0',
       description='Signal-Based Vertically Integrated Seismological Processing',
       include_dirs=[np.get_include()] + sys_includes,
-      ext_modules=[sigvisa_module, ])
+      ext_modules=[sigvisa_module, statespacemodel_module])

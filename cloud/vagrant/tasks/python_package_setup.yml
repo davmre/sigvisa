@@ -1,0 +1,35 @@
+---
+- name: install virtualenv
+  pip:
+    name=virtualenv
+- name: install virtualenvwrapper
+  pip:
+    name=virtualenvwrapper
+- name: Create virtualenv
+  become_user: sigvisa
+  shell: virtualenv "/home/sigvisa/.virtualenvs/sigvisa/"
+         creates="/home/sigvisa/.virtualenvs/sigvisa/bin/activate"
+- name: transfer requrements
+  copy:
+    src=sigvisa_requirements.txt
+    dest=/home/sigvisa/sigvisa_requirements.txt
+- name: Install basic numpy scipy
+  become_user: sigvisa
+  pip: name={{ item }} virtualenv="/home/sigvisa/.virtualenvs/sigvisa/"
+  with_items:
+    - numpy
+    - scipy
+    - cython
+- name: transfer pyublas script
+  copy:
+    src=install_pyublas.sh
+    dest=/home/sigvisa/install_pyublas.sh
+    mode=777
+- name: install pyublas
+  become_user: sigvisa
+  command: /home/sigvisa/install_pyublas.sh creates=/home/sigvisa/.virtualenvs/sigvisa/local/lib/python2.7/site-packages/PyUblas-2013.1-py2.7-linux-x86_64.egg/
+- name: Install requirements
+  become_user: sigvisa
+  pip: 
+    requirements=/home/sigvisa/sigvisa_requirements.txt 
+    virtualenv="/home/sigvisa/.virtualenvs/sigvisa/"

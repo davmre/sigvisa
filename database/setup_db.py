@@ -8,7 +8,19 @@ from subprocess import call
 def pw_generator(size=8, chars=string.ascii_lowercase + string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for x in range(size))
 
-def prompt(text, default=""):
+responses = {}
+if len(sys.argv) > 1:
+    infile = sys.argv[1]
+    with open(infile, 'r') as f:
+        responses = eval(f.read())
+
+def prompt(text, default="", tag=None):
+    if tag is not None and tag in responses:
+        if responses[tag] is None:
+            return default
+        else:
+            return responses[tag]
+
     print text + " [%s]: " % default,
     v = raw_input()
     if len(v) == 0:
@@ -20,13 +32,15 @@ def prompt(text, default=""):
 
 required_files = ('leb_arrival.csv', 'idcx_arrival.csv', 'leb_assoc.csv', 'leb_origin.csv', 'static_site.csv', 'static_sitechan.csv', 'idcx_wfdisc.csv', 'static_siteid.csv', 'static_phaseid.csv')
 
+
+
 SIGVISA_HOME = os.getenv("SIGVISA_HOME")
 if SIGVISA_HOME is None:
     raise Exception("environmental variable SIGVISA_HOME is not defined!")
 db_dir = os.path.join(SIGVISA_HOME, "database")
 os.chdir(db_dir)
 
-csv_dir = prompt("full path to directory with CSV files", db_dir)
+csv_dir = prompt("full path to directory with CSV files", db_dir, tag='csvdir')
 
 for fname in required_files:
     print "checking for %s ... " %(fname),
@@ -34,12 +48,12 @@ for fname in required_files:
         raise Exception("required file '%s' not found in '%s'" % (fname, csv_dir))
     print "found."
 
-mysql_admin = prompt("MySQL admin user", "root")
-mysql_root = prompt("MySQL root password")
-db_name = prompt("name of DB to create for sigvisa", "ctbt3mos")
-db_user = prompt ("name of DB user to create for sigvisa", "ctbt")
-db_pass = prompt ("password for new DB user '%s'" % db_user, pw_generator())
-waveform_data_dir = prompt("full pathname of directory storing waveform data (i.e. having seismic/ as a subdir)")
+mysql_admin = prompt("MySQL admin user", "root", tag='adminuser')
+mysql_root = prompt("MySQL root password", tag='rootpw')
+db_name = prompt("name of DB to create for sigvisa", "ctbt3mos", tag='dbname')
+db_user = prompt ("name of DB user to create for sigvisa", "ctbt", tag='dbuser')
+db_pass = prompt ("password for new DB user '%s'" % db_user, pw_generator(), tag='userpw')
+waveform_data_dir = prompt("full pathname of directory storing waveform data (i.e. having seismic/ as a subdir)", tag='wavedir')
 
 with open('setup_db.sql', 'r') as f:
     setup_sql = f.read()
@@ -59,16 +73,23 @@ with open('setup_db_custom.sql', 'r') as f:
     print "running %s" % " ".join(cmd) +  " < setup_db_custom.sql"
     call(cmd, stdin=f)
 print "removing setup_db_custom.sql..."
-os.remove('setup_db_custom.sql')
+#os.remove('setup_db_custom.sql')
 
 with open('sigvisa.sql', 'r') as f:
     cmd = ["mysql", "-u", "root", "-p%s" % mysql_root, db_name]
     print "running %s" % " ".join(cmd) +  " < sigvisa.sql"
     call(cmd, stdin=f)
 
-print "add the following to your login script (i.e. .bashrc, or virtualenv postactivate script):"
-print "export VISA_MYSQL_USER=%s" % db_user
-print "export VISA_MYSQL_DB=%s" % db_name
-print "export VISA_MYSQL_PASS=%s" % db_pass
+evars = "export VISA_MYSQL_USER=%s\n" % db_user
+evars += "export VISA_MYSQL_DB=%s\n" % db_name
+evars += "export VISA_MYSQL_PASS=%s\n" % db_pass
+
+print "add the following to your login script (e.g. .bash_profile, or virtualenv postactivate script):"
+print evars,
+bash_profile = os.path.join(os.getenv("HOME"), ".bash_profile")
+auto_export = prompt ("should I do this automatically (for %s)?" % bash_profile, "yes", tag='autoenv')
+if auto_export=="yes":
+    with open(bash_profile, 'a') as f:
+        f.write(evars)
 
 print "done!"

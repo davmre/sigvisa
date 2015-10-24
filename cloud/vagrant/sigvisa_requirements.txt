@@ -1,0 +1,33 @@
+numpy
+scipy
+cython
+pyublas
+scikit-learn
+scikits.sparse
+matplotlib
+-e git+http://github.com/matplotlib/basemap.git#egg=basemap
+obspy
+django
+#cx_Oracle
+MySQL-python
+python-dateutil
+functools32
+django-pagination
+-e git+git@github.com:ionelmc/django-easyfilters.git#egg=django-easyfilters
+django-extensions
+django-debug-toolbar
+pytz
+nose
+pywavelets
+seaborn
+numdifftools
+
+# not strictly necessary, but useful:
+
+# ipython notebook
+pyzmq
+tornado
+ipython
+
+# interactive debugger, "python manage.py runserver_plus" to enable
+# werkzeug

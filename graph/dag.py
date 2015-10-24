@@ -64,6 +64,17 @@ class DAG(object):
             node.clear_mark()
             q.extendleft(node.children)
 
+
+    def topo_sorted_nodes(self):
+        self._gc_topo_sorted_nodes()
+        assert(len(self._topo_sorted_list) == len(self.all_nodes))
+        return self._topo_sorted_list
+
+    def recover_parents_from_children(self):
+        for node in self.topo_sorted_nodes():
+            for child in node.children:
+                child.addParent(node, stealth=True)
+
 def get_relevant_nodes(node_list, exclude_nodes=None):
     # note, it's important that the nodes have a consistent order, since
     # we represent their joint values as a vector.
@@ -79,6 +90,10 @@ def get_relevant_nodes(node_list, exclude_nodes=None):
             relevant_nodes.remove(n)
 
     return node_list, relevant_nodes
+
+
+class ParentConditionalNotDefined(Exception):
+    pass
 
 class DirectedGraphModel(DAG):
 
@@ -108,7 +123,12 @@ class DirectedGraphModel(DAG):
         logp = 0
         for node in self.topo_sorted_nodes():
             if node.deterministic(): continue
-            lp = node.log_p()
+
+            try:
+                lp = node.log_p()
+            except ParentConditionalNotDefined:
+                lp = node.upwards_message_normalizer()
+
             if verbose:
                 print "node %s has logp %.1f" % (node.label, lp)
             logp += lp
@@ -138,6 +158,7 @@ class DirectedGraphModel(DAG):
             for dn in node.get_deterministic_children():
                 dn.parent_predict()
 
+
     def joint_logprob(self, values, node_list, relevant_nodes, proxy_lps=None, c=1):
         # node_list: list of nodes whose values we are interested in
 
@@ -148,13 +169,23 @@ class DirectedGraphModel(DAG):
         if values is not None:
             self.set_all(values=values, node_list=node_list)
 
+        joint_factors = set()
         if proxy_lps is not None:
             ll = np.sum([f() for (f, df) in proxy_lps.values()])
             ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
         else:
-            ll = np.sum([node.log_p() for node in relevant_nodes])
+            ll = 0
+            for node in relevant_nodes:
+                if len(node.params_modeled_jointly)==0:
+                    ll += node.log_p()
+                else:
+                    ll += node.upwards_message_normalizer()
+                    joint_factors = joint_factors | node.params_modeled_jointly
 
-        #self.set_all(values=v, node_list=node_list)
+        for jf in joint_factors:
+            ll += jf.log_likelihood()
+
+
         return c * ll
 
     def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, proxy_lps=None, c=1):
@@ -167,11 +198,21 @@ class DirectedGraphModel(DAG):
                 n.set_value(key=key, value=val)
 
 
+        joint_factors = set()
         if proxy_lps is not None:
             ll = np.sum([f() for (f, df) in proxy_lps.values()])
             ll += np.sum([node.log_p() for node in relevant_nodes if node.label not in proxy_lps.keys()])
         else:
-            ll = np.sum([node.log_p() for node in relevant_nodes])
+            ll = 0
+            for node in relevant_nodes:
+                if len(node.params_modeled_jointly)==0:
+                    ll += node.log_p()
+                else:
+                    ll += node.upwards_message_normalizer()
+                    joint_factors = joint_factors | node.params_modeled_jointly
+
+        for jf in joint_factors:
+            ll += jf.log_likelihood()
 
         return c * ll
 
@@ -288,10 +329,6 @@ class DirectedGraphModel(DAG):
         for parent in node.parents.values():
             self.leaf_nodes.discard(parent)
 
-    def topo_sorted_nodes(self):
-        self._gc_topo_sorted_nodes()
-        assert(len(self._topo_sorted_list) == len(self.all_nodes))
-        return self._topo_sorted_list
 
     def get_node_from_key(self, key):
         return self.nodes_by_key[key]

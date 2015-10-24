@@ -3,6 +3,8 @@
 *.pyc
 *.so
 parameters/*.txt
+parameters/noise_models/
+parameters/runs/
 eval/*
 bgjob*
 utils/bgjob
@@ -15,7 +17,7 @@ database/*.csv
 *.log
 *.tgz
 *.gz
-*.txt
+/*.txt
 *.csv
 *.npz
 *.png
@@ -27,6 +29,7 @@ database/*.csv
 /*evids
 /eval*
 /wiggle_data*
+/training_messages*
 /TAGS
 /earthmodel.c
 /logs/codas_2_1338747082/all_data
@@ -55,7 +58,6 @@ database/*.csv
 /test_orids
 /gen_templates.sh
 /test_orids3
-/parameters/
 *.wave
 database/setup_db_custom.sql
 *prof
@@ -76,6 +78,7 @@ demos/*/*.html
 *cmds
 *cmd
 *_cmd*
+experiments/synth_wavematch
 experiments/event_localization
 tests/mcmc/event_localization
 tests/mcmc/one_station_templates
@@ -88,3 +91,9 @@ demos/template_mcmc_dtra_080213/
 /experiments/template_mcmc
 /gp_tts
 /notebooks/.ipynb_checkpoints/
+cloud/vagrant/.vagrant
+web/*.txt
+matrices/
+/synthetic/worlds
+/web/matrices/
+notebooks/*.txt

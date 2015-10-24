@@ -75,8 +75,10 @@ create table sigvisa_coda_fit_phase (
  peak_decay double precision,
  coda_decay  double precision,
  amp_transfer double precision,
+ mult_wiggle_std double precision,
  wiggle_stime double precision,
- wiggle_fname varchar(255),
+ message_fname varchar(255),
+ wiggle_family varchar(20),
  primary key(fpid),
  foreign key (fitid) REFERENCES sigvisa_coda_fit(fitid)
 );
@@ -106,7 +108,7 @@ create table sigvisa_param_model (
  modelid int not null auto_increment,
  fitting_runid int not null,
  template_shape varchar(15),
- param varchar(15) not null,
+ param varchar(30) not null,
  site varchar(10) not null,
  chan varchar(10) not null,
  band varchar(15) not null,

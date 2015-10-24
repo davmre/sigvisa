@@ -1,3 +1,4 @@
+{% load url from future %}
 {% load math_filters %}
 <html>
 <head>
@@ -5,12 +6,12 @@
 <script src="{{ STATIC_URL }}html5slider.js"></script>
 
 {% if prev %}
-<link rel='prev'  href="{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}" />
+<link rel='prev'  href="{% url 'fit_run_detail' fitid=prev.fitid %}?{{filter_GET_params}}" />
 {% endif %}
 {% if next %}
-<link rel='next'  href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}" />
-<link rel='prerender'  href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}" />
-<link rel='prefetch'  href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}" />
+<link rel='next'  href="{% url 'fit_run_detail' fitid=next.fitid %}?{{filter_GET_params}}" />
+<link rel='prerender'  href="{% url 'fit_run_detail' fitid=next.fitid %}?{{filter_GET_params}}" />
+<link rel='prefetch'  href="{% url 'fit_run_detail' fitid=next.fitid %}?{{filter_GET_params}}" />
 {% endif %}
 
 
@@ -35,7 +36,7 @@ document.getElementById('loading').style.visibility = 'hidden';
   <td valign=top rowspan=1>
     <b>Event</b>
     <table>
-      <tr><td>evid</td><td><a href="{% url event evid=ev.evid|stringformat:'d' %}">{{ ev.evid|stringformat:'d' }}</a></td></tr>
+      <tr><td>evid</td><td><a href="{% url 'event' evid=ev.evid|stringformat:'d' %}">{{ ev.evid|stringformat:'d' }}</a></td></tr>
       <tr><td>orid</td><td>{{ ev.orid|stringformat:'d' }}</td></tr>
       <tr><td>loc</td><td>{{ loc_str }}</td></tr>
       <tr><td>depth</td><td>{{ ev.depth|stringformat:'.1f' }}km</td></tr>
@@ -48,9 +49,9 @@ document.getElementById('loading').style.visibility = 'hidden';
     </table>
   </td>
   <td valign=top rowspan=1>
-    <b>Waveform</b>
+    <b>Waveform</b> (<a href="{% url 'wave_select' %}?sta={{ wave.sta }};chan={{ wave.chan }};stime={{ wave.stime }};etime={{ wave.etime }};filter_str={{ wave.filter_str|urlencode }};logscale=false">view</a>)
     <table>
-      <tr><td>sta</td><td><a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a></td></tr>
+      <tr><td>sta</td><td><a href="{% url 'site' sta=wave.sta %}">{{ wave.sta }}</a></td></tr>
       <tr><td>npts</td><td>{{ wave.npts }}</td></tr>
       <tr><td>srate</td><td>{{ wave.srate }}Hz</td></tr>
       <tr><td>len</td><td>{{ wave.len }}s</td></tr>
@@ -63,7 +64,7 @@ document.getElementById('loading').style.visibility = 'hidden';
     </table>
   </td>
   <td valign=top rowspan=1>
-    <b>Fit</b> (<a href="{% url template_debug fitid=fit.fitid %}">debug fit</a>)
+    <b>Fit</b> (<a href="{% url 'template_debug' fitid=fit.fitid %}">debug fit</a>)
     <table>
       <tr><td>fitid</td><td>{{ fit.fitid }}</td></tr>
       <tr><td>time</td><td>{{ fit_time_str }}</td></tr>
@@ -74,15 +75,15 @@ document.getElementById('loading').style.visibility = 'hidden';
     </table><br/>
   </td>
   <td valign=top rowspan=1>
-    <b>Noise</b> (<a href="{% url nm_detail nmid=fit.nmid.nmid %}">detail</a>)
+    <b>Noise</b> (<a href="{% url 'nm_detail' nmid=fit.nmid.nmid %}">detail</a>)
     <table>
       <tr><td>type</td><td>{{fit.nmid.model_type }}</td></tr>
       <tr><td>mean</td><td>{{fit.nmid.mean }}</td></tr>
       <tr><td>log(mean)</td><td>{{fit.nmid.mean|log }}</td></tr>
       <tr><td>std</td><td>{{fit.nmid.std }}</td></tr>
       <tr><td>order</td><td>{{fit.nmid.nparams }}</td></tr>
-      {% if fit.nmid.model_type == "ar" %}<tr><td>params</td><td><a href="{% url nm_detail nmid=fit.nmid.nmid %}"><img src="{% url nm_param_plot nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>{% endif %}
-      <tr><td>sample</td><td><a href="{% url nm_detail nmid=fit.nmid.nmid %}"><img src="{% url nm_sample nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>
+      {% if fit.nmid.model_type == "ar" %}<tr><td>params</td><td><a href="{% url 'nm_detail' nmid=fit.nmid.nmid %}"><img src="{% url 'nm_param_plot' nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>{% endif %}
+      <tr><td>sample</td><td><a href="{% url 'nm_detail' nmid=fit.nmid.nmid %}"><img src="{% url 'nm_sample' nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>
     </table>
     </td>
 </tr>
@@ -104,8 +105,12 @@ document.getElementById('loading').style.visibility = 'hidden';
 	    <label for="fitlog">logscale</label>
 	  </td>
 	  <td valign='top'>
-	    <input id="fitwiggle" type="checkbox" onchange="updateFitImage()" {% if fit_view_options.wiggle %}checked{% endif %}>
+	    <input id="fitwiggle" type="checkbox" onchange="changeWiggle()" {% if fit_view_options.wiggle %}checked{% endif %}>
 	    <label for="fitwiggle">wiggle</label>
+	  </td>
+	  <td valign='top'>
+	    <input id="fitnoise" type="checkbox" onchange="changeNoise()" {% if fit_view_options.noise %}checked{% endif %}>
+	    <label for="fitnoise">noise</label>
 	  </td>
 	  <td valign='top'>
 	    <div id="loading" style="color: red">loading...</div>
@@ -116,14 +121,15 @@ document.getElementById('loading').style.visibility = 'hidden';
   </td>
   <td colspan=4 rowspan=2 valign='top'>
     <table border=1 width=100%>
-      <tr>
+      <tr style="font-size: 10pt">
 	<td><strong>Phase</strong></td>
 	<td><strong>atime</strong></td>
-	<td><strong>onset_seconds</strong></td>
-	<td><strong>coda_height</strong></td>
-	<td><strong>peak_decay</strong></td>
-	<td><strong>coda_decay</strong></td>
+	<td><strong>log(onset_seconds)</strong></td>
+	<td><strong>log(coda_height)</strong></td>
+	<td><strong>log(peak_decay)</strong></td>
+	<td><strong>log(coda_decay)</strong></td>
 	<td><strong>amp_transfer</strong></td>
+	<td><strong>mult_wiggle_std</strong></td>
 	<td><strong>trained wiggles</strong></td>
       </tr>
       {% for phase in fit.sigvisacodafitphase_set.all %}
@@ -135,14 +141,8 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td>{{ phase.peak_decay }}</td>
 	<td>{{ phase.coda_decay }}</td>
 	<td>{{ phase.amp_transfer }}</td>
-	<td>
-	{% if phase.wiggle_fname and phase.wiggle_fname != 'NONE' %}
-	<a href="{% url fit_phase_wiggles fpid=phase.fpid%}">{{ phase.sigvisawiggle_set.count }} parameterization{{ phase.sigvisawiggle_set.count|pluralize }}</a>
-	  {% endif %}
-	{% if phase.wiggle_fname == 'NONE' %}
-	could not extract wiggle.
-	  {% endif %}
-	</td>
+	<td>{{ phase.mult_wiggle_std }}</td>
+	<td><a href="{% url 'fit_phase_wiggles' fpid=phase.fpid%}">wiggle</a></td>
       </tr>
       {% endfor %}
     </table>
@@ -152,7 +152,7 @@ document.getElementById('loading').style.visibility = 'hidden';
   <td colspan=1 align="center">
 
 
-    <form action="{% url rate_fit fitid=fit.fitid %}?next_fitid={{next.fitid}};{{filter_GET_params}}" method="post" id='approval_form'>
+    <form action="{% url 'rate_fit' fitid=fit.fitid %}?next_fitid={{next.fitid}};{{filter_GET_params}}" method="post" id='approval_form'>
       {% csrf_token %}
       <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
       <label for="unknown">Unknown</label>
@@ -162,17 +162,17 @@ document.getElementById('loading').style.visibility = 'hidden';
       <label for="good">Good fit</label>
       <input type="submit" value="Submit" />
     </form>
-<p><a href="{% url delete_fit  fitid=fit.fitid %}">delete fit</a></p>
+<p><a href="{% url 'delete_fit'  fitid=fit.fitid %}">delete fit</a></p>
   </td>
 </tr>
 </table>
 
 <center>
 <p>{% if prev %}
-<a href="{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}">previous</a>
+<a href="{% url 'fit_run_detail' fitid=prev.fitid %}?{{filter_GET_params}}">previous</a>
 {% endif %}
 {% if next %}
-<a href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}">next</a>
+<a href="{% url 'fit_run_detail' fitid=next.fitid %}?{{filter_GET_params}}">next</a>
 {% endif %}</p>
 </center>
 
@@ -182,8 +182,8 @@ document.getElementById('loading').style.visibility = 'hidden';
 <tr><td valign=top align=left width="33%">
 <strong>Filters: </strong>
 
-(<a href="{% url fit_list runid=fit.runid.runid %}?{{filter_GET_params}}">back to list</a>)
-  <br/>{{ fits_filter }}</td>
+(<a href="{% url 'fit_list' runid=fit.runid.runid %}?{{filter_GET_params}}">back to list</a>)
+  <br/><!-- fits_filter --></td>
 
 <td valign=top align=left width=33%><strong>optimization log:</strong>
 <br/><pre>{{ fit.optim_log }}</pre>
@@ -194,7 +194,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 <td valign=top align=left width=33%><strong>other fits for this arrival:</strong>
 <ul>
 {% for other_fit in other_fits %}
-<li><a href="{% url fit_run_detail fitid=other_fit.fitid%}">{{ other_fit.runid.run_name }}/{{ other_fit.runid.iter }}</a></li>
+<li><a href="{% url 'fit_run_detail' fitid=other_fit.fitid%}">{{ other_fit.runid.run_name }}/{{ other_fit.runid.iter }}</a></li>
 {% endfor %}
 </td>
 
@@ -216,13 +216,13 @@ switch(KeyID)
 
 {% if prev %}
 case 37:
-window.location = "{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}";
+window.location = "{% url 'fit_run_detail' fitid=prev.fitid %}?{{filter_GET_params}}";
 break;
 {% endif %}
 
 {% if next %}
 case 39:
-window.location = "{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}";
+window.location = "{% url 'fit_run_detail' fitid=next.fitid %}?{{filter_GET_params}}";
 break;
 {% endif %}
 
@@ -256,15 +256,31 @@ display.innerHTML=slide.value;
 
 }
 
+function changeNoise() {
+if (document.getElementById("fitnoise").checked) {
+   document.getElementById("fitwiggle").checked = false;
+}
+updateFitImage()
+}
+
+function changeWiggle() {
+if (document.getElementById("fitwiggle").checked) {
+   document.getElementById("fitnoise").checked = false;
+}
+updateFitImage()
+}
+
+
 function updateFitImage() {
 var slide = document.getElementById("slide");
 slideAmount = slide.value;
 
 fitlog = document.getElementById("fitlog").checked;
 fitwiggle = document.getElementById("fitwiggle").checked;
+fitnoise = document.getElementById("fitnoise").checked;
 
 var fit_img = document.getElementById("fit");
-new_src = "{% url visual fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";wiggle=" + fitwiggle + ";saveprefs=true";
+new_src = "{% url 'visual' fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";wiggle=" + fitwiggle + ";noise=" + fitnoise + ";saveprefs=true";
 
 // only show the loading message if the image has actually changed
 if ('/' + fit_img.src.split("/").slice(3).join("/") != new_src) {

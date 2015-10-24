@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 import scipy.stats as stats
+import scipy.linalg
 from scipy.misc import factorial
 from scipy.special import erf
 from sigvisa.models import Distribution
@@ -47,7 +48,7 @@ class InvGamma(Distribution):
     def predict(self):
         return self.beta / (self.alpha+1) # return the mode, since the mean isn't always defined
 
-    def log_p(self, x):
+    def log_p(self, x, **kwargs):
         alpha = self.alpha
         beta = self.beta
         if alpha <= 0 or beta <= 0:
@@ -74,7 +75,7 @@ class LogNormal(Distribution):
         self.mu = mu
         self.sigma = sigma
 
-    def log_p(self, x):
+    def log_p(self, x, **kwargs):
         mu = self.mu
         sigma = self.sigma
         if x == 0.0: return np.log(1e-300)
@@ -128,10 +129,13 @@ class Gaussian(Distribution):
     def deriv_log_p(self, x, **kwargs):
         return -(x - self.mean)/self.var
 
-    def predict(self, **kwargs):
+    def predict(self, *args, **kwargs):
         return self.mean
 
-    def sample(self, **kwargs):
+    def variance(self, *args, **kwargs):
+        return self.var
+
+    def sample(self, *args, **kwargs):
         return self.mean + np.random.randn() * self.std
 
     def product(self, other):
@@ -152,17 +156,19 @@ class Gaussian(Distribution):
         return "Gaussian(mean=%f, std=%f)" % (self.mean, self.std)
 
 class TruncatedGaussian(Distribution):
-    def __init__(self, mean, std, a=-np.inf, b=np.inf):
+    def __init__(self, mean, std, a=-np.inf, b=np.inf, eps=1e-2):
         self.mean = mean
         self.std = std
         self.a=a
         self.b=b
+        self.eps = eps
 
         self.Z = .5 * (erf((self.b-mean)/(std*np.sqrt(2))) -  erf((self.a-mean)/(std*np.sqrt(2))))
         self.logZ = np.log(self.Z)
 
     def log_p(self, x,  **kwargs):
-        if x < self.a or x > self.b:
+        eps = self.eps
+        if x <= self.a-eps or x >= self.b +eps:
             return -np.inf
 
         mu = self.mean
@@ -170,7 +176,48 @@ class TruncatedGaussian(Distribution):
         lp = -.5 * np.log(2*np.pi*sigma*sigma) - .5 * (x - mu)**2 / sigma**2 - self.logZ
         if np.isnan(lp):
             lp = np.float("-inf")
+
+        if x < self.a:
+
+            d = ( (self.a-x)/eps ) ** (1/1024.0)
+            penalty =  d / (1 - d )
+            return lp - penalty
+        elif x > self.b:
+            # at x=b, we have 0
+            # at x=b+eps
+            d = ( (x-self.b)/eps ) ** (1/1024.0)
+            penalty =  d / (1 - d )
+            return lp - penalty
+
+
         return lp
+
+    def deriv_log_p(self, x, **kwargs):
+        eps=self.eps
+        if x <= self.a-eps or x >= self.b +eps:
+            return 0.0
+
+        d_lp = -(x - self.mean)/(self.std**2)
+
+        if x < self.a:
+            d = ( (self.a-x)/eps ) ** (1/1024.0)
+            dd_dx = (1/1024.0) * ( (self.a-x)/eps )**(1/1024.0 - 1.0) * -1.0/eps
+            penalty =  d / (1 - d )
+            dpenalty_dd = 1.0/(1-d)**2
+            dpenalty_dx = dpenalty_dd * dd_dx
+            return d_lp - dpenalty_dx
+        elif x > self.b:
+            # at x=b, we have 0
+            # at x=b+eps
+            d = ( (x-self.b)/eps ) ** (1/1024.0)
+            dd_dx = (1/1024.0) * ( (x-self.b)/eps )**(1/1024.0 - 1.0) * 1.0/eps
+            penalty =  d / (1 - d )
+            dpenalty_dd = 1.0/(1-d)**2
+            dpenalty_dx = dpenalty_dd * dd_dx
+            return d_lp - dpenalty_dx
+
+
+        return d_lp
 
     def predict(self, **kwargs):
         return self.mean
@@ -184,6 +231,8 @@ class TruncatedGaussian(Distribution):
             sample = self.mean + np.random.randn() * self.std
         return sample
 
+    def variance(self, **kwargs):
+        return self.std**2
 
 class MultiGaussian(Distribution):
     def __init__(self, mean, cov, pre_inv=False):
@@ -192,27 +241,28 @@ class MultiGaussian(Distribution):
         self.L = scipy.linalg.cholesky(cov, True)
 
         if pre_inv:
-            self.invL = np.linalg.inv(L)
+            self.invL = np.linalg.inv(self.L)
         else:
             self.invL = None
 
     def log_p(self, x, **kwargs):
         r = x-self.mean
 
-        if self.invL:
+        if self.invL is not None:
             l = np.dot(self.invL, r)
             rr = np.dot(l.T, l)
         else:
-            tmp = scipy.linalg.chol_solve((self.L, True), r)
-            rr = np.dot(r.T, rr)
+            tmp = scipy.linalg.cho_solve((self.L, True), r)
+            rr = np.dot(r.T, tmp)
 
         logdet2 = np.log(np.diag(self.L)).sum()
         ll =  -.5 * (rr + len(self.mean) * np.log(2*np.pi)) - logdet2
         return ll
 
     def sample(self):
-        # why am I implementing this? use scipy.stats.multivariate_normal instead.
-        pass
+        n = len(self.mean)
+        z = np.random.randn(n)
+        return np.dot(self.L, z) + self.mean
 
 class Laplacian(Distribution):
     def __init__(self, center, scale):
@@ -273,6 +323,30 @@ class Poisson(Distribution):
     def sample(self, **kwargs):
         return stats.poisson.rvs(self.mu)
 
+class Beta(Distribution):
+    def __init__(self, alpha, beta):
+        assert(alpha >= 0 and beta >= 0)
+        self.alpha = float(alpha)
+        self.beta = float(beta)
+
+    def log_p(self, x, **kwargs):
+        if x <= 0 or x >= 1:
+            return -np.inf
+        alpha , beta = self.alpha, self.beta
+
+        lp = (alpha-1)*np.log(x) + (beta-1)*np.log(1-x) - scipy.special.betaln(alpha, beta)
+        return lp
+
+    def predict(self, **kwargs):
+        return self.alpha/(self.alpha+self.beta)
+
+    def sample(self, **kwargs):
+        return scipy.stats.beta(self.alpha, self.beta, loc=0, scale=1).rvs(1)[0]
+
+    def variance(self, **kwargs):
+        alpha, beta = self.alpha, self.beta
+        return (alpha*beta)/((alpha+beta)**2 * (alpha+beta+1))
+
 class Bernoulli(Distribution):
 
     def __init__(self, p):
@@ -309,3 +383,71 @@ class Negate(Distribution):
 
     def deriv_log_p(self, x, *args, **kwargs):
         return self.dist.deriv_log_p(-x, *args, **kwargs)
+
+class PiecewiseLinear(Distribution):
+    def __init__(self, xs, lps, mix_dist=None, mix_weight=0.0):
+        self.mix_dist = mix_dist
+        self.mix_weight = mix_weight
+        self.ps = np.exp(lps - np.max(lps))
+        self.xs = xs
+        self._normalize()
+
+    def _normalize(self):
+        pts = len(self.xs)
+        areas = np.empty((pts-1,))
+        for i in range(pts-1):
+            gap = self.xs[i+1]-self.xs[i]
+            areas[i] = gap * (self.ps[i+1]+self.ps[i])/2.0
+        Z = np.sum(areas)
+
+        self.areas = areas / Z
+        self.ps /= Z
+
+    def log_p(self, x, *args, **kwargs):
+        idx = np.searchsorted(self.xs, x)
+        if idx == 0:
+            p = 0
+        elif idx==len(self.xs):
+            p = 0
+        else:
+            p1 = self.ps[idx-1]
+            p2 = self.ps[idx]
+            z = x-self.xs[idx-1]
+            gap = self.xs[idx]-self.xs[idx-1]
+
+            p = (1.0 - z/gap) * p1 + (z/gap)*p2
+
+        if self.mix_weight > 0:
+            mix_p = np.exp(self.mix_dist.log_p(x))
+            p = p*(1.0-self.mix_weight) + self.mix_weight * mix_p
+
+        return np.log(p)
+
+    def sample(self, *args, **kwargs):
+        if self.mix_weight > 0:
+            u = np.random.rand()
+            if u < self.mix_weight:
+                return self.mix_dist.sample(*args, **kwargs)
+
+        pts = len(self.xs)
+        segment = np.random.choice(np.arange((pts-1),), p=self.areas)
+        area = self.areas[segment]
+        gap = self.xs[segment+1] - self.xs[segment]
+        p1 = self.ps[segment]
+        p2 = self.ps[segment+1]
+
+        u = np.random.rand() * area
+        if np.abs(p1-p2) < 1e-10:
+            z = (u/area) * gap
+        else:
+            z = (np.sqrt(p1**2 * gap**2 + 2*(p2-p1)*u*gap) - p1*gap) / (p2-p1)
+
+        if np.isnan(z):
+            import pdb; pdb.set_trace()
+        
+        if z > gap:
+            import pdb; pdb.set_trace()
+
+        x =  self.xs[segment] + z
+        return x
+

@@ -4,6 +4,7 @@ import scipy.stats
 from sigvisa import Sigvisa
 from sigvisa.source.event import Event
 from sigvisa.models import Distribution
+from sigvisa.models.distributions import Beta
 import sigvisa.utils.geog as geog
 import collections
 import hashlib
@@ -35,7 +36,6 @@ class ParamModel(Distribution):
         if sta is not None:
             self.site_lon, self.site_lat, self.site_elev, _, _, _, _ = Sigvisa().earthmodel.site_info(sta, 0)
 
-        self.s = Sigvisa()
 
     def __repr_base_params__(self):
         return repr({'site_lon': self.site_lon, 'site_lat': self.site_lat, 'site_elev': self.site_elev})
@@ -116,19 +116,34 @@ class ParamModel(Distribution):
 
 class ConstGaussianModel(ParamModel):
 
-    def __init__(self, X=None, y=None, sta=None, fname=None, mean=None, std=None):
+    def __init__(self, X=None, y=None, yvars=None, sta=None, fname=None, mean=None, std=None):
         super(ConstGaussianModel, self).__init__(sta=sta)
 
         if fname is not None:
             self.load_trained_model(fname)
             return
 
-        self.mean = np.mean(y) if mean is None else mean
-        self.std = np.std(y) if std is None else std
+        # assume our points are samples from a single Gaussian with some mean and var
+        # we observe each point with addition noise variance yvar.
+
+        # I'm too lazy to work out a proper Bayesian analysis, so instead we'll do a hack where
+        # we just assume var=1
+        if mean is not None:
+            self.mean = mean
+            self.std = std
+        else:
+            weights = 1.0/(yvars+1.0)
+            self.mean = np.average(y, weights=weights)
+            variance = np.average((y-self.mean)**2, weights=weights)
+            self.std = np.sqrt(variance)
 
         self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
-        self.ll = np.sum(self.l1 - .5 * ((y - self.mean)/self.std)**2)
+        if y is not None:
+            self.ll = np.sum(self.l1 - .5 * ((y - self.mean)/self.std)**2)
+        else:
+            self.ll=0
 
+        self.s = None
 
     def save_trained_model(self, fname):
         with open(fname, 'w') as f:
@@ -182,14 +197,21 @@ class ConstGaussianModel(ParamModel):
 
         return deriv
 
+    def variance(self, cond):
+        return self.std**2
+
+
 class ConstLaplacianModel(ParamModel):
 
-    def __init__(self, X=None, y=None, sta=None, fname=None, center=None, scale=None):
+    def __init__(self, X=None, y=None, yvars=None, sta=None, fname=None, center=None, scale=None):
         super(ConstLaplacianModel, self).__init__(sta=sta)
 
         if fname is not None:
             self.load_trained_model(fname)
             return
+
+        if yvars is not None:
+            print "warning: ignoring message variances in estimating Laplacian"
 
         self.center = np.median(y) if center is None else center
         self.scale = np.mean(np.abs(y-self.center)) if scale is None else scale
@@ -247,3 +269,81 @@ class ConstLaplacianModel(ParamModel):
         else:
             deriv = np.sum( [ 0.0 if z ==self.center else float(np.sign(self.center - z))/ self.scale for z in x ] )
         return deriv
+
+    def variance(self, cond):
+        return 2 * self.scale**2
+
+class ConstBetaModel(ParamModel):
+
+    def __init__(self, X=None, y=None, yvars=None, sta=None, fname=None, alpha=None, beta=None):
+        super(ConstBetaModel, self).__init__(sta=sta)
+
+        if fname is not None:
+            self.load_trained_model(fname)
+            return
+
+        if yvars is not None:
+            print "warning: ignoring message variances in estimating Laplacian"
+
+
+        def lp((a, b)):
+            d = Beta(a, b)
+            return -np.sum(d.log_p(yy) for yy in y.flatten())
+        if alpha is None:
+            r = scipy.optimize.minimize(lp, np.array((2.0, 3.0)), bounds=((0, None), (0, None)))
+            alpha, beta = r.x
+            ll = -r.fun
+        else:
+            ll = -lp((alpha, beta))
+        self.alpha, self.beta = alpha, beta
+        self.ll = ll
+        self.model = Beta(alpha, beta)
+
+    def save_trained_model(self, fname):
+        with open(fname, 'w') as f:
+            f.write(repr({'alpha': self.alpha, 'beta': self.beta, 'll': self.ll}) + "\n")
+            f.write(super(ConstBetaModel, self).__repr_base_params__())
+
+    def load_trained_model(self, fname):
+        with open(fname, 'r') as f:
+            l = f.readlines()
+            p_dict = eval(l[0])
+            self.alpha = p_dict['alpha']
+            self.beta = p_dict['beta']
+            self.ll = p_dict['ll']
+            super(ConstBetaModel, self).__unrepr_base_params__(l[1])
+        self.model = Beta(self.alpha, self.beta)
+
+    def predict(self, cond):
+        X1 = self.standardize_input_array(cond)
+        if len(X1.shape) == 1 or X1.shape[0] == 1:
+            return self.model.predict()
+        n = X1.shape[1]
+        return self.model.predict() * np.ones((n, 1))
+
+    def sample(self, cond):
+        X1 = self.standardize_input_array(cond)
+        return scipy.stats.beta.rvs(self.alpha, self.beta, size=X1.shape[0])
+
+    def log_likelihood(self):
+        return self.ll
+
+    def log_p(self, x, cond=None, **kwargs):
+        #X1 = self.standardize_input_array(cond, **kwargs)
+        x = x if isinstance(x, collections.Iterable) else np.array((x,))
+
+        return self.model.log_p(x)
+
+    def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4, **kwargs):
+        assert(idx == None)
+        #X1 = self.standardize_input_array(cond, **kwargs)
+        x = x if isinstance(x, collections.Iterable) else (x,)
+
+        if cond_key is not None:
+            deriv = 0
+        else:
+            raise Exception("not implemented")
+        return deriv
+
+    def variance(self, cond):
+        return self.model.variance()

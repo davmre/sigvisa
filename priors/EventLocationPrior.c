@@ -170,7 +170,7 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
   
   /* the event location better be valid */
   if ((lon < -180) || (lon > 180) || (lat < -90) || (lat > 90) 
-      || (depth < MIN_DEPTH) || (depth > MAX_DEPTH))
+      || (depth < MIN_DEPTH && depth != -1) || (depth > MAX_DEPTH))
   {
     printf("Error: invalid location -- lon %lf lat %lf depth %lf\n",
            lon, lat, depth);
@@ -219,8 +219,51 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
   
   /* the probability density at any point in the bucket is uniform within the
    * bucket so we divide the bucket probability by the area of the bucket */
-  return log(val)\
-    - log(dist->lonstep) - log(dist->zstep) - log(MAX_DEPTH-MIN_DEPTH);
+  double r = log(val) - log(dist->lonstep) - log(dist->zstep);
+  if (depth == -1){
+    return r;
+  } else {
+    return depth_lp(depth);
+  }
+}
+
+
+double depth_lp(double depth) {
+
+  // simple hack: depth prior is a mixture of
+  //   .7 * Exponential(5)
+  //   .3 * Gamma(loc=6.27209, alpha=1.41801048, scale=126.7144)
+  //      (using the scipy.stats parameterization)
+  // where the first component fits surface events and the second fits the tail of deep events.
+  // See notebooks/depth_prior.ipynb for more.
+  // (but also TODO: we should have more principled code for learning this, and especially 
+  //  learn a joint location/depth prior since depth distribution is actually very different 
+  //  in different locations). 
+
+  if (depth < 0 || depth > 700) {
+    printf("Error: invalid depth %lf\n", depth);    
+    return -HUGE_VAL;
+  }
+
+  // first component
+  double p1 = exp(-depth/5.0)/5.0;
+    
+
+  // second component
+  double scale = 126.7144;
+  double loc = 6.27209;
+  double p2 = 0;
+  
+  if (depth > loc) {
+    double x = (depth-loc)/scale;
+    // gamma(1.41801048) = 0.88642998
+    p2 = pow(x,0.41801048) * exp(-x) / 0.88642998;
+    p2 /= scale;
+  }
+
+  // mixture
+  double p = .7*p1 + .3*p2;
+  return log(p);
 }
 
 static int sample_vec(int veclen, double * p_probvec)
@@ -263,5 +306,6 @@ void EventLocationPrior_Sample(const EventLocationPrior_t * dist,
   *p_lat = RAD2DEG * asin(-1 + (latidx + RAND_DOUBLE) * dist->zstep);
 
   *p_depth = RAND_UNIFORM(MIN_DEPTH, MAX_DEPTH);
+  printf("WARNING: sampling depth from uniform distribution because I haven't implemented sampling for the actual depth prior yet.\n");
 }
 

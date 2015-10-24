@@ -5,10 +5,14 @@ from sigvisa.models.statespace import StateSpaceModel
 
 class ARSSM(StateSpaceModel):
 
-    def __init__(self, params, error_var):
+    def __init__(self, params, error_var, mean=0.0):
         self.params = np.asarray(params) # [a1, a2, ..., an] where a1 is the first-order param
+
+        assert(error_var > 0)
         self.error_var = error_var
+
         self.max_dimension = len(params)
+        self.mean = mean
 
     def apply_transition_matrix(self, x, k, x_new):
         x_new[1:] = x[:-1]
@@ -36,18 +40,26 @@ class ARSSM(StateSpaceModel):
             assert(len(x.shape)==2)
             result[:] = x[0,:]
 
+    def obs_model_changed(self, k1, k2):
+        return False
+
     def obs_vector_debug(self, k):
         H = np.zeros((self.max_dimension,))
         H[0] = 1
         return H
 
+    def observation_bias(self, k):
+        return self.mean
+
     def observation_noise(self, k):
         return 0.0
+
+    def stationary(self, k):
+        return True
 
     def prior_mean(self):
         return np.zeros((self.max_dimension,))
 
     def prior_vars(self):
-        p = np.zeros((self.max_dimension,))
-        p[0] = self.error_var
+        p = np.ones((self.max_dimension,))*self.error_var
         return p

@@ -1,4 +1,5 @@
 {% load pagination_tags %}
+{% load url from future %}
 {% autopaginate run_list 50 %}
 
 <html>
@@ -25,11 +26,11 @@
       </tr>
         {% for run in run_list %}
             <tr>
-                <td><a href="{% url mcmcrun_detail dirname=run.dir %}">{{ run.dir }}</a></td>
+                <td><a href="{% url 'mcmcrun_detail' dirname=run.dir %}">{{ run.dir }}</a></td>
                 <td>{{ run.steps }}</td>
                 <td>{{ run.time }}</td>
 		<td>{{ run.cmd }}</td>
-		<td><a href="{% url mcmcrun_analyze dirname=run.dir%}?burnin=100;plot_templates=false">analyze with burnin=100</a></td>
+		<td><a href="{% url 'mcmcrun_analyze' dirname=run.dir%}?burnin=100;plot_templates=false">analyze with burnin=100</a></td>
             </tr>
         {% endfor %}
     </table>

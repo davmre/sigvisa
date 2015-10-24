@@ -1,56 +1,32 @@
+{% load url from future %}
 {% load math_filters %}
 
 <html>
 <head>
-<title>wiggles -- phase {{ phase.fpid }} -- sigvisa</title>
+<title>wiggles -- phase {{ fphase.fpid }} -- sigvisa</title>
 <link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
 {% include "svweb/header.html"  %}
-<strong>wiggles for evid {{fit.evid}} phase {{phase.phase}} at station {{fit.sta}}</strong> (<a href="{% url fit_run_detail fitid=fit.fitid %}">back to fit {{fit.fitid}} detail</a>)<br/>
-run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}}
+
+
 
 <table>
-<tr>
-<td colspan=4 align=center>
-<strong>Real signal with template fit</strong><br/>
-<img src="{% url visual fitid=fit.fitid  %}?ymax={{env_ymax}};ymin={{env_ymin}}" width=500 height=300></td>
-</tr>
-<tr>
-<td>(true wiggle, extracted from fit template)</td>
-<td><strong><center>raw extracted wiggle:</center></strong><br/><img src="{% url raw_wiggle fpid=phase.fpid  %}?ymax={{wiggle_ymax}};ymin={{wiggle_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
-<td><strong><center>template * wiggle:</center></strong><br/><img src="{% url template_wiggle fpid=phase.fpid  %}?ymax={{env_ymax}};ymin={{env_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
-<td><strong><center>wiggle spectrum:</center></strong><br/><img src="{% url wiggle_spectrum fpid=phase.fpid  %}" width=500 height=300></td>
-</tr>
+<tr><td><img src="{% url 'fit_wiggle_view' fpid=fphase.fpid %}" width=450 ></td><td><img src="{% url 'visual' fitid=fphase.fitid.fitid %}?components=template,wavelet;smooth=0;phase={{ fphase.phase }};xmin={{ xmin }};xmax={{ xmax }}" width=450></td><td><img src="{% url 'visual' fitid=fphase.fitid.fitid %}?components=template,multnoise;smooth=0;phase={{ fphase.phase }};xmin={{ xmin }};xmax={{ xmax }}" width=450></td></tr>
+<tr style="text-align: center"><td>Repeatable wiggle</td><td>Repeatable wiggle (scaled)</td><td>Nonrepeatable wiggle (scaled)</td></tr>
+</table>
 
-{% for wiggle in phase.sigvisawiggle_set.all %}
-<tr>
-<td>
 
+<p>Wiggle family {{ fphase.wiggle_family }}: {{ n_coefs }} coefficients
 <table>
-<tr><td><strong>wiggleid:</strong></td><td>{{wiggle.wiggleid}}</td></tr>
-<tr><td><strong>timestamp:</strong></td><td>{{wiggle.timestamp}}</td></tr>
-
-<tr><td><strong>srate</strong></td><td>{{wiggle.basisid.srate}}</td></tr>
-<tr><td><strong>npts</strong></td><td>{{wiggle.basisid.npts}}</td></tr>
-<tr><td><strong>len</strong></td><td>{{wiggle.basisid.npts|add:"-1"|div:wiggle.basisid.srate}}s</td></tr>
-<tr><td><strong>logscale</strong></td><td>{{wiggle.basisid.logscale}}</td></tr>
-<tr><td><strong>dimension</strong></td><td>{{wiggle.basisid.dimension}}</td></tr>
-<tr><td><strong>basis_type</strong></td><td>{{wiggle.basisid.basis_type}}</td></tr>
-
-{% if wiggle.basisid.family_name|slice:":8" == "fourier_" %}
-   <tr><td><strong>max_freq:</strong></td><td>{{wiggle.basisid.max_freq}}</td></tr>
-{% endif %}
-
+<tr><td>posterior means</td>  {% for pm in pmeans %}<td>{{ pm|stringformat:'.3f' }}</td>{% endfor %}</tr>
+<tr><td>posterior vars</td> {% for pv in pvars %}<td>{{ pv|stringformat:'.3f' }}</td>{% endfor %}</tr>
 </table>
+</p>
 
-</td>
-<td><strong><center>fit parameterized wiggle:</center></strong><br/><img src="{% url reconstructed_wiggle wiggleid=wiggle.wiggleid  %}?ymax={{wiggle_ymax}};ymin={{wiggle_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
-<td><strong><center>template * parameterized wiggle:</center></strong><br/><img src="{% url reconstructed_template_wiggle wiggleid=wiggle.wiggleid  %}?ymax={{env_ymax}};ymin={{env_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
-<td><strong><center>wiggle spectrum:</center></strong><br/><img src="{% url reconstructed_wiggle_spectrum wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
-</tr>
-{% endfor %}
-</table>
+<p>Messages: <tt>{{ message_repr }} </tt></p>
+
+<a href="{% url 'fit_run_detail' fitid=fphase.fitid.fitid %}">Back to fit {{ fphase.fitid.fitid }}</a>.
 
 {% include "svweb/footer.html"  %}
 </body>

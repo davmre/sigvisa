@@ -106,3 +106,9 @@ class EventLocationNode(Node):
         bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
 
         return bounds
+
+class NoisyEventLocModel(Distribution):
+    """
+    when adding an event, we can have an "observe_event(eid, ev, stds=None)" method that takes the event to observe, the event to observe it as, and the noise levelk of the observation (obviously with some default).
+   this will just create a bunch of child nodes, each for a particular aspect of the event. each with a parent-conditional Gaussian model.
+    """

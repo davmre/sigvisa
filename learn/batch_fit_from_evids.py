@@ -83,6 +83,9 @@ def run_fit_and_rename_output(args):
                 print "fit succeeded: moving %s to %s" % (tmp_output_file, success_output_file)
                 shutil.move(tmp_output_file, success_output_file)
                 break
+            if "not fitting" in line:
+                fitid = -1
+                break
 
         if fitid is None:
             failed_output_dir = os.path.join(base_output, "failed")
@@ -90,6 +93,9 @@ def run_fit_and_rename_output(args):
             ensure_dir_exists(failed_output_dir)
             print "fit failed: moving %s to %s" % (tmp_output_file, failed_output_file)
             shutil.move(tmp_output_file, failed_output_file)
+        elif fitid == -1:
+            print "skipping existing fit, deleting log %s" % tmp_output_file
+            os.remove(tmp_output_file)
 
     return result
 
@@ -135,7 +141,11 @@ def main():
         if a.startswith("--"):
             extra_option_string += " " + a
         else:
-            extra_option_string += "=" + a
+            if "'" in a:
+                # hack to escape args that contain quotes (eg tmpl_optim_params)
+                extra_option_string += "=\"" + a + "\""
+            else:
+                extra_option_string += "=" + a
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -191,7 +201,7 @@ def main():
             if options.per_station_limit and len(sta_evids[sta]) > options.per_station_limit:
                 continue
 
-            cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s %s" % (
+            cmd_str = "python -m learn.fit_shape_params_mcmc -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s %s" % (
                 int(evid), sta, "--fit_wiggles" if options.fit_wiggles else "",
                 "--template_shape=%s" % options.template_shape if options.template_shape else "",
                 "--template_model=\"%s\"" % options.template_model if options.template_model else "",

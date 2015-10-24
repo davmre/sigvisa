@@ -271,11 +271,11 @@ def read_event_detections(cursor, evid, stations=None, evtype="leb", min_snr=0):
 
     if stations is not None:
         ref_siteids = [s.ref_siteid[sta] for sta in stations]
-        sta_cmd = "site.id in (" + ','.join([str(rs) for rs in ref_siteids]) + ")"
+        sta_cmd = "and site.id in (" + ','.join([str(rs) for rs in ref_siteids]) + ")"
     else:
-        sta_cmd = "site.statype='ss'"
+        sta_cmd = ""
 
-    sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > %d and iarr.sta=site.sta and iass.phase=ph.phase and ascii(iass.phase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" % (
+    sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > %d and iarr.sta=site.sta and iass.phase=ph.phase and ascii(iass.phase) = ascii(ph.phase) %s order by iarr.time, iarr.arid" % (
         evtype, evtype, evtype, int(evid), min_snr, sta_cmd)
 
     cursor.execute(sql_query)
@@ -283,6 +283,14 @@ def read_event_detections(cursor, evid, stations=None, evtype="leb", min_snr=0):
 
     return np.array(detections)
 
+def read_misc_assocs_at_station(cursor, sta, start_time, end_time, primary_evid):
+    s = Sigvisa()
+
+    site = s.get_array_site(sta)
+
+    sql_query = "select l.time, lebo.evid from leb_origin lebo, leb_arrival l, leb_assoc leba where l.time between %f and %f and l.arid=leba.arid and leba.orid=lebo.orid and (l.sta='%s' or l.sta='%s') and lebo.evid!=%d" % (start_time, end_time, sta, site, primary_evid)
+    cursor.execute(sql_query)
+    return np.array(cursor.fetchall(), dtype=np.float)
 
 def read_station_detections(cursor, sta, start_time, end_time, arrival_table="idcx_arrival"):
 

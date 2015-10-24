@@ -4,6 +4,7 @@ import copy
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models import DummyModel
 
+
 class Node(object):
 
     def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False):
@@ -15,6 +16,8 @@ class Node(object):
         self.label = label
         self.mark = 0
         self.key_prefix = ""
+
+        self.params_modeled_jointly = set()
 
         if not keys:
             if isinstance(initial_value, dict):
@@ -36,7 +39,7 @@ class Node(object):
         self._fixed = not any(self._mutable.itervalues())
         self._update_mutable_cache()
 
-        if isinstance(initial_value, float) and np.isnan(initial_value):
+        if isinstance(initial_value, float) and not np.isfinite(initial_value):
             raise ValueError("creating node %s with NaN value!" % label)
 
         if len(keys) > 1:
@@ -85,13 +88,15 @@ class Node(object):
         child.parent_nodes_added.add(self)
 
 
-    def addParent(self, parent):
-        parent.children.add(self)
+    def addParent(self, parent, stealth=False):
         for key in parent.keys():
             self.parents[key] = parent
-            self.parent_keys_removed.discard(key)
-        parent.child_set_changed=True
-        self.parent_nodes_added.add(parent)
+            if not stealth:
+                self.parent_keys_removed.discard(key)
+        if not stealth:
+            parent.child_set_changed=True
+            self.parent_nodes_added.add(parent)
+            parent.children.add(self)
 
     # NOTE: removeChild and removeParent assume that node is actually
     # being removed from the graph. We'd have to do more bookkeeping
@@ -102,6 +107,7 @@ class Node(object):
 
     def removeParent(self, parent):
         self.parent_nodes_added.discard(parent)
+
         for key in parent.keys():
             del self.parents[key]
             self.parent_keys_removed.add(key)
@@ -174,11 +180,16 @@ class Node(object):
 
     def set_value(self, value, key=None, force_deterministic_consistency=True):
 
-        if isinstance(value, float) and np.isnan(value):
+        if isinstance(value, float) and not np.isfinite(value):
             raise ValueError("trying to set NaN at node %s" % self.label)
 
         if isinstance(value, np.ndarray) and value.size == 1:
             raise ValueError("%s: setting scalar value as %s np array %s " % (self.label, value.shape, value))
+
+
+        #if "tt_residual" in self.label and value != 0:
+        #    import pdb; pdb.set_trace()
+
 
         key = key if key else self.single_key
         if self._mutable[key]:
@@ -266,6 +277,7 @@ class Node(object):
             self._pv_cache[key] = node.get_value(key)
         del self.parent_keys_changed
         self.parent_keys_changed = set()
+
         for node in self.parent_nodes_added:
             self._pv_cache.update(node.get_dict())
 
@@ -274,24 +286,61 @@ class Node(object):
 
         return self._pv_cache
 
+    def upwards_message_normalizer(self, parent_values=None):
+        # assume the generic case is that this node holds a value, modeled as a noisy sample from a GP,
+        # so we just need to pass the "observed" value up to the GP, and there's no special contribution
+        # from the normalizing constant of the (this node | gp mean) likelihood since it's just
+        # Gaussian and sums to 1 (thus log=0).
+
+        if parent_values is None:
+            parent_values = self._parent_values()
+
+        v = self.get_dict()
+        v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
+
+        assert(np.isfinite(v))
+
+        for joint_model in self.params_modeled_jointly:
+            joint_model.generic_upwards_message(v=v, cond=parent_values)
+
+        return 0.0
+
+    @staticmethod
+    def param_truncation_penalty(param, value):
+        p = 0
+        if 'mult_wiggle_std' in param:
+            if value > 1:
+                p = -np.exp(100*(value-1))
+            if value < 0:
+                p = -np.exp(100*(-value))
+        if 'tt_residual' in param and np.abs(value) > 25:
+            p = -(10*(np.abs(value)-25))**4
+        elif 'peak_offset' in param and value > 3.0:
+            p = -(10*(value-3))**4
+        elif 'coda_decay' in param and value < -9:
+            p = -( 10 * -(value+9))**4
+
+        return p
+
+
     def log_p(self, parent_values=None, v=None):
         #  log probability of the values at this node, conditioned on all parent values
 
         if parent_values is None:
             parent_values = self._parent_values()
 
+        if self.model is None and len(self.params_modeled_jointly) > 0:
+            from sigvisa.graph.dag import ParentConditionalNotDefined
+            raise ParentConditionalNotDefined()
+
         if v is None:
             v = self.get_dict()
             v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
         lp = self.model.log_p(x = v, cond=parent_values, key_prefix=self.key_prefix)
 
+        # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
-            if 'tt_residual' in self.label and np.abs(v) > 10:
-                lp = -99999999
-            elif 'peak_offset' in self.label and np.exp(v) > 15:
-                lp = -99999999
-            elif 'coda_decay' in self.label and np.exp(v) < .008:
-                lp = -9999999
+            lp += self.param_truncation_penalty(self.label, v)
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))
@@ -367,7 +416,12 @@ class Node(object):
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        nv = self.model.predict(cond=parent_values)
+
+        if self.model is None and len(self.params_modeled_jointly) > 0:
+            nv, _ = list(self.params_modeled_jointly)[0].prior()
+        else:
+            nv = self.model.predict(cond=parent_values)
+
         if set_new_value:
             self._set_values_from_model(nv)
         else:
@@ -388,15 +442,25 @@ class Node(object):
     # use custom getstate() and setstate() methods to avoid pickling
     # param models when we pickle a graph object (since these models
     # can be large, and GP models can't be directly pickled anyway).
+
     def __getstate__(self):
+
+        # ground out parent_keys_changed, etc into self._pv_cache.
+        # this avoids recursive node pointers that cause pickle
+        # to hit the depth limit. 
+        self._parent_values()
+
+
+        d = copy.copy(self.__dict__)
         try:
             self.modelid
-            d = copy.copy(self.__dict__)
             del d['model']
-            state = d
         except AttributeError:
-            state = self.__dict__
-        return state
+            pass
+
+        d['parents'] = dict()
+
+        return d
 
     def __setstate__(self, state):
         if "model" not in state:
@@ -476,9 +540,6 @@ class DeterministicNode(Node):
     def set_value(self, value, key=None, parent_key=None):
         if not parent_key:
             parent_key = self.default_parent_key()
-
-        if "coda_height" in self.label and value > 30:
-            import pdb; pdb.set_trace()
 
         parent_val = self.invert(value=value, parent_key=parent_key)
         self.parents[parent_key].set_value(value=parent_val, key=parent_key)

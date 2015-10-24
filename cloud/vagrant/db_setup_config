@@ -1,0 +1,9 @@
+{"csvdir": "/home/sigvisa/sigvisa_csv",
+ "adminuser": "root",
+ "rootpw": "55rontob",
+ "dbname": "ctbt3mos",
+ "dbuser": "ctbt",
+ "userpw": None,
+ "wavedir": "/home/sigvisa/ctbt_data/",
+ "autoenv": "yes"
+}

@@ -6,6 +6,8 @@ import sigvisa.utils.geog as geog
 import multiprocessing
 import copy
 from mpl_toolkits.basemap import Basemap
+from matplotlib.patches import Ellipse
+
 import matplotlib
 
 def multi_f(f_args):
@@ -223,7 +225,7 @@ class Heatmap(object):
                 self.fvals[loni, lati] = fvals[i]
                 i += 1
 
-    def init_bmap(self, coastlines = True, nofillcontinents=True, resolution="l", projection="cyl", axes=None, **kwargs):
+    def init_bmap(self, coastlines = True, nofillcontinents=True, resolution="l", projection="cyl", axes=None, coastline_color="k", **kwargs):
         if projection=="robin":
             bmap = Basemap(resolution = resolution, projection = projection, ax=axes, lon_0=0,
                            **kwargs)
@@ -232,7 +234,7 @@ class Heatmap(object):
                            llcrnrlon=self.left_lon, llcrnrlat=self.bottom_lat,
                            urcrnrlon=self.right_lon, urcrnrlat=self.top_lat,  **kwargs)
         if coastlines:
-            bmap.drawcoastlines(zorder=10)
+            bmap.drawcoastlines(zorder=10, color=coastline_color)
 
         if not nofillcontinents:
             # fill the continents with a greenish color
@@ -260,13 +262,40 @@ class Heatmap(object):
 
         self.bmap.drawmeridians(meridians, labels=[True, False, False, True], fontsize=x_fontsize, zorder=zorder)
 
-    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, alpha=1.0, **plotargs):
+    def plot_covs(self, means, covs, zorder=10, stds=2.0, colors=None, alpha=0.5, **plotargs):
         try:
             bmap = self.bmap
         except:
             self.init_bmap()
 
-        normed_locations = np.array([self.normalize_lonlat(*location) for location in locations])
+        normed_means = np.array([self.normalize_lonlat(*mean[:2]) for mean in means])
+        for enum, (c, C) in enumerate(zip(normed_means, covs)):
+            x1, x2 = bmap(c[0], c[1])
+            color = colors[enum] if colors is not None else None
+            bmap.plot([x1], [x2], zorder=zorder,  **plotargs)
+
+            evl, evec = np.linalg.eig(C)
+            a = 90-np.arctan(evec[0][1]/evec[0][0]) * 180.0/np.pi
+            axes = np.sqrt(evl)*stds
+            e = Ellipse(xy=(x1, x2), width=axes[1], height=axes[0], angle=a)
+            bmap.ax.add_artist(e)
+            #e.set_clip_box(bmap.ax.bbox)
+            e.set_alpha(alpha)
+            e.set_facecolor(color)
+
+    def drawline(self, loc1, loc2, color, **kwargs):
+        bmap = self.bmap
+        x1, y1 = bmap(loc1[0], loc1[1])
+        x2, y2 = bmap(loc2[0], loc2[1])
+        bmap.plot([x1, x2], [y1, y2], c=color, **kwargs)
+
+    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, alpha=1.0, colors=None, **plotargs):
+        try:
+            bmap = self.bmap
+        except:
+            self.init_bmap()
+
+        normed_locations = np.array([self.normalize_lonlat(*location[:2]) for location in locations])
 
 
         if yvals is not None and len(yvals) > 0: #HACK
@@ -293,6 +322,8 @@ class Heatmap(object):
                 my_alpha = alpha[enum]
             except:
                 my_alpha = alpha
+            if colors is not None:
+                plotargs['mfc'] = colors[enum]
             bmap.plot([x1], [x2], zorder=zorder, alpha=my_alpha, **plotargs)
 
 
@@ -388,7 +419,7 @@ class Heatmap(object):
                                     cax=cax, format=colorbar_format)
 
 
-    def normalize_lonlat(self, lon, lat):
+    def normalize_lonlat(self, lon, lat, *args):
         """
         Return the given location represented within the coordinate
         scheme of the current heatmap (e.g. [-180, 180] vs [0, 360]).
@@ -518,8 +549,8 @@ class Heatmap(object):
             # it as the initialization for iterative updating.
             return self
 
-        if self.left_lon != other.left_lon or self.bottom_lat != other.bottom_lat or self.right_lon != other.right_lon or self.top_lat != other.top_lat or self.n != other.n:
-            raise Exception("cannot multiply heatmaps with different gridpoints!")
+        if np.abs(self.left_lon - other.left_lon) > 1e-8 or np.abs(self.bottom_lat - other.bottom_lat) > 1e-8 or np.abs(self.right_lon - other.right_lon) > 1e-8 or np.abs(self.top_lat - other.top_lat) > 1e-8 or self.n != other.n:
+            raise Exception("cannot add heatmaps with different gridpoints!")
 
         newf = lambda lon, lat: self.f(lon, lat) * other.f(lon, lat)
         new_vals = self.fvals * other.fvals
@@ -535,7 +566,7 @@ class Heatmap(object):
             # it as the initialization for iterative updating.
             return self
 
-        if self.left_lon != other.left_lon or self.bottom_lat != other.bottom_lat or self.right_lon != other.right_lon or self.top_lat != other.top_lat or self.n != other.n:
+        if np.abs(self.left_lon - other.left_lon) > 1e-8 or np.abs(self.bottom_lat - other.bottom_lat) > 1e-8 or np.abs(self.right_lon - other.right_lon) > 1e-8 or np.abs(self.top_lat - other.top_lat) > 1e-8 or self.n != other.n:
             raise Exception("cannot add heatmaps with different gridpoints!")
 
         newf = lambda lon, lat: self.f(lon, lat) + other.f(lon, lat)

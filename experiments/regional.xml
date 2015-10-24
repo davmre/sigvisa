@@ -1,0 +1,2718 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<quakeml xmlns="http://quakeml.org/xmlns/quakeml/1.2">
+  <eventParameters publicID="smi:ISC/bulletin">
+    <creationInfo>
+      <agencyID>ISC</agencyID>
+      <creationTime>2015-04-09T00:44:21</creationTime>
+    </creationInfo>
+    <description>ISC Bulletin</description>
+    <comment>
+      <text>Please note: Before 1 Jan 2006 the Jeffreys-Bullen (JB) travel times were used to compute the ISC hypocentres. From 1 Jan 2006 the ISC hypocentres are computed and reviewed using ak135 velocity model. In addition, the JB based hypocentres (agency ISCJB) are still computed for the purpose of continuity until such time when the entire ISC dataset has been recomputed using ak135 (by July 2014). The ISCJB solutions are not reviewed by the ISC seismologists. </text>
+    </comment>
+    <event publicID="smi:ISC/evid=15153832">
+      <preferredOriginID>smi:ISC/origid=15777480</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777480">
+        <time>
+          <value>2009-04-20T12:21:25.51Z</value>
+          <uncertainty>0.24</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2031</value>
+        </latitude>
+        <longitude>
+          <value>129.7498</value>
+        </longitude>
+        <depth>
+          <value>48195.2</value>
+        </depth>
+        <quality>
+          <usedPhaseCount>721</usedPhaseCount>
+          <associatedStationCount>768</associatedStationCount>
+          <standardError>1.3483</standardError>
+          <azimuthalGap>21.497</azimuthalGap>
+          <minimumDistance>0.353</minimumDistance>
+          <maximumDistance>161.644</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>3.21222</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>4.14568</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>47.5</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15951998">
+        <mag>
+          <value>5.31</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777480</originID>
+        <stationCount>132</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15951997">
+        <mag>
+          <value>5.22</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777480</originID>
+        <stationCount>188</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=12935731">
+      <preferredOriginID>smi:ISC/origid=15777482</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777482">
+        <time>
+          <value>2009-04-20T12:51:21.44Z</value>
+          <uncertainty>0.82</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2142</value>
+        </latitude>
+        <longitude>
+          <value>129.6641</value>
+        </longitude>
+        <depth>
+          <value>36000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>14</usedPhaseCount>
+          <associatedStationCount>14</associatedStationCount>
+          <standardError>1.3118</standardError>
+          <azimuthalGap>93.984</azimuthalGap>
+          <minimumDistance>0.389</minimumDistance>
+          <maximumDistance>69.979</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>8.38964</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>11.5173</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>34.3</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15609135">
+        <mag>
+          <value>3.85</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777482</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153848">
+      <preferredOriginID>smi:ISC/origid=15777496</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777496">
+        <time>
+          <value>2009-04-20T14:36:13.90Z</value>
+          <uncertainty>0.68</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2308</value>
+        </latitude>
+        <longitude>
+          <value>129.6152</value>
+        </longitude>
+        <depth>
+          <value>36000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>29</usedPhaseCount>
+          <associatedStationCount>27</associatedStationCount>
+          <standardError>1.8490</standardError>
+          <azimuthalGap>95.352</azimuthalGap>
+          <minimumDistance>0.409</minimumDistance>
+          <maximumDistance>68.948</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>5.84959</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>10.7479</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>22.7</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904454">
+        <mag>
+          <value>3.75</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777496</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153847">
+      <preferredOriginID>smi:ISC/origid=15777498</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777498">
+        <time>
+          <value>2009-04-20T14:55:13.33Z</value>
+          <uncertainty>0.53</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.0881</value>
+        </latitude>
+        <longitude>
+          <value>129.6497</value>
+        </longitude>
+        <depth>
+          <value>36000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>49</usedPhaseCount>
+          <associatedStationCount>49</associatedStationCount>
+          <standardError>1.0255</standardError>
+          <azimuthalGap>56.958</azimuthalGap>
+          <minimumDistance>0.501</minimumDistance>
+          <maximumDistance>127.852</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>6.15123</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>9.80777</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>43.2</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15609148">
+        <mag>
+          <value>3.96</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777498</originID>
+        <stationCount>13</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=12935830">
+      <preferredOriginID>smi:ISC/origid=15777502</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777502">
+        <time>
+          <value>2009-04-20T15:10:38.76Z</value>
+          <uncertainty>1.06</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1953</value>
+        </latitude>
+        <longitude>
+          <value>129.5874</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>14</usedPhaseCount>
+          <associatedStationCount>13</associatedStationCount>
+          <standardError>0.9104</standardError>
+          <azimuthalGap>121.673</azimuthalGap>
+          <minimumDistance>0.453</minimumDistance>
+          <maximumDistance>65.674</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>6.84233</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>12.1835</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>31.6</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+    </event>
+    <event publicID="smi:ISC/evid=15153849">
+      <preferredOriginID>smi:ISC/origid=15777505</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777505">
+        <time>
+          <value>2009-04-20T15:28:34.61Z</value>
+          <uncertainty>0.59</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1037</value>
+        </latitude>
+        <longitude>
+          <value>129.6508</value>
+        </longitude>
+        <depth>
+          <value>25479.6</value>
+        </depth>
+        <quality>
+          <usedPhaseCount>103</usedPhaseCount>
+          <associatedStationCount>90</associatedStationCount>
+          <standardError>1.0793</standardError>
+          <azimuthalGap>50.461</azimuthalGap>
+          <minimumDistance>0.487</minimumDistance>
+          <maximumDistance>153.172</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>5.2157</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>8.85493</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>55.4</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904456">
+        <mag>
+          <value>4.26</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777505</originID>
+        <stationCount>21</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15904455">
+        <mag>
+          <value>3.53</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777505</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153838">
+      <preferredOriginID>smi:ISC/origid=15777508</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777508">
+        <time>
+          <value>2009-04-20T16:02:04.93Z</value>
+          <uncertainty>0.78</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1409</value>
+        </latitude>
+        <longitude>
+          <value>129.5673</value>
+        </longitude>
+        <depth>
+          <value>36000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>20</usedPhaseCount>
+          <associatedStationCount>19</associatedStationCount>
+          <standardError>1.3100</standardError>
+          <azimuthalGap>92.982</azimuthalGap>
+          <minimumDistance>0.507</minimumDistance>
+          <maximumDistance>69.866</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>7.66617</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>10.8383</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>26.3</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15609156">
+        <mag>
+          <value>3.80</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777508</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153839">
+      <preferredOriginID>smi:ISC/origid=15551993</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15551993">
+        <time>
+          <value>2009-04-20T16:35:44.33Z</value>
+          <uncertainty>1.40</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1757</value>
+        </latitude>
+        <longitude>
+          <value>129.3794</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>5</usedPhaseCount>
+          <standardError>1.0200</standardError>
+          <azimuthalGap>169.000</azimuthalGap>
+          <minimumDistance>14.310</minimumDistance>
+          <maximumDistance>65.540</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>21.8</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>65.2</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>59.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097048">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15551993</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097049">
+        <mag>
+          <value>3.80</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15551993</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097050">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15551993</originID>
+        <stationCount>21</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097051">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15551993</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097047">
+        <mag>
+          <value>3.50</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15551993</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153158">
+      <preferredOriginID>smi:ISC/origid=15777516</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777516">
+        <time>
+          <value>2009-04-20T16:36:30.55Z</value>
+          <uncertainty>0.41</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1387</value>
+        </latitude>
+        <longitude>
+          <value>129.6193</value>
+        </longitude>
+        <depth>
+          <value>36000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>86</usedPhaseCount>
+          <associatedStationCount>83</associatedStationCount>
+          <standardError>1.2622</standardError>
+          <azimuthalGap>55.805</azimuthalGap>
+          <minimumDistance>0.476</minimumDistance>
+          <maximumDistance>153.166</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>4.97579</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>7.53653</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>51.2</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904458">
+        <mag>
+          <value>4.38</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777516</originID>
+        <stationCount>18</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15904457">
+        <mag>
+          <value>3.32</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777516</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153162">
+      <preferredOriginID>smi:ISC/origid=15551997</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15551997">
+        <time>
+          <value>2009-04-20T17:06:40.49Z</value>
+          <uncertainty>2.37</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1216</value>
+        </latitude>
+        <longitude>
+          <value>129.7099</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>3</usedPhaseCount>
+          <standardError>1.1300</standardError>
+          <azimuthalGap>198.000</azimuthalGap>
+          <minimumDistance>16.360</minimumDistance>
+          <maximumDistance>65.680</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>28.5</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>164.9</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>69.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097074">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15551997</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097075">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15551997</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097076">
+        <mag>
+          <value>3.00</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15551997</originID>
+        <stationCount>18</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097077">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15551997</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097073">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15551997</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16359982">
+      <preferredOriginID>smi:ISC/origid=16010793</preferredOriginID>
+      <description>
+        <text>Seram</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=16010793">
+        <time>
+          <value>2009-04-20T17:37:41.87Z</value>
+          <uncertainty>1.59</uncertainty>
+        </time>
+        <latitude>
+          <value>-3.8765</value>
+        </latitude>
+        <longitude>
+          <value>130.2818</value>
+        </longitude>
+        <depth>
+          <value>10000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>5</usedPhaseCount>
+          <associatedStationCount>8</associatedStationCount>
+          <standardError>0.9981</standardError>
+          <azimuthalGap>159.690</azimuthalGap>
+          <minimumDistance>3.008</minimumDistance>
+          <maximumDistance>65.796</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>17.4268</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>35.3089</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>49.3</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+    </event>
+    <event publicID="smi:ISC/evid=15153854">
+      <preferredOriginID>smi:ISC/origid=15777523</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777523">
+        <time>
+          <value>2009-04-20T17:59:12.52Z</value>
+          <uncertainty>0.35</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1550</value>
+        </latitude>
+        <longitude>
+          <value>129.7764</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>126</usedPhaseCount>
+          <associatedStationCount>129</associatedStationCount>
+          <standardError>1.4696</standardError>
+          <azimuthalGap>44.083</azimuthalGap>
+          <minimumDistance>0.387</minimumDistance>
+          <maximumDistance>153.051</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>6.03091</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>8.80162</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>63.2</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15609169">
+        <mag>
+          <value>4.63</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777523</originID>
+        <stationCount>33</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15609168">
+        <mag>
+          <value>3.54</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777523</originID>
+        <stationCount>8</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153165">
+      <preferredOriginID>smi:ISC/origid=15552005</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552005">
+        <time>
+          <value>2009-04-20T18:24:54.12Z</value>
+          <uncertainty>1.72</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.0006</value>
+        </latitude>
+        <longitude>
+          <value>129.9971</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>6</usedPhaseCount>
+          <standardError>0.9800</standardError>
+          <azimuthalGap>192.000</azimuthalGap>
+          <minimumDistance>14.650</minimumDistance>
+          <maximumDistance>68.910</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>23</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>78.3</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>72.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097123">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097124">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097125">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>20</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097129">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097122">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097126">
+        <mag>
+          <value>3.90</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097127">
+        <mag>
+          <value>3.90</value>
+        </mag>
+        <type>Ms1</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097128">
+        <mag>
+          <value>2.40</value>
+        </mag>
+        <type>ms1mx</type>
+        <originID>smi:ISC/origid=15552005</originID>
+        <stationCount>30</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153834">
+      <preferredOriginID>smi:ISC/origid=15966528</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15966528">
+        <time>
+          <value>2009-04-20T18:43:19.88Z</value>
+          <uncertainty>0.52</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.0895</value>
+        </latitude>
+        <longitude>
+          <value>129.6003</value>
+        </longitude>
+        <depth>
+          <value>10000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>43</usedPhaseCount>
+          <associatedStationCount>45</associatedStationCount>
+          <standardError>1.2119</standardError>
+          <azimuthalGap>88.136</azimuthalGap>
+          <minimumDistance>0.526</minimumDistance>
+          <maximumDistance>153.215</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>7.30278</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>11.1801</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>54.8</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904460">
+        <mag>
+          <value>4.32</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15966528</originID>
+        <stationCount>12</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153168">
+      <preferredOriginID>smi:ISC/origid=15552014</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552014">
+        <time>
+          <value>2009-04-20T19:39:24.51Z</value>
+          <uncertainty>2.36</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2564</value>
+        </latitude>
+        <longitude>
+          <value>129.3560</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>3</usedPhaseCount>
+          <standardError>1.1300</standardError>
+          <azimuthalGap>197.000</azimuthalGap>
+          <minimumDistance>16.330</minimumDistance>
+          <maximumDistance>65.600</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>28.6</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>172.6</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>69.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097174">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552014</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097175">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552014</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097176">
+        <mag>
+          <value>3.30</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552014</originID>
+        <stationCount>19</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097177">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552014</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097173">
+        <mag>
+          <value>5.50</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552014</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153855">
+      <preferredOriginID>smi:ISC/origid=15777538</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777538">
+        <time>
+          <value>2009-04-20T19:49:12.69Z</value>
+          <uncertainty>0.33</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2077</value>
+        </latitude>
+        <longitude>
+          <value>129.7874</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>140</usedPhaseCount>
+          <associatedStationCount>150</associatedStationCount>
+          <standardError>1.5786</standardError>
+          <azimuthalGap>43.718</azimuthalGap>
+          <minimumDistance>0.334</minimumDistance>
+          <maximumDistance>153.005</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>5.62155</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>8.55505</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>58.7</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804216">
+        <mag>
+          <value>4.63</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777538</originID>
+        <stationCount>38</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153833">
+      <preferredOriginID>smi:ISC/origid=15777546</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777546">
+        <time>
+          <value>2009-04-20T21:44:00.00Z</value>
+          <uncertainty>0.60</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.3164</value>
+        </latitude>
+        <longitude>
+          <value>129.7277</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>42</usedPhaseCount>
+          <associatedStationCount>47</associatedStationCount>
+          <standardError>1.4578</standardError>
+          <azimuthalGap>74.407</azimuthalGap>
+          <minimumDistance>0.270</minimumDistance>
+          <maximumDistance>127.980</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>7.96232</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>16.2008</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>78.8</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804222">
+        <mag>
+          <value>4.07</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777546</originID>
+        <stationCount>13</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=12935797">
+      <preferredOriginID>smi:ISC/origid=15777548</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777548">
+        <time>
+          <value>2009-04-20T21:55:27.97Z</value>
+          <uncertainty>0.66</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1844</value>
+        </latitude>
+        <longitude>
+          <value>129.6787</value>
+        </longitude>
+        <depth>
+          <value>36000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>40</usedPhaseCount>
+          <associatedStationCount>38</associatedStationCount>
+          <standardError>1.7505</standardError>
+          <azimuthalGap>111.911</azimuthalGap>
+          <minimumDistance>0.404</minimumDistance>
+          <maximumDistance>69.967</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>7.17442</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>11.0589</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>50.6</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904467">
+        <mag>
+          <value>4.04</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777548</originID>
+        <stationCount>8</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153173">
+      <preferredOriginID>smi:ISC/origid=15552027</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552027">
+        <time>
+          <value>2009-04-20T22:12:44.52Z</value>
+          <uncertainty>2.57</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.3271</value>
+        </latitude>
+        <longitude>
+          <value>129.3529</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>3</usedPhaseCount>
+          <standardError>1.0400</standardError>
+          <azimuthalGap>197.000</azimuthalGap>
+          <minimumDistance>16.260</minimumDistance>
+          <maximumDistance>65.650</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>29.2</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>198.1</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>69.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097249">
+        <mag>
+          <value>3.50</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552027</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097250">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552027</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097251">
+        <mag>
+          <value>3.30</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552027</originID>
+        <stationCount>19</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097252">
+        <mag>
+          <value>3.50</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552027</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097248">
+        <mag>
+          <value>2.90</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552027</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=12612258">
+      <preferredOriginID>smi:ISC/origid=15777554</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777554">
+        <time>
+          <value>2009-04-20T23:31:55.46Z</value>
+          <uncertainty>0.32</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1681</value>
+        </latitude>
+        <longitude>
+          <value>129.7706</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>159</usedPhaseCount>
+          <associatedStationCount>172</associatedStationCount>
+          <standardError>1.5954</standardError>
+          <azimuthalGap>43.652</azimuthalGap>
+          <minimumDistance>0.376</minimumDistance>
+          <maximumDistance>153.045</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>5.60425</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>7.31193</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>67.8</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804228">
+        <mag>
+          <value>4.86</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777554</originID>
+        <stationCount>47</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15804227">
+        <mag>
+          <value>3.76</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777554</originID>
+        <stationCount>13</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=12935791">
+      <preferredOriginID>smi:ISC/origid=15777556</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777556">
+        <time>
+          <value>2009-04-20T23:34:48.11Z</value>
+          <uncertainty>0.57</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2145</value>
+        </latitude>
+        <longitude>
+          <value>129.6915</value>
+        </longitude>
+        <depth>
+          <value>36000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>46</usedPhaseCount>
+          <associatedStationCount>46</associatedStationCount>
+          <standardError>0.8999</standardError>
+          <azimuthalGap>114.802</azimuthalGap>
+          <minimumDistance>16.276</minimumDistance>
+          <maximumDistance>148.883</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>11.6041</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>27.4486</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>64.7</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804229">
+        <mag>
+          <value>4.41</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777556</originID>
+        <stationCount>17</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153177">
+      <preferredOriginID>smi:ISC/origid=15552036</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552036">
+        <time>
+          <value>2009-04-21T00:20:07.01Z</value>
+          <uncertainty>1.95</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2373</value>
+        </latitude>
+        <longitude>
+          <value>129.3137</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>3</usedPhaseCount>
+          <standardError>1.3200</standardError>
+          <azimuthalGap>197.000</azimuthalGap>
+          <minimumDistance>16.360</minimumDistance>
+          <maximumDistance>65.560</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>29.9</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>87.4</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>68.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097307">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552036</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097308">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552036</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097309">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552036</originID>
+        <stationCount>20</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097310">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552036</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097306">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552036</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153178">
+      <preferredOriginID>smi:ISC/origid=15552041</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552041">
+        <time>
+          <value>2009-04-21T01:04:37.95Z</value>
+          <uncertainty>1.46</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1509</value>
+        </latitude>
+        <longitude>
+          <value>130.0826</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>7</usedPhaseCount>
+          <standardError>0.9100</standardError>
+          <azimuthalGap>198.000</azimuthalGap>
+          <minimumDistance>14.530</minimumDistance>
+          <maximumDistance>75.720</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>14</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>80.2</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>75.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097340">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552041</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097341">
+        <mag>
+          <value>3.80</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552041</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097342">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552041</originID>
+        <stationCount>22</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097343">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552041</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097339">
+        <mag>
+          <value>3.50</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552041</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153877">
+      <preferredOriginID>smi:ISC/origid=15777571</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777571">
+        <time>
+          <value>2009-04-21T01:18:30.10Z</value>
+          <uncertainty>0.51</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.3294</value>
+        </latitude>
+        <longitude>
+          <value>129.6342</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>70</usedPhaseCount>
+          <associatedStationCount>73</associatedStationCount>
+          <standardError>1.6771</standardError>
+          <azimuthalGap>56.599</azimuthalGap>
+          <minimumDistance>0.331</minimumDistance>
+          <maximumDistance>153.012</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>6.21345</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>9.86236</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>55.2</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904473">
+        <mag>
+          <value>4.34</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777571</originID>
+        <stationCount>12</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153864">
+      <preferredOriginID>smi:ISC/origid=15777575</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777575">
+        <time>
+          <value>2009-04-21T01:41:19.25Z</value>
+          <uncertainty>0.97</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2413</value>
+        </latitude>
+        <longitude>
+          <value>129.6536</value>
+        </longitude>
+        <depth>
+          <value>26278.2</value>
+        </depth>
+        <quality>
+          <usedPhaseCount>115</usedPhaseCount>
+          <associatedStationCount>110</associatedStationCount>
+          <standardError>1.4515</standardError>
+          <azimuthalGap>44.161</azimuthalGap>
+          <minimumDistance>0.375</minimumDistance>
+          <maximumDistance>153.066</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>4.45164</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>7.23605</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>42.7</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804243">
+        <mag>
+          <value>4.44</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777575</originID>
+        <stationCount>27</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15804242">
+        <mag>
+          <value>4.04</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777575</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153869">
+      <preferredOriginID>smi:ISC/origid=15777576</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777576">
+        <time>
+          <value>2009-04-21T01:56:40.49Z</value>
+          <uncertainty>0.80</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2566</value>
+        </latitude>
+        <longitude>
+          <value>129.5653</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>21</usedPhaseCount>
+          <associatedStationCount>22</associatedStationCount>
+          <standardError>1.4623</standardError>
+          <azimuthalGap>93.342</azimuthalGap>
+          <minimumDistance>1.105</minimumDistance>
+          <maximumDistance>68.949</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>8.57599</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>11.6472</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>44.5</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904474">
+        <mag>
+          <value>3.89</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777576</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153878">
+      <preferredOriginID>smi:ISC/origid=15777577</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777577">
+        <time>
+          <value>2009-04-21T01:58:12.00Z</value>
+          <uncertainty>0.36</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.3004</value>
+        </latitude>
+        <longitude>
+          <value>129.6555</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>100</usedPhaseCount>
+          <associatedStationCount>92</associatedStationCount>
+          <standardError>1.6752</standardError>
+          <azimuthalGap>56.430</azimuthalGap>
+          <minimumDistance>0.332</minimumDistance>
+          <maximumDistance>153.020</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>4.84025</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>8.17097</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>50.3</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804246">
+        <mag>
+          <value>4.62</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777577</originID>
+        <stationCount>25</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15804245">
+        <mag>
+          <value>3.66</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777577</originID>
+        <stationCount>5</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153887">
+      <preferredOriginID>smi:ISC/origid=15777580</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777580">
+        <time>
+          <value>2009-04-21T02:43:16.36Z</value>
+          <uncertainty>0.50</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.3048</value>
+        </latitude>
+        <longitude>
+          <value>129.6662</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>61</usedPhaseCount>
+          <associatedStationCount>59</associatedStationCount>
+          <standardError>1.3404</standardError>
+          <azimuthalGap>69.804</azimuthalGap>
+          <minimumDistance>0.321</minimumDistance>
+          <maximumDistance>127.918</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>6.04077</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>9.49911</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>44.1</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804248">
+        <mag>
+          <value>4.12</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777580</originID>
+        <stationCount>12</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153186">
+      <preferredOriginID>smi:ISC/origid=15552062</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552062">
+        <time>
+          <value>2009-04-21T04:20:51.77Z</value>
+          <uncertainty>2.20</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1103</value>
+        </latitude>
+        <longitude>
+          <value>129.7472</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>4</usedPhaseCount>
+          <standardError>1.2600</standardError>
+          <azimuthalGap>198.000</azimuthalGap>
+          <minimumDistance>14.470</minimumDistance>
+          <maximumDistance>65.690</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>26.7</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>112.7</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>74.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097459">
+        <mag>
+          <value>3.30</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552062</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097460">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552062</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097461">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552062</originID>
+        <stationCount>21</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097462">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552062</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097458">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552062</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153896">
+      <preferredOriginID>smi:ISC/origid=15777600</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777600">
+        <time>
+          <value>2009-04-21T05:33:22.95Z</value>
+          <uncertainty>0.27</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2823</value>
+        </latitude>
+        <longitude>
+          <value>129.6853</value>
+        </longitude>
+        <depth>
+          <value>35719.2</value>
+        </depth>
+        <quality>
+          <usedPhaseCount>664</usedPhaseCount>
+          <associatedStationCount>737</associatedStationCount>
+          <standardError>1.2632</standardError>
+          <azimuthalGap>42.821</azimuthalGap>
+          <minimumDistance>0.324</minimumDistance>
+          <maximumDistance>161.633</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>4.11228</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>5.9165</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>48.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15904484">
+        <mag>
+          <value>5.34</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777600</originID>
+        <stationCount>83</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15904483">
+        <mag>
+          <value>5.37</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15777600</originID>
+        <stationCount>159</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153190">
+      <preferredOriginID>smi:ISC/origid=15552071</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552071">
+        <time>
+          <value>2009-04-21T05:45:19.12Z</value>
+          <uncertainty>1.93</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.0404</value>
+        </latitude>
+        <longitude>
+          <value>129.9539</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>6</usedPhaseCount>
+          <standardError>0.7400</standardError>
+          <azimuthalGap>197.000</azimuthalGap>
+          <minimumDistance>14.600</minimumDistance>
+          <maximumDistance>69.990</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>24</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>85.2</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>71.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097512">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552071</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097513">
+        <mag>
+          <value>3.90</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552071</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097514">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552071</originID>
+        <stationCount>22</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097515">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552071</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097511">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552071</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153192">
+      <preferredOriginID>smi:ISC/origid=15552074</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552074">
+        <time>
+          <value>2009-04-21T06:05:44.91Z</value>
+          <uncertainty>2.13</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.2000</value>
+        </latitude>
+        <longitude>
+          <value>129.3787</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>4</usedPhaseCount>
+          <standardError>0.3200</standardError>
+          <azimuthalGap>197.000</azimuthalGap>
+          <minimumDistance>14.290</minimumDistance>
+          <maximumDistance>65.560</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>26.8</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>108.8</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>73.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097529">
+        <mag>
+          <value>3.30</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552074</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097530">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552074</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097531">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552074</originID>
+        <stationCount>21</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097532">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552074</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097528">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552074</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153193">
+      <preferredOriginID>smi:ISC/origid=15552075</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552075">
+        <time>
+          <value>2009-04-21T06:12:55.37Z</value>
+          <uncertainty>1.16</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.3416</value>
+        </latitude>
+        <longitude>
+          <value>129.2209</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>9</usedPhaseCount>
+          <standardError>0.6200</standardError>
+          <azimuthalGap>177.000</azimuthalGap>
+          <minimumDistance>14.110</minimumDistance>
+          <maximumDistance>127.490</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>18.7</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>101</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>72.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097534">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552075</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097535">
+        <mag>
+          <value>3.80</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552075</originID>
+        <stationCount>8</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097536">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552075</originID>
+        <stationCount>22</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097537">
+        <mag>
+          <value>3.80</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552075</originID>
+        <stationCount>8</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097533">
+        <mag>
+          <value>3.60</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552075</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153206">
+      <preferredOriginID>smi:ISC/origid=15552097</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552097">
+        <time>
+          <value>2009-04-21T10:37:42.65Z</value>
+          <uncertainty>2.23</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.0619</value>
+        </latitude>
+        <longitude>
+          <value>130.0912</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>4</usedPhaseCount>
+          <standardError>1.2600</standardError>
+          <azimuthalGap>198.000</azimuthalGap>
+          <minimumDistance>16.320</minimumDistance>
+          <maximumDistance>70.080</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>26.5</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>167</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>71.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097659">
+        <mag>
+          <value>3.30</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097660">
+        <mag>
+          <value>3.40</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097661">
+        <mag>
+          <value>3.30</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>20</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097665">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097658">
+        <mag>
+          <value>2.90</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097662">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>MS</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097663">
+        <mag>
+          <value>3.20</value>
+        </mag>
+        <type>Ms1</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097664">
+        <mag>
+          <value>2.90</value>
+        </mag>
+        <type>ms1mx</type>
+        <originID>smi:ISC/origid=15552097</originID>
+        <stationCount>16</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153225">
+      <preferredOriginID>smi:ISC/origid=15552140</preferredOriginID>
+      <description>
+        <text>Seram</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552140">
+        <time>
+          <value>2009-04-21T19:37:24.82Z</value>
+          <uncertainty>2.65</uncertainty>
+        </time>
+        <latitude>
+          <value>-3.8592</value>
+        </latitude>
+        <longitude>
+          <value>130.0880</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>3</usedPhaseCount>
+          <standardError>0.0200</standardError>
+          <azimuthalGap>200.000</azimuthalGap>
+          <minimumDistance>16.510</minimumDistance>
+          <maximumDistance>65.670</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>30.4</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>175</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>70.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15097899">
+        <mag>
+          <value>2.90</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552140</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097900">
+        <mag>
+          <value>3.30</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552140</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097901">
+        <mag>
+          <value>3.10</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552140</originID>
+        <stationCount>18</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097902">
+        <mag>
+          <value>3.10</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552140</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15097898">
+        <mag>
+          <value>5.20</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552140</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16153253">
+      <preferredOriginID>smi:ISC/origid=15552162</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15552162">
+        <time>
+          <value>2009-04-22T04:09:06.81Z</value>
+          <uncertainty>2.22</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1129</value>
+        </latitude>
+        <longitude>
+          <value>129.9283</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>5</usedPhaseCount>
+          <standardError>1.0700</standardError>
+          <azimuthalGap>199.000</azimuthalGap>
+          <minimumDistance>14.520</minimumDistance>
+          <maximumDistance>65.790</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>24.8</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>114.7</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>74.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15098035">
+        <mag>
+          <value>3.50</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15552162</originID>
+        <stationCount>1</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15098036">
+        <mag>
+          <value>3.70</value>
+        </mag>
+        <type>mb1</type>
+        <originID>smi:ISC/origid=15552162</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15098037">
+        <mag>
+          <value>3.50</value>
+        </mag>
+        <type>mb1mx</type>
+        <originID>smi:ISC/origid=15552162</originID>
+        <stationCount>21</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15098038">
+        <mag>
+          <value>3.50</value>
+        </mag>
+        <type>mbtmp</type>
+        <originID>smi:ISC/origid=15552162</originID>
+        <stationCount>4</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+      <magnitude publicID="smi:ISC/magid=15098034">
+        <mag>
+          <value>3.00</value>
+        </mag>
+        <type>ML</type>
+        <originID>smi:ISC/origid=15552162</originID>
+        <stationCount>2</stationCount>
+        <creationInfo>
+          <author>IDC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=12935978">
+      <preferredOriginID>smi:ISC/origid=15777712</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777712">
+        <time>
+          <value>2009-04-22T04:31:14.09Z</value>
+          <uncertainty>0.82</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.3691</value>
+        </latitude>
+        <longitude>
+          <value>129.7330</value>
+        </longitude>
+        <depth>
+          <value>35000.0</value>
+        </depth>
+        <depthType>operator assigned</depthType>
+        <quality>
+          <usedPhaseCount>15</usedPhaseCount>
+          <associatedStationCount>12</associatedStationCount>
+          <standardError>1.9733</standardError>
+          <azimuthalGap>87.158</azimuthalGap>
+          <minimumDistance>0.229</minimumDistance>
+          <maximumDistance>127.997</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>6.72375</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>10.3647</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>31.6</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15609321">
+        <mag>
+          <value>3.65</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777712</originID>
+        <stationCount>3</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=15153904">
+      <preferredOriginID>smi:ISC/origid=15777715</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15777715">
+        <time>
+          <value>2009-04-22T05:10:11.00Z</value>
+          <uncertainty>1.88</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.1746</value>
+        </latitude>
+        <longitude>
+          <value>129.7551</value>
+        </longitude>
+        <depth>
+          <value>5467.7</value>
+        </depth>
+        <quality>
+          <usedPhaseCount>53</usedPhaseCount>
+          <associatedStationCount>46</associatedStationCount>
+          <standardError>1.8201</standardError>
+          <azimuthalGap>87.434</azimuthalGap>
+          <minimumDistance>0.376</minimumDistance>
+          <maximumDistance>153.050</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>4.11026</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>6.21251</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>31.5</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+      <magnitude publicID="smi:ISC/magid=15804309">
+        <mag>
+          <value>4.04</value>
+        </mag>
+        <type>mb</type>
+        <originID>smi:ISC/origid=15777715</originID>
+        <stationCount>6</stationCount>
+        <creationInfo>
+          <author>ISC</author>
+        </creationInfo>
+      </magnitude>
+    </event>
+    <event publicID="smi:ISC/evid=16359990">
+      <preferredOriginID>smi:ISC/origid=15739796</preferredOriginID>
+      <description>
+        <text>Banda Sea</text>
+        <type>Flinn-Engdahl region</type>
+      </description>
+      <origin publicID="smi:ISC/origid=15739796">
+        <time>
+          <value>2009-04-22T05:54:34.53Z</value>
+          <uncertainty>2.03</uncertainty>
+        </time>
+        <latitude>
+          <value>-4.4700</value>
+        </latitude>
+        <longitude>
+          <value>130.1751</value>
+        </longitude>
+        <depth>
+          <value>0.0</value>
+        </depth>
+        <quality>
+          <usedPhaseCount>7</usedPhaseCount>
+          <standardError>1.4200</standardError>
+          <minimumDistance>0.270</minimumDistance>
+          <maximumDistance>17.460</maximumDistance>
+        </quality>
+        <creationInfo>
+          <author>AUST</author>
+        </creationInfo>
+        <originUncertainty>
+          <preferredDescription>uncertainty ellipse</preferredDescription>
+          <minHorizontalUncertainty>1.1</minHorizontalUncertainty>
+          <maxHorizontalUncertainty>1.5</maxHorizontalUncertainty>
+          <azimuthMaxHorizontalUncertainty>256.0</azimuthMaxHorizontalUncertainty>
+        </originUncertainty>
+      </origin>
+    </event>
+  </eventParameters>
+</quakeml>

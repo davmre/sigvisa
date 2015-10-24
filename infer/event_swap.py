@@ -15,7 +15,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.models.ttime import tt_predict
 from sigvisa.infer.event_mcmc import *
-from sigvisa.infer.propose_hough import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
+from sigvisa.infer.propose_hough import hough_location_proposal
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 
 from sigvisa.infer.event_birthdeath import ev_birth_helper_full,ev_death_helper_full
@@ -33,7 +33,7 @@ def sample_events_to_swap(sg, n_events=2, fix_result=None):
     # if set, return lp
     # else, return eid1, eid2, lp
 
-    eids = sorted(sg.evnodes.keys())
+    eids = sorted([eid for eid in sg.evnodes.keys() if eid not in sg.fixed_events])
     n = len(eids)
 
     if len(eids) < n_events:
@@ -69,6 +69,10 @@ def repropose_event_move_lstsqr(sg, **kwargs):
 
 def swap_threeway_lstsqr(sg, **kwargs):
     return swap_events_move(sg, n_events=3, location_proposal=overpropose_new_locations, **kwargs)
+
+def swap_threeway_hough(sg, **kwargs):
+    return swap_events_move(sg, n_events=3, location_proposal=hough_location_proposal, **kwargs)
+
 
 def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, return_probs=False):
     eids, lp_swap = sample_events_to_swap(sg, n_events=n_events)

@@ -1,3 +1,4 @@
+{% load url from future %}
 <html>
 <head>
 <script>
@@ -35,11 +36,11 @@ document.getElementById('loading').style.visibility = 'hidden';
     <h1 id="loading">Loading...</h1>
   </div>
   <br/>
-  <input type="textbox" id="txt_sta" value=""  size="4"/>
-  <input type="textbox" id="txt_chan" value="BHZ"  size="3" />
-  <input type="textbox" id="stime" value="0" size="15"/>
-  <input type="textbox" id="etime" value="0" size="15"/>
-  <input type="textbox" id="filter_str" value="freq_2.0_3.0;env;smooth_8"  size="30"/>
+  <input type="textbox" id="txt_sta" value="{{ sta }}"  size="4"/>
+  <input type="textbox" id="txt_chan" value="{{ chan }}"  size="3" />
+  <input type="textbox" id="stime" value="{{ stime }}" size="15"/>
+  <input type="textbox" id="etime" value="{{ etime }}" size="15"/>
+  <input type="textbox" id="filter_str" value="{{ filter_str }}"  size="30"/>
   <input id="logscale" type="checkbox" />
   <label for="fitlog">logscale</label>
   <input type="button" value="update" onclick="updateWaveImage()" />
@@ -71,6 +72,8 @@ wave_img.src = new_src
 function showLoading() {
 document.getElementById('loading').style.visibility = 'visible';
 }
+
+updateWaveImage()
 </script>
 {% include "svweb/footer.html"  %}
 </body>

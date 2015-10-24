@@ -1,3 +1,4 @@
+{% load url from future %}
 {% load pagination_tags %}
 {% autopaginate model_list 20 %}
 
@@ -43,10 +44,10 @@
                 <td>{{ model.modelid }}</td>
 		<td>{{ model.timestamp }}</td>
 		<td>{{ model.elapsed|floatformat:1 }}</td>
-                <td><a href="{% url fit_list runid=model.fitting_runid.runid %}?chan={{model.chan}};band={{model.band}};sta={{model.site}}">{{ model.fitting_runid.run_name }} iter {{ model.fitting_runid.iter }}</a></td>
+                <td><a href="{% url 'fit_list' runid=model.fitting_runid.runid %}?chan={{model.chan}};band={{model.band}};sta={{model.site}}">{{ model.fitting_runid.run_name }} iter {{ model.fitting_runid.iter }}</a></td>
                 <td>{{ model.template_shape }}</td>
                 <td>{{ model.param }}</td>
-                <td><a href="{% url site sta=model.site %}">{{ model.site }}</a></td>
+                <td><a href="{% url 'site' sta=model.site %}">{{ model.site }}</a></td>
                 <td>{{ model.chan }}</td>
                 <td>{{ model.band }}</td>
                 <td>{{ model.phase }}</td>
@@ -61,19 +62,19 @@
                 <td>{{ model.training_ll|floatformat:1 }}</td>
                 <td>
 		{% if model.model_type|slice:":8" == "constant" %}
-		<a href="{% url model_density modelid=model.modelid %}">density</a>
+		<a href="{% url 'model_density' modelid=model.modelid %}">density</a>
 		{% elif model.model_type|slice:":2" == "gp" %}
-		<a href="{% url model_distance_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=10">distance plot</a>
-		<a href="{% url model_heatmap modelid=model.modelid %}">heatmap</a>
-		<a href="{% url model_heatmap_std modelid=model.modelid %}">heatmap_std</a>
+		<a href="{% url 'model_distance_plot' modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=10">distance plot</a>
+		<a href="{% url 'model_heatmap' modelid=model.modelid %}">heatmap</a>
+		<a href="{% url 'model_heatmap_std' modelid=model.modelid %}">heatmap_std</a>
 		{% elif model.model_type|slice:":15" == "param_linear_mb" %}
-		<a href="{% url model_mb_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">mb plot</a>
+		<a href="{% url 'model_mb_plot' modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">mb plot</a>
 		{% elif model.model_type|slice:":19" == "param_linear_distmb" %}
-		<a href="{% url model_mb_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">mb plot</a>
-		<a href="{% url model_distance_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">distance plot</a>
+		<a href="{% url 'model_mb_plot' modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">mb plot</a>
+		<a href="{% url 'model_distance_plot' modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">distance plot</a>
 		{% elif model.model_type|slice:":5" == "param" %}
-		<a href="{% url model_distance_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">distance plot</a>
-		<a href="{% url model_heatmap modelid=model.modelid %}">heatmap</a>
+		<a href="{% url 'model_distance_plot' modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">distance plot</a>
+		<a href="{% url 'model_heatmap' modelid=model.modelid %}">heatmap</a>
 		{% endif %}
 		</td>
             </tr>

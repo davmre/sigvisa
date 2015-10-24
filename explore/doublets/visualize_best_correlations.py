@@ -23,8 +23,7 @@ from sigvisa import *
 from sigvisa.signals.io import fetch_waveform
 from sigvisa.explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
 from sigvisa.source.event import get_event
-from sigvisa.plotting.event_heatmap import get_eventHeatmap
-from sigvisa.models.wiggles.fourier_features import FourierFeatures
+#from sigvisa.models.wiggles.fourier_features import FourierFeatures
 
 
 def normalize(x):
@@ -127,8 +126,9 @@ def main():
         pp.savefig()
 
         # plot the projected-onto-fourier-features version
-        ff = FourierFeatures(fundamental=0.2, min_freq=0.8, max_freq=3.5)
+        #ff = FourierFeatures(fundamental=0.2, min_freq=0.8, max_freq=3.5)
 
+        """
         fig = plt.figure()
         gs = gridspec.GridSpec(3, 1)
         gs.update(left=0.1, right=0.95, hspace=1)
@@ -149,7 +149,7 @@ def main():
         plt.suptitle("same as last but comparing fourier projections")
 
         pp.savefig()
-
+        """
     pp.close()
 
 if __name__ == "__main__":

@@ -34,14 +34,13 @@ import sigvisa.source.brune_source as brune
 from scipy.optimize import leastsq
 
 
-from sigvisa.infer.propose_hough import propose_event_from_hough
 from sigvisa.infer.propose_lstsqr import ev_lstsqr_dist
 
 fixed_node_cache = dict()
 relevant_node_cache = dict()
 
 
-def ev_move_relevant_nodes(node_list, fixed_nodes):
+def ev_move_relevant_nodes(node_list, fixed_nodes, separate_wns=False):
 
     # loc: children are basically all the stochastic nodes, and arrival_time
     #      we want the stochastic nodes, and arrival_time's default parent
@@ -54,7 +53,8 @@ def ev_move_relevant_nodes(node_list, fixed_nodes):
 
     direct_stochastic_children = [c for n in node_list for c in n.children if not c.deterministic()]
     inlaws = [n.parents[n.default_parent_key()] for n in fixed_nodes]
-    return set(node_list + direct_stochastic_children + inlaws)
+    relevant_nodes = set(node_list + direct_stochastic_children + inlaws)
+    return relevant_nodes
 
 """
 def set_ev(ev_node, v, fixed_vals, fixed_nodes, params, fixed_atimes=None, ignore_illegal=True):
@@ -84,16 +84,10 @@ def atime_block_update_dist(sg, eid, old_ev, new_ev):
 
     fix_atime_probs = {}
 
-    for site in sg.site_elements.keys():
-        # TODO: implement multiple bands/chans
-        assert (len(list(sg.site_bands[site])) == 1)
-        band = list(sg.site_bands[site])[0]
-
-        assert (len(list(sg.site_chans[site])) == 1)
-        chan = list(sg.site_chans[site])[0]
-
-        for phase in sg.ev_arriving_phases(eid, site=site):
-            for sta in sg.site_elements[site]:
+    for sta, wns in sg.station_waves.items():
+        for wn in wns:
+            band, chan = wn.band, wn.chan
+            for phase in sg.ev_arriving_phases(eid, sta=sta):
                 tmnodes = sg.get_template_nodes(eid, sta, phase, band, chan)
                 atime_key, atime_node = tmnodes['arrival_time']
                 ttr_key, ttr_node = tmnodes['tt_residual']
@@ -113,7 +107,6 @@ def atime_block_update_dist(sg, eid, old_ev, new_ev):
                 new_tt_residual = current_tt_residual - atime_diff
 
                 try:
-                    wn = sg.get_wave_node_by_atime(sta, band, chan, current_pred_atime)
                     wave_lp1 = wn.log_p()
                     atime_node.set_value(new_pred_atime)
                     wave_lp2 = wn.log_p()
@@ -159,11 +152,10 @@ def clear_node_caches(sg, eid):
         except KeyError:
             pass
 
-def add_phase_template(sg, sta, eid, phase, vals=None, node_lps=None):
+def add_phase_template(sg, wn, eid, phase, vals=None, node_lps=None):
+    sta, band, chan = wn.sta, wn.band, wn.chan
+
     tg = sg.template_generator(phase)
-    wg = sg.wiggle_generator(phase, sg.base_srate)
-
-
 
     phase_added = False
     if phase not in sg.ev_arriving_phases(eid, sta=sta):
@@ -171,17 +163,11 @@ def add_phase_template(sg, sta, eid, phase, vals=None, node_lps=None):
         site = s.get_array_site(sta)
         if node_lps is not None:
             node_lps.register_new_phase_pre(sg, site, phase, eid)
-        sg.add_event_site_phase(tg, wg, site, phase, sg.evnodes[eid], sample_templates=True)
+        sg.add_event_site_phase(tg, site, phase, sg.evnodes[eid], sample_templates=True)
         phase_added=True
 
-    tmvals, lp = propose_phase_template(sg, sta, eid, phase)
-
+    tmvals, lp = propose_phase_template(sg, wn, eid, phase)
     s = Sigvisa()
-    site = s.get_array_site(sta)
-    assert (len(list(sg.site_bands[site])) == 1)
-    band = list(sg.site_bands[site])[0]
-    assert (len(list(sg.site_chans[site])) == 1)
-    chan = list(sg.site_chans[site])[0]
     tmnodes = sg.get_template_nodes(eid, sta, phase, band, chan)
     for p, (k, n) in tmnodes.items():
         if p in tmvals:
@@ -216,6 +202,8 @@ def phases_changed(sg, eid, ev):
 
 
 class UpdatedNodeLPs(object):
+    # TODO: make sure this does the right thing with multiple bands/chans. Right now some pieces are keyed by wn and some by site/band/chan and this might break horribly. 
+
     def __init__(self, old_ev):
         self.nodes_added = set()
         self.nodes_removed = dict()
@@ -239,8 +227,8 @@ class UpdatedNodeLPs(object):
             print "  %s: %.2f" % (n.label, lp)
 
         print "uatemplate counts:"
-        for k, delta in self.uatemplate_count_delta.items():
-            print k, delta
+        for wn, delta in self.uatemplate_count_delta.items():
+            print wn.label, delta
 
     def dump_detected_changes(self, lps_old, lps_new, relevant_nodes):
         rn_labels = [n.label for n in relevant_nodes]
@@ -261,22 +249,22 @@ class UpdatedNodeLPs(object):
         tmnodes = sg.uatemplates[tmid]
         for n in tmnodes.values():
             self.nodes_removed[n] = n.log_p()
-        eid, phase, sta, chan, band, param = parse_key(tmnodes.values()[0].label)
-        self.uatemplate_count_delta[(sta, chan, band)] -= 1
+        wn = list(tmnodes['coda_height'].children)[0]
+        self.uatemplate_count_delta[wn] -= 1
 
     def register_new_uatemplate(self, sg, tmid, wn_invariant=True):
         assert(wn_invariant)
         tmnodes = sg.uatemplates[tmid]
+        wn = list(tmnodes['coda_height'].children)[0]
         for n in tmnodes.values():
             self.nodes_added.add(n)
-        eid, phase, sta, chan, band, param = parse_key(tmnodes.values()[0].label)
-        self.uatemplate_count_delta[(sta, chan, band)] += 1
+        self.uatemplate_count_delta[wn] += 1
 
     def __register_phase_helper(self, sg, site, phase, eid, d, f_lp):
         for sta in sg.site_elements[site]:
             for band in sg.site_bands[site]:
                 for chan in sg.site_chans[site]:
-                    nodes = sg.get_arrival_nodes(eid, sta, phase, band, chan)
+                    nodes = sg.get_template_nodes(eid, sta, phase, band, chan)
                     for (k, n) in nodes.values():
                         if not n.deterministic():
                             if isinstance(d, dict):
@@ -289,8 +277,11 @@ class UpdatedNodeLPs(object):
         for sta in sg.site_elements[site]:
             for band in sg.site_bands[site]:
                 for chan in sg.site_chans[site]:
-                    wn = sg.get_arrival_wn(sta, eid, phase, band, chan, revert_to_atime=True)
-                    wns.append(wn)
+                    try:
+                        wn = sg.get_arrival_wn(sta, eid, phase, band, chan, revert_to_atime=True)
+                        wns.append(wn)
+                    except KeyError:
+                        continue
 
         return wns
 
@@ -398,12 +389,11 @@ class UpdatedNodeLPs(object):
             lp_delta += self.nodes_changed_new[n] - self.nodes_changed_old[n]
 
         # also account for the uatemplate Poisson process prior
-        for k, delta in self.uatemplate_count_delta.items():
-            sta, chan, band = k
-            new_count = len(sg.uatemplate_ids[k])
+        for wn, delta in self.uatemplate_count_delta.items():
+            new_count = len(sg.uatemplate_ids[(wn.sta, wn.band, wn.chan)])
             old_count = new_count - delta
-            old_lp = sg.ntemplates_sta_log_p(sta, n=old_count)
-            new_lp = sg.ntemplates_sta_log_p(sta, n=new_count)
+            old_lp = sg.ntemplates_sta_log_p(wn, n=old_count)
+            new_lp = sg.ntemplates_sta_log_p(wn, n=new_count)
             lp_delta += new_lp-old_lp
 
         return lp_delta
@@ -490,69 +480,58 @@ def ev_phasejump(sg, eid, new_ev, params_changed, adaptive_blocking=False, birth
     tmids = []
     sg.set_event(eid, new_ev, params_changed=params_changed, preserve_templates=preserve_templates, node_lps=node_lps, illegal_phase_action="ignore")
     s = Sigvisa()
+
     for site in birth_phases.keys():
-        # TODO: implement multiple bands/chans
-        assert (len(list(sg.site_bands[site])) == 1)
-        band = list(sg.site_bands[site])[0]
-
-        assert (len(list(sg.site_chans[site])) == 1)
-        chan = list(sg.site_chans[site])[0]
-
         deterministic_phase_swap(sg, eid, birth_phases[site], death_phases[site], inverse_fns, "P", "Pn")
 
-        # the set of phases generated by each event is
-        # deterministic. so whenever an event move generates a new
-        # phase at some station, our proposal must include that phase.
-        # as with an event birth move, we sample whether to associate
-        # an existing unass template, or create a new template from
-        # scratch.
         for sta in sg.site_elements[site]:
-            for phase in birth_phases[site]:
-                tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase)
-                if tmid is not None:
-                    # associate an unass. template
-                    forward_fns.append(lambda sta=sta,phase=phase,tmid=tmid: associate_template(sg, sta, tmid, eid, phase, create_phase_arrival=True, node_lps=node_lps))
-                    inverse_fns.append(lambda sta=sta,phase=phase: unassociate_template(sg, sta, eid, phase, remove_event_phase=True))
-                    associations.append((sta, phase, True))
-                    print "proposing to associate %d to %d %s at %s" % (tmid, eid, phase, sta),
-                else:
-                    # propose a new template from scratch
-                    forward_fns.append( lambda sta=sta,phase=phase,eid=eid: add_phase_template(sg, sta, eid, phase, node_lps=node_lps)[1] )
-                    inverse_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, sta, phase))
-                    associations.append((sta, phase, False))
-                    print "proposing new template for %d %s at %s" % (eid, phase, sta),
+            for wn in sg.station_waves[sta]:
+                for phase in birth_phases[site]:
+                    tmid, assoc_logprob = sample_template_to_associate(sg, wn, eid, phase)
+                    if tmid is not None:
+                        # associate an unass. template
+                        forward_fns.append(lambda wn=wn,phase=phase,tmid=tmid: associate_template(sg, wn, tmid, eid, phase, create_phase_arrival=True, node_lps=node_lps))
+                        inverse_fns.append(lambda wn=wn,phase=phase: unassociate_template(sg, wn, eid, phase, remove_event_phase=True))
+                        associations.append((wn, phase, True))
+                        print "proposing to associate %d to %d %s at %s" % (tmid, eid, phase, wn.sta),
+                    else:
+                        # propose a new template from scratch
+                        forward_fns.append( lambda wn=wn,phase=phase,eid=eid: add_phase_template(sg, wn, eid, phase, node_lps=node_lps)[1] )
+                        inverse_fns.append(lambda eid=eid,wn=wn,phase=phase: sg.delete_event_phase(eid, wn.sta, phase))
+                        associations.append((wn, phase, False))
+                        print "proposing new template for %d %s at %s" % (eid, phase, wn.sta),
 
-                move_logprob += assoc_logprob
+                    move_logprob += assoc_logprob
 
-            # similarly, for every phase that is no longer generated from
-            # the new location, we must either delete or de-associate the
-            # corresponding template.
-            for phase in death_phases[site]:
-                deassociate, deassociate_logprob = sample_deassociation_proposal(sg, sta, eid, phase)
-                deassociations.append((sta, phase, deassociate, tmid_i))
-                if deassociate:
-                    # deassociation will produce a new uatemplated
-                    # with incrementing tmid. We keep track of this
-                    # tmid (kind of a hack) to ensure that we
-                    # reassociate the same template if the move gets
-                    # rejected.
-                    forward_fns.append(lambda sta=sta,phase=phase: tmids.append(unassociate_template(sg, sta, eid, phase, remove_event_phase=True, node_lps=node_lps)))
-                    inverse_fns.append(lambda sta=sta,phase=phase,tmid_i=tmid_i: associate_template(sg, sta, tmids[tmid_i], eid, phase, create_phase_arrival=True))
-                    tmid_i += 1
-                    print "proposing to deassociate %s for %d at %s (lp %.1f)" % (phase, eid, sta, deassociate_logprob),
-                else:
-                    template_param_array = sg.get_arrival_vals(eid, sta, phase, band, chan)
+                # similarly, for every phase that is no longer generated from
+                # the new location, we must either delete or de-associate the
+                # corresponding template.
+                for phase in death_phases[site]:
+                    deassociate, deassociate_logprob = sample_deassociation_proposal(sg, wn, eid, phase)
+                    deassociations.append((wn, phase, deassociate, tmid_i))
+                    if deassociate:
+                        # deassociation will produce a new uatemplated
+                        # with incrementing tmid. We keep track of this
+                        # tmid (kind of a hack) to ensure that we
+                        # reassociate the same template if the move gets
+                        # rejected.
+                        forward_fns.append(lambda wn=wn,phase=phase: tmids.append(unassociate_template(sg, wn, eid, phase, remove_event_phase=True, node_lps=node_lps)))
+                        inverse_fns.append(lambda wn=wn,phase=phase,tmid_i=tmid_i: associate_template(sg, wn, tmids[tmid_i], eid, phase, create_phase_arrival=True))
+                        tmid_i += 1
+                        print "proposing to deassociate %s for %d at %s (lp %.1f)" % (phase, eid, sta, deassociate_logprob),
+                    else:
+                        template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
 
-                    forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_pre(sg, site, phase, eid))
-                    forward_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, sta, phase))
-                    forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_post(sg, site, phase, eid))
-                    inverse_fns.append( lambda sta=sta,phase=phase,eid=eid: add_phase_template(sg, sta, eid, phase) )
-                    inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
-                    tmp = propose_phase_template(sg, sta, eid, phase, template_param_array, fix_result=True, ev=old_ev)
-                    reverse_logprob += tmp
-                    print "proposing to delete %s for %d at %s (lp %f)"% (phase, eid, sta, deassociate_logprob),
+                        forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_pre(sg, site, phase, eid))
+                        forward_fns.append(lambda eid=eid,sta=sta,phase=phase: sg.delete_event_phase(eid, sta, phase))
+                        forward_fns.append(lambda eid=eid,site=site,phase=phase: node_lps.register_phase_removed_post(sg, site, phase, eid))
+                        inverse_fns.append( lambda wn=wn,phase=phase,eid=eid: add_phase_template(sg, wn, eid, phase) )
+                        inverse_fns.append(lambda wn=wn,phase=phase,template_param_array=template_param_array : sg.set_template(eid,wn.sta, phase, wn.band, wn.chan, template_param_array))
+                        tmp = propose_phase_template(sg, wn, eid, phase, template_param_array, fix_result=True, ev=old_ev)
+                        reverse_logprob += tmp
+                        print "proposing to delete %s for %d at %s (lp %f)"% (phase, eid, sta, deassociate_logprob),
 
-                move_logprob += deassociate_logprob
+                    move_logprob += deassociate_logprob
 
     for fn in forward_fns:
         x = fn()
@@ -571,21 +550,21 @@ def ev_phasejump(sg, eid, new_ev, params_changed, adaptive_blocking=False, birth
     # can compute probabilities for the reverse move
     if jump_required:
         sg.set_event(eid, old_ev, params_changed=params_changed, preserve_templates=preserve_templates, illegal_phase_action="ignore")
-        for (sta, phase, associated) in associations:
-            dl = deassociation_logprob(sg, sta, eid, phase, deletion_prob=not associated)
+        for (wn, phase, associated) in associations:
+            dl = deassociation_logprob(sg, wn, eid, phase, deletion_prob=not associated)
             reverse_logprob += dl
-            print "rl +=", dl, "to associate", sta, phase
+            print "rl +=", dl, "to associate", wn.sta, phase
 
-        for (sta, phase, deassociate, tmid_i) in deassociations:
-            c = template_association_distribution(sg, sta, eid, phase)
+        for (wn, phase, deassociate, tmid_i) in deassociations:
+            c = template_association_distribution(sg, wn, eid, phase)
             if deassociate:
                 tmid = tmids[tmid_i]
                 tmp = np.log(c[tmid])
                 reverse_logprob += tmp
-                print "rl +=", tmp, "to deassociate", sta, phase, tmid
+                print "rl +=", tmp, "to deassociate", wn.sta, phase, tmid
             else:
                 tmp = np.log(c[None])
-                print "rl +=", tmp, "to delete", sta, phase
+                print "rl +=", tmp, "to delete", wn.sta, phase
                 reverse_logprob += tmp
         sg.set_event(eid, new_ev, params_changed=params_changed, preserve_templates=preserve_templates, illegal_phase_action="ignore")
 
@@ -649,7 +628,7 @@ def ev_move_full(sg, ev_node, std, params, adaptive_blocking=False, debug_probs=
         relevant_nodes = ev_move_relevant_nodes(node_list, fixed_nodes)
         relevant_node_cache[ev_node] = (node_list, relevant_nodes)
     else:
-        (node_list, relevant_nodes) = relevant_node_cache[ev_node]
+        (node_list, relevant_nodes, wns) = relevant_node_cache[ev_node]
 
     # propose a new set of param values
     gsample = np.random.normal(0, std, d)
@@ -677,7 +656,6 @@ def ev_move_full(sg, ev_node, std, params, adaptive_blocking=False, debug_probs=
     move_logprob, reverse_logprob, revert_move, jump_required, node_lps = ev_phasejump(sg, eid, new_ev, params, adaptive_blocking=adaptive_blocking)
     lp_old += node_lps.update_lp_old(sg, relevant_nodes)
 
-
     node_lps.update_relevant_nodes_for_lpnew(relevant_nodes)
     lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
     lp_new += node_lps.update_lp_new(sg, relevant_nodes)
@@ -698,6 +676,9 @@ def ev_move_full(sg, ev_node, std, params, adaptive_blocking=False, debug_probs=
         return True
     else:
         revert_move()
+        for n in relevant_nodes:
+            if len(n.params_modeled_jointly) > 0:
+                n.upwards_message_normalizer()
         return False
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):
@@ -823,16 +804,21 @@ def swap_params(t1nodes, t2nodes):
             atime1, atime2 = v1, v2
     return atime1, atime2
 
-def swap_association_move(sg, wave_node, repropose_events=False, debug_probs=False, stas=None):
+def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, stas=None):
 
-    # sample from all pairs of adjacent templates in which not both are uatemplates
-    arr1, arr2, pair_prob = sample_uniform_pair_to_swap(sg, wave_node)
+    # sample from all pairs of adjacent templates
+    arr1, arr2, pair_prob = sample_uniform_pair_to_swap(sg, wn)
     if arr1 is None:
         return False
 
+    # don't bother "swapping" uatemplates
+    if arr1[2]=="UA" and arr2[2] == "UA":
+        return False
+
+
     # get all relevant nodes for the arrivals we sampled
-    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wn.sta, band=wn.band, chan=wn.chan)
+    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wn.sta, band=wn.band, chan=wn.chan)
     rn = set(relevant_nodes_hack(t1nodes) + relevant_nodes_hack(t2nodes))
     if repropose_events:
         if arr1[1] > 0:
@@ -938,7 +924,7 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
     params_over_time = defaultdict(list)
 
     for wn in wn_list:
-        wave_env = wn.get_value() if wn.env else wn.get_wave().filter('env').data
+        wave_env = wn.get_env()
         wn.cdf = preprocess_signal_for_sampling(wave_env)
 
         arrivals = wn.arrivals()
@@ -950,12 +936,11 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
             arrivals = wn.arrivals()
             eid, phase = list(arrivals)[0]
 
-            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
             tmnodes = templates[wn.sta]
 
             n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["tt_residual"],
                                                            offset_node=tmnodes["peak_offset"],
-                                                             wave_node=wn, std=stds['peak_offset'])
+                                                             wn=wn, std=stds['peak_offset'])
             n_tried["peak_offset"] += 1
 
             for param in ("tt_residual","amp_transfer","coda_decay"):
@@ -1019,33 +1004,6 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
     """
 
 
-def main():
-
-    parser = OptionParser()
-    register_svgraph_cmdline(parser)
-    register_svgraph_event_based_signal_cmdline(parser)
-    (options, args) = parser.parse_args()
-
-    sg = setup_svgraph_from_cmdline(options, args)
-
-    evnodes = load_event_based_signals_from_cmdline(sg, options, args)
-
-    key_prefix = "%d;" % (evnodes['mb'].eid)
-
-    evnodes['natural_source'].fix_value(key = key_prefix + "natural_source")
-    evnodes['lon'].set_value(key = key_prefix + "lon", value=124.3)
-    evnodes['lat'].set_value(key = key_prefix + "lat", value=44.5)
-    evnodes['depth'].set_value(key = key_prefix + "depth", value = 10.0)
-    evnodes['time'].set_value(key = key_prefix + "time", value=ev_true.time+5.0)
-    evnodes['mb'].set_value(key = key_prefix + "mb", value=3.0)
-
-    np.random.seed(1)
-    run_event_MH(sg, evnodes, wave_nodes)
-
-    #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
-    print ll
-
-    #plot_with_fit("unass.png", wn)
 
 if __name__ == "__main__":
     try:

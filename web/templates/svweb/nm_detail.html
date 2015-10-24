@@ -1,3 +1,4 @@
+{% load url from future %}
 <html>
 <head>
 <title>nm{{ nm.nmid }} -- sigvisa</title>
@@ -10,7 +11,7 @@
 
 <p>time: {{timestr}}<br/>len: {{nm.window_len}}s<br/>
 chan: {{nm.chan}}, band: {{nm.band}}, srate: {{nm.hz}}hz, smoothing: {{nm.smooth}}<br/>
-model_type: {{nm.model_type}}, n: {{nm.nparams}}. {% if nm.model_type == "ar" %}<a href="{% url nm_crossval nmid=nm.nmid %}?max_order=50">cross-validate</a>{% endif %}<br/>
+model_type: {{nm.model_type}}, n: {{nm.nparams}}. {% if nm.model_type == "ar" %}<a href="{% url 'nm_crossval' nmid=nm.nmid %}?max_order=50">cross-validate</a>{% endif %}<br/>
 mean: {{nm.mean}}, std: {{nm.std}}</p>
 
 
@@ -21,34 +22,34 @@ mean: {{nm.mean}}, std: {{nm.std}}</p>
 <tr>
   <td>
     <strong>Params (order {{nm.nparams}}):</strong><br>
-    <img src="{% if nm.model_type == "ar" %}{% url nm_param_plot nmid=nm.nmid %}{%endif %}" width=500 height=300>
+    <img src="{% if nm.model_type == "ar" %}{% url 'nm_param_plot' nmid=nm.nmid %}{%endif %}" width=500 height=300>
   </td>
 
   <td>
     <strong>Spectrum:</strong><br>
-    <img src="{% url nm_spectrum nmid=nm.nmid %}" width=500 height=300>
+    <img src="{% url 'nm_spectrum' nmid=nm.nmid %}" width=500 height=300>
   </td>
 </tr>
 
 <tr>
   <td>
     <strong>Training signal (full):</strong><br>
-    <img src="{% url wave_image %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:nm.window_len}};filter_str={{ filter_str }};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
+    <img src="{% url 'wave_image' %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:nm.window_len}};filter_str={{ filter_str }};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
   </td>
   <td>
     <strong>Model ({{ nm.window_len }}s sample):</strong><br>
-    <img src="{% url nm_sample nmid=nm.nmid %}?ymin={{ymin}};ymax={{ymax}}"  width=500 height=300>
+    <img src="{% url 'nm_sample' nmid=nm.nmid %}?ymin={{ymin}};ymax={{ymax}}"  width=500 height=300>
   </td>
 </tr>
 <tr>
   <td>
     <strong>Training signal (5s):</strong><br>
-    <img src="{% url wave_image %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:5}};filter_str={{ filter_str }};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
+    <img src="{% url 'wave_image' %}?sta={{ nm.sta }};chan={{ nm.chan }};stime={{ nm.window_stime }};etime={{nm.window_stime|add:5}};filter_str={{ filter_str }};ymin={{ymin}};ymax={{ymax}}" width=500 height=300>
   </td>
 
   <td>
     <strong>Model (5s sample):</strong><br>
-    <img src="{% url nm_sample nmid=nm.nmid %}?len=5;ymin={{ymin}};ymax={{ymax}}"  width=500 height=300>
+    <img src="{% url 'nm_sample' nmid=nm.nmid %}?len=5;ymin={{ymin}};ymax={{ymax}}"  width=500 height=300>
   </td>
 </tr>
 
@@ -71,15 +72,15 @@ mean: {{nm.mean}}, std: {{nm.std}}</p>
       </tr>
         {% for fit in nm.sigvisacodafit_set.all %}
             <tr>
-                <td><a href="{% url event evid=fit.evid %}">{{ fit.evid }}</a></td>
-                <td><a href="{% url site sta=fit.sta %}">{{ fit.sta }}</a></td>
+                <td><a href="{% url 'event' evid=fit.evid %}">{{ fit.evid }}</a></td>
+                <td><a href="{% url 'site' sta=fit.sta %}">{{ fit.sta }}</a></td>
                 <td>{{ fit.chan }}</td>
                 <td>{{ fit.band }}</td>
                 <td>{{ fit.stime }}</td>
                 <td>{{ fit.timestamp }}</td>
                 <td>{{ fit.elapsed }}</td>
                 <td>{{ fit.acost }}</td>
-                <td><a href="{% url fit_run_detail fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url visual fitid=fit.fitid %}?smooth=8;logscale=true;saveprefs=false" width=150 height=100></a></td>
+                <td><a href="{% url 'fit_run_detail' fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url 'visual' fitid=fit.fitid %}?smooth=8;logscale=true;saveprefs=false" width=150 height=100></a></td>
             </tr>
         {% endfor %}
     </table>

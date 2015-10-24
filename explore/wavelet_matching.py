@@ -922,7 +922,8 @@ def wavelets_evid(evs_sta, ys_sta, evid):
 
 
 def load_vdec_signals(sta, basedir="vdec_signals"):
-    s = np.load(os.path.join(basedir, "signals_Pn_%s.npy" % sta))
+    ss = Sigvisa()
+    s = np.load(os.path.join(ss.homedir, basedir, "signals_Pn_%s.npy" % sta))
     if s.shape[1] == 2407:
         ss = np.zeros((s.shape[0], 1207))
         ss[:,0:7] = s[:,0:7]

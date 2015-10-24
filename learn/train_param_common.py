@@ -17,7 +17,7 @@ from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
-from sigvisa.models.spatial_regression.features import ortho_poly_fit
+from sigvisa.treegp.features import ortho_poly_fit
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
 
@@ -57,31 +57,39 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, **kwargs):
+def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, optimize=True, **kwargs):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
+        if "param_var" in kwargs:
+            del kwargs['param_var']
         kernel_str = s[1]
         basisfn_str = s[2]
-        model = learn_gp(X=X, y=y, sta=sta,
+        model = learn_gp(X=X, y=y, y_obs_variances=yvars, sta=sta,
                          basisfn_str=basisfn_str,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
                          optim_params=optim_params, k=k,
-                         bounds=bounds, **kwargs)
+                         bounds=bounds, optimize=optimize, **kwargs)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
-        model = learn_gp(X=X, y=y, sta=sta,
+        if "param_var" in kwargs:
+            del kwargs['param_var']
+        model = learn_gp(X=X, y=y, y_obs_variances=yvars, sta=sta,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
                          optim_params=optim_params, k=k,
-                         bounds=bounds, **kwargs)
+                         bounds=bounds, optimize=optimize, **kwargs)
     elif model_type == "constant_gaussian":
-        model = learn_constant_gaussian(sta=sta, X=X, y=y, **kwargs)
+        model = learn_constant_gaussian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type == "constant_laplacian":
-        model = learn_constant_laplacian(sta=sta, X=X, y=y, **kwargs)
+        model = learn_constant_laplacian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
+    elif model_type == "constant_beta":
+        model = learn_constant_beta(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
-        model = learn_parametric(X=X, y=y, sta=sta, basisfn_str=basisfn_str, **kwargs)
+        model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta,
+                                 optimize_marginal_ll=optimize,
+                                 basisfn_str=basisfn_str, **kwargs)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
@@ -121,6 +129,10 @@ def pre_featurizer(basisfn_str):
         basisfn_str = "mlinear"
         featurizer_recovery = {'means': np.array((3500,3.9,)), 'scales': np.array((1000,.5,)), 'extract_dim': (3,4)}
         extract_dim=None
+    elif basisfn_str == "bias":
+        basisfn_str = "mlinear"
+        featurizer_recovery = {'means': np.array(()), 'scales': np.array(()), 'extract_dim': ()}
+        extract_dim = None
     else:
         featurizer_recovery = None
         extract_dim=3
@@ -143,6 +155,7 @@ def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal
             ll += noise_prior.log_p(var)
             ll_deriv += noise_prior.deriv_log_p(var)
         return (-ll, -ll_deriv)
+
 
     if optimize_marginal_ll:
         x0 = 10
@@ -184,22 +197,25 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
 
     try:
         st = target.split('_')
-        float(st[1])
-        target = st[0]
+        int(st[-1])
+        target = "_".join(st[:-1])
     except (ValueError, AttributeError):
         pass
+
 
     distance_idx = None
     if kernel_str == "lld":
         distance_idx = 3
     elif kernel_str == "lldlld":
         distance_idx = 6
-    if "distmb" in basisfn_str:
-        extract_dim = (distance_idx, distance_idx+1)
+    if basisfn_str is not None:
+        basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
+        kwargs["basis"] = basisfn_str
+        kwargs["extract_dim"] = extract_dim
+        kwargs["featurizer_recover"] = featurizer_recovery
     else:
-        extract_dim = distance_idx
-
-    basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
+        featurizer_recovery = None
+        extract_dim = None
 
     if cov_main is None:
         noise_var, noise_prior, cov_main, cov_fic = build_starting_hparams(kernel_str, target)
@@ -210,7 +226,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         else:
             sX, sy = X, y
         print "learning hyperparams on", len(sy), "examples"
-        nllgrad, x0, bounds, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basis=basisfn_str, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
+        nllgrad, x0, bounds, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
         #bounds = [(1e-2,50.0,),(1e-2, 50.0)] + [(1e-2,1000.0),] * (len(x0) -2) if bounds is None else bounds
         params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
@@ -220,7 +236,8 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
     if len(y) > max_n:
         X, y = subsample_data(X=X, y=y, k=max_n)
 
-    gp = SparseGP(X=X, y=y, basis=basisfn_str, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
+
+    gp = SparseGP(X=X, y=y, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
     return gp
 
 
@@ -284,6 +301,9 @@ def learn_constant_laplacian(X, y, sta, optimize_marginal_ll=True, optim_params=
 
     return baseline_models.ConstLaplacianModel(X=X, y=y, sta=sta, center=center, scale=scale)
 
+def learn_constant_beta(X, y, sta, **kwargs):
+    return baseline_models.ConstBetaModel(X=X, y=y, sta=sta)
+
 def load_modelid(modelid, memoize=True, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -291,15 +311,17 @@ def load_modelid(modelid, memoize=True, **kwargs):
     fname, model_type = cursor.fetchone()
     cursor.close()
     if memoize:
-        return load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
+        model = load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
     else:
-        return load_model_notmemoized(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
+        model = load_model_notmemoized(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
+    model.modelid = modelid
+    return model
 
 @lru_cache(maxsize=None)
 def load_model(*args, **kwargs):
     return load_model_notmemoized(*args, **kwargs)
 
-def load_model_notmemoized(fname, model_type, gpmodel_build_trees=True):
+def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
     if model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):
@@ -308,6 +330,8 @@ def load_model_notmemoized(fname, model_type, gpmodel_build_trees=True):
         model = baseline_models.ConstGaussianModel(fname=fname)
     elif model_type == "constant_laplacian":
         model = baseline_models.ConstLaplacianModel(fname=fname)
+    elif model_type == "constant_beta":
+        model = baseline_models.ConstBetaModel(fname=fname)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
