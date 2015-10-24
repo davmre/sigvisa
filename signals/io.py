@@ -6,7 +6,6 @@ import gzip
 import functools32
 import numpy as np
 import numpy.ma as ma
-import scipy.optimize
 
 from optparse import OptionParser
 from obspy.core import Trace, Stream, UTCDateTime
@@ -23,7 +22,7 @@ from sigvisa import Sigvisa
 try:
     from MySQLdb import ProgrammingError
 except:
-    class ProgrammingError(exception):
+    class ProgrammingError(Exception):
         pass
 
 

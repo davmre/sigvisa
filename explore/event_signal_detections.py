@@ -31,7 +31,7 @@ def main():
 
     f = open('detections.txt', 'w')
 
-
+    leb_stas = []
     for station in stalist:
 
         if s.earthmodel.site_info(station, 0)[3] == 1:
@@ -46,8 +46,10 @@ def main():
             etime = atime + 300
 
 
+            """
             wave = fetch_waveform(station=sta, stime=stime, etime=etime, chan="auto", cursor=cursor).filter("%s;env" % "freq_2.0_3.0").filter('hz_5.0')
             print "loaded wave at", sta
+
 
             sg = SigvisaGraph(template_model_type="gplocal+lld+dist5", template_shape="paired_exp",
                           wiggle_model_type="dummy", wiggle_family="dummy",
@@ -67,10 +69,14 @@ def main():
             sg.parent_predict_all()
             sg.optimize_templates(construct_optim_params("'disp': True, 'method': 'bfgs'"))
             lp2 = sg.current_log_p()
-
+            """
             sql_query = "select l.time, l.snr from leb_arrival l, leb_origin lebo, leb_assoc leba where l.sta='%s' and l.time between %f and %f and l.arid=leba.arid and leba.orid=lebo.orid and lebo.evid=%d" % (station, atime-50, atime+50, evid)
             cursor.execute(sql_query)
             leb_arrivals = cursor.fetchall()
+            if len(leb_arrivals) > 0:
+                print "appending", station
+                leb_stas.append(station)
+            continue
 
             sql_query = "select l.time, l.snr from sel3_arrival l, sel3_origin lebo, sel3_assoc leba where l.sta='%s' and l.time between %f and %f and l.arid=leba.arid and leba.orid=lebo.orid and lebo.evid=%d" % (station, atime-50, atime+50, evid)
             cursor.execute(sql_query)
@@ -80,8 +86,10 @@ def main():
             cursor.execute(sql_query)
             idc_arrivals = cursor.fetchall()
 
+            """
             v, tg = wn.get_template_params_for_arrival(eid=0, phase='P')
             snr = np.exp(v['coda_height']) / wn.nm.c
+            """
 
             code = 0
             if len(leb_arrivals) > 0:
@@ -92,19 +100,19 @@ def main():
                 code += 4
 
             f.write('\n%s\n------\n' % station)
-            f.write("SIGVISA %.1f %.1f %.1f %.1f\n" % (v['arrival_time'], snr, lp11, lp2))
+            """f.write("SIGVISA %.1f %.1f %.1f %.1f\n" % (v['arrival_time'], snr, lp11, lp2))
             if lp2 > lp11:
                 f.write( "\t detected at %s!\n" % (sta))
                 code += 8
             else:
-                f.write("\n")
+                f.write("\n")"""
             f.write( "LEB %s\n" % leb_arrivals)
             f.write( "IDC %s\n" % idc_arrivals)
             f.write( "SEL3 %s\n" % sel3_arrivals)
 
             sets[code].add(station)
 
-            plot_with_fit('logs/dprk_detection/%s.png' % station, wn)
+            #plot_with_fit('logs/dprk_detection/%s.png' % station, wn)
 
             f.flush()
             f1 = open('detection_sets.txt', 'w')
@@ -127,6 +135,7 @@ def main():
             f.write('error: %s\n' % e)
             print "error at %s: %s" % (sta, e)
             continue
+    print leb_stas
     f.close()
 
 
