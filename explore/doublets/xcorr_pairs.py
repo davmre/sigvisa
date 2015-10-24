@@ -38,9 +38,8 @@ def extract_phase_window(sta, chan, phase, atime, window_len, filter_str, evid, 
     if load_from_db:
         wave = fetch_waveform(sta, chan, atime - leadin_s, atime + window_len, pad_seconds=PAD)
 
-        pad_samples = wave['srate'] * PAD
         filtered = wave.filter(filter_str)
-
+        pad_samples = filtered['srate'] * PAD
         d = filtered.data.filled(float('nan'))[pad_samples:-pad_samples]
 
         if cache:
@@ -48,7 +47,7 @@ def extract_phase_window(sta, chan, phase, atime, window_len, filter_str, evid, 
                 ensure_dir_exists(fdir)
                 print "saved to", fullpath
                 np.savetxt(fullpath, d)
-        srate = wave['srate']
+        srate = filtered['srate']
 
     return d, srate
 

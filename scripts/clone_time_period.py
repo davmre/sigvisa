@@ -59,7 +59,8 @@ def dump_waveforms(cursor, sta, start_time, end_time, basedir=""):
     sta = s.get_default_sta(sta)
     print "getting waveforms for", sta
 
-    sql_query = "select dir,dfile,foff,nsamp,datatype from idcx_wfdisc where sta='%s' and time between %f and %f" % (sta, start_time, end_time)
+    cond = "sta='%s' and ((time > %f and time < %f) or (endtime > %f and endtime < %f) or (time < %f and endtime > %f))" % (sta, start_time, end_time, start_time, end_time, start_time, end_time)
+    sql_query = "select dir,dfile,foff,nsamp,datatype from idcx_wfdisc where " + cond
     cursor.execute(sql_query)
     file_ranges = dict()
     for (ddir, dfile, foff, nsamp, dtype) in cursor:
@@ -86,7 +87,7 @@ def dump_waveforms(cursor, sta, start_time, end_time, basedir=""):
         print "wrote to", new_fname
         fname_map[fname] = (new_fname, sidx)
 
-    sql_query = "select * from idcx_wfdisc where sta='%s' and time between %f and %f" % (sta, start_time, end_time)
+    sql_query = "select * from idcx_wfdisc where " + cond
     cursor.execute(sql_query)
     rows = []
     for row in cursor:

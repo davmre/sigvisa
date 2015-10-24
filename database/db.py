@@ -31,7 +31,8 @@ import os
 def connect(unix_socket=None):
     if os.getenv("VISA_ORA_USER") is not None:
         import cx_Oracle
-        dbconn = cx_Oracle.connect(user=os.getenv("VISA_ORA_USER"), password=os.getenv("VISA_ORA_PASS"), threaded=True)
+        #dbconn = cx_Oracle.connect(user=os.getenv("VISA_ORA_USER"), password=os.getenv("VISA_ORA_PASS"), threaded=True)
+        dbconn = cx_Oracle.connect("moore/D109Moore@vdec", threaded=True)
     else:
         import MySQLdb
 
