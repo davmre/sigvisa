@@ -16,7 +16,7 @@ from sigvisa.source.event import get_event, Event
 from sigvisa.learn.train_param_common import load_modelid as tpc_load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian, LogNormal, InvGamma, Beta
+from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian, LogNormal, InvGamma, Beta, Laplacian
 from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel
 from sigvisa.models.conditional import ConditionalGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
@@ -90,7 +90,7 @@ default_parametric_tmtypes = {'tt_residual': 'constant_laplacian',
                               'amp_transfer': 'param_sin1'}
 
 dummyPriorModel = {
-"tt_residual": TruncatedGaussian(mean=0.0, std=1.0, a=-25.0, b=25.0),
+"tt_residual": Laplacian(center=0.0, scale=3.0),
 "amp_transfer": Gaussian(mean=0.0, std=2.0),
 "peak_offset": TruncatedGaussian(mean=-0.5, std=1.0, b=4.0),
 "mult_wiggle_std": Beta(4.0, 1.0),
@@ -865,7 +865,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
     def add_event(self, ev, tmshapes=None, sample_templates=False, fixed=False, eid=None,
-                  observed=False, stddevs=None):
+                  observed=False, stddevs=None, no_templates=False):
         """
 
         Add an event node to the graph and connect it to all waves
@@ -887,23 +887,24 @@ class SigvisaGraph(DirectedGraphModel):
             self.extended_evnodes[eid].append(n)
             self.add_node(n)
 
-        for (site, element_list) in self.site_elements.iteritems():
-            for phase in self.predict_phases_site(ev=ev, site=site):
-                #print "adding phase", phase, "at site", site
-                self.phases_used.add(phase)
-                if self.absorb_n_phases:
-                    if phase == "Pn":
-                        phase = "P"
-                    elif phase == "Sn":
-                        phase = "S"
-                tg = self.template_generator(phase)
-                try:
-                    tt = tt_predict(ev, site, phase=phase)
-                except Exception as e:
-                    print e
-                    continue
+        if not no_templates:
+            for (site, element_list) in self.site_elements.iteritems():
+                for phase in self.predict_phases_site(ev=ev, site=site):
+                    #print "adding phase", phase, "at site", site
+                    self.phases_used.add(phase)
+                    if self.absorb_n_phases:
+                        if phase == "Pn":
+                            phase = "P"
+                        elif phase == "Sn":
+                            phase = "S"
+                    tg = self.template_generator(phase)
+                    try:
+                        tt = tt_predict(ev, site, phase=phase)
+                    except Exception as e:
+                        print e
+                        continue
 
-                self.add_event_site_phase(tg, site, phase, evnodes, sample_templates=sample_templates)
+                    self.add_event_site_phase(tg, site, phase, evnodes, sample_templates=sample_templates)
 
         if observed != False:
             if observed == True:

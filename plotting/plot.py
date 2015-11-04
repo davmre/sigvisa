@@ -296,7 +296,7 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
 
 # does not save for you - you need to call savefig() yourself!
 
-def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None, color="green", draw_bars=True, draw_text=True, alpha=0.5, bottom=None, top=None, top_rel=1.0, bottom_rel=0.0, **kwargs):
+def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None, color="green", draw_bars=True, draw_text=True, alpha=0.5, bottom=None, top=None, top_rel=0.95, bottom_rel=0.05, **kwargs):
     if predictions is None or wave is None:
         return
 
@@ -344,12 +344,16 @@ def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, e
         (top,bottom) = (np.log(top), np.log(bottom))
 
     if draw_bars:
-        axes.bar(left=pred_times, height=[top-bottom for _ in pred_times],
-                 width=.25, bottom=bottom, edgecolor=colors, color=colors, linewidth=1, alpha=alpha, **kwargs)
+        for (t, c) in zip(pred_times, colors):
+            axes.axvline(x=t, color=c, linewidth=1, alpha=alpha, ymin=bottom_rel, ymax=top_rel, **kwargs)
+        #axes.bar(left=pred_times, height=[top-bottom for _ in pred_times],
+        #         width=.25, bottom=bottom, edgecolor=colors, color=colors, linewidth=1, alpha=alpha, **kwargs)
 
     if draw_text:
+        import matplotlib.transforms as transforms
+        trans = transforms.blended_transform_factory(axes.transData, axes.transAxes)
         for (lbl, t, c) in zip(pred_labels, pred_times, colors):
-            axes.text(t + .5, top - (top-bottom) * 0.1, lbl, color=c, fontsize=10)
+            axes.text(t + .5, top_rel-0.05, lbl, color=c, fontsize=10, transform=trans)
 
 # does not save for you - you need to call savefig() yourself!
 

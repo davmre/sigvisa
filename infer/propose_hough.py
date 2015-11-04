@@ -1439,7 +1439,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
         s.hough_proposer[offset] = ctf
 
     #r = ctf.propose_event(sg, fix_result=fix_result,
-    #                      one_event_semantics=one_event_semantics)
+    #                       one_event_semantics=one_event_semantics)
 
 
     if fix_result is None:

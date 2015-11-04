@@ -150,6 +150,8 @@ def main():
                       help="train models even if a model of the same type already appears in the DB")
     parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 1", type="str", help="fitting param string")
     parser.add_option("--no_optimize", dest="optimize", default=True, action="store_false", help="don't optimize hyperparameters")
+    parser.add_option("--raw_signals", dest="raw_signals", default=False, action="store_true",
+                      help="don't learn a mult_wiggle_std param (False)")
     parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
                       help="model array station jointly; don't explode array into individual elements (False)")
     parser.add_option("--subsample", dest="subsample", default=500, type="float",
@@ -225,6 +227,10 @@ def main():
         targets = [wiggle_family + "_%d" % i for i in range(basis.shape[0])]
         model_types = dict([(target, "gp_lld") for target in targets])
         iterations = 0
+
+    if options.raw_signals:
+        del model_types['mult_wiggle_std']
+        targets.remove("mult_wiggle_std")
 
     modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.template_shape, options.subsample, param_var + slack_var, options.optimize)
 

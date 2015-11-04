@@ -100,7 +100,7 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
         candidates = np.linspace(max(prior_min, -4),  min(prior_max, 5), 20)
         
 
-    provided_coda_height = tmvals['coda_height']
+    provided_coda_height = tmvals['coda_height'] if "coda_height" in tmvals else None
     tg = sg.template_generator("P")
     lps = []
     def proxylp(candidate):
@@ -141,7 +141,8 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
 
     assert( (np.diff(candidates) > 0).all() )
 
-    tmvals['coda_height'] = provided_coda_height
+    if provided_coda_height is not None:
+        tmvals['coda_height'] = provided_coda_height
     p = PiecewiseLinear(candidates, np.array(lps))
 
 

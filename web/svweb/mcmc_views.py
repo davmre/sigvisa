@@ -1111,13 +1111,16 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     if plot_template_arrivals:
         atimes = dict([("%d_%s" % (eid, phase), wn.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in wn.arrivals()])
         colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in wn.arrivals()])
-        plot_pred_atimes(dict(atimes), wn.get_wave(), axes=axes, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
+        plot_pred_atimes(dict(atimes), wn.get_wave(), axes=axes, color=colors, alpha=1.0, bottom_rel=0.0, top_rel=0.1)
 
     if stime > 0 and etime > 0:
         sidx = max(int((stime - wn.st) * wn.srate), 0)
         eidx = max(sidx, min(int((etime - wn.st) * wn.srate), wn.npts))
         d = wn.get_value()[sidx:eidx]
-        dmax, dmin = np.max(d), np.min(d)
+        try:
+            dmax, dmin = np.max(d), np.min(d)
+        except:
+            dmax, dmin = np.max(wn.get_value()), np.min(wn.get_value())
 
         try:
             pd = pred_env[sidx:eidx]
