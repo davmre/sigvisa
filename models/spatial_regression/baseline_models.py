@@ -331,8 +331,11 @@ class ConstBetaModel(ParamModel):
     def log_p(self, x, cond=None, **kwargs):
         #X1 = self.standardize_input_array(cond, **kwargs)
         x = x if isinstance(x, collections.Iterable) else np.array((x,))
-
-        return self.model.log_p(x)
+        lps = self.model.log_p(x)
+        if not isinstance(lps, float) and len(lps) ==1:
+            return lps[0]
+        else:
+            return lps 
 
     def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4, **kwargs):
         assert(idx == None)

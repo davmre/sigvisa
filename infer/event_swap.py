@@ -18,7 +18,7 @@ from sigvisa.infer.event_mcmc import *
 from sigvisa.infer.propose_hough import hough_location_proposal
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 
-from sigvisa.infer.event_birthdeath import ev_birth_helper_full,ev_death_helper_full
+from sigvisa.infer.event_birthdeath import ev_birth_executor,ev_death_executor
 
 from sigvisa.infer.template_mcmc import *
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes, plot_pred_atimes
@@ -112,21 +112,38 @@ def rebirth_events_helper(sg, eids, location_proposal):
 
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
-        lqf, lqb, r = ev_death_helper_full(sg, eid, location_proposal=lp)
-        print "death %d lqf %f lqb %f" % (eid, lqf, lqb)
-        log_qforward += lqf
-        log_qbackward += lqb
-        revert_moves.append(r)
+        r = ev_death_executor(sg, eid, location_proposal=lp)
+        if r is None:
+            revert_moves.reverse()
+            for r in revert_moves:
+                r()
+            return False
+        lp_intermediate, lp_old, lqf_old, lqb_old, redeath_old, rebirth_old, proposal_extra = r
+        redeath_old()
+        # leave the graph in the dead state, so the new death proposals are with respect to
+        # this one already having happened...
+
+        print "death %d lqf %f lqb %f" % (eid, lqf_old, lqb_old)
+        log_qforward += lqf_old
+        log_qbackward += lqb_old
+        revert_moves.append(rebirth_old)
 
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
-        lqf, lqb, r, _ = ev_birth_helper_full(sg, location_proposal=lp, eid=eid)
-        print "birth %d lqf %f lqb %f" % (eid, lqf, lqb)
-        log_qforward += lqf
-        log_qbackward += lqb
-        revert_moves.append(r)
+        r = ev_birth_executor(sg, location_proposal=lp, eid=eid)
+        if r is None:
+            revert_moves.reverse()
+            for r in revert_moves:
+                r()
+            return False
 
-    lp_new = sg.current_log_p()
+        lp_new, lp_int, lqf_new, lqb_new, rebirth_new, redeath_new, proposal_extra = r
+        rebirth_new()
+
+        print "birth %d lqf %f lqb %f" % (eid, lqf, lqb)
+        log_qforward += lqf_new
+        log_qbackward += lqb_new
+        revert_moves.append(redeath_new)
 
     revert_moves.reverse()
     def revert_move():

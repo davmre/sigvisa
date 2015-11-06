@@ -116,8 +116,14 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
         best_lp = np.max(lps)
         lp_diff = np.abs(np.diff(lps))
 
+        # an lp is "significant" if it or its neighbor is above the threshold
         thresh = best_lp - 3
-        significant_lps = ( lps[:-1] > thresh ) +  ( lps[1:] > thresh )
+        significant_lps = ( lps[:-1] > thresh ) +  ( lps[1:] > thresh ) 
+
+        # a "bad step" is where we have a sharp boundary next to a significant lp.
+        # that is, the significant lps are the areas where it's important to
+        # approximate the posterior well, and a large difference in lp between adjacent
+        # candidates means we're not doing that. 
         badsteps = significant_lps * (lp_diff > 1)
         bad_idxs = np.arange(len(lps)-1)[badsteps]
         return bad_idxs
@@ -1077,7 +1083,7 @@ def get_merge_distribution(sg, wn, keep_arr, keep_nodes, sorted_params,
     from sigvisa.infer.run_mcmc import single_template_MH
     t1 = time.time()
     np.random.seed(1)
-    sp, vals = single_template_MH(sg, wn, keep_nodes, phase=phase, steps=mh_burnin_steps+mh_samples, window_lps=window_lps, hamiltonian=False, sorted_params=sorted_params)
+    sp, vals = single_template_MH(sg, wn, [(phase, keep_nodes)], steps=mh_burnin_steps+mh_samples, window_lps=window_lps, hamiltonian=False, sorted_params=sorted_params)
     t2 = time.time()
     print "opt time %s mcmc time: %s" % (t1-t0, t2-t1)
 

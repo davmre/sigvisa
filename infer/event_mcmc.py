@@ -18,7 +18,7 @@ from sigvisa.learn.train_param_common import load_modelid
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
-from sigvisa.infer.event_birthdeath import sample_template_to_associate, template_association_logodds, associate_template, unassociate_template, sample_deassociation_proposal, template_association_distribution, propose_phase_template, deassociation_logprob
+from sigvisa.infer.event_birthdeath import sample_template_to_associate, template_association_logodds, associate_template, unassociate_template, sample_deassociation_proposal, template_association_distribution, deassociation_logprob
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move, get_sorted_arrivals, relevant_nodes_hack
@@ -39,6 +39,102 @@ from sigvisa.infer.propose_lstsqr import ev_lstsqr_dist
 fixed_node_cache = dict()
 relevant_node_cache = dict()
 
+
+def propose_phase_template(sg, wn, eid, phase, tmvals=None, 
+                           smart_peak_time=True, use_correlation=False,
+                           include_presampled=True,
+                           prebirth_unexplained=None, 
+                           fix_result=False, ev=None, 
+                           exclude_arrs=[]):
+    # WARNING: DEPRECATED old code copied from event_birthdeath since
+    # I don't use it there anymore. and I shouldn't use it here,
+    # either, but haven't fixed ev_phasejump yet.
+    from sigvisa.infer.event_birthdeath import heuristic_amplitude_posterior, smart_peak_time_proposal, ev_phase_template_logprob
+
+    # sample a set of params for a phase template from an appropriate distribution (as described above).
+    # return as an array.
+
+    # we assume that add_event already sampled all the params parent-conditionally
+    if tmvals is None:
+        tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+
+    if ev is None:
+        ev = sg.get_event(eid)
+
+
+    if use_correlation:
+        uas = [(e, p) for (e, p) in wn.arrivals() if p=="UA"]
+        exclude_arrs = uas + exclude_arrs
+    exclude_arrs = [(eid, phase)] + exclude_arrs
+    exclude_arrs = list(set(exclude_arrs))
+
+    pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
+    lp = 0
+    if smart_peak_time:
+        peak_lp = smart_peak_time_proposal(sg, wn, tmvals, eid, phase, 
+                                           pred_atime, 
+                                           use_correlation=use_correlation,
+                                           prebirth_unexplained=prebirth_unexplained,
+                                           exclude_arrs=exclude_arrs,
+                                           fix_result=fix_result)
+
+        lp += peak_lp
+        print "peak_lp", peak_lp
+        try:
+            proposed_tt_residual = tmvals["tt_residual"]
+        except KeyError:
+            proposed_tt_residual = None
+        proposed_atime = tmvals["arrival_time"]
+
+    
+    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, exclude_arrs=exclude_arrs, unexplained = prebirth_unexplained, full_tssm_proposal=use_correlation)
+
+    if 'amp_transfer' in tmvals:
+        del tmvals['amp_transfer']
+
+    if smart_peak_time:
+        if "tt_residual" in tmvals:
+            del tmvals["tt_residual"]
+        del tmvals["arrival_time"]
+
+    if amp_dist is not None:
+
+        if fix_result:
+            amplitude = tmvals["coda_height"]
+        else:
+            amplitude = amp_dist.sample()
+        del tmvals['coda_height']
+
+        # compute log-prob of non-amplitude parameters
+        if include_presampled:
+            param_lp = ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
+            print "param_lp", param_lp
+            lp += param_lp
+
+        tmvals['coda_height'] = amplitude
+        amp_lp = amp_dist.log_p(amplitude)
+        lp += amp_lp
+        print "amp_lp", amp_lp
+    else:
+        if include_presampled:
+            lp += ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
+        else:
+            print "WARNING: no amp_dist to compute amplitude probability from, inference is incorrect"
+
+    if smart_peak_time:
+        if proposed_tt_residual is not None:
+            tmvals["tt_residual"] = proposed_tt_residual
+        
+        tmvals["arrival_time"] = proposed_atime
+
+    if np.isnan(np.array(tmvals.values(), dtype=float)).any():
+        raise ValueError()
+    assert(not np.isnan(lp))
+
+    if fix_result:
+        return lp
+    else:
+        return tmvals, lp
 
 def ev_move_relevant_nodes(node_list, fixed_nodes, separate_wns=False):
 
@@ -426,7 +522,28 @@ class UpdatedNodeLPs(object):
         return n
 
 
+
+
 def ev_phasejump(sg, eid, new_ev, params_changed, adaptive_blocking=False, birth_phases=None, death_phases=None, jump_required=None):
+    # WARNING: this method is probably more complicated than it needs to be and hasn't been updated to 
+    # follow the new phase birth machinery in ev_birthdeath. to do so would need a method of 
+    # the following form:
+    #    - first propose (and set) a new ev location
+    #    - then at each sta, propose (and set) new templates
+    #         (leaving the graph in the new state)
+    #    - then compute the probability of the reverse ev move,
+    #      by calling that proposal with fix_result
+    #          (setting the graph to the old_ev state)
+    #    - then compute the probability of the reverse template
+    #      move, by calling that proposal weith fix_result
+    #          (setting the graph to the fully old state)
+    # finally, if we accept, replay all the actions of the original proposal.
+    # this would require each method to return a replay function, and enough
+    # info to call its reverse counterpart with fix_result. 
+    # and I think it'd be a lot cleaner, avoid a lot of bookkeeping that is now buggy,
+    # and allow integration with newer, smarter proposals like those in ev_birthdeath. 
+
+
     # given proposed new event parameters, propose to birth/kill
     # phases as needed to generate the proper set of phases for the
     # new location.

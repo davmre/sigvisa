@@ -67,7 +67,6 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
         except:
             sg.fixed_events = set(sg.evnodes.keys())
             sg.fully_fixed_events = set()
-        import pdb; pdb.set_trace()
 
     else:
         sg = rs.build_sg(ms1)

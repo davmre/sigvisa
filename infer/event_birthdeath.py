@@ -5,6 +5,9 @@ import traceback
 import pdb
 import pickle
 import os
+import itertools
+from collections import defaultdict
+
 
 from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
@@ -160,6 +163,34 @@ def ev_phase_template_logprob(sg, wn, eid, phase, template_dict, return_debug=Fa
         return lp, lps
     else:
         return lp
+
+def joint_association_distribution(sg, wn, eid, phases, associate_using_mb=True, max_ttr=25.0):
+    ev = sg.get_event(eid)
+    possible_associations = defaultdict(list)
+    ignore_mb = not associate_using_mb
+    
+    for phase in phases:
+        pred_atime = ev.time + tt_predict(ev, wn.sta, phase=phase)
+        possible_associations[phase].append((None, sg.uatemplate_rate))
+        for tmid in sg.uatemplate_ids[(wn.sta,wn.chan,wn.band)]:
+            tmnodes = sg.uatemplates[tmid]
+            atime = tmnodes['arrival_time'].get_value()
+            if np.abs(atime - pred_atime) < max_ttr: 
+                odds = np.exp(template_association_logodds(sg, wn, tmid, eid, phase, ignore_mb=ignore_mb))
+                possible_associations[phase].append((tmid, odds))
+                print "odds for", phase, tmid, "are", odds
+
+    vals = [possible_associations[k] for k in phases]
+    joint_dist = Counter()
+    for assoc in itertools.product(*vals):
+        tmids, odds = zip(*assoc)
+        nontrivial_tmids = [t for t in tmids if t is not None]
+        if len(set(nontrivial_tmids)) != len(nontrivial_tmids):
+            # duplicate tmid, assigned to two phases
+            continue
+        joint_dist[tmids] = np.prod(odds)
+    joint_dist.normalize()
+    return joint_dist
 
 
 def template_association_logodds(sg, wn, tmid, eid, phase, ignore_mb=False):
@@ -317,8 +348,11 @@ def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-
 
     n_u = len(sg.uatemplate_ids[(wn.sta,wn.chan,wn.band)])
     ntemplates_ratio_log = sg.ntemplates_sta_log_p(wn, n=n_u+1) - sg.ntemplates_sta_log_p(wn, n=n_u)
+
     deassociation_ratio_log = unass_lp + ntemplates_ratio_log
+
     signal_lp_with_template = wn.log_p()
+
     signal_lp_without_template = wn.log_p(arrivals=arrivals)
     deletion_ratio_log = signal_lp_without_template - signal_lp_with_template
 
@@ -707,105 +741,77 @@ def heuristic_amplitude_posterior_old(sg, wn, tmvals, eid, phase, debug=False):
 
     return heuristic_posterior
 
-def propose_phase_template(sg, wn, eid, phase, tmvals=None, 
-                           smart_peak_time=True, use_correlation=False,
-                           include_presampled=True,
-                           prebirth_unexplained=None, 
-                           fix_result=False, ev=None, return_debug=False,
-                           exclude_arrs=[]):
-    # sample a set of params for a phase template from an appropriate distribution (as described above).
-    # return as an array.
 
-    # we assume that add_event already sampled all the params parent-conditionally
-    if tmvals is None:
-        tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-
+def clean_propose_phase_template(sg, wn, eid, phase, 
+                                 fix_result=None, 
+                                 debug_info=None,
+                                 ev=None):
+    # add the given phase to the graph, with appropriate proposal values (or fix_result)
+    # return the tmvals and stuff
     if ev is None:
         ev = sg.get_event(eid)
-
-    if use_correlation:
-        uas = [(e, p) for (e, p) in wn.arrivals() if p=="UA"]
-        exclude_arrs = uas + exclude_arrs
-    exclude_arrs = [(eid, phase)] + exclude_arrs
-    exclude_arrs = list(set(exclude_arrs))
-
-    pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
-    lp = 0
-    debug_lps = {}
-    if smart_peak_time:
-        peak_lp = smart_peak_time_proposal(sg, wn, tmvals, eid, phase, 
-                                           pred_atime, 
-                                           use_correlation=use_correlation,
-                                           prebirth_unexplained=prebirth_unexplained,
-                                           exclude_arrs=exclude_arrs,
-                                           fix_result=fix_result)
-
-        lp += peak_lp
-        print "peak_lp", peak_lp
-        try:
-            proposed_tt_residual = tmvals["tt_residual"]
-        except KeyError:
-            proposed_tt_residual = None
-        proposed_atime = tmvals["arrival_time"]
-        debug_lps["tt_residual"] = peak_lp
-
-    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, exclude_arrs=exclude_arrs, unexplained = prebirth_unexplained, full_tssm_proposal=use_correlation)
-
-
-    if 'amp_transfer' in tmvals:
-        del tmvals['amp_transfer']
-
-    if smart_peak_time:
-        if "tt_residual" in tmvals:
-            del tmvals["tt_residual"]
-        del tmvals["arrival_time"]
-
-    if amp_dist is not None:
-
-        if fix_result:
-            amplitude = tmvals["coda_height"]
-        else:
-            amplitude = amp_dist.sample()
-        del tmvals['coda_height']
-
-        # compute log-prob of non-amplitude parameters
-        if include_presampled:
-            param_lp = ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
-            debug_lps['other'] = param_lp
-            print "param_lp", param_lp
-            lp += param_lp
-
-        tmvals['coda_height'] = amplitude
-        amp_lp = amp_dist.log_p(amplitude)
-        debug_lps['coda_height'] = amp_lp
-        lp += amp_lp
-        print "amp_lp", amp_lp
-    else:
-        if include_presampled:
-            param_lp = ev_phase_template_logprob(sg, wn, eid, phase, tmvals)
-            lp += param_lp
-            debug_lps["other"] = param_lp
-        else:
-            print "WARNING: no amp_dist to compute amplitude probability from, inference is incorrect"
-
-    if smart_peak_time:
-        if proposed_tt_residual is not None:
-            tmvals["tt_residual"] = proposed_tt_residual
         
-        tmvals["arrival_time"] = proposed_atime
 
-    if np.isnan(np.array(tmvals.values(), dtype=float)).any():
-        raise ValueError()
-    assert(not np.isnan(lp))
-
-    if fix_result:
-        return lp
-    else:
-        if return_debug:
-            return tmvals, lp, debug_lps
+    # add the template
+    
+    #sg._topo_sort()
+    
+    # sample most of the template params from the event-conditional prior
+    tmnodes = sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
+    k_ttr, n_ttr = tmnodes["tt_residual"]
+    k_time, n_time = tmnodes["arrival_time"]
+    k_amp, n_amp = tmnodes["amp_transfer"]
+    k_height, n_height = tmnodes["coda_height"]
+    tmvals = {}
+    log_q = 0.0
+    for param, (k, n) in tmnodes.items():
+        if param in ("tt_residual", "amp_transfer") or n.deterministic():
+            continue
+        if fix_result is not None:
+            n.set_value(fix_result[param])
         else:
-            return tmvals, lp
-        return tmvals, lp
+            n.parent_sample()
+        param_lp = n.log_p()
+        log_q += param_lp
+        
+        tmvals[param] = n.get_value()
+        if debug_info is not None:
+            debug_info[param] = (tmvals[param], param_lp, param_lp)
+        print "param", param, "val", tmvals[param], "lp", param_lp
+        
+    # then sample atime from the signal
+    pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
+    debug_lps = {}
+    if fix_result is not None:
+        tmvals["arrival_time"] = fix_result["arrival_time"]
+    peak_lp = smart_peak_time_proposal(sg, wn, tmvals, eid, phase,
+                                       pred_atime,
+                                       use_correlation=False,
+                                       prebirth_unexplained=None,
+                                       exclude_arrs=[],
+                                       fix_result=(fix_result is not None))
+    n_time.set_value(key=k_time, value = tmvals["arrival_time"])
+    log_q += peak_lp
+    if debug_info is not None:
+        debug_info["tt_residual"] = (n_ttr.get_value(), peak_lp, n_ttr.log_p())
+
+    # then sample amplitude from the signal
+    amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, 
+                                             exclude_arrs=[(eid, phase)], 
+                                             unexplained = None, 
+                                             full_tssm_proposal=False)
+    if fix_result is not None:
+        tmvals["coda_height"] = fix_result["coda_height"]
+    else:
+        tmvals["coda_height"] = amp_dist.sample()
+    n_height.set_value(key=k_height, value=tmvals["coda_height"])
+    amp_lp = amp_dist.log_p(tmvals["coda_height"])
+    log_q += amp_lp
+    tmvals["amp_transfer"] = n_amp.get_value(key=k_amp)
+    if debug_info is not None:
+        debug_info["amp_transfer"] = (n_amp.get_value(), amp_lp, n_amp.log_p())
+    
+    return tmvals, log_q
 
 #########################################################################################
 
@@ -867,175 +873,68 @@ def death_proposal_logprob(sg, eid):
     #assert(np.isfinite(lp))
     return lp
 
-
-def ev_death_helper(sg, eid, use_correlation=False, associate_using_mb=True, fix_result=None):
-
-    # fix_result is a dict mapping (wn, phase) -> (disassociated, tmvals)
-
-    ev = sg.get_event(eid)
-
-    next_uatemplateid = sg.next_uatemplateid
-
-    move_logprob = 0
-    reverse_logprob = 0
-
-    forward_fns = []
-    inverse_fns = []
-    inverse_fns.append(lambda : sg.add_event(ev, eid=eid))
-
-    tmids = []
-    tmid_i = 0
-
-    death_record = {}
-
-    for elements in sg.site_elements.values():
-        for sta in elements:
-            for wn in sg.station_waves[sta]:
-
-                s = Sigvisa()
-                site = s.get_array_site(sta)
-                template_param_array = None
-                for phase in sg.ev_arriving_phases(eid, sta):
-                    #if (eid, phase) not in wn.arrivals():
-                    #    continue
-
-                    if fix_result is not None:
-                        deassociate, fixed_tmvals = fix_result[(wn, phase)]
-                    else:
-                        deassociate = None
-                        fixed_tmvals = None
-                    deassociate, deassociate_logprob = sample_deassociation_proposal(sg, wn, eid, phase, fix_result = deassociate)
-
-                    move_logprob += deassociate_logprob
-
-                    if deassociate:
-                        # deassociation will produce a new uatemplated
-                        # with incrementing tmid. We keep track of this
-                        # tmid (kind of a hack) to ensure that we
-                        # reassociate the same template if the move gets
-                        # rejected.
-                        forward_fns.append(lambda wn=wn,phase=phase: tmids.append(unassociate_template(sg, wn, eid, phase)))
-                        inverse_fns.append(lambda wn=wn,phase=phase,tmid_i=tmid_i: associate_template(sg, wn, tmids[tmid_i], eid, phase))
-
-                        print "proposing to deassociate at %s (lp %.1f)" % (sta, deassociate_logprob)
-                        if use_correlation:
-                            # since the correlation birth move can propose new atimes/amps for uatemplates, 
-                            # the death move needs to be able to reverse these changes. so we 
-                            # propose a new atime/amp conditioned on the event we're about to kill
-                            # (on the grounds that since the template we're trying to reproduce was
-                            # chosen to associate to this event, its parameters must be likely under
-                            # that distribution).
-                            
-                            if fix_result is not None:
-                                tmpl_lp = propose_phase_template(sg, wn, eid, phase, 
-                                                                 use_correlation=False, 
-                                                                 include_presampled=False,
-                                                                 tmvals = fixed_tmvals,
-                                                                 fix_result=True)
-                                #print "fixed death reproposal", fixed_tmvals, tmpl_lp
-                            else:
-                                tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-                                tmvals, tmpl_lp = propose_phase_template(sg, wn, eid, phase, 
-                                                                         use_correlation=False, 
-                                                                         include_presampled=False,
-                                                                         tmvals = tmvals,
-                                                                         fix_result=False)
-                                #print "live death reproposal", tmvals, tmpl_lp
-
-                                # after we unassociate the template from the event, we'll set its
-                                # values to our proposed ones. 
-                                forward_fns.append(lambda wn=wn,phase=phase,tmvals=tmvals,tmid_i=tmid_i : sg.set_template(-tmids[tmid_i], wn.sta, "UA", wn.band, wn.chan, tmvals))
-
-                                # to reverse this operation, we set the template to its original (associated)
-                                # params. 
-                                template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-                                inverse_fns.append(lambda wn=wn,phase=phase,template_param_array=template_param_array : sg.set_template(eid,wn.sta, phase, wn.band, wn.chan, template_param_array))
-
-
-                            move_logprob += tmpl_lp
-
-                    else:
-                        if fix_result is not None:
-                            template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-                            inverse_fns.append(lambda wn=wn,phase=phase,template_param_array=template_param_array : sg.set_template(eid,wn.sta, phase, wn.band, wn.chan, template_param_array))
-                            print "proposing to delete at %s (lp %f)"% (sta, deassociate_logprob)
-                            
-                    death_record[(wn, phase)] = (deassociate, template_param_array, tmid_i)
-                    #deassociations.append((wn, phase, deassociate, tmid_i, template_param_array))
-                    if deassociate:
-                        tmid_i += 1
-
-    if fix_result is not None:
-        return move_logprob
-
-    # order of operations:
-    # first, deassociate the templates we need to deassociate
-    # second, calculate probabilities of re-associating them to the event (while it's still around)
-    # finally, kill the event
-    for fn in forward_fns:
-        fn()
-    sg._topo_sort()
     
-    # now that the forward_fns have built up the list of tmids for dissassociated arrivals,
-    # we can update our records to replace the actual tmids. 
-    canonicalized_death_record = {}
-    for k, (deassociate, template_param_array, tmid_i) in death_record.items():
-        canonicalized_death_record[k] = (deassociate, template_param_array, 
-                                         tmids[tmid_i] if deassociate else None)
+def ev_death_executor(sg, location_proposal, proposal_includes_mb=True):
+    log_qforward = 0.0
+    log_qbackward = 0.0
+    
+        
+    debug_info = {}
 
-    reverse_logprob = ev_birth_helper(sg, ev, use_correlation=use_correlation, 
-                                      associate_using_mb=associate_using_mb, eid=eid,
-                                      fix_result=canonicalized_death_record)
-
-    sg.remove_event(eid)
-
-    def revert_move():
-        for fn in inverse_fns:
-            fn()
-        sg._topo_sort()
-        sg.next_uatemplateid = next_uatemplateid
-
-    return move_logprob, reverse_logprob, revert_move
-
-
-
-def ev_death_helper_full(sg, eid, location_proposal, proposal_includes_mb=False, use_correlation=False):
-    ev = sg.get_event(eid)
-    if not proposal_includes_mb:
-        lqb, reset_coda_heights = propose_mb(sg, eid, fix_result=ev.mb)
-        sg.evnodes[eid]["mb"].set_value(4.0)
-        reset_coda_heights()
-    else:
-        lqb = 0.0
-
-    log_qforward, log_qbackward, revert_move = ev_death_helper(sg, eid, associate_using_mb=False, use_correlation=use_correlation)
-    #try:
-    lp_loc = location_proposal(sg, fix_result=ev)
-    print "death helper", lqb, log_qbackward, lp_loc
-    #except Exception as e:
-    #    print "exception in birth probability evaluation: ", e
-    #    lp_loc = -np.inf
-
-    def revert():
-        revert_move()
-        if not proposal_includes_mb:
-            sg.evnodes[eid]["mb"].set_value(ev.mb)
-            reset_coda_heights()
-
-    return log_qforward, lqb + log_qbackward + lp_loc, revert
-
-def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_outcome=None, **kwargs):
-    eid, eid_logprob = sample_death_proposal(sg)
+    eid, lq_death = sample_death_proposal(sg)
     if eid is None:
-        return False
-    move_logprob = eid_logprob
-    n_current_events = len(sg.evnodes) - len(sg.fixed_events)
-    reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
+        return None
+
+    log_qforward += lq_death
 
     lp_old = sg.current_log_p()
-    log_qforward, log_qbackward, revert_move = ev_death_helper_full(sg, eid, location_proposal, **kwargs)
-    lp_new = sg.current_log_p()
 
+    lqf, replicate_untmpls, birth_records = ev_template_death_helper(sg, eid)
+    log_qforward += lqf
+
+    # this is a little inelegant 
+    replicate_death, ev = ev_bare_death_move(sg, eid)
+    sg._topo_sort()
+    
+    lp_new = sg.current_log_p()
+        
+    n_current_events = len(sg.evnodes) - len(sg.fixed_events)
+    log_qbackward = -np.log(n_current_events + 1)
+    lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, fix_result=(ev, eid))
+    log_qbackward += lq_loc
+
+    lqb, replicate_tmpls, death_records = ev_template_birth_helper(sg, eid, 
+                                                                   associate_using_mb=proposal_includes_mb, 
+                                                                   fix_result=birth_records)
+    log_qbackward += lqb
+    sg._topo_sort()
+
+                                                                
+    lp_old2 = sg.current_log_p()
+    assert(np.abs(lp_old2 - lp_old) < 1e-6)
+    
+    def rebirth():
+        replicate_birth()
+        replicate_tmpls()
+        sg._topo_sort()
+        
+    def redeath():
+        replicate_untmpls() # maybe not technically necessary
+        replicate_death()
+        sg._topo_sort()
+
+    proposal_extra = (extra, eid, debug_info)
+    return lp_new, lp_old, log_qforward, log_qbackward, redeath, rebirth, proposal_extra
+
+def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_outcome=None, **kwargs):
+
+    #n_current_events = len(sg.evnodes) - len(sg.fixed_events)
+    #reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
+
+    r = ev_death_executor(sg, location_proposal, **kwargs)
+    if r is None:
+        return False
+    lp_new, lp_old, log_qforward, log_qbackward, redeath, rebirth, proposal_extra = r
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, associations = proposal_extra
@@ -1055,15 +954,9 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_out
                     f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
 
-
-    log_qforward += move_logprob
-    log_qbackward += reverse_logprob
-
     print "death move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
 
-
-
-    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move, force_outcome=force_outcome)
+    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=redeath, revert_move=None, force_outcome=force_outcome)
 
 def ev_death_move_hough(sg, hough_kwargs={}, **kwargs):
     def hlp(sg, fix_result=None, **kwargs):
@@ -1096,259 +989,312 @@ def ev_death_move_lstsqr(sg, **kwargs):
 
 ##########################################################################################
 
-def ev_birth_helper(sg, proposed_ev, use_correlation=False, 
-                            associate_using_mb=True, eid=None,
-                            fix_result=None):
-    forward_fns = []
-    inverse_fns = []
-    birth_record = {}
+def ev_death_dist(sg):
+    log_qforward = -np.log(len(sg.evnodes.keys()))
+    
+def ev_bare_death_move(sg, eid):
+    
+    def replicate_move():
+        sg.remove_event(eid)
+    
+    ev = sg.get_event(eid)
+    replicate_move()
+    return replicate_move, ev
 
-    prebirth_unexplained = None
-    if use_correlation:
-        if fix_result:
-            exclude_eids = [eid,]
+def ev_sta_template_death_helper(sg, wn, eid, 
+                                 fix_result=None,
+                                 debug_info=None):
+    death_record = {}
+    
+    s = Sigvisa()
+    site = s.get_array_site(wn.sta)
+    sta = wn.sta
+    replicate_fns = []
+    assoc_tmids = {}
+    log_qforward = 0.0
+    site_phases = sg.ev_arriving_phases(eid, sta)
+    for phase in site_phases:
+        if fix_result is not None:
+            deassociate, tmid, fixed_tmvals = fix_result[phase]
         else:
-            exclude_eids = []
-        prebirth_unexplained = {}
-        for sta, wns in sg.station_waves.items():
-            for wn in wns:
-                prebirth_unexplained[wn.label] = wn.unexplained_kalman(exclude_eids=exclude_eids)
+            deassociate = None
+            tmid = None
+            fixed_tmvals = None
+        deassociate, deassociate_logprob = sample_deassociation_proposal(sg, wn, eid, phase, 
+                                                                         fix_result = deassociate)
+        log_qforward += deassociate_logprob
+        if deassociate:
+            tmid = unassociate_template(sg, wn, eid, phase, tmid=tmid)
+            replicate_fns.append(lambda wn=wn,phase=phase,eid=eid,tmid=tmid: \
+                                 unassociate_template(sg, wn, eid, phase, tmid=tmid))
 
-    debug_info = {}
+            print "proposing to deassociate %s at %s (lp %.1f)" % (phase, sta, deassociate_logprob)
+            assoc_tmids[phase] = tmid
+        else:
+            if fix_result is None:
+                template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+                sg.delete_event_phase(eid, wn.sta, phase)
+                replicate_fns.append(lambda eid=eid, sta=wn.sta, phase=phase: sg.delete_event_phase(eid, sta, phase))
+                print "proposing to delete %s at %s (lp %f)"% (phase, sta, deassociate_logprob)                
+                death_record[phase] = template_param_array
+
+    sorted_tmids = [assoc_tmids[phase] if phase in assoc_tmids else None for phase in sorted(site_phases)]
+    death_record["assoc_tmids"] = tuple(sorted_tmids)
+    
+    def replicate_move():
+        for fn in replicate_fns:
+            fn()
+    
+    return log_qforward, replicate_move, death_record
+
+def ev_template_death_helper(sg, eid, fix_result=None):
+    birth_records = {}
+    replicate_fns = []
+    log_qforward = 0.0
     for site,elements in sg.site_elements.items():
-        for sta in elements:
-            debug_info[sta] = dict()
-            debug_info[sta]["wn_old"] = np.sum([wn.log_p() for wn in sg.station_waves[sta]])
-
-    # add an event, WITH all its template nodes initialized to parent-sampled values.
-    # we need to replace these values before computing any signal-based probabilities.
-    # luckily,
-    if fix_result is None:
-        evnodes = sg.add_event(proposed_ev, sample_templates=True, eid=eid)
-        eid = evnodes['mb'].eid
-
-    # loop over phase arrivals at each station and propose either
-    # associating an existing unass. template with the new event, or
-    # creating a new template.
-    # don't modify the graph, but generate a list of functions
-    # to execute the forward and reverse moves
-
-    log_qforward = 0
-    for site,elements in sg.site_elements.items():
-        site_phases = sg.predict_phases_site(proposed_ev, site=site)
         for sta in elements:
             for wn in sg.station_waves[sta]:
-
-                s = Sigvisa()
-                site = s.get_array_site(sta)
-                band, chan = wn.band, wn.chan
-
-                proposed_tmids = set()
-                for phase in site_phases:
-                    debug_info[sta][phase] = {}
-
-                    #if (eid, phase) not in wn.arrivals():
-                    #    continue
-
-                    # we should really do the associations one-by-one,
-                    # instead of just keeping a list of tmids we've
-                    # proposed to associate and then doing it all at the
-                    # end.as it currently stands the death move doesn't
-                    # quite compute the correct reverse probabilities.
-
-                    if fix_result is not None:
-                        deassociate, fixed_tmvals, fixed_tmid = fix_result[(wn, phase)]
-                        if not deassociate:
-                            fixed_tmid = None
-                    else:
-                        fixed_tmid = None
-                    tmid, assoc_logprob = sample_template_to_associate(sg, wn, eid, phase, 
-                                                                       ignore_mb=not associate_using_mb, 
-                                                                       forbidden=proposed_tmids,
-                                                                       fix_result=fixed_tmid)
-
-                    debug_info[sta][phase]["assoc"] = (tmid, assoc_logprob, 0.0)
-                    if tmid is not None:
-                        # propose to associate a uatemplate for this phase
-                        forward_fns.append(lambda wn=wn,phase=phase,tmid=tmid: associate_template(sg, wn, tmid, eid, phase))
-                        inverse_fns.append(lambda wn=wn,phase=phase,tmid=tmid: unassociate_template(sg, wn, eid, phase, tmid=tmid))
-                        proposed_tmids.add(tmid)
-
-                        tmnodes = sg.uatemplates[tmid]
-                        param_values = dict([(k, n.get_value()) for (k,n) in tmnodes.items()])
-                        lp_unass, lps_unass = unass_template_logprob(sg, wn, param_values, ignore_mb=not associate_using_mb, return_debug=True)
-                        lp_ev, lps_ev = ev_phase_template_logprob(sg, wn, eid, phase, param_values, ignore_mb=not associate_using_mb, return_debug=True)
-                        
-                        for param in param_values.keys():
-                            if param=="amp_transfer" or param=="tt_residual": continue
-                            evparam = param
-                            uaparam = param
-                            if param=="coda_height":
-                                evparam = "amp_transfer"
-                            if param=="arrival_time":
-                                evparam = "tt_residual"
-                                uaparam = "ua_atime"
-                            v = param_values[param]
-                            ualp = float(lps_unass[uaparam])
-                            evlp = float(lps_ev[evparam])
-                            debug_info[sta][phase][param] = (v, ualp, evlp)
-
-                        print "proposing to associate template %d at %s,%s with assoc lp %.1f" % (tmid, wn.sta, phase, assoc_logprob)
-
-                    tmpl_lp  = 0.0
-                    tmvals = None
-                    tmvals_old = None
-                    if tmid is None or use_correlation:
-                        exclude_arrs = []
-                        if tmid is not None:
-                            tmvals_old = sg.get_template_vals(-tmid, wn.sta, "UA", wn.band, wn.chan)
-                            inverse_fns.append(lambda wn=wn,phase=phase,tmvals=tmvals_old : sg.set_template(-tmid, wn.sta, "UA", wn.band, wn.chan, tmvals))
-
-                            exclude_arrs = [(-tmid, "UA")]                            
-
-                        if fix_result is not None:
-                            #print "fix result: tmpl lp %f for %s, %s" % (tmpl_lp, tmid, fixed_tmvals)
-                            tmpl_lp = \
-                                 propose_phase_template(sg, wn, eid, phase, 
-                                                        use_correlation=use_correlation, 
-                                                        prebirth_unexplained=prebirth_unexplained, 
-                                                        include_presampled = (tmid is None), 
-                                                        tmvals = fixed_tmvals, 
-                                                        exclude_arrs=exclude_arrs,
-                                                        fix_result=True)
-                            #print "fix result: tmpl lp %f for %s, %s" % (tmpl_lp, tmid, fixed_tmvals)
-                        else:
-                            if tmid is None:
-                                # we are birthing anew, so use the parent-conditional event template
-                                tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-                            else:
-                                # we are modifying an existing template, so use those values
-                                tmvals = sg.get_template_vals(-tmid, wn.sta, "UA", wn.band, wn.chan)
-
-                            tmvals, tmpl_lp, debug_lps = \
-                                 propose_phase_template(sg, wn, eid, phase, 
-                                                        use_correlation=use_correlation, 
-                                                        prebirth_unexplained=prebirth_unexplained, 
-                                                        include_presampled = (tmid is None), 
-                                                        tmvals = tmvals, 
-                                                        exclude_arrs=exclude_arrs,
-                                                        return_debug=True,
-                                                        fix_result=False)
-
-                            for param in debug_lps.keys():
-                                logq = float(debug_lps[param])
-                                if param == "other":
-                                    debug_info[sta][phase][param] = (0.0, logq, logq)
-                                    continue
-                                v = tmvals[param]
-                                logp = float(param_logprob(sg, site, sta, proposed_ev, phase, wn.chan, wn.band, param, v))
-                                debug_info[sta][phase][param] = (v, logq, logp)
-
-                            #print "true birth: tmpl lp %f for %s, %s" % (tmpl_lp, tmid, tmvals)
-                            #print "proposed values", tmvals
-                            if np.isnan(np.array(tmvals.values(), dtype=float)).any():
-                                raise ValueError()
-                            forward_fns.append(lambda wn=wn,phase=phase,tmvals=tmvals : sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, tmvals))
-                        print "proposing to birth new phase %s,%s with assoc lp %.1f tmpl lp %f" % (sta, phase, assoc_logprob, tmpl_lp)
-                    
-                    birth_record[(wn, phase)] = (tmid is not None, tmvals_old)
-                    sta_phase_logprob = assoc_logprob + tmpl_lp
-                    log_qforward += sta_phase_logprob
-                    print "birth qforward + ", assoc_logprob, tmpl_lp, "=", log_qforward
-
-
-    if fix_result is not None:
-        return log_qforward
-
-    inverse_fns.append(lambda : sg.remove_event(eid))
-
-    # execute all the forward moves
-    for fn in forward_fns:
-        fn()
-    sg._topo_sort()
-
-    for site,elements in sg.site_elements.items():
-        for sta in elements:
-            debug_info[sta]["wn_new"] = np.sum([wn.log_p() for wn in sg.station_waves[sta]])
-
-    log_qbackward = ev_death_helper(sg, eid, use_correlation=use_correlation, associate_using_mb=associate_using_mb, fix_result=birth_record)
-
-    def revert_move():
-        for fn in inverse_fns:
+                fr_sta = None
+                if fix_result is not None:
+                    fr_sta = fix_result[wn.label]                
+                lqf_sta, replicate_sta, birth_sta = ev_sta_template_death_helper(sg, wn, eid, fix_result=fr_sta)
+                replicate_fns.append(replicate_sta)
+                log_qforward += lqf_sta
+                birth_records[wn.label] = birth_sta
+                
+    def replicate_move():
+        for fn in replicate_fns:
             fn()
+            
+    return log_qforward, replicate_move, birth_records
 
-    return log_qforward, log_qbackward, revert_move, eid, birth_record, debug_info
+
+def ev_bare_birth_move(sg, location_proposal, 
+                       debug_info=None,
+                       fix_result=None):
+    if fix_result is not None:
+        ev, eid = fix_result
+        extra = None
+        log_qforward = location_proposal(sg, fix_result=ev)
+    else:
+        ev, log_qforward, extra = location_proposal(sg)
+        eid = None
+        if ev is None:
+            return None, None, None, None
+        
+    evnodes = sg.add_event(ev, eid=eid, no_templates=True)
+    eid = evnodes["loc"].eid
     
+    if debug_info is not None:
+        evnodes = set(sg.evnodes[eid].values())
+        evlps = [(n.label.split(";")[1], n.log_p()) for n in evnodes]
+        evlps += [('nevents', np.log(sg.event_rate))]
+        debug_info["ev"] = (ev, log_qforward, evlps)
+    
+    def replicate_move():
+        sg.add_event(ev, eid=eid, no_templates=True)
+        
+    return log_qforward, replicate_move, eid, extra
 
+def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None, debug_info=None, associate_using_mb=True):
+    log_qforward = 0    
+    band, chan = wn.band, wn.chan
+    jd = joint_association_distribution(sg, wn, eid=eid, phases=site_phases, 
+                                        associate_using_mb=associate_using_mb)
+    if fix_result is None:
+        assoc_tmids = jd.sample()
+        assoc_lp = np.log(jd[assoc_tmids])
+    else:
+        assoc_tmids = fix_result["assoc_tmids"]
+        assoc_lp = np.log(jd[assoc_tmids]) if assoc_tmids in jd else -np.inf
+    print "using assoc", zip(site_phases, assoc_tmids), "with lp", assoc_lp
+    log_qforward += assoc_lp
+    
+    if debug_info is not None:
+        debug_info["assoc"] = (zip(site_phases, assoc_tmids), assoc_lp, 0.0)
 
-def ev_birth_helper_full(sg, location_proposal, eid=None, proposal_includes_mb=True, use_correlation=False):
-    # propose a new ev location
-    #try:
-    ev, lp_loc, extra = location_proposal(sg)
-    if ev is None:
-        return 0, 0, None, None
+    replicate_fns = []
+    birth_record = {}
+    for i_phase, phase in enumerate(site_phases):
+        debug_phase = None
+        if debug_info is not None:
+            debug_info[phase] = {}
+            debug_phase = debug_info[phase]
+            
+        assoc_tmid = assoc_tmids[i_phase]
+        if assoc_tmid is not None:
+            if debug_phase is not None:
+                tmnodes = sg.get_template_nodes(-assoc_tmid, wn.sta, "UA", wn.band, wn.chan)
+                ualps = dict([(param, n.log_p()) for (param, (k,n)) in tmnodes.items()])
+                    
+            
+            associate_template(sg, wn, assoc_tmid, eid, phase, create_phase_arrival=True)
+            replicate_fns.append(lambda sg=sg,wn=wn,phase=phase,eid=eid,tmid=assoc_tmid: \
+                                  associate_template(sg, wn, tmid, eid, phase, create_phase_arrival=True))
+            
+            if debug_phase is not None:
+                tmnodes = sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
+                for (param, (k, n)) in tmnodes.items():
+                    if n.deterministic(): continue
+                    evlp = n.log_p()
+                    uaparam = param
+                    if param == "amp_transfer":
+                        uaparam = "coda_height"
+                    elif param == "tt_residual":
+                        uaparam = "arrival_time"
+                    ualp = ualps[uaparam]
+                    if uaparam=="arrival_time":
+                        ualp = np.log(sg.uatemplate_rate)
+                    v = n.get_value(key=k)
+                    debug_phase[param] = (v, ualp, evlp)
+        else:  
 
-    print "proposing new ev", ev
+            # add random variables for this phase to the graph (initially set to dummy values)
+            site = Sigvisa().get_array_site(wn.sta)
+            tg = sg.template_generator(phase)
+            f1 = lambda tg=tg, site=site, phase=phase, eid=eid : \
+                   sg.add_event_site_phase(tg, site, phase, sg.evnodes[eid], sample_templates=False)
+            f1()
+            replicate_fns.append(f1)
+            
+            # now propose values for this template
+            fr_phase = None
+            if fix_result is not None:
+                fr_phase = fix_result[phase]
+            tmvals, tmpl_lp = clean_propose_phase_template(sg, wn, eid, phase=phase, 
+                                                           fix_result=fr_phase, 
+                                                           debug_info=debug_phase)      
+            # to replay this move, we just need to reset the proposed values
+            print wn.label, phase, "amp_transfer", tmvals["amp_transfer"]
+            def rf(eid=eid, wn=wn, tmvals=tmvals, phase=phase):
+                sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, tmvals)
+            replicate_fns.append(rf)
+            log_qforward += tmpl_lp
+            
 
-
+        birth_record[(phase)] = (assoc_tmid is not None, assoc_tmid, None)
+        
+    def replicate_fn():
+        for fn in replicate_fns:
+            fn()
+        
+    return log_qforward, replicate_fn, birth_record
         
 
-    #except Exception as e:
-    #    print "exception in birth proposal", e
-    #    def noop(): pass
-    #    return -np.inf, 0.0, noop, (None, 0, [])
+    
+def ev_template_birth_helper(sg, eid, fix_result=None, 
+                             associate_using_mb=True,
+                             debug_info=None):
+    death_records = {}
+    replicate_fns = []
+    log_qforward = 0
+    proposed_ev = sg.get_event(eid)
+    for site,elements in sg.site_elements.items():
+        site_phases = sorted(sg.predict_phases_site(proposed_ev, site=site))
+        for sta in elements:
+            debug_info_sta = None
+            if fix_result is None and debug_info is not None:
+                if sta not in debug_info:
+                    debug_info[sta] = dict()
+                debug_info_sta = debug_info[sta]
+                debug_info[sta]["wn_old"] = np.sum([wn.log_p() for wn in sg.station_waves[sta]])
+                
+            for wn in sg.station_waves[sta]:
+                fr_sta = None
+                if fix_result is not None:
+                    fr_sta = fix_result[wn.label]                
+                lqf_sta, replicate_sta, death_sta = ev_sta_template_birth_helper(sg, wn, eid=eid, 
+                                                                                 site_phases=site_phases,
+                                                                                 fix_result=fr_sta,
+                                                                                 associate_using_mb=associate_using_mb,
+                                                                                 debug_info=debug_info_sta)
+                log_qforward += lqf_sta
+                replicate_fns.append(replicate_sta)
+                death_records[wn.label] = death_sta
+                
+            if debug_info_sta is not None:
+                debug_info[sta]["wn_new"] = np.sum([wn.log_p() for wn in sg.station_waves[sta]])
+                
+    def replicate_move():
+        for fn in replicate_fns:
+            fn()
+    
+    return log_qforward, replicate_move, death_records
 
-    # propose its associations
-    log_qforward, log_qbackward, revert_move, eid, associations, debug_info = ev_birth_helper(sg, ev, associate_using_mb=proposal_includes_mb, eid=eid, use_correlation=use_correlation)
+                
+    
+def ev_birth_executor(sg, location_proposal, proposal_includes_mb=True, force_outcome=None):
+    debug_info = {}
+        
 
-    # propose its magnitude
-    if not proposal_includes_mb:
-        lqf = propose_mb(sg, eid)
-    else:
-        lqf = 0
-
-    evnodes = set(sg.evnodes[eid].values())
-    evlps = [(n.label.split(";")[1], n.log_p()) for n in evnodes]
-    evlps += [('nevents', np.log(sg.event_rate))]
-    debug_info["ev"] = (ev, lp_loc+lqf, evlps)
-
-    print "birth helper", lqf, log_qforward, lp_loc, log_qbackward
-
-    return lp_loc + log_qforward + lqf, log_qbackward, revert_move, (extra, eid, associations, debug_info)
-
-def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_action=None, force_outcome=None, **kwargs):
+    log_qbackward = 0.0
+    log_qforward = 0.0
 
     n_current_events = len(sg.evnodes) - len(sg.fixed_events)
-    birth_position_lp = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
-
+    log_qforward += -np.log(n_current_events + 1)
+    
     lp_old = sg.current_log_p()
 
-    #wn_logps_1 = dict([(sta, wn.log_p()) for (sta, wns) in sg.station_waves.items() for wn in wns])
-    sg.current_log_p_breakdown()
-    log_qforward, log_qbackward, revert_move, proposal_extra = ev_birth_helper_full(sg, location_proposal, **kwargs)
-    if revert_move is None:
+    lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, debug_info=debug_info)
+    if lq_loc is None:
+        return None
+
+    log_qforward += lq_loc
+
+    lqf, replicate_tmpls, death_records = ev_template_birth_helper(sg, eid, 
+                                                                   associate_using_mb=proposal_includes_mb, 
+                                                                   debug_info=debug_info)
+    log_qforward += lqf
+    sg._topo_sort()
+    
+    lp_new = sg.current_log_p()
+    
+    lqb, replicate_untmpls, birth_records = ev_template_death_helper(sg, eid, fix_result=death_records)
+    log_qbackward += lqb
+
+    lq_death = death_proposal_logprob(sg, eid)
+    log_qbackward += lq_death
+    replicate_death, ev = ev_bare_death_move(sg, eid)
+    sg._topo_sort()
+    
+    # should get rid of this (and corresponding line in death move) at
+    # some point once I'm confident, since it's actually pretty
+    # expensive
+    lp_old2 = sg.current_log_p()
+    assert(np.abs(lp_old2 - lp_old) < 1e-6)
+    
+    def rebirth():
+        replicate_birth()
+        replicate_tmpls()
+        sg._topo_sort()
+        
+    def redeath():
+        replicate_untmpls() # maybe not technically necessary
+        replicate_death()
+        sg._topo_sort()
+
+    proposal_extra = (extra, eid, debug_info)
+    return lp_new, lp_old, log_qforward, log_qbackward, rebirth, redeath, proposal_extra
+
+def ev_birth_move_abstract(sg, location_proposal, revert_action=None, 
+                           accept_action=None, force_outcome=None, **kwargs):
+
+    r = ev_birth_executor(sg, location_proposal, **kwargs)
+    if r is None:
         # location proposal did not return an event
         return False
-
-    lp_new = sg.current_log_p()
-
-    #wn_logps_2 = dict([(sta, wn.log_p()) for (sta, wns) in sg.station_waves.items() for wn in wns])
-
-    (extra, eid, associations, debug_info) = proposal_extra
-
-    log_qforward += birth_position_lp
-    log_qbackward += death_proposal_logprob(sg, eid)
-
-    sg.current_log_p_breakdown()
+    else:
+        lp_new, lp_old, log_qforward, log_qbackward, rebirth, redeath, proposal_extra = r
 
     def revert():
         if revert_action is not None:
             revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
-        revert_move()
+        #revert_move()
 
     def accept():
         if accept_action is not None:
             accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+        rebirth()
 
     print "birth move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
 
@@ -1358,7 +1304,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None, accept_act
 def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
-        hough_array, eid, associations, debug_info = proposal_extra
+        hough_array, eid, debug_info = proposal_extra
         log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
         ev_log_file = os.path.join(log_to_run_dir, "birth_proposal_%d.txt" % eid)
 
@@ -1372,16 +1318,13 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
             f.write("proposed ev: %s\n" % proposed_ev)
             f.write(" hough args %s\n" % repr(hough_kwargs))
             f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
-            for (wn, phase), (assoc, tmvals) in associations.items():
-                if assoc:
-                    f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
         with open(ev_log_file, 'w') as f:
             f.write(prettyprint_debug(debug_info))
-        import pdb; pdb.set_trace()
+
 
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
-        hough_array, eid, associations, debug_info = proposal_extra
+        hough_array, eid, debug_info = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
         if np.random.rand() < 0.1:
             sites = sg.site_elements.keys()
@@ -1391,10 +1334,10 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
             print "done"
 
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
-        hough_array, eid, associations, debug_info = proposal_extra
+        hough_array, eid, debug_info = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
         if log_to_run_dir is not None:
-            log_event_birth(sg, hough_array, log_to_run_dir, eid, associations)
+            log_event_birth(sg, hough_array, log_to_run_dir, eid)
         else:
             raise Exception("why are we not logging?")
 
@@ -1448,7 +1391,7 @@ def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):
         #hough_array, eid, associations = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
         #if log_to_run_dir is not None:
-        #    log_event_birth(sg, None, log_to_run_dir, eid, associations)
+        #    log_event_birth(sg, None, log_to_run_dir, eid)
         #else:
         #    raise Exception("why are we not logging?")
 
@@ -1470,7 +1413,7 @@ def ev_birth_move_cheating(sg, log_to_run_dir=None, **kwargs):
         #hough_array, eid, associations = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
         #if log_to_run_dir is not None:
-        #    log_event_birth(sg, None, log_to_run_dir, eid, associations)
+        #    log_event_birth(sg, None, log_to_run_dir, eid)
         #else:
         #    raise Exception("why are we not logging?")
 
@@ -1503,7 +1446,7 @@ def ev_birth_move_lstsqr(sg, log_to_run_dir=None, **kwargs):
 
 ##############################################################
 
-def log_event_birth(sg, hough_array, run_dir, eid, associations):
+def log_event_birth(sg, hough_array, run_dir, eid):
 
     log_dir = os.path.join(run_dir, "ev_%05d" % eid)
     mkdir_p(log_dir)
@@ -1524,6 +1467,7 @@ def prettyprint_debug(birth_debug):
 
     # track lp_new - (lp_old + log_qforward)
     overall_score = 0
+    
 
     ev, lq_ev, lps_ev = birth_debug["ev"]
     s += "proposed ev %s\n" % ev
@@ -1536,23 +1480,27 @@ def prettyprint_debug(birth_debug):
     s += "total %.2f, delta %.2f\n" % (total_lp, delta)
     overall_score = delta
 
+    
     for sta in birth_debug.keys():
         if sta=="ev": continue
 
         wn_old, wn_new = birth_debug[sta]["wn_old"], birth_debug[sta]["wn_new"]
         wn_delta = wn_new - wn_old
-        s += "sta %s wn_old %.2f wn_new %.2f wn_delta %.2f overall STASCORE\n" % (sta, wn_old, wn_new, wn_delta)
-        sta_score = wn_delta
+        phase_assocs, assoc_lp, _ = birth_debug[sta]["assoc"]
+        s += "sta %s wn_old %.2f wn_new %.2f wn_delta %.2f assoc %.2f overall STASCORE\n" % (sta, wn_old, wn_new, wn_delta, assoc_lp)
+        sta_score = wn_delta - assoc_lp
+        
+        phase_assocs = dict(phase_assocs)
+        
         for phase in birth_debug[sta].keys():
-            if "wn" in phase: continue
+            if "wn" in phase or phase=="assoc" : continue
             phase_score = 0
-            tmid, assoc_lp, _ = birth_debug[sta][phase]["assoc"]
+            tmid = phase_assocs[phase]
             if tmid is not None:
-                s += " phase %s: associating tmid %d at logq %.2f, score PHASESCORE\n" % (phase, tmid, assoc_lp)
+                s += " phase %s: associating tmid %d, score PHASESCORE\n" % (phase, tmid)
             else:
-                s += " phase %s: birthing new template at logq %.2f, score PHASESCORE\n" % (phase, assoc_lp)
-            phase_score -= assoc_lp
-            
+                s += " phase %s: birthing new template, score PHASESCORE\n" % (phase)
+
             d = birth_debug[sta][phase]
             for param, (v, lp1, lp2) in sorted(d.items()):
                 if param=="assoc": continue

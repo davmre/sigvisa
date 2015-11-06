@@ -175,7 +175,7 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
 
 ############################################################################
 
-def single_template_MH(sg, wn, tmnodes, phase, steps=1000, rw=True, hamiltonian=False, window_lps=None, sorted_params=None):
+def single_template_MH(sg, wn, tmnodes, steps=1000, rw=True, hamiltonian=False, window_lps=None, sorted_params=None):
     #tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
     template_moves_special = {'peak_offset': improve_offset_move_gaussian,
@@ -191,29 +191,30 @@ def single_template_MH(sg, wn, tmnodes, phase, steps=1000, rw=True, hamiltonian=
 
     vals = []
     if sorted_params is None:
-        sorted_params = sorted([p for (p, (k, n)) in tmnodes.items() if not n.deterministic()])
+        sorted_params = sorted([p for (p, (k, n)) in tmnodes[0][1].items() if not n.deterministic()])
 
     for step in range(steps):
-        # special template moves
-        for (move_name, fn) in template_moves_special.iteritems():
-            run_move(move_name=move_name, fn=fn,
-                     sg=sg, wn=wn, tmnodes=tmnodes,
-                     n_attempted=n_attempted, n_accepted=n_accepted,
-                     std=stds[move_name] if move_name in stds else None,
-                     window_lps=window_lps)
+        for phase, phase_tmnodes in tmnodes:
+            # special template moves
+            for (move_name, fn) in template_moves_special.iteritems():
+                run_move(move_name=move_name, fn=fn,
+                         sg=sg, wn=wn, tmnodes=phase_tmnodes,
+                         n_attempted=n_attempted, n_accepted=n_accepted,
+                         std=stds[move_name] if move_name in stds else None,
+                         window_lps=window_lps)
 
-        if rw:
-            # also do basic wiggling-around of all template params
-            tg = sg.template_generator(phase)
+            if rw:
+                # also do basic wiggling-around of all template params
+                tg = sg.template_generator(phase)
 
-            proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
+                proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
 
-            do_template_moves(sg, wn, tmnodes, tg, stds,
-                              n_attempted=n_attempted, n_accepted=n_accepted,
-                              proxy_lps=proxy_lps)
+                do_template_moves(sg, wn, phase_tmnodes, tg, stds,
+                                  n_attempted=n_attempted, n_accepted=n_accepted,
+                                  proxy_lps=proxy_lps)
 
 
-        v = np.array([tmnodes[p][1].get_value(tmnodes[p][0]) for p in sorted_params])
+        v = np.array([tmn[p][1].get_value(tmn[p][0]) for (phase, tmn) in tmnodes for p in sorted_params])
         vals.append(v)
 
         #if step % 50 == 0:
