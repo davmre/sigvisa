@@ -1423,6 +1423,10 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
         phases = ("P",)
     else:
         phases = sg.phases
+    # HACK
+    print "WARNING I AM HARDCODING PHASES TO BE LAZY"
+    phases = ("P", "S", "Lg")
+
 
     try:
         ctf = s.hough_proposer[offset]
@@ -1438,14 +1442,14 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
                           mbbins=[12,2,2], offset=offset)
         s.hough_proposer[offset] = ctf
 
-    #r = ctf.propose_event(sg, fix_result=fix_result,
-    #                       one_event_semantics=one_event_semantics)
+    r = ctf.propose_event(sg, fix_result=fix_result,
+                           one_event_semantics=one_event_semantics)
 
 
-    if fix_result is None:
-        ev = Event(lon=-105.427, lat=43.731, depth=0.0, time=1239041017.07, mb=4.0)
-        lp, global_dist = ctf.propose_event(sg, fix_result=ev,one_event_semantics=one_event_semantics, fixed_return_global_dist=True)
-        r = ev, lp, global_dist
+    #if fix_result is None:
+    #    ev = Event(lon=-105.427, lat=43.731, depth=0.0, time=1239041017.07, mb=4.0)
+    #    lp, global_dist = ctf.propose_event(sg, fix_result=ev,one_event_semantics=one_event_semantics, fixed_return_global_dist=True)
+    #    r = ev, lp, global_dist
     return r
 
 

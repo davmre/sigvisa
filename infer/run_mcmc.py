@@ -189,6 +189,9 @@ def single_template_MH(sg, wn, tmnodes, steps=1000, rw=True, hamiltonian=False, 
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
 
+    if len(tmnodes) == 0:
+        return None, np.array(tmnodes)
+
     vals = []
     if sorted_params is None:
         sorted_params = sorted([p for (p, (k, n)) in tmnodes[0][1].items() if not n.deterministic()])
@@ -241,9 +244,9 @@ def run_open_world_MH(sg, steps=10000,
     if enable_event_openworld:
         hough_rate = 0.1
         correlation_rate = 0.0
-        global_moves = {'event_swap': (swap_events_move_hough, 0.05),
-                        'event_repropose': (repropose_event_move_hough, 0.05),
-                        'event_threeway_swap': (swap_threeway_hough, 0.05),
+        global_moves = {'event_swap': (swap_events_move_hough, 0.00),
+                        'event_repropose': (repropose_event_move_hough, 0.00),
+                        'event_threeway_swap': (swap_threeway_hough, 0.00),
                         'event_birth_hough': (ev_birth_move_hough, hough_rate),
                         'event_birth_hough_offset': (ev_birth_move_hough_offset, hough_rate),
                         'event_birth_hough_oes': (ev_birth_move_hough_oes, hough_rate),
