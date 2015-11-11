@@ -138,9 +138,11 @@ def mcmc_ev_detail(request, dirname, eid):
     sg, max_step = final_mcmc_state(mcmc_run_dir)
 
     eid = int(eid)
+    ev = sg.get_event(eid)
+    ev_str = str(ev)
 
     r = []
-    for sta, wns in sg.station_waves.items():
+    for sta, wns in sorted(sg.station_waves.items()):
         for wn in wns:
             arrs = [(eid2, phase) for (eid2, phase) in wn.arrivals() if eid2==eid]
             if len(arrs) == 0: continue
@@ -150,12 +152,16 @@ def mcmc_ev_detail(request, dirname, eid):
             max_atime = np.max(atimes)
             r.append((wn.label, min_atime-10, max_atime + 60, repr(tms)))
 
+    proposalpath = "ev_%05d/hough.png" % eid
+
     return render_to_response("svweb/mcmc_ev_detail.html",
                               {'r': r,
                                'dirname': dirname,
                                'full_dirname': mcmc_run_dir,
                                'eid': eid,
+                               'ev_str': ev_str,
                                'step': max_step,
+                               'proposalpath': proposalpath,
                                }, context_instance=RequestContext(request))
 
 def mcmc_run_detail(request, dirname):

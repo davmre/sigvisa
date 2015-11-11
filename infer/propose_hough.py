@@ -915,7 +915,7 @@ class HoughConfig(object):
                 ev_prior[i,j,:,:] = binp
                 
         # normalize to give a prior prior over event location for a single event
-        ev_prior /= np.sum(ev_prior[:,:,0,0])
+        #ev_prior /= np.sum(ev_prior[:,:,0,0])
 
         mbbin_prior_dist = scipy.stats.expon(loc=2.5, scale=1.0/np.log(10.0))
         mbbin_prior_probs = [mbbin_prior_dist.cdf( self.min_mb+(i+1)*self.mb_bin_width) - mbbin_prior_dist.cdf(self.min_mb+i*self.mb_bin_width) for i in range(self.mbbins) ]
@@ -1014,6 +1014,14 @@ class HoughConfig(object):
         return self.amp_transfer_cache[key]
 
     def precompute_detprob_grid(self, sg, sta, chan, band):
+
+        # probability that we find a uatemplate for a given phase,
+        # conditioned on the fact that the rest of the model (based on
+        # amp_transfer) thinks there ought to be one there.
+        # setting this to zero is equivalent to just ignoring that phase.
+        # TODO: tune these in some more formal way. 
+        phase_det_prior = {"P": 0.85, "S": 0.1, "Lg": 0.1, "ScP": 0.1, "PcP": 0.1, "pP": 0.1, "Pg": 0.1}
+
         key = (sta, chan, band)
         if key not in self.detprob_cache:
 
@@ -1041,9 +1049,10 @@ class HoughConfig(object):
                     pred_amps = at_grid[:, :, :, phase_idx] + source_mean 
                     z = (noise_base-pred_amps) / (amp_stds)
                     p = rv.sf(z)
-                    p *= 0.85 # say there's a 0.15 chance a detection
-                              # just hasn't happened for whatever
-                              # reason
+
+                    # say there's some probability that we just miss
+                    # detections for whatever reason.
+                    p *= phase_det_prior[self.phases[phase_idx]]
                     detprobs[:, :, :, mbbin, phase_idx] = p * tt_mask[:,:,:,phase_idx]
 
             self.detprob_cache[key] = detprobs
@@ -1358,14 +1367,14 @@ class CTFProposer(object):
                          uatemplate_rate=sg.uatemplate_rate)
         self.global_hc = hc
 
-    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None, one_event_semantics=False, fixed_return_global_dist=False):
+    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None, one_event_semantics=True, fixed_return_global_dist=False):
         if uatemplates_by_sta is None:
             uatemplates_by_sta = get_uatemplates(sg)
 
         hc = self.global_hc
 
         global_array,debug, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
-        global_dist = normalize_global(global_array, nll, one_event_semantics=one_event_semantics, hc=hc)
+        global_dist = normalize_global(global_array.copy(), nll, one_event_semantics=one_event_semantics, hc=hc)
 
         if fix_result:
             ev = fix_result
@@ -1374,7 +1383,7 @@ class CTFProposer(object):
         else:
             v = categorical_sample_array(global_dist)
         prob = categorical_prob(global_dist, v)
-        (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), _, _ = hc.index_to_coords(v)
+        (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_mb, max_mb), _ = hc.index_to_coords(v)
 
         for i, fine_width in enumerate(self.bin_widths[1:]):
             depth_bounds = [min_depth, min_depth + (max_depth-min_depth)/2.0, max_depth]
@@ -1384,6 +1393,7 @@ class CTFProposer(object):
                              depthbin_bounds=depth_bounds, top_lat=top_lat, bottom_lat=bottom_lat,
                              left_lon=left_lon, right_lon=right_lon, min_depth=min_depth,
                              max_depth=max_depth, time_tick_s = 10.0,
+                             min_mb=min_mb, max_mb=max_mb,
                              mbbins=mb_bins)
             array,debug, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
             dist = normalize_global(array, nll, one_event_semantics=one_event_semantics, hc=hc)
@@ -1392,7 +1402,7 @@ class CTFProposer(object):
             else:
                 v = categorical_sample_array(dist)
             prob *= categorical_prob(dist, v)
-            (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), _, _ = hc.index_to_coords(v)
+            (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_mb, max_mb), _ = hc.index_to_coords(v)
 
         if fix_result:
             _, evlp = event_from_bin(hc, v)
@@ -1404,7 +1414,7 @@ class CTFProposer(object):
             return ev, np.log(prob) + evlp, global_dist
 
 def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
-                            offset=None, one_event_semantics=None, P_only=False):
+                            offset=None, one_event_semantics=True, P_only=False):
     s = Sigvisa()
     if proposal_dist_seed is not None:
         np.random.seed(proposal_dist_seed)
@@ -1416,17 +1426,14 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     #if one_event_semantics is None:
     #    one_event_semantics = np.random.choice([True, False])
 
-    offset = False
-    one_event_semantics=False
-
     if P_only:
         phases = ("P",)
     else:
         phases = sg.phases
     # HACK
-    print "WARNING I AM HARDCODING PHASES TO BE LAZY"
-    phases = ("P", "S", "Lg")
-
+    #print "WARNING I AM HARDCODING PHASES TO BE LAZY"
+    #phases = ("P", "S", "Lg")
+    #phases = ("P", )
 
     try:
         ctf = s.hough_proposer[offset]
@@ -1444,7 +1451,6 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
 
     r = ctf.propose_event(sg, fix_result=fix_result,
                            one_event_semantics=one_event_semantics)
-
 
     #if fix_result is None:
     #    ev = Event(lon=-105.427, lat=43.731, depth=0.0, time=1239041017.07, mb=4.0)

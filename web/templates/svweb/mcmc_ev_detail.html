@@ -9,6 +9,8 @@
 
 <h2>eid {{ eid }} from MCMC run {{ dirname }} step {{ step }} </h2>
 
+<table><tr><td>{{ ev_str }}</td><td align=right>
+<a href="{% url 'mcmcrun_browsedir' dirname=dirname path=proposalpath %}"><img src="{% url 'mcmcrun_browsedir' dirname=dirname path=proposalpath %}" width=30% ></a></td></tr></table>
 
 <table width=100%>
 

@@ -20,6 +20,7 @@ from sigvisa.source.event import get_event, EventNotFound
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import load_sg_from_db_fit
+from sigvisa.models.ttime import tt_predict
 
 import sigvisa.utils.geog as geog
 
@@ -196,7 +197,8 @@ def fit_detail(request, fitid):
 
 
 def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=None,
-                            ratio=1.6, dpi=144, tmpl_alpha=1, tmpl_width=3, tmpl_color="green"):
+                            ratio=1.6, dpi=144, tmpl_alpha=1, tmpl_width=3, 
+                            tmpl_color="green", predictions=None):
 
     fig = Figure(figsize=(ratio*5, 5), dpi=144)
     fig.patch.set_facecolor('white')
@@ -217,6 +219,10 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
 
     if request is not None:
         process_plot_args(request, axes)
+
+    if predictions is not None:
+        plot.plot_pred_atimes(predictions, template, axes=axes, color="purple", alpha=1.0)
+
 
     canvas = FigureCanvas(fig)
     response = django.http.HttpResponse(content_type='image/png')
@@ -299,6 +305,7 @@ def FitImageView(request, fitid):
     saveprefs = request.GET.get("saveprefs", "False").lower().startswith('t')
     only_eid = int(request.GET.get("eid", -9999))
     only_phase = request.GET.get("phase", None)
+    pred_phases = request.GET.get("pred_phases", "none")
     template_only = request.GET.get("template_only", "False").lower().startswith('t')
 
     if saveprefs:
@@ -367,9 +374,33 @@ def FitImageView(request, fitid):
         pred_wave = wave_node.get_wave()
         pred_wave.data.mask = obs_wave.data.mask
 
+    pred_phase_atimes = None
+    phases = None
+    eid = sg.evnodes.keys()[0]
+    ev = sg.get_event(eid)
+    sta = sg.station_waves.keys()[0]
+    if pred_phases=="all":
+        # pred atimes for all phases that exist
+        phases = ("P", "PKP", "S", "PKPbc", "PcP", "pP", "Lg", "PKPab", "ScP", "PKKPbc", "Pg", "Rg")
+    elif pred_phases=="model":
+        # pred atimes for the phases this sg knows about
+        phases = sg.phases
+    if phases is not None:
+        pred_phase_atimes = {}
+        for phase in phases:
+            try:
+                tt = tt_predict(ev, sta, phase=phase)
+            except:
+                tt = -1
+            if tt > 0:
+                pred_phase_atimes[phase] = ev.time + tt
+
+    
     return wave_plus_template_view(wave=None if template_only else obs_wave, template=pred_wave,
                                    logscale=logscale, smoothing=smoothing, request=request,
-                                   tmpl_alpha = 0.8 if wiggle else 1, tmpl_color="red" if noise else "green")
+                                   tmpl_alpha = 0.8 if wiggle else 1, 
+                                   tmpl_color="red" if noise else "green", 
+                                   predictions=pred_phase_atimes)
 
 
 def phases_from_request(request):

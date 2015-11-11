@@ -284,6 +284,8 @@ class Laplacian(Distribution):
         u = np.random.rand() - .5
         return self.center - self.scale * np.sign(u) * np.log(1-2*np.abs(u))
 
+    def variance(self, **kwargs):
+        return 2*self.scale**2
 
 
 class Exponential(Distribution):

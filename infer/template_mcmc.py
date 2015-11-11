@@ -84,8 +84,15 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
     unexplained_local = unexplained[start_idx:end_idx]
     n = len(unexplained_local)
 
-    peak_height = float(unexplained[peak_idx])
-    env_height = max(peak_height - wn.nm_env.c, wn.nm_env.c/1000.0)
+    try:
+        peak_height = float(unexplained[peak_idx])
+        env_height = max(peak_height - wn.nm_env.c, wn.nm_env.c/1000.0)
+    except IndexError:
+        # if the peak idx is past the end of the signal,
+        # then the amplitude posterior will essentially 
+        # just be the prior, so none of this really matters.
+        # Let's just set a default value to avoid crashing.
+        env_height = 1e-3
 
     data_min = np.log(env_height) - 2
     data_max = np.log(env_height) + 2

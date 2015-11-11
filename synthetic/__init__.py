@@ -20,15 +20,15 @@ def wave_dirname(base_dir=None, **kwargs):
     base_dir = BASE_DIR if base_dir is None else base_dir
     return os.path.join(BASE_DIR, md5hash("sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ])))
 
-def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tt_buffer_s=500, tmshape="lin_polyexp", nm_type="ar", band="freq_0.8_4.5", hz=5.0, dummy_fallback=False, return_all=False, wave_dir=None, dumpsg=True):
+def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tt_buffer_s=500, tmshape="lin_polyexp", band="freq_0.8_4.5", hz=5.0, dummy_fallback=False, return_all=False, wave_dir=None, dumpsg=True, evs=None):
 
     if wave_dir is None:
-        wave_dir = wave_dirname(seed=seed, runid=runid, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, sites=sites, phases=phases, tmtype=md5hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb, nm_type=nm_type)
+        wave_dir = wave_dirname(seed=seed, runid=runid, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, sites=sites, phases=phases, tmtype=md5hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb, nm_type="ar")
     mkdir_p(wave_dir)
 
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family,
-                      nm_type = nm_type, phases=phases, runids=(runid,), dummy_fallback=dummy_fallback)
+                      phases=phases, runids=(runid,), dummy_fallback=dummy_fallback)
 
     s = Sigvisa()
 
@@ -47,7 +47,11 @@ def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, t
         np.random.seed(seed)
         s.sigmodel.srand(seed)
 
-    evs = sg.prior_sample_events(stime=stime, etime=stime+len_s-tt_buffer_s, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
+    if evs is None:
+        evs = sg.prior_sample_events(stime=stime, etime=stime+len_s-tt_buffer_s, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
+    else:
+        for ev in evs:
+            sg.add_event(ev, sample_templates=True)
     print "sampled", len(evs), "evs"
 
     sg.uatemplate_rate = uatemplate_rate
