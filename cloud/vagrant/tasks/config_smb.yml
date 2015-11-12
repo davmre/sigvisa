@@ -6,10 +6,10 @@
     owner=root
 - name: ensure .ssh dir exists
   file: path=/home/sigvisa/.ssh state=directory
-- name: add patmos ssh key
+- name: add kampos ssh key
   copy:
-    src=id_rsa_patmos_smb
-    dest=/home/sigvisa/.ssh/id_rsa_patmos_smb
+    src=id_rsa_kampos_smb
+    dest=/home/sigvisa/.ssh/id_rsa_kampos_smb
     owner=sigvisa
     mode=0400
 - name: sync known hosts
