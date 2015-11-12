@@ -110,15 +110,21 @@ def rebirth_events_helper(sg, eids, location_proposal):
 
     seeds = [np.random.choice(1000) for eid in eids]
 
+    lp_old = None
+
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
-        r = ev_death_executor(sg, eid, location_proposal=lp)
+
+        r = ev_death_executor(sg, force_kill_eid=eid, location_proposal=lp)
         if r is None:
             revert_moves.reverse()
             for r in revert_moves:
                 r()
             return False
-        lp_intermediate, lp_old, lqf_old, lqb_old, redeath_old, rebirth_old, proposal_extra = r
+        lp_intermediate, lpo, lqf_old, lqb_old, redeath_old, rebirth_old, proposal_extra = r
+        if lp_old is None:
+            lp_old = lpo
+
         redeath_old()
         # leave the graph in the dead state, so the new death proposals are with respect to
         # this one already having happened...
@@ -130,7 +136,7 @@ def rebirth_events_helper(sg, eids, location_proposal):
 
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
-        r = ev_birth_executor(sg, location_proposal=lp, eid=eid)
+        r = ev_birth_executor(sg, location_proposal=lp, force_eid=eid, dumb_proposal=True)
         if r is None:
             revert_moves.reverse()
             for r in revert_moves:
@@ -140,7 +146,7 @@ def rebirth_events_helper(sg, eids, location_proposal):
         lp_new, lp_int, lqf_new, lqb_new, rebirth_new, redeath_new, proposal_extra = r
         rebirth_new()
 
-        print "birth %d lqf %f lqb %f" % (eid, lqf, lqb)
+        print "birth %d lqf %f lqb %f" % (eid, lqf_new, lqb_new)
         log_qforward += lqf_new
         log_qbackward += lqb_new
         revert_moves.append(redeath_new)

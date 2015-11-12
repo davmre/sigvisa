@@ -1049,6 +1049,4 @@ def ev_source_type_move(sg, eid):
     def revert_move():
         set_source(old_value)
 
-    import pdb; pdb.set_trace()
-    
     return mh_accept_util(lp_old, lp_new, revert_move=revert_move)

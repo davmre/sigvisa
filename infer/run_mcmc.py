@@ -244,8 +244,8 @@ def run_open_world_MH(sg, steps=10000,
     if enable_event_openworld:
         hough_rate = 0.2
         correlation_rate = 0.0
-        global_moves = {'event_swap': (swap_events_move_hough, 0.00),
-                        'event_repropose': (repropose_event_move_hough, 0.00),
+        global_moves = {'event_swap': (swap_events_move_hough, 0.1),
+                        'event_repropose': (repropose_event_move_hough, 0.1),
                         'event_threeway_swap': (swap_threeway_hough, 0.00),
                         'event_birth_hough': (ev_birth_move_hough, hough_rate),
                         'event_birth_hough_offset': (ev_birth_move_hough_offset, hough_rate),

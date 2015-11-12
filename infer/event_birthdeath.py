@@ -878,14 +878,20 @@ def death_proposal_logprob(sg, eid):
     
 def ev_death_executor(sg, location_proposal, 
                       proposal_includes_mb=True,
-                      dumb_birth=True):
+                      dumb_birth=True, 
+                      force_kill_eid=None):
     log_qforward = 0.0
     log_qbackward = 0.0
     
         
     debug_info = {}
 
-    eid, lq_death = sample_death_proposal(sg)
+    if force_kill_eid is None:
+        eid, lq_death = sample_death_proposal(sg)
+    else:
+        eid = force_kill_eid
+        lq_death = 0
+
     if eid is None:
         return None
 
@@ -893,7 +899,7 @@ def ev_death_executor(sg, location_proposal,
 
     lp_old = sg.current_log_p()
 
-    lqf, replicate_untmpls, birth_records = ev_template_death_helper(sg, eid)
+    lqf, replicate_untmpls, death_records = ev_template_death_helper(sg, eid)
     log_qforward += lqf
 
     # this is a little inelegant 
@@ -902,20 +908,20 @@ def ev_death_executor(sg, location_proposal,
     
     lp_new = sg.current_log_p()
         
-    n_current_events = len(sg.evnodes) - len(sg.fixed_events)
-    log_qbackward = -np.log(n_current_events + 1)
+    if force_kill_eid is None:
+        n_current_events = len(sg.evnodes) - len(sg.fixed_events)
+        log_qbackward += -np.log(n_current_events + 1)
     lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, fix_result=(ev, eid))
     log_qbackward += lq_loc
 
-    lqb, replicate_tmpls, death_records = \
+    lqb, replicate_tmpls, birth_records = \
             ev_template_birth_helper(sg, eid, 
                                      associate_using_mb=proposal_includes_mb, 
-                                     fix_result=birth_records, 
+                                     fix_result=death_records, 
                                      dumb_proposal=dumb_birth)
     log_qbackward += lqb
     sg._topo_sort()
-
-                                                                
+                        
     lp_old2 = sg.current_log_p()
     assert(np.abs(lp_old2 - lp_old) < 1e-6)
     
@@ -1034,12 +1040,12 @@ def ev_sta_template_death_helper(sg, wn, eid,
             print "proposing to deassociate %s at %s (lp %.1f)" % (phase, sta, deassociate_logprob)
             assoc_tmids[phase] = tmid
         else:
+            template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+            death_record[phase] = template_param_array
             if fix_result is None:
-                template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
                 sg.delete_event_phase(eid, wn.sta, phase)
                 replicate_fns.append(lambda eid=eid, sta=wn.sta, phase=phase: sg.delete_event_phase(eid, sta, phase))
                 print "proposing to delete %s at %s (lp %f)"% (phase, sta, deassociate_logprob)                
-                death_record[phase] = template_param_array
 
     sorted_tmids = [assoc_tmids[phase] if phase in assoc_tmids else None for phase in sorted(site_phases)]
     death_record["assoc_tmids"] = tuple(sorted_tmids)
@@ -1074,6 +1080,7 @@ def ev_template_death_helper(sg, eid, fix_result=None):
 
 def ev_bare_birth_move(sg, location_proposal, 
                        debug_info=None,
+                       eid=None,
                        fix_result=None):
     if fix_result is not None:
         ev, eid = fix_result
@@ -1081,7 +1088,6 @@ def ev_bare_birth_move(sg, location_proposal,
         log_qforward = location_proposal(sg, fix_result=ev)
     else:
         ev, log_qforward, extra = location_proposal(sg)
-        eid = None
         if ev is None:
             return None, None, None, None
         
@@ -1261,6 +1267,8 @@ def dumb_propose_phase_template(sg, wn, eid, phase,
             n.parent_sample()
         param_lp = n.log_p()
         log_q += param_lp
+
+        # print "dumb logq", param, wn.sta, phase, n.get_value(), log_q, " fixed" if fix_result is not None else " unfixed"
         
         tmvals[param] = n.get_value()
         if debug_info is not None:
@@ -1278,6 +1286,9 @@ def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None,
 
     site = Sigvisa().get_array_site(wn.sta)    
     for i_phase, phase in enumerate(new_phases):
+        #if phase=="ScP" and wn.sta=="NV01":
+        #    import pdb; pdb.set_trace()
+
         debug_phase = None
         if debug_info is not None:
             debug_info[phase] = {}
@@ -1405,8 +1416,10 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
 
                 
     
-def ev_birth_executor(sg, location_proposal, proposal_includes_mb=True, 
+def ev_birth_executor(sg, location_proposal, 
+                      proposal_includes_mb=True, 
                       dumb_proposal=False,
+                      force_eid=None,
                       force_outcome=None):
     debug_info = {}
         
@@ -1415,17 +1428,18 @@ def ev_birth_executor(sg, location_proposal, proposal_includes_mb=True,
     log_qforward = 0.0
 
     n_current_events = len(sg.evnodes) - len(sg.fixed_events)
-    log_qforward += -np.log(n_current_events + 1)
+    if force_eid is None:
+        log_qforward += -np.log(n_current_events + 1)
     
     lp_old = sg.current_log_p()
 
-    lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, debug_info=debug_info)
+    lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, debug_info=debug_info, eid=force_eid)
     if lq_loc is None:
         return None
 
     log_qforward += lq_loc
 
-    lqf, replicate_tmpls, death_records = \
+    lqf, replicate_tmpls, birth_records = \
                     ev_template_birth_helper(sg, eid, 
                                              associate_using_mb=proposal_includes_mb, 
                                              dumb_proposal=dumb_proposal,
@@ -1435,11 +1449,13 @@ def ev_birth_executor(sg, location_proposal, proposal_includes_mb=True,
     
     lp_new = sg.current_log_p()
     
-    lqb, replicate_untmpls, birth_records = ev_template_death_helper(sg, eid, fix_result=death_records)
+    lqb, replicate_untmpls, death_records = ev_template_death_helper(sg, eid, fix_result=birth_records)
     log_qbackward += lqb
 
-    lq_death = death_proposal_logprob(sg, eid)
-    log_qbackward += lq_death
+    if force_eid is None:
+        lq_death = death_proposal_logprob(sg, eid)
+        log_qbackward += lq_death
+
     replicate_death, ev = ev_bare_death_move(sg, eid)
     sg._topo_sort()
     
@@ -1448,7 +1464,7 @@ def ev_birth_executor(sg, location_proposal, proposal_includes_mb=True,
     # expensive
     lp_old2 = sg.current_log_p()
     assert(np.abs(lp_old2 - lp_old) < 1e-6)
-    
+
     def rebirth():
         replicate_birth()
         replicate_tmpls()
