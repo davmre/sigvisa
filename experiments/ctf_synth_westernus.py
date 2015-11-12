@@ -28,7 +28,7 @@ def main():
     runid=3
     phases=["P", "S", "Lg", "PcP", "ScP", "pP", "Pg"]
 
-    ev = Event(lon=-105.427, lat=43.731, depth=0.0, time=1239041017.07, mb=4.0)
+    ev = Event(lon=-105.427, lat=43.731, depth=0.0, time=1239041017.07, mb=4.0, natural_source=False)
 
     sw = SampledWorld(seed=seed)
     sw.sample_sg(runid=3, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=3.0, force_mb=3.7, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=False, evs = [ev,], stime=region_stime)
@@ -52,7 +52,7 @@ def main():
             sg = pickle.load(f)
     else:
         sg = rs.build_sg(ms1)
-        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=500)
+        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=200)
 
 
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc',], steps=1000)

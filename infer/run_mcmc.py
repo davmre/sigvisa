@@ -17,7 +17,7 @@ from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, ad
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_offset, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_offset, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation
-from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move
+from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move, ev_source_type_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth_move, death_move_for_optimizing_birth, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
@@ -273,7 +273,7 @@ def run_open_world_MH(sg, steps=10000,
                             'evtime': ('time', ('time',)),
                             'evmb': ('mb', ('mb',)),
                             'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
-    event_moves_special = {}
+    event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0)}
 
     if template_openworld_custom is not None:
         sta_moves = template_openworld_custom
@@ -363,12 +363,12 @@ def run_open_world_MH(sg, steps=10000,
                          n_accepted=n_accepted, move_times=move_times,
                          sg=sg, ev_node=evnodes[node_name], std=stds[move_name], params=params)
 
-            for (move_name, fn) in event_moves_special.items():
+            for (move_name, (fn, prob)) in event_moves_special.items():
                 n_attempted[move_name] += 1
                 n_accepted[move_name] += fn(sg, eid)
                 run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
-                         sg=sg, eid=eid)
+                         move_prob=prob, sg=sg, eid=eid)
 
         for (site, elements) in sg.site_elements.items():
             for sta in elements:

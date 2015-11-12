@@ -20,7 +20,7 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.infer.event_birthdeath import sample_template_to_associate, template_association_logodds, associate_template, unassociate_template, sample_deassociation_proposal, template_association_distribution, deassociation_logprob
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_util
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move, get_sorted_arrivals, relevant_nodes_hack
 from sigvisa.graph.graph_utils import create_key, parse_key
 from sigvisa.plotting.plot import savefig, plot_with_fit
@@ -1026,111 +1026,29 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
         return False
 
 
-def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
+def ev_source_type_move(sg, eid):
+    evnode = sg.evnodes[eid]["natural_source"]
+    # propose a new source type while holding coda heights constant
+    coda_heights = [(n, n.get_value()) for n in sg.extended_evnodes[eid] if "coda_height" in n.label]
 
-    n_accepted = dict()
-    n_tried = dict()
-    moves = ( 'indep_peak', 'peak_offset', 'tt_residual', 'amp_transfer', 'coda_decay', 'evloc', 'evloc_big', 'evtime', 'evdepth', 'evmb')
-    for move in moves:
-        n_accepted[move] = 0
-        n_tried[move] = 0
+    def set_source(is_natural):
+        evnode.set_value(is_natural)
+        for height_node, fixed_height in coda_heights:
+            height_node.set_value(fixed_height)
 
-    stds = {'peak_offset': .1, 'tt_residual': .1, 'amp_transfer': .1, 'coda_decay': 0.01, 'evloc': 0.01, 'evloc_big': 0.5, 'evtime': 2.0, "evmb": 0.5, "evdepth": 5.0}
+    old_value = evnode.get_value()
+    proposed_value = not old_value
 
-    templates = dict()
-    params_over_time = defaultdict(list)
+    amp_transfers = [n for n in sg.extended_evnodes[eid] if "amp_transfer" in n.label]
+    relevant_nodes = [evnode,] + amp_transfers
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
 
-    for wn in wn_list:
-        wave_env = wn.get_env()
-        wn.cdf = preprocess_signal_for_sampling(wave_env)
+    set_source(proposed_value)
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
 
-        arrivals = wn.arrivals()
-        eid, phase = list(arrivals)[0]
-        templates[wn.sta] = dict([(param, node) for (param, (key, node)) in sg.get_template_nodes(eid=eid, phase=phase, sta=wn.sta, band=wn.band, chan=wn.chan).items()])
+    def revert_move():
+        set_source(old_value)
 
-    for step in range(steps):
-        for wn in wn_list:
-            arrivals = wn.arrivals()
-            eid, phase = list(arrivals)[0]
-
-            tmnodes = templates[wn.sta]
-
-            n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["tt_residual"],
-                                                           offset_node=tmnodes["peak_offset"],
-                                                             wn=wn, std=stds['peak_offset'])
-            n_tried["peak_offset"] += 1
-
-            for param in ("tt_residual","amp_transfer","coda_decay"):
-                n = tmnodes[param]
-                n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
-                n_tried[param] += 1
-
-            for (param, n) in tmnodes.items():
-                params_over_time["%s_%s" % (wn.sta, param)].append(n.get_value())
-
-        n_accepted["evloc"] += ev_move(sg, evnodes['loc'], std=stds['evloc'], params=('lon', 'lat'))
-        n_tried["evloc"] += 1
-
-        n_accepted["evloc_big"] += ev_move(sg, evnodes['loc'], std=stds['evloc_big'], params=('lon', 'lat'))
-        n_tried["evloc_big"] += 1
-
-        n_accepted["evtime"] += ev_move(sg, evnodes['time'], std=stds['evtime'], params=("time",))
-        n_tried["evtime"] += 1
-
-        print evnodes['loc'].get_local_value(key="depth")
-
-        n_accepted["evdepth"] += ev_move(sg, evnodes['loc'], std=stds['evdepth'], params=("depth",))
-        n_tried["evdepth"] += 1
-
-        print evnodes['loc'].get_local_value(key="depth")
-
-        n_accepted["evmb"] += ev_move(sg, evnodes['mb'], std=stds['evmb'], params=("mb",))
-        n_tried["evmb"] += 1
-
-        params_over_time["evloc"].append( evnodes['loc'].get_mutable_values())
-        params_over_time["evtime"].append( evnodes['time'].get_mutable_values())
-        params_over_time["evdepth"].append( evnodes['loc'].get_mutable_values())
-        params_over_time["evmb"].append( evnodes['mb'].get_mutable_values())
-
-        if step > 0 and ((step % skip == 0) or (step < 15)):
-            lp = sg.current_log_p()
-            print "step %d: lp %.2f, %d templates, accepted " % (step, lp, len(arrivals)),
-            for move in moves:
-                if (move == "birth") or (move == "death"):
-                    print "%s: %d, " % (move, n_accepted[move]),
-                else:
-                    accepted_percent = float(n_accepted[move]) / n_tried[move] *100 if n_tried[move] > 0 else 0
-                    print "%s: %d%%, " % (move, accepted_percent),
-            print
-            print " ev loc", evnodes['loc'].get_mutable_values()
-            #for wn in wn_list:
-            #    plot_with_fit("ev_%s_step%06d.png" % (wn.sta, step), wn)
-
-        if step % 200 == 10:
-            np.savez('ev_vals.npz', **params_over_time)
-    """
-    for (param, vals) in params_over_time.items():
-        fig = Figure(figsize=(8, 5), dpi=144)
-        axes = fig.add_subplot(111)
-        axes.set_xlabel("Steps", fontsize=8)
-        axes.set_ylabel(param, fontsize=8)
-        axes.plot(vals)
-        savefig("mcmc_unass_%s.png" % param, fig)
-
-    np.savez('mcmc_unass_vals.npz', **params_over_time)
-    """
-
-
-
-if __name__ == "__main__":
-    try:
-        #sample_template()
-        main()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print e
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        import pdb
-        pdb.post_mortem(tb)
+    import pdb; pdb.set_trace()
+    
+    return mh_accept_util(lp_old, lp_new, revert_move=revert_move)

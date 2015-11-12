@@ -17,8 +17,8 @@ def source_freq_logamp(mb, f, phase):
 
     # Generally follows Fisk (2006)
 
-    P_phases = ['P', 'Pn']
-    S_phases = ['S', 'Sn']
+    P_phases = ['P', 'Pn', "PcP", "pP", "Pg"]
+    S_phases = ['S', 'Sn', "ScP", "Lg"]
 
     # P and S wave source velocities in granite, m/s
     V_sP = 5500.0
