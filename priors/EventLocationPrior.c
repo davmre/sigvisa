@@ -305,7 +305,9 @@ void EventLocationPrior_Sample(const EventLocationPrior_t * dist,
   latidx = sample_vec(dist->numlat, dist->p_latprob + lonidx * dist->numlat);
   *p_lat = RAD2DEG * asin(-1 + (latidx + RAND_DOUBLE) * dist->zstep);
 
-  *p_depth = RAND_UNIFORM(MIN_DEPTH, MAX_DEPTH);
-  printf("WARNING: sampling depth from uniform distribution because I haven't implemented sampling for the actual depth prior yet.\n");
+  
+  double u = RAND_UNIFORM(0, 1);
+  *p_depth = -log(1-u) * 5.0;
+  printf("WARNING: sampling depth from only the first (surface) mixture component because gamma distributions are hard.\n");
 }
 

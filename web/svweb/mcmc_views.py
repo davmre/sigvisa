@@ -220,7 +220,7 @@ def mcmc_run_detail(request, dirname):
         burnin = 100 if max_step > 150 else 10 if max_step > 10 else 0
 
     X = []
-    for eid in eids:
+    for eid in sorted(eids):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
         
