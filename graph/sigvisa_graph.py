@@ -700,9 +700,6 @@ class SigvisaGraph(DirectedGraphModel):
         # parameters, e.g. ["lon", "lat"]. In the latter case, we only
         # update the given parameters.
 
-        # node_lps is an optional UpdatedNodeLPs object tracking changes to the state, used for
-        # efficiently computing MH proposal ratios
-
         def get_preserved_nodes(preserve_templates, params_changed):
             # return the set of nodes whose values we want to fix
 
@@ -741,31 +738,6 @@ class SigvisaGraph(DirectedGraphModel):
         evnodes = self.evnodes[eid]
 
         preserved_nodes, atimes_updated, coda_heights_updated = get_preserved_nodes(preserve_templates, params_changed)
-
-        perturbed_wns = set()
-        if node_lps is not None:
-            for sw in self.station_waves.values():
-                for wn in sw:
-                    phases = [phase for (arr_eid, phase) in wn.arrivals() if arr_eid==eid]
-                    for phase in phases:
-                        # if we're updating a parameter that changes
-                        # the atime or coda_height, and we didn't fix
-                        # the atime/coda_height for this arrival, then
-                        # the predicted signal (thus wn.log_p()) will
-                        # change.
-                        if atimes_updated:
-                            k, v = get_parent_value(eid, phase, wn.sta, "arrival_time", self.all_nodes, wn.chan, wn.band, return_key=True)
-                            if k not in preserved_nodes:
-                                perturbed_wns.add(wn)
-                                break
-                        if coda_heights_updated:
-                            k, v = get_parent_value(eid, phase, wn.sta, "coda_height", self.all_nodes, wn.chan, wn.band, return_key=True)
-                            if k not in preserved_nodes:
-                                perturbed_wns.add(wn)
-                                break
-        for wn in perturbed_wns:
-            if wn not in node_lps.nodes_changed_old:
-                node_lps.nodes_changed_old[wn] = wn.log_p()
 
         # record the values of the nodes we're going to preserve, so
         # we can re-set them later.
@@ -811,10 +783,7 @@ class SigvisaGraph(DirectedGraphModel):
                 print "removing impossible %s at %s" % (sta, phase)
                 self.delete_event_phase(eid, sta, phase)
 
-        for wn in perturbed_wns:
-            node_lps.nodes_changed_new[wn] = wn.log_p()
-
-    def delete_event_phase(self, eid, sta, phase):
+    def delete_event_phase(self, eid, sta, phase, re_sort=True):
         extended_evnodes = self.extended_evnodes[eid][:]
         for node in extended_evnodes:
             if sta not in node.label: continue
@@ -822,7 +791,8 @@ class SigvisaGraph(DirectedGraphModel):
             if nsta==sta and nphase==phase:
                 self.remove_node(node)
                 self.extended_evnodes[eid].remove(node)
-        self._topo_sort()
+        if re_sort:
+            self._topo_sort()
 
     def predict_phases_site(self, ev, site):
         phase_set = None
@@ -1474,17 +1444,28 @@ class SigvisaGraph(DirectedGraphModel):
         stime = self.event_start_time if stime is None else stime
         etime = self.end_time if etime is None else etime
 
+        if self.inference_region is not None:
+            stime = self.inference_region.stime
+            etime = self.inference_region.etime
+
         event_time_dist = Uniform(stime, etime)
         event_mag_dist = Exponential(rate=np.log(10.0), min_value=min_mb)
 
-        origin_time = event_time_dist.sample()
+        region_constraint = False
+        while not region_constraint:            
+            origin_time = event_time_dist.sample()
 
-        s.sigmodel.srand(np.random.randint(sys.maxint))
-        lon, lat, depth = s.sigmodel.event_location_prior_sample()
-        mb = event_mag_dist.sample()
-        natural_source = True # TODO : sample from source prior
+            s.sigmodel.srand(np.random.randint(sys.maxint))
+            lon, lat, depth = s.sigmodel.event_location_prior_sample()
+            mb = event_mag_dist.sample()
+            natural_source = True # TODO : sample from source prior
 
-        ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+            ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+
+            if self.inference_region is not None:
+                region_constraint = self.inference_region.contains_event(ev)
+            else:
+                region_constraint = True
 
         return ev
 

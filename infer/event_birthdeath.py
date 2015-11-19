@@ -324,7 +324,10 @@ def unassociate_template(sg, wn, eid, phase, tmid=None, remove_event_phase=False
         # whole event), we need to delete the event phase arrival.
         if node_lps is not None:
             node_lps.register_phase_removed_pre(sg, site, phase, eid, wn_invariant=True)
-        sg.delete_event_phase(eid, wn.sta, phase)
+
+        # assume we're doing this as part of a larger move,
+        # so we'll fix the topo sorting later
+        sg.delete_event_phase(eid, wn.sta, phase, re_sort=False)
 
     return tmid
 
@@ -1010,7 +1013,7 @@ def ev_bare_death_move(sg, eid):
     replicate_move()
     return replicate_move, ev
 
-def ev_sta_template_death_helper(sg, wn, eid, 
+def ev_sta_template_death_helper(sg, wn, eid, phases=None,
                                  fix_result=None,
                                  debug_info=None):
     death_record = {}
@@ -1021,8 +1024,10 @@ def ev_sta_template_death_helper(sg, wn, eid,
     replicate_fns = []
     assoc_tmids = {}
     log_qforward = 0.0
-    site_phases = sg.ev_arriving_phases(eid, sta)
-    for phase in site_phases:
+    if phases is None:
+        phases = sg.ev_arriving_phases(eid, sta)
+
+    for phase in phases:
         if fix_result is not None:
             deassociate, tmid, fixed_tmvals = fix_result[phase]
         else:
@@ -1033,23 +1038,23 @@ def ev_sta_template_death_helper(sg, wn, eid,
                                                                          fix_result = deassociate)
         log_qforward += deassociate_logprob
         if deassociate:
-            tmid = unassociate_template(sg, wn, eid, phase, tmid=tmid)
+            tmid = unassociate_template(sg, wn, eid, phase, tmid=tmid, 
+                                        remove_event_phase=True)
             replicate_fns.append(lambda wn=wn,phase=phase,eid=eid,tmid=tmid: \
-                                 unassociate_template(sg, wn, eid, phase, tmid=tmid))
+                                 unassociate_template(sg, wn, eid, phase, tmid=tmid, 
+                                                      remove_event_phase=True))
 
             print "proposing to deassociate %s at %s (lp %.1f)" % (phase, sta, deassociate_logprob)
             assoc_tmids[phase] = tmid
         else:
             template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
             death_record[phase] = template_param_array
-            if fix_result is None:
-                sg.delete_event_phase(eid, wn.sta, phase)
-                replicate_fns.append(lambda eid=eid, sta=wn.sta, phase=phase: sg.delete_event_phase(eid, sta, phase))
-                print "proposing to delete %s at %s (lp %f)"% (phase, sta, deassociate_logprob)                
-
-    sorted_tmids = [assoc_tmids[phase] if phase in assoc_tmids else None for phase in sorted(site_phases)]
+            sg.delete_event_phase(eid, wn.sta, phase, re_sort=False)
+            replicate_fns.append(lambda eid=eid, sta=wn.sta, phase=phase: sg.delete_event_phase(eid, sta, phase))
+            print "proposing to delete %s at %s (lp %f)"% (phase, sta, deassociate_logprob)                
+    sorted_tmids = [assoc_tmids[phase] if phase in assoc_tmids else None for phase in sorted(phases)]
     death_record["assoc_tmids"] = tuple(sorted_tmids)
-    
+
     def replicate_move():
         for fn in replicate_fns:
             fn()
