@@ -93,6 +93,7 @@ def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, t
     if dumpsg:
         sg.debug_dump(dump_path=os.path.join(wave_dir, 'init_dump'))
 
+
     if return_all:
         return evs, waves, sg
     else:

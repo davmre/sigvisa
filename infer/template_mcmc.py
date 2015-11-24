@@ -16,7 +16,7 @@ from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.distributions import Gaussian, PiecewiseLinear
 from sigvisa.models.signal_model import extract_arrival_from_key, unify_windows
 from sigvisa.models.noise.armodel.model import ARGradientException
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing, mh_accept_util
+from sigvisa.infer.mcmc_basic import gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing, mh_accept_util
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
@@ -133,6 +133,13 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
         # candidates means we're not doing that. 
         badsteps = significant_lps * (lp_diff > 1)
         bad_idxs = np.arange(len(lps)-1)[badsteps]
+
+        # also check lps at the edges. if either of these are bad, we'll need to expand the domain.
+        if lps[0] > thresh:
+            bad_idxs = np.concatenate((bad_idxs, (-1,)))
+        if lps[-1] > thresh:
+            bad_idxs = np.concatenate((bad_idxs, (len(lps),)))
+
         return bad_idxs
 
     bad_idxs = bad_indices(lps)
@@ -140,9 +147,16 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
         new_candidates = []
         new_lps = []
         for idx in bad_idxs:
-            c1 = candidates[idx]
-            c2 = candidates[idx+1]
-            c = c1 + (c2-c1)/2.0
+            if idx == -1:
+                incr = max(0.05, candidates[1] - candidates[0])
+                c = candidates[0] - incr
+            elif idx == len(lps):
+                incr = max(0.05, candidates[-1] - candidates[-2])
+                c = candidates[-1] + incr
+            else:
+                c1 = candidates[idx]
+                c2 = candidates[idx+1]
+                c = c1 + (c2-c1)/2.0
             new_candidates.append(c)
             new_lps.append( proxylp(c))
         full_c = np.concatenate((candidates, new_candidates))
@@ -1937,16 +1951,39 @@ def hamiltonian_move_reparameterized(sg, wn, tmnodes, window_lps=None, **kwargs)
 from sigvisa.signals.common import smooth
 from sigvisa.models.templates.lin_polyexp import MAX_PEAK_OFFSET_S
 
-def sta_lta_cdf(env_diff_pos, short_idx=3, long_idx=30):
-    from obspy.signal.trigger import recSTALTA
-    sta_lta = recSTALTA(env_diff_pos, short_idx, long_idx)
-    weighted_stalta_deriv = np.diff(sta_lta)*sta_lta[1:]
-    smoothed_wsd2 = smooth(weighted_stalta_deriv**2, window_len=5)
-    return preprocess_signal_for_sampling(smoothed_wsd2)
-
 def sta_lta_cdf2(env_diff_pos, short_idx=2, long_idx=30, smooth_idx=7,
                  shift_idx=3, distsmooth_idx=3, sta_lta_power=3):
-    from obspy.signal.trigger import classicSTALTA
+
+    #from obspy.signal.trigger import classicSTALTAPy as classicSTALTA
+    # steal this definition from obspy since for some reason it's breaking on
+    # python-dbg builds
+    def classicSTALTAPy(a, nsta, nlta):
+        # The cumulative sum can be exploited to calculate a moving average (the
+        # cumsum function is quite efficient)
+        sta = np.cumsum(a ** 2)
+
+        # Convert to float
+        sta = np.require(sta, dtype=np.float)
+
+        # Copy for LTA
+        lta = sta.copy()
+
+        # Compute the STA and the LTA
+        sta[nsta:] = sta[nsta:] - sta[:-nsta]
+        sta /= nsta
+        lta[nlta:] = lta[nlta:] - lta[:-nlta]
+        lta /= nlta
+
+        # Pad zeros
+        sta[:nlta - 1] = 0
+
+        # Avoid division by zero by setting zero values to tiny float
+        dtiny = np.finfo(0.0).tiny
+        idx = lta < dtiny
+        lta[idx] = dtiny
+
+        return sta / lta
+    classicSTALTA = classicSTALTAPy
 
     if smooth_idx is not None:
         smoothed = smooth(env_diff_pos, smooth_idx)

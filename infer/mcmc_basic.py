@@ -2,6 +2,7 @@ import numpy as np
 from functools32 import lru_cache
 from sigvisa.models.signal_model import ObservedSignalNode
 
+"""
 @lru_cache(maxsize=2048)
 def get_node_scales(node_list):
     low_bounds = np.concatenate([node.low_bounds() for node in node_list])
@@ -11,14 +12,15 @@ def get_node_scales(node_list):
     scaled *= ["arrival_time" not in n.label for n in node_list]
     scales[~scaled] = 1.0
     return scales
+"""
 
 def gaussian_propose(sg, keys, node_list, values=None, scales=None, std=0.01, phase_wraparound=False, **kwargs):
-    scales = scales if scales is not None else get_node_scales(node_list)
+    #scales = scales if scales is not None else get_node_scales(node_list)
     values = values if values is not None else np.array([n.get_value(k) for (n,k) in zip(node_list, keys)])
     n = len(values)
 
     gsample = np.random.normal(0, std, n)
-    move = gsample * scales
+    move = gsample #* scales
     if phase_wraparound: # phases must be between 0 and 2pi
         return (values + move) % 6.283185307179586
     else:

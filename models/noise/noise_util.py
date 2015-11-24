@@ -4,7 +4,6 @@ import time
 import os
 
 from sigvisa import Sigvisa, BadParamTreeException
-from obspy.signal.trigger import zDetect, recSTALTA
 
 from sigvisa.database import dataset
 from sigvisa.database.signal_data import ensure_dir_exists
@@ -35,31 +34,6 @@ class NoNoiseException(Exception):
     pass
 
 
-def get_sta_lta_picks(wave):
-    df = wave['srate']
-    s = Sigvisa()
-
-    fw = wave.filter('freq_0.5_5.0')
-    stalta = recSTALTA(
-        fw.data[df * NOISE_PAD_SECONDS + df:-df * NOISE_PAD_SECONDS - df].filled(float('nan')), int(5 * df), int(10 * df))[10 * df:]
-# stalta =
-# classicSTALTAPy(fw.data[df*NOISE_PAD_SECONDS:-df*NOISE_PAD_SECONDS].filled(float('nan')),
-# int(5 * df), int(20 * df))[20*df:]
-    stalta = ma.masked_invalid(stalta)
-    print "max stalta", np.max(stalta),
-    print ", min stalta", np.min(stalta)
-
-#    np.savetxt("fw.wave", fw.data)
-#    np.savetxt("stalta.wave", stalta)
-    if np.max(stalta) > 1.8:
-        import pdb
-        pdb.set_trace()
-
-        return True
-    elif np.min(stalta) < 0.4:
-        return True
-    else:
-        return False
 
 
 def model_path(sta, chan, filter_str, srate, order, window_stime, model_type):

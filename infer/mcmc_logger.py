@@ -168,6 +168,19 @@ class MCMCLogger(object):
             if type(f) == file:
                 f.flush()
 
+    def log_event_move(self, sg, eid, old_ev, new_ev, details, lp_old, lp_new, lqf, lqb, accepted):
+        s = "\n\nstep %d: proposed to move eid %d to %s\n" % (self.last_step, eid, new_ev)
+        s += "  additional proposal details: %s\n" % repr(details)
+        s += "  lp_new %.2f lp_old %.2f log_qforward %.2f log_qbackward %.2f\n" % (lp_new, lp_old, lqf, lqb)
+        ratio = lp_new + lqb - lp_old - lqf
+        if accepted:
+            s += "  move ACCEPTED with ratio %.2f\n" % ratio
+        else:
+            s += "  move REJECTED with ratio %.2f\n" % ratio
+
+        handle = open(os.path.join(self.run_dir, 'ev_%05d_proposals.txt' % eid), 'a')
+        handle.write(s)
+        handle.close()
 
     def load_template_vals(self, eid, phase, wn):
         """

@@ -135,7 +135,13 @@ def mcmc_ev_detail(request, dirname, eid):
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+    step = int(request.GET.get('step', '-1'))
+    if step < 0:
+        max_step = np.max([int(d[5:]) for d in os.listdir(mcmc_run_dir) if d.startswith('step')])
+        step = max_step
+
+    sg = graph_for_step(mcmc_run_dir, step)
 
     eid = int(eid)
     ev = sg.get_event(eid)
@@ -160,7 +166,7 @@ def mcmc_ev_detail(request, dirname, eid):
                                'full_dirname': mcmc_run_dir,
                                'eid': eid,
                                'ev_str': ev_str,
-                               'step': max_step,
+                               'step': step,
                                'proposalpath': proposalpath,
                                }, context_instance=RequestContext(request))
 

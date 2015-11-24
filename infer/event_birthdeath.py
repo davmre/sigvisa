@@ -782,8 +782,11 @@ def clean_propose_phase_template(sg, wn, eid, phase,
         tmvals[param] = n.get_value()
         if debug_info is not None:
             debug_info[param] = (tmvals[param], param_lp, param_lp)
-        # print "param", param, "val", tmvals[param], "lp", param_lp
-        
+        print "param", param, "val", tmvals[param], "lp", param_lp
+
+    #if "arrival_time" not in tmvals:
+    #    tmvals["arrival_time"] = tmnodes["arrival_time"][1].get_value()
+ 
     # then sample atime from the signal
     pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
     debug_lps = {}
@@ -799,6 +802,7 @@ def clean_propose_phase_template(sg, wn, eid, phase,
     log_q += peak_lp
     if debug_info is not None:
         debug_info["tt_residual"] = (n_ttr.get_value(), peak_lp, n_ttr.log_p())
+    #print "param atime val", tmvals["arrival_time"], "lp", peak_lp
 
     # then sample amplitude from the signal
     amp_dist = heuristic_amplitude_posterior(sg, wn, tmvals, eid, phase, 
@@ -815,6 +819,10 @@ def clean_propose_phase_template(sg, wn, eid, phase,
     tmvals["amp_transfer"] = n_amp.get_value(key=k_amp)
     if debug_info is not None:
         debug_info["amp_transfer"] = (n_amp.get_value(), amp_lp, n_amp.log_p())
+    #print "param atransfer val", tmvals["amp_transfer"], "lp", amp_lp
+
+    if not np.isfinite(log_q):
+        import pdb; pdb.set_trace()
     
     return tmvals, log_q
 
@@ -881,7 +889,7 @@ def death_proposal_logprob(sg, eid):
     
 def ev_death_executor(sg, location_proposal, 
                       proposal_includes_mb=True,
-                      dumb_birth=True, 
+                      birth_type="mh",
                       force_kill_eid=None):
     log_qforward = 0.0
     log_qbackward = 0.0
@@ -921,7 +929,7 @@ def ev_death_executor(sg, location_proposal,
             ev_template_birth_helper(sg, eid, 
                                      associate_using_mb=proposal_includes_mb, 
                                      fix_result=death_records, 
-                                     dumb_proposal=dumb_birth)
+                                     proposal_type=birth_type)
     log_qbackward += lqb
     sg._topo_sort()
                         
@@ -983,10 +991,9 @@ def ev_death_move_hough_offset(sg, **kwargs):
     hough_kwargs = {"offset": True}
     return ev_death_move_hough(sg, hough_kwargs, **kwargs)
 
-
 def ev_death_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
-    return ev_death_move_hough(sg, hough_kwargs, dumb_birth=True, **kwargs)
+    return ev_death_move_hough(sg, hough_kwargs, birth_type="dumb", **kwargs)
 
 
 def ev_death_move_correlation(sg, **kwargs):
@@ -1123,7 +1130,10 @@ def propose_tmvals_from_gibbs_scan(sg, wn, eid, phase, fix_result=None, debug_in
             continue
 
         proxylp = proxylp_full(sg, wn, n)
-        d = approximate_scalar_gibbs_distribution(sg, wn, eid, phase, param, n, proxylp)
+        d = approximate_scalar_gibbs_distribution(sg, wn, eid, 
+                                                  phase, param, 
+                                                  n, proxylp, 
+                                                  prior_weight = 0.01)
         
         if fix_result is not None:
             v = fix_result[param]
@@ -1273,8 +1283,8 @@ def dumb_propose_phase_template(sg, wn, eid, phase,
         param_lp = n.log_p()
         log_q += param_lp
 
-        # print "dumb logq", param, wn.sta, phase, n.get_value(), log_q, " fixed" if fix_result is not None else " unfixed"
-        
+        print "dumb logq", param, wn.sta, phase, n.get_value(), param_lp, " fixed" if fix_result is not None else " unfixed"
+
         tmvals[param] = n.get_value()
         if debug_info is not None:
             debug_info[param] = (tmvals[param], param_lp, param_lp)
@@ -1284,7 +1294,7 @@ def dumb_propose_phase_template(sg, wn, eid, phase,
 
 
 def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None, 
-                             debug_info=None, dumb_proposal=False):
+                             debug_info=None, proposal_type="clean"):
 
     log_qforward = 0
     replicate_fns = []
@@ -1312,7 +1322,7 @@ def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None,
         if fix_result is not None:
             fr_phase = fix_result[phase]
 
-        if dumb_proposal:
+        if proposal_type=="dumb":
             tmvals, tmpl_lp = dumb_propose_phase_template(sg, wn, eid, phase=phase, 
                                                           fix_result=fr_phase, 
                                                           debug_info=debug_phase)      
@@ -1320,6 +1330,8 @@ def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None,
             tmvals, tmpl_lp = clean_propose_phase_template(sg, wn, eid, phase=phase, 
                                                            fix_result=fr_phase, 
                                                            debug_info=debug_phase)      
+            print wn.sta, tmpl_lp
+
 
         # to replay this move, we just need to reset the proposed values
         def rf(eid=eid, wn=wn, tmvals=tmvals, phase=phase):
@@ -1332,8 +1344,7 @@ def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None,
 def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None, 
                                  debug_info=None, 
                                  associate_using_mb=True,
-                                 dumb_proposal=False,
-                                 mh_adaptation=True):
+                                 proposal_type="mh"):
 
     if len(site_phases) == 0:
         nop = lambda : None
@@ -1351,11 +1362,8 @@ def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None,
     #  - a dumb parent-conditional proposal
     #  - a 'semismart' proposal which attempts to adapt atime and amplitude based on the signal
     #  - a smart proposal that internally runs MH steps to find good params
-    if dumb_proposal:
-        mh_adaptation=False
-
     new_phases = [phase for (phase, assoc) in zip(site_phases, assoc_tmids) if assoc is None]
-    if mh_adaptation:
+    if proposal_type=="mh":
         lqf, rfns = propose_new_phases_mh(sg, wn, eid, new_phases, 
                                           fix_result=fix_result,
                                           debug_info=debug_info)
@@ -1363,7 +1371,7 @@ def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None,
         lqf, rfns = propose_new_phases_no_mh(sg, wn, eid, new_phases, 
                                              fix_result=fix_result, 
                                              debug_info=debug_info,
-                                             dumb_proposal=dumb_proposal)
+                                             proposal_type=proposal_type)
 
     log_qforward += lqf
     replicate_fns += rfns
@@ -1378,7 +1386,7 @@ def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None,
     
 def ev_template_birth_helper(sg, eid, fix_result=None, 
                              associate_using_mb=True,
-                             dumb_proposal=False,
+                             proposal_type="mh",
                              debug_info=None, **kwargs):
     death_records = {}
     replicate_fns = []
@@ -1404,7 +1412,7 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
                                                  fix_result=fr_sta,
                                                  associate_using_mb=associate_using_mb,
                                                  debug_info=debug_info_sta, 
-                                                 dumb_proposal=dumb_proposal,
+                                                 proposal_type=proposal_type,
                                                  **kwargs)
                 log_qforward += lqf_sta
                 replicate_fns.append(replicate_sta)
@@ -1423,7 +1431,7 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
     
 def ev_birth_executor(sg, location_proposal, 
                       proposal_includes_mb=True, 
-                      dumb_proposal=False,
+                      proposal_type="mh",
                       force_eid=None,
                       force_outcome=None):
     debug_info = {}
@@ -1447,7 +1455,7 @@ def ev_birth_executor(sg, location_proposal,
     lqf, replicate_tmpls, birth_records = \
                     ev_template_birth_helper(sg, eid, 
                                              associate_using_mb=proposal_includes_mb, 
-                                             dumb_proposal=dumb_proposal,
+                                             proposal_type=proposal_type,
                                              debug_info=debug_info)
     log_qforward += lqf
     sg._topo_sort()
@@ -1564,7 +1572,7 @@ def ev_birth_move_hough_offset(sg, **kwargs):
 def ev_birth_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
     return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, 
-                               dumb_proposal=True, **kwargs)
+                               proposal_type="dumb", **kwargs)
 
 
 def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):

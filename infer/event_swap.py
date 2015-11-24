@@ -95,10 +95,29 @@ def swap_events_move_lstsqr(*args, **kwargs):
     kwargs['location_proposal']=overpropose_new_locations
     return swap_events_move(*args, **kwargs)
 
-def rebirth_events_helper(sg, eids, location_proposal):
+def rebirth_events_helper(sg, eids, location_proposal, 
+                          forward_birth_type="dumb", 
+                          reverse_birth_type="dumb"):
     """
     Given a list of events, propose killing them all and rebirthing
     new events from the resulting uatemplates.
+
+    dumb_birth_forward asks whether we should propose the new event 
+    from a dumb birth distribution. This is more reasonable than you'd
+    think since all the templates that really need to fit the signal are
+    hopefully being re-associated (having been de-associated by the death 
+    move) so the stuff that's left is either high-noise signals or 
+    low-amplitude templates. A potential problem is cases where we 
+    killed a small template in the death move, but the dumb birth tries to
+    propose a big template. 
+
+    dumb_birth_reverse asks whether we should use a dumb proposal to evaluate
+    the reverse probability of rebirthing the current event. 
+
+    note that for valid MCMC, we need either:
+    - dumb_birth_forward and dumb_birth_reverse are the same (so this move correctly computes its own reverse probability)
+    - they are different, but we choose the ordering uniformly at random, i.e. flip a coin to decide which one is true. this is smart/dumb, dumb/smart. 
+
     """
 
     old_evs = [sg.get_event(eid) for eid in eids]
@@ -115,7 +134,8 @@ def rebirth_events_helper(sg, eids, location_proposal):
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
 
-        r = ev_death_executor(sg, force_kill_eid=eid, location_proposal=lp)
+        r = ev_death_executor(sg, force_kill_eid=eid, location_proposal=lp, 
+                              birth_type=reverse_birth_type)
         if r is None:
             revert_moves.reverse()
             for r in revert_moves:
@@ -136,7 +156,8 @@ def rebirth_events_helper(sg, eids, location_proposal):
 
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
-        r = ev_birth_executor(sg, location_proposal=lp, force_eid=eid, dumb_proposal=True)
+        r = ev_birth_executor(sg, location_proposal=lp, force_eid=eid, 
+                              proposal_type=forward_birth_type)
         if r is None:
             revert_moves.reverse()
             for r in revert_moves:

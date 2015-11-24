@@ -317,7 +317,7 @@ def load_modelid(modelid, memoize=True, **kwargs):
     model.modelid = modelid
     return model
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=128)
 def load_model(*args, **kwargs):
     return load_model_notmemoized(*args, **kwargs)
 

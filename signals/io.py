@@ -10,7 +10,6 @@ import numpy.ma as ma
 from optparse import OptionParser
 from obspy.core import Trace, Stream, UTCDateTime
 import obspy.signal.filter
-from obspy.signal.trigger import triggerOnset
 
 from sigvisa.database.dataset import *
 from sigvisa.signals.common import *

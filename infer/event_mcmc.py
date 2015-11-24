@@ -20,10 +20,10 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.infer.event_birthdeath import ev_sta_template_death_helper, ev_sta_template_birth_helper
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_util
+from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move, get_sorted_arrivals, relevant_nodes_hack
 from sigvisa.graph.graph_utils import create_key, parse_key
-from sigvisa.models.distributions import TruncatedGaussian
+from sigvisa.models.distributions import TruncatedGaussian, Bernoulli
 from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure
 from sigvisa.utils.geog import wrap_lonlat
@@ -56,8 +56,119 @@ def phases_changed(sg, eid, ev):
     return birth_phases, death_phases, jump_required
 
 
+def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases, 
+                                   adaptive_decouple=False, fix_result=None):
+    evdict = new_ev.to_dict()
+    evnodes = sg.evnodes[eid]
+
+    log_qforward = 0.0
+    decouple_record = dict()
+    replicate_fns = []
+
+    # record the values of the nodes we're going to preserve, so
+    # we can re-set them later.
+    fixed_vals = dict()
+    for n in sg.extended_evnodes[eid]:
+        try:
+            fixed_vals[n.label] = n.get_value()
+        except KeyError:
+            # ignore the evnodes themselves
+            continue
+
+    # set the new event values
+    def set_event():
+        for k in evdict.keys():
+            evnodes[k].set_local_value(evdict[k], key=k, force_deterministic_consistency=False)
+    set_event()
+    replicate_fns.append(set_event)
+
+    for site in sg.site_elements.keys():
+        for sta in sg.site_elements[site]:
+            
+            wns = sg.station_waves[sta]
+            sta_fixable_nodes = []
+            sta_relevant_nodes = []
+            for n in sg.extended_evnodes[eid]:
+                try:
+                    (eid2, phase, sta2, chan, band, param) = parse_key(n.label)
+                except ValueError:
+                    # ignore the ev nodes
+                    continue
+                if not (sta2 == sta or sta2 == site): 
+                    continue
+                elif phase in invalid_phases[site]:
+                    continue
+
+                if n.deterministic():
+                    sta_fixable_nodes.append(n)
+                else:
+                    sta_relevant_nodes.append(n)
+
+            def sta_logp():
+                lp = np.sum([n.log_p() for n in sta_relevant_nodes])
+                lp += np.sum([wn.log_p() for wn in wns])
+                return lp
+
+            # for some reason Python doesn't include the sta nodes inside the
+            # closure for these functions unless we explicitly list them as arguments. 
+            # (more precisely, it *does* include them, but it ends up pointing to the
+            #  nodes of the last station rather than the one for this iteration of the 
+            #  station loop...)
+            def do_decouple(sta_fixable_nodes=sta_fixable_nodes,sta_relevant_nodes=sta_relevant_nodes):
+                for n in sta_relevant_nodes:
+                    if n.get_value() != fixed_vals[n.label]:
+                        n.set_value(fixed_vals[n.label])
+                for n in sta_fixable_nodes:
+                    n.parent_predict()
+
+            def do_preserve(sta_fixable_nodes=sta_fixable_nodes):  
+                for n in sta_fixable_nodes:
+                    n.set_value(fixed_vals[n.label])
+                    print "preserving at", n.label, "by setting to fixed val", fixed_vals[n.label]
+
+
+            if adaptive_decouple:
+                do_preserve()
+                lp_preserved = sta_logp()
+
+                do_decouple()
+                lp_decoupled = sta_logp()
+
+                lpmax = max(lp_preserved, lp_decoupled)
+                lp_preserved = max(lp_preserved - lpmax, -10)
+                lp_decoupled = max(lp_decoupled - lpmax, -10)
+                p_decoupled = np.exp(lp_decoupled) / (np.exp(lp_decoupled) + np.exp(lp_preserved))
+                dist = Bernoulli(p_decoupled)
+
+                wn = wns[0]
+                if fix_result is not None:
+                    decouple = fix_result[wn.label]["decoupled"]
+                else:
+                    decouple = dist.sample()
+
+                lqf = dist.log_p(decouple)
+                log_qforward += lqf
+            else:
+                decouple = False
+                
+            decouple_record[wn.label] = decouple
+
+            if decouple:
+                replicate_fns.append(do_decouple)
+            else:
+                do_preserve()
+                replicate_fns.append(do_preserve)
+
+    def replicate_move():
+        for fn in replicate_fns:
+            fn()
+
+    return log_qforward, replicate_move, decouple_record
+
+
 def ev_phasejump_helper(sg, eid, new_ev, params_changed, 
-                        dumb_birth=False, fix_result=None):
+                        adaptive_decouple=False,
+                        birth_type="mh", fix_result=None):
     # assume: we are proposing to update eid to new_ev, but have not 
     # yet done so in the graph. 
     # this method:
@@ -75,11 +186,15 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
     # figure out which phases we need to add and remove
     birth_phases, death_phases, _ = phases_changed(sg, eid, new_ev)
 
-    # set the event to the new position, ignoring inconsistent phase errors
-    def set_ev():
-        sg.set_event(eid, new_ev, params_changed=params_changed, preserve_templates=True, node_lps=None, illegal_phase_action="ignore")
-    replicate_fns.append(set_ev)
-    set_ev()
+    # set the event to the new position, and either let the arrival times and coda_heights shift, or don't
+    lqf, rset, decouple_record = set_event_proposing_decoupling(sg, eid, new_ev, death_phases, fix_result=fix_result, adaptive_decouple=adaptive_decouple)
+    replicate_fns.append(rset)
+    log_qforward += lqf
+    for wnlabel in decouple_record.keys():
+        if wnlabel not in phasejump_record:
+            phasejump_record[wnlabel] = {}
+        phasejump_record[wnlabel]["decoupled"] = decouple_record[wnlabel]
+
     
     for site in birth_phases.keys():
         birthed = birth_phases[site]
@@ -89,7 +204,8 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
 
         for sta in sg.site_elements[site]:
             for wn in sg.station_waves[sta]:
-                phasejump_record[wn.label] = {}
+                if wn.label not in phasejump_record:
+                    phasejump_record[wn.label] = {}
                 fr_sta_death = None
                 fr_sta_birth = None
                 if fix_result is not None:
@@ -109,12 +225,12 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
                 # we store the death record as the future 
                 # fixed_result of the reverse birth move
                 phasejump_record[wn.label]['birth'] = death_record
-
+                
                 # propose a birth solution
                 if len(birthed) == 0:
                     birth_record = None
                 else:
-                    lqf, re_birth, birth_record = ev_sta_template_birth_helper(sg, wn, eid, site_phases=birthed, fix_result=fr_sta_birth, dumb_proposal=dumb_birth)
+                    lqf, re_birth, birth_record = ev_sta_template_birth_helper(sg, wn, eid, site_phases=birthed, fix_result=fr_sta_birth, proposal_type=birth_type)
                     log_qforward += lqf
                     print sta, lqf, log_qforward
                     replicate_fns.append(re_birth)
@@ -131,7 +247,9 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
 
 
 
-def ev_move_full(sg, ev_node, std, params):
+def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None, 
+                 adaptive_decouple=False,
+                 logger=None, return_debug=False):
     def update_ev(old_ev, params, new_v):
         new_ev = copy.copy(old_ev)
         try:
@@ -173,11 +291,13 @@ def ev_move_full(sg, ev_node, std, params):
 
         # propose a new set of param values
         if params[0] == "depth":
+            current_v = float(current_v)
             rv1 = TruncatedGaussian(current_v, std=std, a=0.0, b=700.0)
             new_v = rv1.sample()
             rv2 = TruncatedGaussian(new_v, std=std, a=0.0, b=700.0)
             log_qforward += rv1.log_p(new_v)
             log_qbackward += rv2.log_p(current_v)
+            new_v = np.array((new_v,))
         else:
             gsample = np.random.normal(0, std, d)
             move = gsample * std
@@ -219,14 +339,26 @@ def ev_move_full(sg, ev_node, std, params):
 
         return lp
             
-    log_qforward = 0.0
-    log_qbackward = 0.0
 
     eid = int(ev_node.label.split(';')[0])
-    old_ev, new_ev, log_qforward, log_qbackward = propose_ev(ev_node, eid, params)
+
+    if force_proposed_ev is not None:
+        new_ev = force_proposed_ev
+        old_ev = sg.get_event(eid)
+        log_qforward = 0.0
+        log_qbackward = 0.0
+    else:
+        old_ev, new_ev, log_qforward, log_qbackward = propose_ev(ev_node, eid, params)
+
+    dumb_forward = np.random.rand() < 0.0
+    forward_type = "dumb" if dumb_forward else "mh" 
+    dumb_backward = True #np.random.rand() < 0.0
+    reverse_type = "dumb" if dumb_backward else "mh" 
 
     # set the event, and propose values for new and removed phases, as needed
-    lqf, replicate_forward, phasejump_record = ev_phasejump_helper(sg, eid, new_ev, params)
+    lqf, replicate_forward, phasejump_record = ev_phasejump_helper(sg, eid, new_ev, params, 
+                                                                   adaptive_decouple=adaptive_decouple,
+                                                                   birth_type=forward_type)
     log_qforward += lqf
 
     #lp_new = sg.current_log_p()
@@ -234,7 +366,9 @@ def ev_move_full(sg, ev_node, std, params):
     
     # set the old event and propose values 
     lqb, _, phasejump_reverse_record = ev_phasejump_helper(sg, eid, old_ev, params, 
-                                                   fix_result=phasejump_record)
+                                                           birth_type=reverse_type,
+                                                           adaptive_decouple=adaptive_decouple,
+                                                           fix_result=phasejump_record)
     log_qbackward += lqb
 
     #lp_old = sg.current_log_p()
@@ -243,8 +377,24 @@ def ev_move_full(sg, ev_node, std, params):
     #diff1 = lp_new - lp_old
     #diff2 = lp_new_quick - lp_old_quick
     #assert(np.abs(diff2 - diff1) < 1e-6)
+    
 
-    return mh_accept_util(lp_old_quick, lp_new_quick, log_qforward, log_qbackward, accept_move=replicate_forward)
+    accepted = mh_accept_util(lp_old_quick, lp_new_quick, log_qforward, log_qbackward, accept_move=replicate_forward)
+
+    if logger is not None:
+                            
+        phasejump_reverse_record["dumb"] = ("forward " if dumb_forward else "") + ("backward_ " if dumb_backward else "")
+
+        logger.log_event_move(sg, eid, old_ev, new_ev, 
+                              phasejump_reverse_record,
+                              lp_old_quick, lp_new_quick, 
+                              log_qforward, log_qbackward,
+                              accepted=accepted)
+
+    if return_debug:
+        return lp_old_quick, lp_new_quick, log_qforward, log_qbackward, replicate_forward
+    else:
+        return accepted
     
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):

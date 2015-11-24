@@ -51,7 +51,20 @@ def proxylp_localenv(sg, wn, eid, phase, param):
     
     return proxylp
         
-def approximate_scalar_gibbs_distribution(sg, wn, eid, phase, param, node, proxylp):
+def approximate_scalar_gibbs_distribution(sg, wn, eid, phase, param, 
+                                          node, proxylp, prior_weight = 0.0):
+
+    class priormodel(object):
+        def __init__(self, node):
+            self.model = node.model
+            self.pv = node._pv_cache
+        
+        def log_p(self, x, **kwargs):
+            return float(self.model.log_p(x, cond=self.pv, **kwargs))
+
+        def sample(self, **kwargs):
+            return float(self.model.sample(cond=self.pv, **kwargs))
+
     assert (not node.deterministic())
     tg = sg.template_generator(phase)
     lbounds, hbounds = tg.low_bounds(), tg.high_bounds()
@@ -127,7 +140,8 @@ def approximate_scalar_gibbs_distribution(sg, wn, eid, phase, param, node, proxy
         bad_idxs = bad_indices(lps, candidates)
     
     node.set_value(v)
-    p = PiecewiseLinear(candidates, np.array(lps))
+
+    p = PiecewiseLinear(candidates, np.array(lps), mix_weight = prior_weight, mix_dist = priormodel(node))
     return p
     
     

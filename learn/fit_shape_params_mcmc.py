@@ -290,9 +290,12 @@ def save_template_params(sg, tmpl_optim_param_str,
         full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
         ensure_dir_exists(os.path.dirname(full_fname))
         wave_node.nm.dump_to_file(full_fname)
-        wave_node.nmid = wave_node.nm.save_to_db(dbconn=s.dbconn, sta=wave_node.sta, chan=wave_node.chan,
-                                                 band=wave_node.band, hz=wave_node.srate, env=env_signals, smooth=smooth,
-                                                 window_stime=wave_node.st, window_len=wave_node.et-wave_node.st,
+        wave_node.nmid = wave_node.nm.save_to_db(dbconn=s.dbconn, sta=wave_node.sta, 
+                                                 chan=wave_node.chan,
+                                                 band=wave_node.band, hz=wave_node.srate, 
+                                                 env=env_signals, smooth=smooth,
+                                                 window_stime=wave_node.st, 
+                                                 window_len=wave_node.et-wave_node.st,
                                                  fname=nm_fname, hour=-1)
         print "saving inferred noise model as nmid", wave_node.nmid
 
@@ -444,7 +447,6 @@ def main():
     fitid = run_fit(sigvisa_graph,  fit_hz = options.hz,
                     tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
                     output_runid = runid, steps=options.steps, burnin=options.burnin)
-
 
     print "fit id %d completed successfully." % fitid
 

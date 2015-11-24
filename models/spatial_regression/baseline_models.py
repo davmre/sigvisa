@@ -90,12 +90,12 @@ class ParamModel(Distribution):
         return a
 
     def event_to_array(self, event):
-        if event in self.ev_cache:
-            a = self.ev_cache[event]
-        else:
-            distance = geog.dist_km((event.lon, event.lat), (self.site_lon, self.site_lat))
-            a = np.array(((event.lon, event.lat, event.depth, distance, event.mb),), dtype=float)
-            self.ev_cache[event] = a
+        #if event in self.ev_cache:
+        #    a = self.ev_cache[event]
+        #else:
+        distance = geog.dist_km((event.lon, event.lat), (self.site_lon, self.site_lat))
+        a = np.array(((event.lon, event.lat, event.depth, distance, event.mb),), dtype=float)
+        #self.ev_cache[event] = a
         return a
 
     def standardize_input_array(self, c, **kwargs):

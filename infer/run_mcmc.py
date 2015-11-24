@@ -14,7 +14,7 @@ from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_
 from sigvisa import Sigvisa
 from sigvisa.infer.autoregressive_mcmc import arnoise_params_rw_move, arnoise_mean_rw_move, arnoise_std_rw_move
 from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, mh_accept_lp
+from sigvisa.infer.mcmc_basic import gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_offset, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_offset, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move, ev_source_type_move
@@ -25,9 +25,9 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in
 
 global_stds = {'coda_height': .7,
                'coda_height_small': .1,
-               'coda_decay': .3,
-               'peak_decay': 0.3,
-               'peak_offset': 0.3,
+               'coda_decay': 1.2,
+               'peak_decay': 1.8,
+               'peak_offset': 0.9,
                'mult_wiggle_std': 0.1,
                'improve_offset_move_gaussian': 0.5,
                'arrival_time_big': 4.0,
@@ -361,7 +361,8 @@ def run_open_world_MH(sg, steps=10000,
                 run_move(move_name=move_name, fn=ev_move_full, step=step,
                          n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
-                         sg=sg, ev_node=evnodes[node_name], std=stds[move_name], params=params)
+                         sg=sg, ev_node=evnodes[node_name], 
+                         std=stds[move_name], params=params, logger=logger)
 
             for (move_name, (fn, prob)) in event_moves_special.items():
                 n_attempted[move_name] += 1

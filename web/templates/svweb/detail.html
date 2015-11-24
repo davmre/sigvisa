@@ -280,7 +280,7 @@ fitwiggle = document.getElementById("fitwiggle").checked;
 fitnoise = document.getElementById("fitnoise").checked;
 
 var fit_img = document.getElementById("fit");
-new_src = "{% url 'visual' fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";wiggle=" + fitwiggle + ";noise=" + fitnoise + ";saveprefs=true";
+new_src = "{% url 'visual' fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";wiggle=" + fitwiggle + ";noise=" + fitnoise + ";saveprefs=true;pred_phases=all";
 
 // only show the loading message if the image has actually changed
 if ('/' + fit_img.src.split("/").slice(3).join("/") != new_src) {

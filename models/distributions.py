@@ -423,7 +423,9 @@ class PiecewiseLinear(Distribution):
             mix_p = np.exp(self.mix_dist.log_p(x))
             p = p*(1.0-self.mix_weight) + self.mix_weight * mix_p
 
-        return np.log(p)
+        lp = np.log(p)
+        #assert(np.isfinite(lp))
+        return lp
 
     def sample(self, *args, **kwargs):
         if self.mix_weight > 0:
