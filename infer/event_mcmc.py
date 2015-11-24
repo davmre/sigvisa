@@ -56,6 +56,29 @@ def phases_changed(sg, eid, ev):
     return birth_phases, death_phases, jump_required
 
 
+def cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes):
+
+    # if no arrivals will be preserved at this station,
+    # it's meaningless whether we decouple or not
+    if len(sta_fixable_nodes) == 0:
+        return False
+
+    noise_std = np.sqrt(wn.nm_env.marginal_variance())    
+    max_height = np.max([n.get_value() for n in sta_fixable_nodes if "coda_height" in n.label])
+
+    score = np.exp(max_height )/noise_std
+    if score < 0.5: 
+        # if the max template is smaller than half a noise std, it can't be telling us much
+        return True
+    elif score > 6:
+        # if the max template is bigger than six noise stds, it must be affecting the signal
+        # (might be able to get away with less here, but being cautious for now...)
+        return False
+    else:
+        # in the intermediate cases, we'll do a more expensive proposal using the actual
+        # signal probabilities
+        return None
+
 def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases, 
                                    adaptive_decouple=False, fix_result=None):
     evdict = new_ev.to_dict()
@@ -86,6 +109,8 @@ def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases,
         for sta in sg.site_elements[site]:
             
             wns = sg.station_waves[sta]
+            wnlabel = wns[0].label
+
             sta_fixable_nodes = []
             sta_relevant_nodes = []
             for n in sg.extended_evnodes[eid]:
@@ -123,40 +148,54 @@ def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases,
 
             def do_preserve(sta_fixable_nodes=sta_fixable_nodes):  
                 for n in sta_fixable_nodes:
-                    n.set_value(fixed_vals[n.label])
-                    print "preserving at", n.label, "by setting to fixed val", fixed_vals[n.label]
+                    n.set_value(fixed_vals[n.label])                    
 
 
+            currently_decoupled=True
             if adaptive_decouple:
                 do_preserve()
-                lp_preserved = sta_logp()
-
-                do_decouple()
-                lp_decoupled = sta_logp()
-
-                lpmax = max(lp_preserved, lp_decoupled)
-                lp_preserved = max(lp_preserved - lpmax, -10)
-                lp_decoupled = max(lp_decoupled - lpmax, -10)
-                p_decoupled = np.exp(lp_decoupled) / (np.exp(lp_decoupled) + np.exp(lp_preserved))
-                dist = Bernoulli(p_decoupled)
+                currently_decoupled=False
 
                 wn = wns[0]
+                decouple_heuristic = cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes)
+                if decouple_heuristic is not None:
+                    p_decoupled = 1.0 - 1e-6 if decouple_heuristic else 1e-6
+                else:
+                    lp_preserved = sta_logp()
+                    do_decouple()
+                    currently_decoupled=True
+
+                    lp_decoupled = sta_logp()
+                    lpmax = max(lp_preserved, lp_decoupled)
+                    lp_preserved = max(lp_preserved - lpmax, -10)
+                    lp_decoupled = max(lp_decoupled - lpmax, -10)
+                    p_decoupled = np.exp(lp_decoupled) / (np.exp(lp_decoupled) + np.exp(lp_preserved))
+
+                dist = Bernoulli(p_decoupled)
                 if fix_result is not None:
-                    decouple = fix_result[wn.label]["decoupled"]
+                    decouple = fix_result[wnlabel]["decoupled"]
                 else:
                     decouple = dist.sample()
 
                 lqf = dist.log_p(decouple)
                 log_qforward += lqf
+
+                # print "decouple %s at %s with p_decoupled %.3f lqf %.3f heuristic %s" % (decouple, wn.sta, p_decoupled, lqf, decouple_heuristic)
             else:
                 decouple = False
                 
-            decouple_record[wn.label] = decouple
+            decouple_record[wnlabel] = decouple
 
             if decouple:
+                if not currently_decoupled:
+                    do_decouple()
                 replicate_fns.append(do_decouple)
             else:
-                do_preserve()
+                # if we did the expensive proposal, and then 
+                # decided to preserve, then we need to 
+                # reset the preserved state
+                if currently_decoupled:
+                    do_preserve()
                 replicate_fns.append(do_preserve)
 
     def replicate_move():
@@ -186,6 +225,7 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
     # figure out which phases we need to add and remove
     birth_phases, death_phases, _ = phases_changed(sg, eid, new_ev)
 
+    
     # set the event to the new position, and either let the arrival times and coda_heights shift, or don't
     lqf, rset, decouple_record = set_event_proposing_decoupling(sg, eid, new_ev, death_phases, fix_result=fix_result, adaptive_decouple=adaptive_decouple)
     replicate_fns.append(rset)
@@ -199,6 +239,7 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
     for site in birth_phases.keys():
         birthed = birth_phases[site]
         killed = death_phases[site]
+
         if len(birthed) == 0 and len(killed) == 0:
             continue
 
@@ -248,7 +289,7 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
 
 
 def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None, 
-                 adaptive_decouple=False,
+                 adaptive_decouple="auto",
                  logger=None, return_debug=False):
     def update_ev(old_ev, params, new_v):
         new_ev = copy.copy(old_ev)
@@ -327,7 +368,16 @@ def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None,
         # at every station where we've changed the set of arriving phases,
         # compute the signal lp, and also include lps for all uatemplates
         # (since we might have associated or disassociated templates)
+
+        # if we're using GP wiggle models, we need to compute logps at every station
+        assert(sg.wiggle_model_type=="dummy")
+
         for wnlabel in phasejump_record.keys():
+            # include any wns where our signal explanation will have changed.
+            # if the only record is that we didn't decouple, we can skip this wn.
+            if len(phasejump_record[wnlabel]) == 1 and not phasejump_record[wnlabel]['decoupled']:
+                continue
+
             wn = sg.all_nodes[wnlabel]
             lp += wn.log_p()
 
@@ -350,10 +400,13 @@ def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None,
     else:
         old_ev, new_ev, log_qforward, log_qbackward = propose_ev(ev_node, eid, params)
 
-    dumb_forward = np.random.rand() < 0.0
+    dumb_forward = np.random.rand() < 0.2
     forward_type = "dumb" if dumb_forward else "mh" 
-    dumb_backward = True #np.random.rand() < 0.0
+    dumb_backward = np.random.rand() < 0.2
     reverse_type = "dumb" if dumb_backward else "mh" 
+
+    if adaptive_decouple=="auto":        
+        adaptive_decouple = ("lon" in params or "time" in params or "depth" in params)
 
     # set the event, and propose values for new and removed phases, as needed
     lqf, replicate_forward, phasejump_record = ev_phasejump_helper(sg, eid, new_ev, params, 
