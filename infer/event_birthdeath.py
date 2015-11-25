@@ -1522,6 +1522,11 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, debug_info = proposal_extra
+
+        if log_to_run_dir is None:
+            print "WARNING: not logging event because no rundir specified"
+            return
+
         log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
         ev_log_file = os.path.join(log_to_run_dir, "birth_proposal_%d.txt" % eid)
 
@@ -1543,6 +1548,10 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, debug_info = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+
+        if log_to_run_dir is None:
+            return
+                
         if np.random.rand() < 1.0: #0.1:
             sites = sg.site_elements.keys()
             print "saving hough array picture...",
@@ -1553,6 +1562,10 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, debug_info = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+
+        if log_to_run_dir is None:
+            return
+
         if log_to_run_dir is not None:
             log_event_birth(sg, hough_array, log_to_run_dir, eid)
         else:
