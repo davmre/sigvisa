@@ -248,6 +248,8 @@ public:
 
   ~PyTSSM() {
 
+    delete this->ssm;
+
     // release all the Python references we've been holding
     // (SSM objects and scale vectors)
     // std::vector<PyObject *>::iterator it;

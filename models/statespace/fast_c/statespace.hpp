@@ -205,10 +205,10 @@ TransientCombinedSSM(std::vector<StateSpaceModel *> & ssms, const vector<int> & 
   const unsigned int n_ssms;
 private:
 
-  std::vector<StateSpaceModel *> ssms;
-  const vector<int> start_idxs;
-  const vector<int> end_idxs;
-  const std::vector<const double * > scales;
+  std::vector<StateSpaceModel *> & ssms;
+  const vector<int> & start_idxs;
+  const vector<int> & end_idxs;
+  const std::vector<const double * > & scales;
 
   const double obs_noise;
   unsigned int n_steps;
