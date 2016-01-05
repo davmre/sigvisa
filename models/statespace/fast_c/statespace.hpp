@@ -229,7 +229,7 @@ private:
 
 
 double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk);
-void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k);
+int kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k);
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z);
 void mean_obs(StateSpaceModel &ssm, vector<double> & result);
 void obs_var(StateSpaceModel &ssm, vector<double> & result);

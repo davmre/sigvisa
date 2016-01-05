@@ -2,6 +2,7 @@
 #include <boost/numeric/ublas/matrix.hpp>
 
 #include <stdio.h>
+#include <math.h>
 
 #include <cmath>
 #include <memory>
@@ -15,7 +16,7 @@
 using namespace boost::numeric::ublas;
 
 
-void udu(matrix<double> &M_mat, matrix<double> &U_mat, vector<double> &d_vec, unsigned int state_size) {
+int udu(matrix<double> &M_mat, matrix<double> &U_mat, vector<double> &d_vec, unsigned int state_size) {
 
   unsigned int n = M_mat.size1();
   double *M = &(M_mat(0,0));
@@ -65,7 +66,7 @@ void udu(matrix<double> &M_mat, matrix<double> &U_mat, vector<double> &d_vec, un
     } else {
       if (fabs(d[j] > 1e-5) ) {
 	printf("WARNING: nonpositive d[%d] %f in udu decomp\n", j, d[j]);
-	exit(-1);
+	return -1;
       }
       d[j] = 0.0;
       alpha = 0.0;
@@ -82,8 +83,9 @@ void udu(matrix<double> &M_mat, matrix<double> &U_mat, vector<double> &d_vec, un
 
   if (d[0] < 0) {
     printf("ERROR: udu decomposition on non-posdef matrix with M(0,0)=%f\n", M[0]);
-    exit(-1);
+    return -1;
   }
+  return 0;
 }
 
 
@@ -389,7 +391,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
   return step_ell;
 }
 
-void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool force_P) {
+int kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool force_P) {
 
   unsigned int prev_state_size = cache.state_size;
 
@@ -405,7 +407,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
   D(write_stuff("xk_posttransit", k, xk);)
 
   if (cache.at_fixed_point and ssm.stationary(k)) {
-    return;
+    return 0;
   }
 
   cache.at_fixed_point = false;
@@ -482,7 +484,10 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     }
 
     // get the new factored representation
-    udu(P, U_tmp, d_tmp, state_size);
+    int err = udu(P, U_tmp, d_tmp, state_size);
+    if (err != 0) {
+      return err;
+    }
 
       D(write_stuff("d_decomp", k, d_tmp);)
       D(write_stuff("U_decomp", k, U_tmp);)
@@ -524,6 +529,7 @@ void kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, bool f
     subrange(U_cached, 0, state_size, 0, state_size) = subrange(U_tmp, 0, state_size, 0, state_size);
     subrange(d_cached, 0, state_size) = subrange(d_tmp, 0, state_size);
   }
+  return 0;
 }
 
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
@@ -546,7 +552,11 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
     D(write_stuff("xk_post_obs", 0, cache.xk);)
 
   for (unsigned k=1; k < N; ++k) {
-    kalman_predict_sqrt(ssm, cache, k, false);
+    int err = kalman_predict_sqrt(ssm, cache, k, false);
+
+    if (err != 0) {
+      return -INFINITY;
+    }
 
     D(write_stuff("U_post_predict", k, cache.pred_U);)
       D(write_stuff("d_post_predict", k, cache.pred_d);)
