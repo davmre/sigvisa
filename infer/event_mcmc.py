@@ -1,3 +1,4 @@
+
 import numpy as np
 import sys
 import os
@@ -38,22 +39,50 @@ from scipy.optimize import leastsq
 
 def phases_changed(sg, eid, ev):
     # given a proposed event, return dictionaries mapping sites to
-    # sets of phases that need to be birthed or killed.
+    # - new_phases: phases that are newly invalid at the new location so must be killed if they currently exist
+    # - invalid_phases: phases that are newly valid at the new location, so may be birthed. (and must be birthed with some probability in order to achieve detailed balance
 
-    old_site_phases = dict()
-    for site, stas in sg.site_elements.items():
-        old_site_phases[site] = set(sg.ev_arriving_phases(eid, site=site))
 
-    birth_phases = dict()
-    death_phases = dict()
-    jump_required = False
-    for site in old_site_phases.keys():
+    old_ev = sg.get_event(eid)
+    new_phases = dict()
+    invalid_phases = dict()
+    for site in sg.site_elements.keys():
+        old_site_phases = sg.predict_phases_site(ev=old_ev, site=site)
         new_site_phases = sg.predict_phases_site(ev=ev, site=site)
-        birth_phases[site] = new_site_phases - old_site_phases[site]
-        death_phases[site] = old_site_phases[site] - new_site_phases
-        if len(birth_phases[site]) > 0 or len(death_phases[site]) > 0:
-            jump_required = True
-    return birth_phases, death_phases, jump_required
+        new_phases[site] = new_site_phases - old_site_phases
+        invalid_phases[site] = old_site_phases - new_site_phases
+
+    return new_phases, invalid_phases
+
+def propose_phasejump_deaths(sg, eid, invalid_phases):
+    ev = sg.get_event(eid)
+    death_phases = {}
+    for site, stas in sg.site_elements.items():
+        current_phases = sg.ev_arriving_phases(eid, site=site)        
+        death_phases[site] = current_phases & invalid_phases[site]
+    return death_phases
+
+def propose_phasejump_births(sg, eid, new_phases, fix_result=None):
+    ev = sg.get_event(eid)
+    birth_phases = {}
+    log_qforward = 0.0
+    for site, stas in sg.site_elements.items():
+        birth_phases[site] = set()
+        for phase in new_phases[site]:
+            pm = sg.get_phase_existence_model(phase)
+
+            fr_phase = None
+            if fix_result is not None:
+                fr_phase = phase in fix_result[site]
+            birth, lqf = pm.sample(ev=ev, site=site, fix_result=fr_phase)
+
+            if birth:
+                birth_phases[site].add(phase)
+            log_qforward += lqf
+
+    return birth_phases, log_qforward
+
+
 
 
 def cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes):
@@ -102,6 +131,7 @@ def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases,
     def set_event():
         for k in evdict.keys():
             evnodes[k].set_local_value(evdict[k], key=k, force_deterministic_consistency=False)
+
     set_event()
     replicate_fns.append(set_event)
 
@@ -223,11 +253,10 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
     phasejump_record = {}
 
     # figure out which phases we need to add and remove
-    birth_phases, death_phases, _ = phases_changed(sg, eid, new_ev)
-
+    new_phases, invalid_phases = phases_changed(sg, eid, new_ev)
     
     # set the event to the new position, and either let the arrival times and coda_heights shift, or don't
-    lqf, rset, decouple_record = set_event_proposing_decoupling(sg, eid, new_ev, death_phases, fix_result=fix_result, adaptive_decouple=adaptive_decouple)
+    lqf, rset, decouple_record = set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases, fix_result=fix_result, adaptive_decouple=adaptive_decouple)
     replicate_fns.append(rset)
     log_qforward += lqf
     for wnlabel in decouple_record.keys():
@@ -235,23 +264,28 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
             phasejump_record[wnlabel] = {}
         phasejump_record[wnlabel]["decoupled"] = decouple_record[wnlabel]
 
-    
-    for site in birth_phases.keys():
-        birthed = birth_phases[site]
+    fr_births = None
+    if fix_result is not None:
+        fr_births = fix_result["births"]
+    birth_phases, lqf = propose_phasejump_births(sg, eid, new_phases, fix_result=fr_births)
+    death_phases = propose_phasejump_deaths(sg, eid, invalid_phases)
+    log_qforward += lqf
+    # the phases we just killed will be reborn on the reverse move
+    phasejump_record["births"] = death_phases
+
+    # do all deaths before births, so that we eliminate invalid phases
+    # from the graph before attempting to run birth proposals.
+    for site in death_phases.keys():
         killed = death_phases[site]
-
-        if len(birthed) == 0 and len(killed) == 0:
+        if len(killed) == 0:
             continue
-
         for sta in sg.site_elements[site]:
             for wn in sg.station_waves[sta]:
                 if wn.label not in phasejump_record:
                     phasejump_record[wn.label] = {}
                 fr_sta_death = None
-                fr_sta_birth = None
                 if fix_result is not None:
                     fr_sta_death=fix_result[wn.label]['death']
-                    fr_sta_birth=fix_result[wn.label]['birth']
 
                 # propose a death solution
                 if len(killed) == 0:
@@ -262,11 +296,23 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
                     log_qforward += lqf
                     print sta, lqf, log_qforward
                     replicate_fns.append(re_death)
-
                 # we store the death record as the future 
                 # fixed_result of the reverse birth move
                 phasejump_record[wn.label]['birth'] = death_record
                 
+
+    for site in birth_phases.keys():
+        birthed = birth_phases[site]
+        if len(birthed) == 0:
+            continue
+        for sta in sg.site_elements[site]:
+            for wn in sg.station_waves[sta]:
+                if wn.label not in phasejump_record:
+                    phasejump_record[wn.label] = {}
+                fr_sta_birth = None
+                if fix_result is not None:
+                    fr_sta_birth=fix_result[wn.label]['birth']
+
                 # propose a birth solution
                 if len(birthed) == 0:
                     birth_record = None
@@ -277,15 +323,17 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
                     replicate_fns.append(re_birth)
                 phasejump_record[wn.label]['death'] = birth_record
 
+
     sg._topo_sort()
     replicate_fns.append(lambda : sg._topo_sort())
+
+
 
     def replicate_move():
         for fn in replicate_fns:
             fn()
 
     return log_qforward, replicate_move, phasejump_record
-
 
 
 def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None, 
@@ -373,6 +421,8 @@ def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None,
         assert(sg.wiggle_model_type=="dummy")
 
         for wnlabel in phasejump_record.keys():
+            if wnlabel == "births":
+                continue
             # include any wns where our signal explanation will have changed.
             # if the only record is that we didn't decouple, we can skip this wn.
             if len(phasejump_record[wnlabel]) == 1 and not phasejump_record[wnlabel]['decoupled']:

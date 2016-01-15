@@ -29,7 +29,7 @@ def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, t
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family,
                       phases=phases, runids=(runid,), dummy_fallback=dummy_fallback, 
-                      inference_region=region)
+                      inference_region=region, min_mb=min_mb)
 
     s = Sigvisa()
 
@@ -49,7 +49,7 @@ def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, t
         s.sigmodel.srand(seed)
 
     if evs is None:
-        evs = sg.prior_sample_events(stime=stime, etime=stime+len_s-tt_buffer_s, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
+        evs = sg.prior_sample_events(stime=stime, etime=stime+len_s-tt_buffer_s, n_events=n_events,  force_mb=force_mb)
 
     else:
         for ev in evs:

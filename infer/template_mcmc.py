@@ -16,6 +16,7 @@ from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.distributions import Gaussian, PiecewiseLinear
 from sigvisa.models.signal_model import extract_arrival_from_key, unify_windows
 from sigvisa.models.noise.armodel.model import ARGradientException
+from sigvisa.models.ttime import tt_predict
 from sigvisa.infer.mcmc_basic import gaussian_propose, gaussian_MH_move, MH_accept, hmc_step, hmc_step_reversing, mh_accept_util
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
@@ -330,6 +331,8 @@ def sample_peak_time_from_cdf(cdf, stime, srate, return_lp=False):
 
 def indep_peak_move(sg, wn, tmnodes,
                     window_lps=None, std=None, **kwargs):
+
+
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
     relevant_nodes = [wn,]

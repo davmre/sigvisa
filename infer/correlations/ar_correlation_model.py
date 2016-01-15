@@ -144,5 +144,8 @@ def ar_advantage(S, c, nm):
 
 
     weave.inline(arcode,['S', 'mask', 'c', 'N', 'n', 'result', 'n_p', 'var', 'p', 'tmpS', 'tmp', 'K', 'u', 'llarray'],type_converters = converters.blitz, verbose=2,compiler='gcc',support_code=fastar_support + local_support)
+
+
+
         
     return result

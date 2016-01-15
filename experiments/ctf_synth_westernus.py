@@ -35,7 +35,7 @@ def main(seed=1, n_events=2, resume_from=""):
     region = Region(lons=region_lon, lats=region_lat, times=(region_stime, region_etime))
 
     sw = SampledWorld(seed=seed)
-    sw.sample_sg(runid=3, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=3.5, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=False, stime=region_stime, evs=evs, region=region)
+    sw.sample_sg(runid=3, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=3.5, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=evs, region=region)
 
     rs = SyntheticRunSpec(sw=sw, runid=runid)
 
@@ -49,6 +49,7 @@ def main(seed=1, n_events=2, resume_from=""):
                     inference_region=region,
                     dummy_fallback=True,
                     hack_param_constraint=True,
+                    min_mb=3.5,
                     vert_only=True)
 
     if len(resume_from) > 0:
@@ -57,6 +58,18 @@ def main(seed=1, n_events=2, resume_from=""):
     else:
         sg = rs.build_sg(ms1)
         ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=200)
+
+    #k = sg.evnodes.keys()
+    #for eid in k:
+    #    if eid > 100:
+    #        sg.remove_event(eid)
+
+    #evtrue = Event(lon=-109.07, lat=41.68, depth=3.8, time=1239045221.9, mb=3.0)
+    #from sigvisa.infer.event_mcmc import ev_phasejump_helper
+    #ev_phasejump_helper(sg, eid=5, new_ev=evtrue, 
+    #                    params_changed=["lon", "lat", "depth", "time", "mb"], 
+    #                    adaptive_decouple=True,
+    #                    birth_type="mh", fix_result=None)
 
 
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc',], steps=1000)

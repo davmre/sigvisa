@@ -169,6 +169,7 @@ def joint_association_distribution(sg, wn, eid, phases, associate_using_mb=True,
     ignore_mb = not associate_using_mb
     
     for phase in phases:
+        
         pred_atime = ev.time + tt_predict(ev, wn.sta, phase=phase)
         possible_associations[phase].append((None, 1.0))
         for tmid in sg.uatemplate_ids[(wn.sta,wn.chan,wn.band)]:
@@ -327,7 +328,7 @@ def unassociate_template(sg, wn, eid, phase, tmid=None, remove_event_phase=False
 
         # assume we're doing this as part of a larger move,
         # so we'll fix the topo sorting later
-        sg.delete_event_phase(eid, wn.sta, phase, re_sort=False)
+        sg.delete_event_phase(eid, site, phase, re_sort=False)
 
     return tmid
 
@@ -909,6 +910,9 @@ def ev_death_executor(sg, location_proposal,
     log_qforward += lq_death
 
     lp_old = sg.current_log_p()
+    s1 = sg.current_log_p_breakdown(silent=True)
+    evs1 = [sg.get_event(eid1) for eid1 in sg.evnodes.keys()]
+    vals1 = [(n.label, n.get_value(), n.log_p()) for n in sg.extended_evnodes[eid] if n.single_key is not None and not n.deterministic()]
 
     lqf, replicate_untmpls, death_records = ev_template_death_helper(sg, eid)
     log_qforward += lqf
@@ -923,6 +927,7 @@ def ev_death_executor(sg, location_proposal,
         n_current_events = len(sg.evnodes) - len(sg.fixed_events)
         log_qbackward += -np.log(n_current_events + 1)
     lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, fix_result=(ev, eid))
+
     log_qbackward += lq_loc
 
     lqb, replicate_tmpls, birth_records = \
@@ -934,6 +939,9 @@ def ev_death_executor(sg, location_proposal,
     sg._topo_sort()
                         
     lp_old2 = sg.current_log_p()
+    s2 = sg.current_log_p_breakdown(silent=True)
+    evs1 = [sg.get_event(eid) for eid in sg.evnodes.keys()]
+    vals2 = [(n.label, n.get_value(), n.log_p()) for n in sg.extended_evnodes[eid] if n.single_key is not None and not n.deterministic()]
     assert(np.abs(lp_old2 - lp_old) < 1e-6)
     
     def rebirth():
@@ -1056,8 +1064,8 @@ def ev_sta_template_death_helper(sg, wn, eid, phases=None,
         else:
             template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
             death_record[phase] = template_param_array
-            sg.delete_event_phase(eid, wn.sta, phase, re_sort=False)
-            replicate_fns.append(lambda eid=eid, sta=wn.sta, phase=phase: sg.delete_event_phase(eid, sta, phase))
+            sg.delete_event_phase(eid, site, phase, re_sort=False)
+            replicate_fns.append(lambda eid=eid, site=site, phase=phase: sg.delete_event_phase(eid, site, phase))
             print "proposing to delete %s at %s (lp %f)"% (phase, sta, deassociate_logprob)                
     sorted_tmids = [assoc_tmids[phase] if phase in assoc_tmids else None for phase in sorted(phases)]
     death_record["assoc_tmids"] = tuple(sorted_tmids)
@@ -1073,6 +1081,8 @@ def ev_template_death_helper(sg, eid, fix_result=None):
     replicate_fns = []
     log_qforward = 0.0
     for site,elements in sg.site_elements.items():
+        phases = sg.ev_arriving_phases(eid, site=site)
+        birth_records["%s_phases" % site] = phases
         for sta in elements:
             for wn in sg.station_waves[sta]:
                 fr_sta = None
@@ -1103,7 +1113,7 @@ def ev_bare_birth_move(sg, location_proposal,
         if ev is None:
             return None, None, None, None
         
-    evnodes = sg.add_event(ev, eid=eid, no_templates=True)
+    evnodes = sg.add_event(ev, eid=eid, phases=[])
     eid = evnodes["loc"].eid
     
     if debug_info is not None:
@@ -1113,7 +1123,7 @@ def ev_bare_birth_move(sg, location_proposal,
         debug_info["ev"] = (ev, log_qforward, evlps)
     
     def replicate_move():
-        sg.add_event(ev, eid=eid, no_templates=True)
+        sg.add_event(ev, eid=eid, phases=[])
         
     return log_qforward, replicate_move, eid, extra
 
@@ -1382,8 +1392,217 @@ def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None,
         
     return log_qforward, replicate_fn, birth_record
         
-
     
+def phase_birth_helper(sg, eid, site, phase, proposal_type="mh", fix_result=None):
+    # boilerplate to birth a single phase across a site (as in a phase mh move),
+    # rather than multple phases at a sta (as in the default ev_sta_template_birth_helper)
+    lqf = 0.0
+    replicate_fns = []
+    death_records = {}
+
+    stas = sg.site_elements[site]
+    for sta in stas:
+        for wn in sg.station_waves[sta]:
+            fr_sta = None
+            if fix_result is not None:
+                fr_sta = fix_result[wn.label]                
+
+            r = ev_sta_template_birth_helper(sg, wn, eid, site_phases=(phase,),
+                                             fix_result=fr_sta,
+                                             associate_using_mb=True,
+                                             proposal_type=proposal_type)
+            lqf_sta, replicate_sta,death_record = r
+            lqf += lqf_sta
+            replicate_fns.append(replicate_sta)
+            death_records[wn.label] = death_record
+
+    sg._topo_sort()
+    replicate_fns.append(sg._topo_sort)
+
+    def replicate_move():
+        for fn in replicate_fns:
+            fn()
+
+    return lqf, replicate_move, death_records
+
+def phase_death_helper(sg, eid, site, phase, fix_result=None):
+    lqf = 0.0
+    replicate_fns = []
+    birth_records = {}
+
+    stas = sg.site_elements[site]
+    for sta in stas:
+        for wn in sg.station_waves[sta]:
+            fr_sta = None
+            if fix_result is not None:
+                fr_sta = fix_result[wn.label]                
+
+
+            r = ev_sta_template_death_helper(sg, wn, eid, phases=(phase,),
+                                             fix_result=fr_sta)
+            lqf_sta, replicate_sta,birth_record = r
+            lqf += lqf_sta
+            replicate_fns.append(replicate_sta)
+            birth_records[wn.label] = birth_record
+
+    sg._topo_sort()
+    replicate_fns.append(sg._topo_sort)
+
+    def replicate_move():
+        for fn in replicate_fns:
+            fn()
+
+    return lqf, replicate_move, birth_records
+
+def phase_birth_proposal(sg, eid, site, fix_result=None):
+    # of possible phases that don't currently exist, choose one to propose
+
+    ev = sg.get_event(eid)
+    possible_phases = sg.predict_phases_site(ev, site)
+    current_phases = sg.ev_arriving_phases(eid, site=site)
+    new_phases = possible_phases - current_phases
+
+    if len(new_phases)==0:
+        return None, 0.0
+
+    phase_probs = Counter()
+    for phase in new_phases:
+        pm = sg.get_phase_existence_model(phase)
+        lp = pm.log_p(True, ev=ev, site=site)
+        phase_probs[phase] = np.exp(.5*lp)
+    
+    phase_probs.normalize()
+    if fix_result is not None:
+        phase = fix_result
+    else:
+        phase = phase_probs.sample()
+    return phase, np.log(phase_probs[phase])
+
+def phase_death_proposal(sg, eid, site, fix_result=None):
+    ev = sg.get_event(eid)
+    current_phases = sg.ev_arriving_phases(eid, site=site)
+    if len(current_phases) == 0:
+        return None, 0.0
+
+    phase_probs = Counter()
+    for phase in current_phases:
+        pm = sg.get_phase_existence_model(phase)
+        lp = pm.log_p(False, ev=ev, site=site)
+        phase_probs[phase] = np.exp(.5*lp)
+    
+    phase_probs.normalize()
+    if fix_result is not None:
+        phase = fix_result
+    else:
+        phase = phase_probs.sample()
+    return phase, np.log(phase_probs[phase])
+    
+
+
+def phase_lp(sg, eid, site, wns):
+    # get current logp
+    #  (including site logp, relevant tmvals, and phase existence)
+
+    lp = 0.0
+
+    # always compute the ev prior, and
+    # always compute all params at all stations, since
+    #  - if we're not using GPs, this is cheap (though maybe not necessary)
+    #  - if we're using GPs, this is necessary, since any parent-conditional 
+    #    distribution can be changed by a change in ev location. 
+    lp += np.sum([n.log_p() for n in sg.extended_evnodes[eid] if not n.deterministic()])
+
+    lp += sg.phase_existence_lp(eids=(eid,), sites=(site,))
+    for wn in wns:
+        # include any wns where our signal explanation will have changed.
+        # if the only record is that we didn't decouple, we can skip this wn.
+        lp += wn.log_p()
+
+        tmids = [-eid for (eid, phase) in wn.arrivals() if phase=="UA"]
+        lp += sg.ntemplates_sta_log_p(wn, n=len(tmids))
+        for tmid in tmids:
+            uanodes = sg.uatemplates[tmid]
+            lp += np.sum([n.log_p() for n in uanodes.values()])
+
+    return lp
+
+def phase_birth_move(sg, eid, site):
+    
+    wns = []
+    for sta in sg.site_elements[site]:
+        wns += sg.station_waves[sta]
+
+
+    # of possible phases that don't currently exist, choose one to propose
+    phase, phase_lqf = phase_birth_proposal(sg, eid, site)
+    if phase is None:
+        # if all possible phases already exist
+        return False
+
+    lp_old = phase_lp(sg, eid, site, wns)
+    lp_old_full = sg.current_log_p()
+
+    # call the birth helper
+    lqf, replicate_birth, death_record = phase_birth_helper(sg, eid, site, phase)
+
+    # get new logp
+    lp_new = phase_lp(sg, eid, site, wns)
+    lp_new_full = sg.current_log_p()
+
+    assert( np.abs((lp_new_full - lp_old_full)  - (lp_new-lp_old)) < 1e-4 )
+
+    # call the death helper
+    lqb, replicate_death, birth_record = phase_death_helper(sg, eid, site, phase, fix_result=death_record)
+
+    # do mh acceptance
+    def accept():
+        replicate_birth()
+
+    return mh_accept_util(lp_old, lp_new, lqf, lqb, accept_move=accept)
+
+
+def phase_death_move(sg, eid, site):
+    wns = []
+    for sta in sg.site_elements[site]:
+        wns += sg.station_waves[sta]
+
+    # DEBUG section to catch illegal phases before we start...
+    current_phases = sg.ev_arriving_phases(eid, site=site)
+    ev = sg.get_event(eid)
+    ttimes = {}
+    s = Sigvisa()
+    sta = s.get_default_sta(site)
+    for phase in current_phases:
+        ttimes[phase] = tt_predict(ev, sta=sta, phase=phase)
+
+    # choose a phase to kill
+    phase, phase_lqf = phase_death_proposal(sg, eid, site)
+    if phase is None:
+        return False
+
+    lp_old = phase_lp(sg, eid, site, wns)
+    lp_old_full = sg.current_log_p()
+
+    # call the birth helper
+    lqf, replicate_death, birth_record = phase_death_helper(sg, eid, site, phase)
+
+    # get new logp
+    lp_new = phase_lp(sg, eid, site, wns)
+    lp_new_full = sg.current_log_p()
+
+    # call the death helper
+    lqb, replicate_birth, death_record = phase_birth_helper(sg, eid, site, phase, 
+                                                            fix_result=birth_record)
+
+    assert( np.abs((lp_new_full - lp_old_full)  - (lp_new-lp_old)) < 1e-4 )
+
+    # do mh acceptance
+    def accept():
+        replicate_death()
+
+    return mh_accept_util(lp_old, lp_new, lqf, lqb, accept_move=accept)
+
+
 def ev_template_birth_helper(sg, eid, fix_result=None, 
                              associate_using_mb=True,
                              proposal_type="mh",
@@ -1393,7 +1612,16 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
     log_qforward = 0
     proposed_ev = sg.get_event(eid)
     for site,elements in sg.site_elements.items():
-        site_phases = sorted(sg.predict_phases_site(proposed_ev, site=site))
+        key = "%s_phases" % site
+        fr_phases = None
+        if fix_result is not None:
+            fr_phases = fix_result[key]
+        site_phases, lqf = sg.sample_phases_site(proposed_ev, site=site, fix_result=fr_phases)
+        site_phases = sorted(list(site_phases))
+        death_records[key] = site_phases
+        log_qforward += lqf
+
+        #site_phases = sorted(sg.predict_phases_site(proposed_ev, site=site))
         for sta in elements:
             debug_info_sta = None
             if fix_result is None and debug_info is not None:

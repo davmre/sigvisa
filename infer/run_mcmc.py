@@ -16,7 +16,7 @@ from sigvisa.infer.autoregressive_mcmc import arnoise_params_rw_move, arnoise_me
 from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
 from sigvisa.infer.mcmc_basic import gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
-from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_offset, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_offset, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation
+from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_offset, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_offset, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation, phase_birth_move, phase_death_move
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move, ev_source_type_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth_move, death_move_for_optimizing_birth, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
@@ -164,6 +164,10 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
     t0  = time.time()
     accepted = fn(**kwargs)
     t1 = time.time()
+
+    if "sg" in kwargs:
+        sg = kwargs["sg"]
+        sg.check_phases()
 
     if n_accepted is not None:
         n_accepted[move_name] += accepted
@@ -365,11 +369,22 @@ def run_open_world_MH(sg, steps=10000,
                          std=stds[move_name], params=params, logger=logger)
 
             for (move_name, (fn, prob)) in event_moves_special.items():
-                n_attempted[move_name] += 1
-                n_accepted[move_name] += fn(sg, eid)
                 run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
                          move_prob=prob, sg=sg, eid=eid)
+
+            for site in sg.site_elements.keys():
+                prob=0.5
+                run_move(move_name="phase_birth", fn=phase_birth_move, 
+                         step=step, n_attempted=n_attempted,
+                         n_accepted=n_accepted, move_times=move_times,
+                         move_prob=prob, sg=sg, site=site, eid=eid)
+
+                run_move(move_name="phase_death", fn=phase_death_move, 
+                         step=step, n_attempted=n_attempted,
+                         n_accepted=n_accepted, move_times=move_times,
+                         move_prob=prob, sg=sg, site=site, eid=eid)
+                
 
         for (site, elements) in sg.site_elements.items():
             for sta in elements:

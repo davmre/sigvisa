@@ -270,10 +270,10 @@ class ModelSpec(object):
             'phases': ["P",],
             'arrays_joint': False,
             'uatemplate_rate': 1e-6,
+            'min_mb': 2.5,
             'jointgp_hparam_prior': None,
             'jointgp_param_run_init': None,
             'hack_param_constraint': False,
-            'absorb_n_phases': True,
             'inference_region': None,
         }
         signal_params = {

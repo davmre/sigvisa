@@ -11,12 +11,20 @@ import os, sys, traceback
 import cPickle as pickle
 from optparse import OptionParser
 
-stas = "NEW,PDAR,ELK,NVAR,ANMO,TXAR,PFO,YKA,ULM,ILAR".split(",")
+#stas = "NEW,PDAR,ELK,NVAR,ANMO,TXAR,PFO,YKA,ULM,ILAR".split(",")
+stas = "NEW,PDAR,NVAR,ANMO,TXAR,PFO,YKA,ULM,ILAR".split(",")
 
 region_lon = (-126, -100)
 region_lat = (32, 49)
-region_stime = 1239040000
-region_etime = region_stime + 7200
+
+stimes = {5411098: 1244065600,
+          5381051: 1242617900,
+          5356788: 1241373200,
+          5336072: 1240250500}
+
+training_stime = 1238889600
+#region_stime = stimes[target_evid]
+#region_etime = region_stime + 7200
 
 def relevant_events(region):
     
@@ -26,14 +34,23 @@ def relevant_events(region):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     sql_query = "select evid from leb_origin where (time between %.1f and %.1f) and not ((lat between %.1f and %.1f) and (lon between %.1f and %.1f) and (time between %.1f and %.1f)) " % (relevant_stime, relevant_etime, region.bottom_lat, region.top_lat, region.left_lon, region.right_lon, region.stime, region.etime)
+    print sql_query
     cursor.execute(sql_query)
     evids = [evid[0] for evid in cursor.fetchall()]
     evs = [get_event(evid=evid) for evid in evids]
     evs = [ev for ev in evs if ev.mb > 0]
+    print "got relevant evs", evs
     return evs
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P")):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1):
+
+    if target_evid > 0:
+        region_stime = stimes[target_evid]
+        hour = float((region_stime - training_stime) / 3600.0)
+        print "stime", region_stime, "hour", hour
+    else:
+        region_stime = training_stime + hour
 
     rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training", hour=hour, len_hours=len_hours)
 
@@ -101,6 +118,8 @@ if __name__ == "__main__":
                       help="comma-separated phases")
     parser.add_option("--fix_outside_templates", dest="fix_outside_templates", default=False, action="store_true",
                       help="don't do inference over templates of events outside the region")
+    parser.add_option("--target_evid", dest="target_evid", default=-1, type=int,
+                      help="evid in training set to attempt to infer. overrides --hour.")
     parser.add_option("--hour", dest="hour", default=0.0, type=float,
                       help="start time, relative to training dataset")
     parser.add_option("--len_hours", dest="len_hours", default=2.0, type=float,
@@ -123,4 +142,4 @@ if __name__ == "__main__":
     bands = options.bands.split(",")
     phases = options.phases.split(",")
 
-    main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases)
+    main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid)

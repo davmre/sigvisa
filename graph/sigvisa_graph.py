@@ -5,6 +5,7 @@ import sys
 import shutil
 import errno
 import re
+import copy
 
 from collections import defaultdict
 from functools32 import lru_cache
@@ -23,6 +24,7 @@ from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.models.joint_gp import JointGP, JointIndepGaussian
 from sigvisa.models.noise.nm_node import NoiseModelNode
+from sigvisa.models.phase_existence import PhaseExistenceModel
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel, ParentConditionalNotDefined
 from sigvisa.graph.graph_utils import extract_sta_node, predict_phases_sta, create_key, get_parent_value, parse_key
@@ -131,7 +133,7 @@ class SigvisaGraph(DirectedGraphModel):
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True, smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
-                 absorb_n_phases=False, hack_param_constraint=True,
+                 hack_param_constraint=True,
                  uatemplate_rate=1e-3,
                  fixed_arrival_npts=None,
                  dummy_prior=None,
@@ -139,6 +141,8 @@ class SigvisaGraph(DirectedGraphModel):
                  jointgp_hparam_prior=None,
                  jointgp_param_run_init=None,
                  force_event_wn_matching=False,
+                 phase_existence_model="ga_logistic",
+                 min_mb = 2.5,
                  inference_region=None):
         """
 
@@ -151,7 +155,6 @@ class SigvisaGraph(DirectedGraphModel):
         super(SigvisaGraph, self).__init__()
 
         self.gpmodel_build_trees = gpmodel_build_trees
-        self.absorb_n_phases = absorb_n_phases
         self.hack_param_constraint = hack_param_constraint
 
 
@@ -276,6 +279,22 @@ class SigvisaGraph(DirectedGraphModel):
         if inference_region is not None:
             self.event_rate = inference_region.estimate_event_rate()
 
+        self.ev_site_phases = dict() # keys: eid, values: defaultdict(set) keyed by site
+        self.phase_existence_model = phase_existence_model
+        self.phase_existence_model_cache = {"P": PhaseExistenceModel("P")}
+
+        self.min_mb = min_mb
+        self.ev_mag_prior = Exponential(rate=np.log(10), min_value=self.min_mb)
+
+    def get_phase_existence_model(self, phase):
+        if phase not in self.phase_existence_model_cache:
+            self.phase_existence_model_cache[phase] = PhaseExistenceModel(phase)
+        return self.phase_existence_model_cache[phase]
+
+
+
+        
+
     def joint_gp_hparam_nodes(self, sta, phase, band, chan, param, srate=None):
         if param.startswith("db"):
             idx = int(param.split("_")[-1])
@@ -354,11 +373,13 @@ class SigvisaGraph(DirectedGraphModel):
         return self._joint_gpmodels[sta][(param, band, chan, phase)]
 
     def ev_arriving_phases(self, eid, sta=None, site=None):
-        if sta is None and site is not None:
-            sta = next(iter(self.site_elements[site]))
-        sta_keys = [n.label for n in self.extended_evnodes[eid] if sta in n.label]
-        phases = set([parse_key(k)[1] for k in sta_keys])
-        return list(phases)
+        if site is None and sta is not None:
+            s = Sigvisa()
+            site = s.get_array_site(sta)
+        return copy.copy(self.ev_site_phases[eid][site])
+        #sta_keys = [n.label for n in self.extended_evnodes[eid] if sta in n.label]
+        #phases = set([parse_key(k)[1] for k in sta_keys])
+        #return list(phases)
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -538,7 +559,7 @@ class SigvisaGraph(DirectedGraphModel):
         return lp
 
 
-    def current_log_p_breakdown(self):
+    def current_log_p_breakdown(self, silent=False):
         nt_lp = self.ntemplates_log_p()
         ne_lp = self.nevents_log_p()
 
@@ -614,28 +635,38 @@ class SigvisaGraph(DirectedGraphModel):
                 jgp, _ = self._joint_gpmodels[sta][k]
                 jointgp_lp  += jgp.log_likelihood()
 
-        print "n_uatemplate: %.1f" % nt_lp
-        print "n_event: %.1f" % ne_lp
-        print "ev priors: ev %.1f" % (ev_prior_lp)
-        print "ev observations: ev %.1f" % (ev_obs_lp)
-        print "tt_residual: ev %.1f" % (ev_tt_lp)
-        print "ev global cost (n + priors + tt): %.1f" % (ev_prior_lp + ev_tt_lp + ne_lp,)
-        print "coda_decay: ev %.1f ua %.1f total %.1f" % (ev_coda_decay_lp, ua_coda_decay_lp, ev_coda_decay_lp+ua_coda_decay_lp)
-        print "peak_decay: ev %.1f ua %.1f total %.1f" % (ev_peak_decay_lp, ua_peak_decay_lp, ev_peak_decay_lp+ua_peak_decay_lp)
-        print "peak_offset: ev %.1f ua %.1f total %.1f" % (ev_peak_offset_lp, ua_peak_offset_lp, ev_peak_offset_lp+ua_peak_offset_lp)
-        print "coda_height: ev %.1f ua %.1f total %.1f" % (ev_amp_transfer_lp, ua_coda_height_lp, ev_amp_transfer_lp+ua_coda_height_lp)
-        print "mult_std_wiggle: ev %.1f ua %.1f total %.1f" % (ev_mult_wiggle_std_lp, ua_mult_wiggle_std_lp, ev_mult_wiggle_std_lp+ua_mult_wiggle_std_lp)
-        print "coef jointgp: %.1f" % jointgp_lp
-        ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp +ev_mult_wiggle_std_lp + jointgp_lp
+        phase_lp = self.phase_existence_lp()
+
+        s = ""
+        s += "n_uatemplate: %.1f\n" % nt_lp
+        s += "n_event: %.1f\n" % ne_lp
+        s += "ev priors: ev %.1f\n" % (ev_prior_lp)
+        s += "ev observations: ev %.1f\n" % (ev_obs_lp)
+        s += "phase existence: ev %.1f\n" % (phase_lp)
+        s += "tt_residual: ev %.1f\n" % (ev_tt_lp)
+        s += "ev global cost (n + priors + phases + tt): %.1f\n" % (ev_prior_lp + ev_obs_lp + ev_tt_lp + ne_lp+phase_lp,)
+        s += "coda_decay: ev %.1f ua %.1f total %.1f\n" % (ev_coda_decay_lp, ua_coda_decay_lp, ev_coda_decay_lp+ua_coda_decay_lp)
+        s += "peak_decay: ev %.1f ua %.1f total %.1f\n" % (ev_peak_decay_lp, ua_peak_decay_lp, ev_peak_decay_lp+ua_peak_decay_lp)
+        s += "peak_offset: ev %.1f ua %.1f total %.1f\n" % (ev_peak_offset_lp, ua_peak_offset_lp, ev_peak_offset_lp+ua_peak_offset_lp)
+        s += "coda_height: ev %.1f ua %.1f total %.1f\n" % (ev_amp_transfer_lp, ua_coda_height_lp, ev_amp_transfer_lp+ua_coda_height_lp)
+        s += "mult_std_wiggle: ev %.1f ua %.1f total %.1f\n" % (ev_mult_wiggle_std_lp, ua_mult_wiggle_std_lp, ev_mult_wiggle_std_lp+ua_mult_wiggle_std_lp)
+        s += "coef jointgp: %.1f\n" % jointgp_lp
+        ev_total = ev_coda_decay_lp + ev_peak_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp +ev_mult_wiggle_std_lp + jointgp_lp 
         ua_total = ua_coda_decay_lp + ua_peak_decay_lp + ua_peak_offset_lp + ua_mult_wiggle_std_lp + ua_coda_height_lp
-        print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
-        ev_total += ev_prior_lp + ev_obs_lp + ev_tt_lp + ne_lp
+        s += "total param: ev %.1f ua %.1f total %.1f\n" % (ev_total, ua_total, ev_total+ua_total)
+        ev_total += ev_prior_lp + ev_obs_lp + ev_tt_lp + ne_lp + phase_lp
         ua_total += nt_lp
-        print "priors+params: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total + ua_total)
-        print "station noise (observed signals): %.1f" % (signal_lp)
-        print "noise model prior lp: %.1f" % (nm_lp)
-        print "overall: %.1f" % (ev_total + ua_total + signal_lp + nm_lp)
-        print "official: %.1f" % self.current_log_p()
+        s += "priors+params: ev %.1f ua %.1f total %.1f\n" % (ev_total, ua_total, ev_total + ua_total)
+        s += "station noise (observed signals): %.1f\n" % (signal_lp)
+        s += "noise model prior lp: %.1f\n" % (nm_lp)
+        s += "overall: %.1f\n" % (ev_total + ua_total + signal_lp + nm_lp)
+        s += "official: %.1f\n" % self.current_log_p()
+        if not silent:
+            print s
+
+        return s
+        
+
 
     def joint_gp_ll(self, verbose=False):
         lp = 0
@@ -648,11 +679,28 @@ class SigvisaGraph(DirectedGraphModel):
                     print "jgp %s %s: %.3f" % (sta, k, jgpll)
         return lp
 
+    def phase_existence_lp(self, eids=None, sites=None):
+        lp = 0.0
+        if eids is None:
+            eids = self.evnodes.keys()
+        if sites is None:
+            sites = self.site_elements.keys()
+
+        for eid in eids:
+            for site in sites:
+                real_phases = self.ev_site_phases[eid][site]
+                for phase in self.phases_used:
+                    pm = self.get_phase_existence_model(phase)
+                    lp += pm.log_p(phase in real_phases,
+                                   ev = sg.get_event(eid), sta=site)
+        return lp
+
     def current_log_p(self, **kwargs):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
         lp += self.ntemplates_log_p()
         lp += self.nevents_log_p()
         lp += self.joint_gp_ll()
+        lp += self.phase_existence_lp()
 
         #if lp < -1000000:
         #import pdb; pdb.set_trace()
@@ -660,6 +708,17 @@ class SigvisaGraph(DirectedGraphModel):
         if np.isnan(lp):
             raise Exception('current_log_p is nan')
         return lp
+
+    def check_phases(self):
+        for eid in self.evnodes.keys():
+            ev = self.get_event(eid)
+            for site in self.site_elements.keys():
+                phases = self.ev_arriving_phases(eid, site=site)
+                sta = list(self.site_elements[site])[0]
+                ttimes = {}
+                for phase in phases:
+                    ttimes[phase] = tt_predict(ev, sta=sta, phase=phase)
+
 
     def add_node(self, node, template=False):
         if template:
@@ -674,7 +733,7 @@ class SigvisaGraph(DirectedGraphModel):
     def get_event(self, eid):
         return event_from_evnodes(self.evnodes[eid])
 
-    def set_event(self, eid, ev, params_changed=None, preserve_templates=True, illegal_phase_action="raise", node_lps=None):
+    def set_event(self, eid, ev, params_changed=None, preserve_templates=True):
 
         # Updates the given eid to have the parameters specified by the event object ev.
 
@@ -687,13 +746,6 @@ class SigvisaGraph(DirectedGraphModel):
         # location/mb. If preserve_templates is a list of node labels
         # (e.g., arrival_time nodes for a subset of phase arrivals),
         # then only the listed nodes will have their values preserved.
-
-        # if some of the phases currently generated by the given event
-        # are illegal at the new location, the travel-time
-        # model will raise an error. Choices for "illegal_phase_action":
-        # - "raise": raise the error
-        # - "delete": forcibly remove the illegal phases
-        # - "ignore": silently ignore the error, creating an inconsistent state(!)
 
         # params_changed can be None (in which case we assume all
         # event parameters need to be updated), or an expicit list of
@@ -752,45 +804,33 @@ class SigvisaGraph(DirectedGraphModel):
             evnodes[k].set_local_value(evdict[k], key=k, force_deterministic_consistency=False)
 
         # now re-set the values we promised to fix
-        impossible_phases = []
         if preserved_nodes is None:
             for n in self.extended_evnodes[eid]:
                 if n.deterministic():
-                    try:
-                        n.parent_predict()
-                    except ValueError as e: # requesting travel time for impossible phase
-                        if illegal_phase_action == "raise":
-                            raise e
-                        _,nphase,nsta,nchan,nband,nparam = parse_key(n.label)
-                        impossible_phases.append((nsta, nphase))
+                    n.parent_predict()
         else:
             for n in self.extended_evnodes[eid]:
-                try:
-                    if n.label not in preserved_nodes:
-                        if n.deterministic():
-                            n.parent_predict()
-                    else:
-                        n.set_value(fixed_vals[n.label])
-                except ValueError as e: # requesting travel time for impossible phase
-                    if illegal_phase_action == "raise":
-                        raise e
-                    _,nphase,nsta,nchan,nband,nparam = parse_key(n.label)
-                    impossible_phases.append((nsta, nphase))
+                if n.label not in preserved_nodes:
+                    if n.deterministic():
+                        n.parent_predict()
+                else:
+                    n.set_value(fixed_vals[n.label])
 
-        if illegal_phase_action=="delete":
-            print "deleting impossible phases", impossible_phases
-            for (sta, phase) in impossible_phases:
-                print "removing impossible %s at %s" % (sta, phase)
-                self.delete_event_phase(eid, sta, phase)
-
-    def delete_event_phase(self, eid, sta, phase, re_sort=True):
+    def delete_event_phase(self, eid, site, phase=None, re_sort=True):
+        
         extended_evnodes = self.extended_evnodes[eid][:]
+        stas = self.site_elements[site]            
+
         for node in extended_evnodes:
-            if sta not in node.label: continue
-            neid,nphase,nsta,nchan,nband,nparam = parse_key(node.label)
-            if nsta==sta and nphase==phase:
+            try:
+                neid,nphase,nsta,nchan,nband,nparam = parse_key(node.label)
+            except ValueError: # top-level event nodes don't parse
+                continue
+            if nphase==phase and nsta in stas:
                 self.remove_node(node)
                 self.extended_evnodes[eid].remove(node)
+
+        self.ev_site_phases[eid][site].remove(phase)
         if re_sort:
             self._topo_sort()
 
@@ -801,12 +841,31 @@ class SigvisaGraph(DirectedGraphModel):
             phase_set = phases if phase_set is None else phase_set.intersection(phases)
         return phase_set
 
+    def sample_phases_site(self, ev, site, fix_result=None):
+        phase_set = self.predict_phases_site(ev, site)
+        lp = 0.0
+        phases = set()
+
+        for phase in phase_set:
+            pm = self.get_phase_existence_model(phase)
+
+            fr_phase = None
+            if fix_result is not None:
+                fr_phase = phase in fix_result
+
+            exists, phase_lp = pm.sample(ev=ev, site=site, fix_result=fr_phase)
+            if exists:
+                phases.add(phase)
+            lp += phase_lp
+        return phases, lp
+
     def remove_event(self, eid):
 
         del self.evnodes[eid]
         for node in self.extended_evnodes[eid]:
             self.remove_node(node)
         del self.extended_evnodes[eid]
+        del self.ev_site_phases[eid]
 
         self._topo_sort()
 
@@ -835,7 +894,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
     def add_event(self, ev, tmshapes=None, sample_templates=False, fixed=False, eid=None,
-                  observed=False, stddevs=None, no_templates=False):
+                  observed=False, stddevs=None, phases="all"):
         """
 
         Add an event node to the graph and connect it to all waves
@@ -848,8 +907,10 @@ class SigvisaGraph(DirectedGraphModel):
             eid = self.next_eid
             self.next_eid += 1
         ev.eid = eid
-        evnodes = setup_event(ev, fixed=fixed)
+        evnodes = setup_event(ev, mag_prior_model = self.ev_mag_prior, 
+                              fixed=fixed)
         self.evnodes[eid] = evnodes
+        self.ev_site_phases[eid] = defaultdict(set)
 
         # use a set here to ensure we don't add the 'loc' node
         # multiple times, since it has multiple keys
@@ -857,24 +918,24 @@ class SigvisaGraph(DirectedGraphModel):
             self.extended_evnodes[eid].append(n)
             self.add_node(n)
 
-        if not no_templates:
-            for (site, element_list) in self.site_elements.iteritems():
-                for phase in self.predict_phases_site(ev=ev, site=site):
-                    #print "adding phase", phase, "at site", site
-                    self.phases_used.add(phase)
-                    if self.absorb_n_phases:
-                        if phase == "Pn":
-                            phase = "P"
-                        elif phase == "Sn":
-                            phase = "S"
-                    tg = self.template_generator(phase)
-                    try:
-                        tt = tt_predict(ev, site, phase=phase)
-                    except Exception as e:
-                        print e
-                        continue
+        for (site, element_list) in self.site_elements.iteritems():
+            if phases == "all":
+                phases = self.predict_phases_site(ev=ev, site=site)
+            elif phases == "none" or phases is None:
+                phases = []
 
-                    self.add_event_site_phase(tg, site, phase, evnodes, sample_templates=sample_templates)
+            for phase in phases:
+                #print "adding phase", phase, "at site", site
+                self.phases_used.add(phase)
+                tg = self.template_generator(phase)
+                try:
+                    tt = tt_predict(ev, site, phase=phase)
+                except Exception as e:
+                    print e
+                    continue
+
+                self.add_event_site_phase(tg, site, phase, evnodes, 
+                                          sample_templates=sample_templates)
 
         if observed != False:
             if observed == True:
@@ -1240,6 +1301,8 @@ class SigvisaGraph(DirectedGraphModel):
 
                 fullnodes.append(n)
         self.extended_evnodes[eid].extend(fullnodes)
+
+        self.ev_site_phases[eid][site].add(phase)
         return fullnodes
 
 
@@ -1438,7 +1501,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         # TODO: optimize
 
-    def prior_sample_event(self, min_mb=3.5, stime=None, etime=None):
+    def prior_sample_event(self, stime=None, etime=None):
         s = Sigvisa()
 
         stime = self.event_start_time if stime is None else stime
@@ -1449,7 +1512,6 @@ class SigvisaGraph(DirectedGraphModel):
             etime = self.inference_region.etime
 
         event_time_dist = Uniform(stime, etime)
-        event_mag_dist = Exponential(rate=np.log(10.0), min_value=min_mb)
 
         region_constraint = False
         while not region_constraint:            
@@ -1457,7 +1519,7 @@ class SigvisaGraph(DirectedGraphModel):
 
             s.sigmodel.srand(np.random.randint(sys.maxint))
             lon, lat, depth = s.sigmodel.event_location_prior_sample()
-            mb = event_mag_dist.sample()
+            mb = self.ev_mag_prior.sample()
             natural_source = True # TODO : sample from source prior
 
             ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
@@ -1469,7 +1531,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         return ev
 
-    def prior_sample_events(self, min_mb=3.5, force_mb=None, stime=None, etime=None, n_events=None):
+    def prior_sample_events(self, force_mb=None, stime=None, etime=None, n_events=None):
         # assume a fresh graph, i.e. no events already exist
 
         if n_events is None:
@@ -1479,7 +1541,7 @@ class SigvisaGraph(DirectedGraphModel):
         evs = []
 
         for i in range(n_events):
-            ev = self.prior_sample_event(min_mb, stime, etime)
+            ev = self.prior_sample_event(stime, etime)
             if force_mb is not None and force_mb != False:
                 ev.mb = force_mb
             self.add_event(ev, sample_templates=True)

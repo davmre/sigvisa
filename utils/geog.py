@@ -80,7 +80,8 @@ def dist_deg(loc1, loc2):
                       )
     return np.degrees(dist_rad)
 
-
+def deg_to_km(deg):
+    return np.radians(deg) * AVG_EARTH_RADIUS_KM
 
 @functools32.lru_cache(maxsize=2048)
 def dist_km(loc1, loc2):
@@ -88,13 +89,9 @@ def dist_km(loc1, loc2):
     Returns the distance in km between two locations specified in degrees
     loc = (longitude, latitude)
     """
-    lon1, lat1 = loc1
-    lon2, lat2 = loc2
+    return deg_to_km(dist_deg(loc1, loc2)) 
 
 
-    d = np.radians(dist_deg(loc1, loc2)) * AVG_EARTH_RADIUS_KM
-
-    return d
 
 def dist_km_ev(ev1, ev2):
     return dist_km((ev1.lon, ev1.lat), (ev2.lon, ev2.lat))

@@ -1327,7 +1327,8 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
 
 class CTFProposer(object):
 
-    def __init__(self, sg, bin_widths, depthbin_bounds, mbbins, phases=("P",), offset=False):
+    def __init__(self, sg, bin_widths, depthbin_bounds, mbbins, 
+                 phases=("P",), offset=False, **kwargs):
         # precompute ttime and amp_transfer patterns
         global_bin_width = bin_widths[0]
 
@@ -1364,10 +1365,12 @@ class CTFProposer(object):
                          mbbins=mbbins[0],
                          top_lat=top_lat, bottom_lat=bottom_lat,
                          left_lon=left_lon, right_lon=right_lon,
-                         uatemplate_rate=sg.uatemplate_rate)
+                         uatemplate_rate=sg.uatemplate_rate, **kwargs)
         self.global_hc = hc
 
-    def propose_event(self, sg, uatemplates_by_sta=None, fix_result=None, one_event_semantics=True, fixed_return_global_dist=False):
+    def propose_event(self, sg, uatemplates_by_sta=None, 
+                      fix_result=None, one_event_semantics=True, 
+                      fixed_return_global_dist=False):
         if uatemplates_by_sta is None:
             uatemplates_by_sta = get_uatemplates(sg)
 
@@ -1431,8 +1434,8 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     else:
         phases = sg.phases
     # HACK
-    #print "WARNING I AM HARDCODING PHASES TO BE LAZY"
-    #phases = ("P", "S", "Lg")
+    print "WARNING I AM HARDCODING PHASES TO BE LAZY"
+    phases = ("P", "S", "Lg")
     #phases = ("P", )
 
     try:
@@ -1446,7 +1449,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
 
         ctf = CTFProposer(sg, bin_widths, phases=phases,
                           depthbin_bounds=[0,10,50,150,400,700], 
-                          mbbins=[12,2,2], offset=offset)
+                          mbbins=[12,2,2], offset=offset, min_mb=sg.min_mb)
         s.hough_proposer[offset] = ctf
 
     r = ctf.propose_event(sg, fix_result=fix_result,

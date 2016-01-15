@@ -3,7 +3,7 @@ import numpy as np
 from sigvisa import Sigvisa
 from sigvisa.graph.nodes import Node
 from sigvisa.models import Distribution, DummyModel
-from sigvisa.models.distributions import Bernoulli
+from sigvisa.models.distributions import Bernoulli, Exponential
 from sigvisa.source.event import Event
 
 
@@ -15,22 +15,6 @@ class EventLocationPrior(Distribution):
                                                              x[key_prefix + 'lat'],
                                                              x[key_prefix + 'depth'])
         return loc_lp
-
-class EventMagPrior(Distribution):
-
-    
-    def __init__(self, min_mag=2.0, mb_rate=2.302585):
-        # default rate is log(10) ~= 2.3 since
-        # Gutenberg Richter dictates that the there are 10 times as many events
-        # of magnitude >= k than are >= k+1
-
-        self.min_mag = 2.0
-        self.mb_rate = mb_rate
-        self.log_rate = np.log(mb_rate)
-        
-    def log_p(self, x, cond=None, key_prefix=""):
-        return self.log_rate - self.mb_rate * (x - self.min_mag)
-
 
 def event_from_evnodes(evnodes):
     # TEMP: evnodes will return a single node, until I get around to splitting it up.
@@ -44,13 +28,15 @@ def event_from_evnodes(evnodes):
     return Event(autoload=False, eid=n.eid, evid=n.evid, orid=n.orid, **evdict)
 
 
-def setup_event(event, fixed=True, **kwargs):
+def setup_event(event, mag_prior_model, fixed=True, **kwargs):
 
     key_prefix = '%d;' % event.eid
 
-
     loc_node = EventLocationNode(event, fixed=fixed, label=key_prefix + 'loc', **kwargs)
-    mb_node = Node(model=EventMagPrior(), initial_value=event.mb, keys=(key_prefix + "mb",), low_bound=0.0, high_bound=10.0, fixed=fixed, label=key_prefix + 'mb', **kwargs)
+    mb_node = Node(model=mag_prior_model, 
+                   initial_value=event.mb, keys=(key_prefix + "mb",), 
+                   low_bound=0.0, high_bound=10.0, fixed=fixed, 
+                   label=key_prefix + 'mb', **kwargs)
     source_node = Node(model=Bernoulli(.999), initial_value=event.natural_source, keys=(key_prefix + "natural_source",), fixed=fixed, label=key_prefix + 'source', **kwargs)
     time_node = Node(model=DummyModel(default_value=event.time), initial_value=event.time, keys=(key_prefix + "time",), fixed=fixed, label=key_prefix + 'time', **kwargs)
 
