@@ -18,10 +18,19 @@ class EventLocationPrior(Distribution):
 
 class EventMagPrior(Distribution):
 
+    
+    def __init__(self, min_mag=2.0, mb_rate=2.302585):
+        # default rate is log(10) ~= 2.3 since
+        # Gutenberg Richter dictates that the there are 10 times as many events
+        # of magnitude >= k than are >= k+1
+
+        self.min_mag = 2.0
+        self.mb_rate = mb_rate
+        self.log_rate = np.log(mb_rate)
+        
     def log_p(self, x, cond=None, key_prefix=""):
-        s = Sigvisa()
-        mb_lp = s.sigmodel.event_mag_prior_logprob(x)
-        return mb_lp
+        return self.log_rate - self.mb_rate * (x - self.min_mag)
+
 
 def event_from_evnodes(evnodes):
     # TEMP: evnodes will return a single node, until I get around to splitting it up.

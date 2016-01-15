@@ -51,7 +51,6 @@ extra_compile_args_c = ['-Wall', '-std=c99', '-g', '-O3']
 extra_link_args = ['-lrt', '-lcblas',]
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
-                  'EventMagPrior.c',
                   'EarthModel.c', 'ArrivalTimePrior.c', 'ArrivalTimeJointPrior.c',
                   'ArrivalAzimuthPrior.c', 'ArrivalSlownessPrior.c',
                   'ArrivalAmplitudePrior.c',

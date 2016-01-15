@@ -18,8 +18,6 @@ static PyObject * py_event_depth_prior_logprob(SigModel_t * p_sigmodel, PyObject
 
 static PyObject * py_srand(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_sample(SigModel_t * p_sigmodel,PyObject *args);
-static PyObject * py_event_mag_prior_logprob(SigModel_t * p_sigmodel, PyObject *args);
-static PyObject * py_event_mag_prior_distribution(SigModel_t * p_sigmodel, PyObject *args);
 
 static PyMethodDef SigModel_methods[] = {
   {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
@@ -46,12 +44,6 @@ static PyMethodDef SigModel_methods[] = {
   {"event_location_prior_sample", (PyCFunction)py_event_location_prior_sample, METH_VARARGS,
    "event_location_prior_sample()"
    " -> sample an event location from the prior"},
-  {"event_mag_prior_logprob", (PyCFunction)py_event_mag_prior_logprob, METH_VARARGS,
-   "event_mag_prior_logprob(mb)"
-   " -> log prior probability of event magnitude"},
-  {"event_mag_prior_distribution", (PyCFunction)py_event_mag_prior_distribution, METH_VARARGS,
-   "event_mag_prior_distribution()"
-   " -> log prior probability of event magnitude"},
 
   /*
   {"propose", (PyCFunction)py_propose, METH_VARARGS,
@@ -251,7 +243,6 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 
   NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
   EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
-  EventMagPrior_Init_Params(&self->event_mag_prior, 1, evmag_fname);
   ArrivalTimeJointPrior_Init_Params(&self->arr_time_joint_prior, arrtime_fname);
   ArrivalAzimuthPrior_Init_Params(&self->arr_az_prior, arrazi_fname);
   ArrivalSlownessPrior_Init_Params(&self->arr_slo_prior, arrslo_fname);
@@ -470,26 +461,6 @@ static PyObject * py_event_location_prior_sample(SigModel_t * p_sigmodel,
   return Py_BuildValue("ddd", lon, lat, depth);
 }
 
-
-static PyObject * py_event_mag_prior_logprob(SigModel_t * p_sigmodel,
-					     PyObject * args)
-{
-  double val;
-  double logprob;
-
-  if (!PyArg_ParseTuple(args, "d", &val))
-    return NULL;
-
-  logprob = EventMagPrior_LogProb(&p_sigmodel->event_mag_prior,
-				       val, 0);
-  return Py_BuildValue("d", logprob);
-}
-
-static PyObject * py_event_mag_prior_distribution(SigModel_t * p_sigmodel,
-						  PyObject * args)
-{
-  return Py_BuildValue("dd", p_sigmodel->event_mag_prior.min_mag, p_sigmodel->event_mag_prior.mag_rate);
-}
 
 
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,
