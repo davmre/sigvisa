@@ -220,7 +220,7 @@ class SwapClient(object):
     def logp_at_sta(self, scb):
         sta, chan, band = scb
         lp = 0.0
-        wns = [ wn for wn in self.sg.station_waves[sta] if wn.band != band or wn.chan != chan]
+        wns = [ wn for wn in self.sg.station_waves[sta] if wn.band == band and wn.chan == chan]
         for wn in wns:
             lp += self.sg.ntemplates_sta_log_p(wn)
         
