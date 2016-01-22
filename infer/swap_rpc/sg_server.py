@@ -203,7 +203,6 @@ def run_parallel_coarse_to_fine(names, specs,
 
     serv = SgSwapServer(neighbors=neighbors, 
                         min_swap_s = min_swap_s,
-                        max_swap_s = max_swap_s,
                         allowable_wait_s = allowable_wait_s,
                         port=control_port)
     rootLogger = logging.getLogger()

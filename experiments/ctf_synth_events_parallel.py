@@ -80,8 +80,10 @@ def main(seed=1,  resume_from="", server_only=False, client_only=None, ctf_only=
                         raw_signals=True)
 
 
+    ms_coarse.add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=200)
     ms_coarse.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=100000)
 
+    ms_fine.add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=200)
     ms_fine.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=40000)
 
 
@@ -97,7 +99,7 @@ def main(seed=1,  resume_from="", server_only=False, client_only=None, ctf_only=
                                 server_only=server_only, 
                                 client_only=client_only,
                                 min_swap_s = 5.0, 
-                                max_swap_s = 40.0,
+                                max_swap_s = 1000.0,
                                 allowable_wait_s = 1.0)
 
 

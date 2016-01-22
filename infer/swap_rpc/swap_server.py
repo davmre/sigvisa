@@ -65,7 +65,6 @@ class SwapServer(object):
                  neighbors,
                  port=5555, 
                  min_swap_s = 20.0, 
-                 max_swap_s=50.0,
                  allowable_wait_s = 0.5):
 
         self.context = zmq.Context()
@@ -90,7 +89,6 @@ class SwapServer(object):
         self.last_swap = defaultdict(float)
 
         self.min_swap_s = min_swap_s
-        self.max_swap_s = max_swap_s
         self.allowable_wait_s = allowable_wait_s
 
         # mappings to connect client names with ZMQ addresses
@@ -201,7 +199,7 @@ class SwapServer(object):
                     continue
 
                 logging.debug("predicted wait %f" % predicted_wait)
-                if predicted_wait < self.allowable_wait_s or elapsed > self.max_swap_s:
+                if predicted_wait < self.allowable_wait_s: # or elapsed > self.max_swap_s:
                     self.client_state[client] = "WAITING"
                     self.client_state_extra[client] = (other, current_time)
                     logging.info("setting client state %s to WAITING on %s, elapsed %.1f predicted wait %.1f" % (client, other, elapsed, predicted_wait))
@@ -346,7 +344,7 @@ class SwapServer(object):
                         if self.client_state[other] == "WORKING":
                             checkpoint, start_time = self.client_state_extra[other]
                             other_elapsed = tt - start_time
-                            self.checkpoint_times[other][checkpoint] = max(other_elapsed, 
+                            self.checkpoint_times[other][checkpoint] = max(other_elapsed*2, 
                                                                            self.checkpoint_times[other][checkpoint])
                         else:
                             logging.warning("client %s was waiting on %s but %s is not working?????" % (client, other, other))
