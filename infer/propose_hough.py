@@ -1338,13 +1338,13 @@ class CTFProposer(object):
             left_lon, right_lon = sg.inference_region.left_lon, sg.inference_region.right_lon
             bottom_lat, top_lat = sg.inference_region.bottom_lat, sg.inference_region.top_lat
         else:
+            left_lon, right_lon, bottom_lat, top_lat = -180, 180, -90, 90
             stime = sg.event_start_time
             try:
                 etime = sg.event_end_time
             except AttributeError:
                 print "WARNING: no event end time specified"
                 etime = sg.end_time
-                left_lon, right_lon, bottom_lat, top_lat = -180, 180, -90, 90
 
         self.bin_widths = bin_widths
         self.stime = stime

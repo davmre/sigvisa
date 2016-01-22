@@ -110,7 +110,8 @@ def do_gp_hparam_moves(sg, stds, n_attempted=None, n_accepted=None,
 
 def do_template_moves(sg, wn, tmnodes, tg, stds,
                       n_attempted=None, n_accepted=None,
-                      move_times=None, step=None, proxy_lps=None):
+                      move_times=None, step=None, 
+                      proxy_lps=None, **kwargs):
 
 
     for param in tg.params(env=wn.is_env):
@@ -131,7 +132,8 @@ def do_template_moves(sg, wn, tmnodes, tg, stds,
                      step=step, n_accepted=n_accepted,
                      n_attempted=n_attempted, move_times=move_times,
                      sg=sg, keys=(k,), node_list=(n,),
-                     relevant_nodes=relevant_nodes, std=stds[param], proxy_lps=proxy_lps)
+                     relevant_nodes=relevant_nodes, std=stds[param], 
+                     proxy_lps=proxy_lps, **kwargs)
         except KeyError:
             continue
 
@@ -140,7 +142,8 @@ def do_template_moves(sg, wn, tmnodes, tg, stds,
                      step=step, n_accepted=n_accepted,
                      n_attempted=n_attempted, move_times=move_times,
                      sg=sg, keys=(k,), node_list=(n,),
-                     relevant_nodes=relevant_nodes, std=stds["coda_height_small"], proxy_lps=proxy_lps)
+                     relevant_nodes=relevant_nodes, 
+                     std=stds["coda_height_small"], proxy_lps=proxy_lps, **kwargs)
 
 
 def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, cyclic=False, **kwargs):
@@ -229,6 +232,11 @@ def single_template_MH(sg, wn, tmnodes, steps=1000, rw=True, hamiltonian=False, 
 
     return sorted_params, np.array(vals)
 
+def swap_move_checkin(swapper, step, checkpoint):
+    if swapper is None: return
+    swapper.try_sync(step, checkpoint)
+
+
 def run_open_world_MH(sg, steps=10000,
                       enable_event_openworld=True,
                       enable_event_moves=True,
@@ -242,6 +250,7 @@ def run_open_world_MH(sg, steps=10000,
                       cyclic_template_moves=False,
                       use_proxy_lp=False,
                       template_openworld_custom=None,
+                      swapper=None,
                       stop_condition=None):
 
 
@@ -342,6 +351,9 @@ def run_open_world_MH(sg, steps=10000,
     except AttributeError:
         pass
 
+    if swapper is not None:
+        swapper.register_counters(n_attempted, n_accepted)
+
     # we don't actually need the LP, but this will
     # cause all relevant messages to be passed.
     # HACK ALERT, should have a separate method
@@ -350,9 +362,11 @@ def run_open_world_MH(sg, steps=10000,
         init_lp = sg.current_log_p()
 
 
-                        
 
     for step in range(start_step, start_step+steps):
+
+        swap_move_checkin(swapper=swapper, step=step, 
+                          checkpoint="newcycle")
 
         # moves to adjust existing events
         for (eid, evnodes) in sg.evnodes.items():
@@ -366,7 +380,8 @@ def run_open_world_MH(sg, steps=10000,
                          n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
                          sg=sg, ev_node=evnodes[node_name], 
-                         std=stds[move_name], params=params, logger=logger)
+                         std=stds[move_name], 
+                         params=params, logger=logger)
 
             for (move_name, (fn, prob)) in event_moves_special.items():
                 run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
@@ -392,10 +407,14 @@ def run_open_world_MH(sg, steps=10000,
 
                     # moves to birth/death/split/merge new unassociated templates
                     for (move_name, (fn, move_prob)) in sta_moves.items():
+                        swap_move_checkin(swapper=swapper, step=step, 
+                                          checkpoint="%s_%s" % (move_name, wn.label))
+
                         run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                                  n_accepted=n_accepted, move_times=move_times,
                                  move_prob=move_prob, cyclic=cyclic_template_moves,
                                  sg=sg, wn=wn)
+
 
                     for (eid, phase) in wn.arrivals():
 
@@ -434,6 +453,9 @@ def run_open_world_MH(sg, steps=10000,
                                               proxy_lps=proxy_lps)
 
         for (move, (fn, prob)) in global_moves.items():
+
+            swap_move_checkin(swapper=swapper, step=step, 
+                              checkpoint="%s" % move)
 
             run_move(move_name=move, fn=fn, step=step, n_attempted=n_attempted,
                      n_accepted=n_accepted, move_times=move_times,
@@ -567,7 +589,6 @@ def main():
 
     sys.setrecursionlimit(20000)
     np.random.seed(options.seed)
-
 
     run_open_world_MH(sg, steps=options.steps,
                       enable_event_openworld= not options.no_event_openworld,

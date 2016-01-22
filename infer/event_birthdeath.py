@@ -938,11 +938,11 @@ def ev_death_executor(sg, location_proposal,
     log_qbackward += lqb
     sg._topo_sort()
                         
-    lp_old2 = sg.current_log_p()
-    s2 = sg.current_log_p_breakdown(silent=True)
-    evs1 = [sg.get_event(eid) for eid in sg.evnodes.keys()]
-    vals2 = [(n.label, n.get_value(), n.log_p()) for n in sg.extended_evnodes[eid] if n.single_key is not None and not n.deterministic()]
-    assert(np.abs(lp_old2 - lp_old) < 1e-6)
+    #lp_old2 = sg.current_log_p()
+    #s2 = sg.current_log_p_breakdown(silent=True)
+    #evs1 = [sg.get_event(eid) for eid in sg.evnodes.keys()]
+    #vals2 = [(n.label, n.get_value(), n.log_p()) for n in sg.extended_evnodes[eid] if n.single_key is not None and not n.deterministic()]
+    #assert(np.abs(lp_old2 - lp_old) < 1e-6)
     
     def rebirth():
         replicate_birth()
@@ -1113,7 +1113,7 @@ def ev_bare_birth_move(sg, location_proposal,
         if ev is None:
             return None, None, None, None
         
-    evnodes = sg.add_event(ev, eid=eid, phases=[])
+    evnodes = sg.add_event(ev, eid=eid, phases=None)
     eid = evnodes["loc"].eid
     
     if debug_info is not None:
@@ -1123,7 +1123,7 @@ def ev_bare_birth_move(sg, location_proposal,
         debug_info["ev"] = (ev, log_qforward, evlps)
     
     def replicate_move():
-        sg.add_event(ev, eid=eid, phases=[])
+        sg.add_event(ev, eid=eid, phases=None)
         
     return log_qforward, replicate_move, eid, extra
 

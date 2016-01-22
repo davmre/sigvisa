@@ -65,6 +65,7 @@ class Waveform(object):
         if my_stats is not None:
             self.my_stats = my_stats
         else:
+            npts = len(data)
             self.my_stats = {"srate": float(srate), "npts": npts}
 
             try:
@@ -219,12 +220,15 @@ class Waveform(object):
         elif name == "hz":
             new_srate = float(pieces[1])
             ratio = self['srate'] / new_srate
-            rounded_ratio = int(np.round(ratio))
-            if np.abs(ratio - rounded_ratio) > 0.00000001:
-                raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
-            f = lambda x: ma.masked_array(data=scipy.signal.decimate(
-                x, rounded_ratio), mask=x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
-            fstats['srate'] = new_srate
+            if ratio == 1.0:
+                f = lambda x : x
+            else:
+                rounded_ratio = int(np.round(ratio))
+                if np.abs(ratio - rounded_ratio) > 0.00000001:
+                    raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
+                f = lambda x: ma.masked_array(data=scipy.signal.decimate(
+                    x, rounded_ratio), mask=x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
+                fstats['srate'] = new_srate
         elif name == "forcehz":
             new_srate = float(pieces[1])
             ratio = self['srate'] / new_srate

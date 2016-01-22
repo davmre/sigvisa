@@ -20,16 +20,16 @@ def wave_dirname(base_dir=None, **kwargs):
     base_dir = BASE_DIR if base_dir is None else base_dir
     return os.path.join(BASE_DIR, md5hash("sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ])))
 
-def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tt_buffer_s=500, tmshape="lin_polyexp", band="freq_0.8_4.5", hz=5.0, dummy_fallback=False, return_all=False, wave_dir=None, dumpsg=True, evs=None, region=None):
+def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb, stime=1238889600.0, len_s=1000, tt_buffer_s=500, tmshape="lin_polyexp", band="freq_0.8_4.5", hz=5.0, dummy_fallback=False, return_all=False, wave_dir=None, dumpsg=True, evs=None, region=None, raw_signals=False):
 
     if wave_dir is None:
-        wave_dir = wave_dirname(seed=seed, runid=runid, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, sites=sites, phases=phases, tmtype=md5hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb, nm_type="ar")
+        wave_dir = wave_dirname(seed=seed, runid=runid, wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family, sites=sites, phases=phases, tmtype=md5hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb, nm_type="ar", raw_signals=raw_signals)
     mkdir_p(wave_dir)
 
     sg = SigvisaGraph(template_model_type=tmtype, template_shape=tmshape,
                       wiggle_model_type=wiggle_model_type, wiggle_family=wiggle_family,
                       phases=phases, runids=(runid,), dummy_fallback=dummy_fallback, 
-                      inference_region=region, min_mb=min_mb)
+                      inference_region=region, min_mb=min_mb, raw_signals=raw_signals)
 
     s = Sigvisa()
 
@@ -38,7 +38,7 @@ def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, t
         try:
             sta = s.get_default_sta(site)
             chan = s.canonical_channel_name[s.default_vertical_channel[sta]]
-            wave = Waveform(data = np.zeros((int(len_s*hz),)), srate=hz, stime=stime, sta=sta, chan=chan, filter_str="%s;env;hz_%.1f" % (band, hz))
+            wave = Waveform(data = np.zeros((int(len_s*hz),)), srate=hz, stime=stime, sta=sta, chan=chan, filter_str="%s;%shz_%.1f" % (band, "env;" if not raw_signals else "",  hz))
             wns[sta] = sg.add_wave(wave)
         except Exception as e:
             print e

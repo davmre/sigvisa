@@ -7,6 +7,8 @@ import hashlib
 
 from sigvisa.database.dataset import read_timerange, read_events, EV_MB_COL, EV_EVID_COL
 from sigvisa.signals.io import load_event_station_chan, load_segments, fetch_waveform, MissingWaveform
+from sigvisa.signals.common import Waveform
+
 from sigvisa.infer.run_mcmc import run_open_world_MH
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa import Sigvisa
@@ -33,14 +35,23 @@ class RunSpec(object):
 
 class SyntheticRunSpec(RunSpec):
 
-    def __init__(self, sw, runid, init_noise=False):
+    def __init__(self, sw, runid, init_noise=False, raw_signals=False):
         self.sw = sw
         self.runids = (runid,)
         self.init_noise = init_noise
+        self.raw_signals = raw_signals
 
     def get_waves(self, modelspec):
         w = self.sw.waves
-        waves = [(w[evid][sta], None) for evid in w.keys() for sta in w[evid].keys()]
+
+        filter_str = ""
+        if self.raw_signals and not modelspec.signal_params["raw_signals"]:
+            filter_str += "env;"
+        
+        hz = modelspec.signal_params['max_hz']
+        filter_str += "hz_%.1f" % hz
+        waves = [(w[evid][sta].filter(filter_str), None) for evid in w.keys() for sta in w[evid].keys()]
+
         return waves
 
     def get_init_events(self):
@@ -361,7 +372,9 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
         except:
             continue
 
-def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_threshold=500, dump_interval=50, print_interval=10):
+def do_inference(sg, modelspec, runspec, max_steps=None, 
+                 model_switch_lp_threshold=500, dump_interval=50, 
+                 print_interval=10, swapper=None):
 
     # save 'true' events if they are known
     # build logger
@@ -414,6 +427,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None, model_switch_lp_thresho
         run_open_world_MH(sg, logger=logger,
                           stop_condition=lp_change_threshold,
                           start_step=step,
+                          swapper=swapper,
                           **inference_params)
         step = logger.last_step
 

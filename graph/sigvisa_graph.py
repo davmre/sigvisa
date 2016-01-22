@@ -131,7 +131,7 @@ class SigvisaGraph(DirectedGraphModel):
                  dummy_fallback=False,
                  run_name=None, iteration=None, runids = None,
                  phases="auto", base_srate=40.0,
-                 assume_envelopes=True, smoothing=None,
+                 smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
                  hack_param_constraint=True,
                  uatemplate_rate=1e-3,
@@ -185,7 +185,6 @@ class SigvisaGraph(DirectedGraphModel):
         self.skip_levels = skip_levels
 
         self.base_srate = base_srate
-        self.assume_envelopes = assume_envelopes
         self.smoothing = smoothing
 
 
@@ -692,7 +691,7 @@ class SigvisaGraph(DirectedGraphModel):
                 for phase in self.phases_used:
                     pm = self.get_phase_existence_model(phase)
                     lp += pm.log_p(phase in real_phases,
-                                   ev = sg.get_event(eid), sta=site)
+                                   ev = self.get_event(eid), site=site)
         return lp
 
     def current_log_p(self, **kwargs):
@@ -920,11 +919,13 @@ class SigvisaGraph(DirectedGraphModel):
 
         for (site, element_list) in self.site_elements.iteritems():
             if phases == "all":
-                phases = self.predict_phases_site(ev=ev, site=site)
+                site_phases = self.predict_phases_site(ev=ev, site=site)
             elif phases == "none" or phases is None:
-                phases = []
+                site_phases = []
+            else:
+                site_phases= phases[site]
 
-            for phase in phases:
+            for phase in site_phases:
                 #print "adding phase", phase, "at site", site
                 self.phases_used.add(phase)
                 tg = self.template_generator(phase)
@@ -1700,7 +1701,6 @@ class SigvisaGraph(DirectedGraphModel):
         cs += "wiggle_model_type: %s\n" % self.wiggle_model_type
         cs += "wiggle_family: %s\n" % self.wiggle_family
         cs += "base_srate: %s\n" % self.base_srate
-        cs += "assume_envelopes: %s\n" % self.assume_envelopes
         cs += "smoothing: %s\n" % self.smoothing
         cs += "dummy_fallback: %s\n" % self.dummy_fallback
         cs += "phases: %s\n" % self.phases
