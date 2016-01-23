@@ -2,18 +2,27 @@ import numpy as np
 
 from sigvisa import Sigvisa
 from sigvisa.graph.nodes import Node
-from sigvisa.models import Distribution, DummyModel
+from sigvisa.models import Distribution, DummyModel, Constraint
 from sigvisa.models.distributions import Bernoulli, Exponential
 from sigvisa.source.event import Event
 
 
 class EventLocationPrior(Distribution):
 
+    def __init__(self, inference_region=None, **kwargs):
+        super(EventLocationPrior, self).__init__(**kwargs)
+        self.inference_region=inference_region
+
+
     def log_p(self, x, cond=None, key_prefix=""):
         s = Sigvisa()
-        loc_lp = s.sigmodel.event_location_prior_logprob(x[key_prefix + 'lon'],
-                                                             x[key_prefix + 'lat'],
-                                                             x[key_prefix + 'depth'])
+        lon, lat, depth = x[key_prefix + 'lon'], x[key_prefix + 'lat'], x[key_prefix + 'depth']
+        if self.inference_region is not None:
+
+            if not self.inference_region.contains_event(lon=lon, lat=lat):
+                return -np.inf
+
+        loc_lp = s.sigmodel.event_location_prior_logprob(lon, lat, depth)
         return loc_lp
 
 def event_from_evnodes(evnodes):
@@ -28,17 +37,25 @@ def event_from_evnodes(evnodes):
     return Event(autoload=False, eid=n.eid, evid=n.evid, orid=n.orid, **evdict)
 
 
-def setup_event(event, mag_prior_model, fixed=True, **kwargs):
+def setup_event(event, mag_prior_model, fixed=True, inference_region=None, **kwargs):
 
     key_prefix = '%d;' % event.eid
 
-    loc_node = EventLocationNode(event, fixed=fixed, label=key_prefix + 'loc', **kwargs)
+    loc_node = EventLocationNode(event, fixed=fixed, label=key_prefix + 'loc', 
+                                 inference_region=inference_region, **kwargs)
     mb_node = Node(model=mag_prior_model, 
                    initial_value=event.mb, keys=(key_prefix + "mb",), 
                    low_bound=0.0, high_bound=10.0, fixed=fixed, 
                    label=key_prefix + 'mb', **kwargs)
     source_node = Node(model=Bernoulli(.999), initial_value=event.natural_source, keys=(key_prefix + "natural_source",), fixed=fixed, label=key_prefix + 'source', **kwargs)
-    time_node = Node(model=DummyModel(default_value=event.time), initial_value=event.time, keys=(key_prefix + "time",), fixed=fixed, label=key_prefix + 'time', **kwargs)
+
+    if inference_region is not None:
+        tmodel = Constraint(default_value=event.time, 
+                            a=inference_region.stime, 
+                            b=inference_region.etime)
+    else:
+        tmodel = DummyModel(default_value=event.time)
+    time_node = Node(model=tmodel, initial_value=event.time, keys=(key_prefix + "time",), fixed=fixed, label=key_prefix + 'time', **kwargs)
 
     evnodes = {"loc": loc_node,
                "lon": loc_node,
@@ -58,7 +75,8 @@ def setup_event(event, mag_prior_model, fixed=True, **kwargs):
 
 class EventLocationNode(Node):
 
-    def __init__(self, event, fixed = True, **kwargs):
+    def __init__(self, event, fixed = True, 
+                 inference_region=None, **kwargs):
 
         self.eid = event.eid
         self.evid = event.evid
@@ -69,8 +87,9 @@ class EventLocationNode(Node):
         for k  in ("lon", "lat", "depth"):
             initial_value[key_prefix + k] = d[k]
 
-        super(EventLocationNode, self).__init__(model = EventLocationPrior(), initial_value=initial_value,
-                                        fixed=fixed, **kwargs)
+        super(EventLocationNode, self).__init__(model = EventLocationPrior(inference_region=inference_region), 
+                                                initial_value=initial_value,
+                                                fixed=fixed, **kwargs)
         self.key_prefix = key_prefix
 
     def prior_predict(self, parent_values=None):

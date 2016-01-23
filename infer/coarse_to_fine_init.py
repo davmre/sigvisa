@@ -49,7 +49,7 @@ class SyntheticRunSpec(RunSpec):
             filter_str += "env;"
         
         hz = modelspec.signal_params['max_hz']
-        filter_str += "hz_%.1f" % hz
+        filter_str += "hz_%.2f" % hz
         waves = [(w[evid][sta].filter(filter_str), None) for evid in w.keys() for sta in w[evid].keys()]
 
         return waves
@@ -285,6 +285,8 @@ class ModelSpec(object):
             'jointgp_hparam_prior': None,
             'jointgp_param_run_init': None,
             'hack_param_constraint': False,
+            'hack_coarse_tts': None,
+            'hack_coarse_signal': None,
             'inference_region': None,
         }
         signal_params = {
@@ -373,8 +375,8 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
             continue
 
 def do_inference(sg, modelspec, runspec, max_steps=None, 
-                 model_switch_lp_threshold=500, dump_interval=50, 
-                 print_interval=10, swapper=None):
+                 model_switch_lp_threshold=500, dump_interval_s=10, 
+                 print_interval_s=10, swapper=None):
 
     # save 'true' events if they are known
     # build logger
@@ -383,7 +385,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
     # run inference with appropriate params
     # and hooks to monitor convergence?
 
-    logger = MCMCLogger( write_template_vals=True, dump_interval=dump_interval, print_interval=print_interval, write_gp_hparams=True)
+    logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True)
     logger.dump(sg)
 
     sg.seed = modelspec.seed

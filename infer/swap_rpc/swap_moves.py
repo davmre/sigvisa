@@ -26,49 +26,27 @@ def propose_env_tmvals(raw_tmvals, reverse=False):
         import pdb; pdb.set_trace()
 
     return tmvals, model.log_p(mult_wiggle_std)
-        
 
-def crossover_events(sg1, sg2, raw1, raw2,
-                     crossover_radius_km = 200,
-                     crossover_radius_s = 200):
+def propose_ev_tmvals(tmvals, reverse=False):
+    r = {}
+    lp = 0.0
+    for eid, eid_dict in tmvals.items():
+        r[eid] = {}
+        for key, sta_dict in eid_dict.items():
+            r[eid][key] = {}
+            for phase, phase_dict in sta_dict.items():
+                r[eid][key][phase], lp_local = propose_env_tmvals(phase_dict, reverse=reverse)
+                lp += lp_local
+    return r, lp
 
-    def evs_in_region(evs, center_dict):
-        r = set()
-        for eid, evdict in evs.items():
-            d = dist_km((evdict["lon"], evdict["lat"]), (center_dict["lon"], center_dict["lat"]))
-            t = np.abs(evdict["time"] - center_dict["time"])
-            if d < crossover_radius_km and t < crossover_radius_s:
-                r.add(eid)
-        return r
-
-    def propose_ev_tmvals(tmvals, reverse=False):
-        r = {}
-        lp = 0.0
-        for eid, eid_dict in tmvals.items():
-            r[eid] = {}
-            for key, sta_dict in eid_dict.items():
-                r[eid][key] = {}
-                for phase, phase_dict in sta_dict.items():
-                    r[eid][key][phase], lp_local = propose_env_tmvals(phase_dict, reverse=reverse)
-                    lp += lp_local
-        return r, lp
-
-    # choose an event at random from the union of the two chains
-    # then swap *all* events within a region around that event
+def crossover_events_helper(sg1, sg2, raw1, raw2, get_swapped):
 
     evs1 = sg1.get_event_locs()
     evs2 = sg2.get_event_locs()
 
-    if len(evs1) == 0 and len(evs2) == 0:
+    swapped_from_sg1, swapped_from_sg2 = get_swapped(evs1, evs2)
+    if swapped_from_sg1 is None:
         return False
-
-    # proposal is symmetric since we're only 
-    # swapping locations
-    unified_locs = evs1.values() + evs2.values()
-    region_center = np.random.choice(unified_locs)
-
-    swapped_from_sg1 = evs_in_region(evs1, region_center)
-    swapped_from_sg2 = evs_in_region(evs2, region_center)
 
     # get templates for each event we'll be swapping
     sg1_orig_tmvals = {}
@@ -79,7 +57,6 @@ def crossover_events(sg1, sg2, raw1, raw2,
         sg2_orig_tmvals[eid] = sg2.get_event_templates(eid)
 
     # match raw-signals templates with env-signal templates if needed
-
     if raw1 and not raw2:
         sg1_swappable_tmvals, log_qforward = propose_ev_tmvals(sg1_orig_tmvals)
         sg2_swappable_tmvals, log_qbackward = propose_ev_tmvals(sg2_orig_tmvals, reverse=True)
@@ -133,9 +110,60 @@ def crossover_events(sg1, sg2, raw1, raw2,
         accept = False
         reverse_move()
 
-    logging.info("event swap from region %s includes %d events, lp_new  %.1f (%.1f/%.1f) lp_old %.1f (%.1f/%.1f)  ratio %.1f" % (region_center, len(swapped_from_sg1) + len(swapped_from_sg2), lp_new, sg1_lp_new, sg2_lp_new, lp_old, sg1_lp_old, sg2_lp_old, ratio))
+    logging.info("event swap includes %d events, lp_new  %.1f (%.1f/%.1f) lp_old %.1f (%.1f/%.1f)  ratio %.1f" % (len(swapped_from_sg1) + len(swapped_from_sg2), lp_new, sg1_lp_new, sg2_lp_new, lp_old, sg1_lp_old, sg2_lp_old, ratio))
 
     return accept
+        
+def swap_events_move(sg1, sg2, raw1, raw2):
+
+    def propose_pairwise_swap(evs1, evs2):
+        if len(evs1) == 0 or len(evs2) == 0:
+            return None, None
+
+        eid1 = np.random.choice(evs1.keys())
+        eid2 = np.random.choice(evs2.keys())
+
+        swapped_from_sg1 = (eid1,)
+        swapped_from_sg2 = (eid2,)
+
+        return swapped_from_sg1, swapped_from_sg2
+
+    return crossover_events_helper(sg1, sg2, raw1, raw2, propose_pairwise_swap)
+
+def crossover_event_region_move(sg1, sg2, raw1, raw2,                      
+                                crossover_radius_km = 200,
+                                crossover_radius_s = 200):
+
+    def evs_in_region(evs, center_dict):
+        r = set()
+        for eid, evdict in evs.items():
+            d = dist_km((evdict["lon"], evdict["lat"]), (center_dict["lon"], center_dict["lat"]))
+            t = np.abs(evdict["time"] - center_dict["time"])
+            if d < crossover_radius_km and t < crossover_radius_s:
+                r.add(eid)
+        return r
+
+
+    def propose_crossover_region(evs1, evs2):
+        # choose an event at random from the union of the two chains
+        # then swap *all* events within a region around that event
+
+
+
+        # proposal is symmetric since we're only 
+        # swapping locations
+
+        if len(evs1) == 0 and len(evs2) == 0:
+            return None, None
+
+        unified_locs = evs1.values() + evs2.values()
+        region_center = np.random.choice(unified_locs)
+
+        swapped_from_sg1 = evs_in_region(evs1, region_center)
+        swapped_from_sg2 = evs_in_region(evs2, region_center)
+        return swapped_from_sg1, swapped_from_sg2
+
+    return crossover_events_helper(sg1, sg2, raw1, raw2, propose_crossover_region)
 
 
 def crossover_uatemplates(sg1, sg2, scb, raw1, raw2, 

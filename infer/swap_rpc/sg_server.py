@@ -1,12 +1,13 @@
 import numpy as np
 import zmq
 import logging
+import time
 
 from multiprocessing import Process
 
 from sigvisa.infer.swap_rpc.sg_client import run_client
 from sigvisa.infer.swap_rpc.swap_server import SwapServer
-from sigvisa.infer.swap_rpc.swap_moves import crossover_uatemplates, crossover_events
+from sigvisa.infer.swap_rpc.swap_moves import crossover_uatemplates, crossover_event_region_move, swap_events_move
 from sigvisa.infer.swap_rpc.serialization import serialize, deserialize
 
 class SgSwapServer(SwapServer):
@@ -43,6 +44,7 @@ class SgSwapServer(SwapServer):
         raw1 = self.raw_signals[client1]
         raw2 = self.raw_signals[client2]
 
+        """
         for scb in scbs:
             accepted = crossover_uatemplates(sg1, sg2, scb, raw1, raw2, 
                                              crossover_period_s=5.0,
@@ -56,11 +58,19 @@ class SgSwapServer(SwapServer):
             logging.info("crossover at %s: accepted %s" % (str(scb), str(accepted)))
             sg1.move_finished("crossover_uatemplates", accepted)
             sg2.move_finished("crossover_uatemplates", accepted)
+        """
 
-        accepted = crossover_events(sg1, sg2, raw1, raw2)
-        logging.info("event crossover accepted %s" % (str(accepted)))
-        sg1.move_finished("crossover_events", accepted)
-        sg2.move_finished("crossover_events", accepted)
+        accepted = crossover_event_region_move(sg1, sg2, raw1, raw2,
+                                               crossover_radius_km=1000,
+                                               crossover_radius_s=2000)
+        logging.info("event region crossover accepted %s" % (str(accepted)))
+        sg1.move_finished("crossover_event_region", accepted)
+        sg2.move_finished("crossover_event_region", accepted)
+
+        accepted = swap_events_move(sg1, sg2, raw1, raw2)
+        logging.info("event swap accepted %s" % (str(accepted)))
+        sg1.move_finished("crossover_event_swap", accepted)
+        sg2.move_finished("crossover_event_swap", accepted)
 
         sg1.done()
         sg2.done()
@@ -200,6 +210,7 @@ def run_parallel_coarse_to_fine(names, specs,
                                                                  "runspec": rs, 
                                                                  "port": control_port})
             processes[name].start()
+
 
     serv = SgSwapServer(neighbors=neighbors, 
                         min_swap_s = min_swap_s,

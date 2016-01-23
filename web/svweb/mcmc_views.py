@@ -110,11 +110,17 @@ def mcmc_lp_posterior(request, dirname):
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
     lps = np.loadtxt(os.path.join(mcmc_run_dir, "lp.txt"))
+    times = np.loadtxt(os.path.join(mcmc_run_dir, "times.txt"))
+
+    n = min(len(lps), len(times))
+    lps = lps[:n]
+    times = times[:n]
+
     f = Figure()
     f.patch.set_facecolor('white')
     ax = f.add_subplot(111)
-    ax.plot(lps)
-    ax.set_xlabel("step")
+    ax.plot(times, lps)
+    ax.set_xlabel("elapsed time")
     ax.set_ylabel("log density")
 
 

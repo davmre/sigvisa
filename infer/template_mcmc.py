@@ -1993,6 +1993,10 @@ def sta_lta_cdf2(env_diff_pos, short_idx=2, long_idx=30, smooth_idx=7,
     else:
         smoothed = env_diff_pos
 
+    short_idx = max(1, short_idx)
+    long_idx = max(5, long_idx)
+    shift_idx = max(1, shift_idx)
+
     extended = np.zeros(long_idx + len(smoothed))
     extended[long_idx:] = smoothed
     extended[:long_idx] = np.mean(smoothed)

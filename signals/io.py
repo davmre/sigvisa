@@ -205,7 +205,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
 
         waveform = dict(zip([x[0].lower() for x in table_description], waveform_values))
 
-        # check the samprate is consistent for all waveforms in this interval
+
         assert(samprate is None or samprate == waveform['samprate'])
         if samprate is None:
             samprate = waveform['samprate']

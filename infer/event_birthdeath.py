@@ -849,7 +849,7 @@ def death_proposal_log_ratio(sg, eid):
                     lp_unass += lp_unass_tmpl
                     lp_ev += lp_ev_tmpl
     r = lp_unass - lp_ev
-    assert(np.isfinite(r))
+    #assert(np.isfinite(r))
     return r
 
 def death_proposal_distribution(sg):
@@ -995,6 +995,7 @@ def ev_death_move_hough(sg, hough_kwargs={}, **kwargs):
         return hough_location_proposal(sg, fix_result=fix_result, **kwargs)
     return ev_death_move_abstract(sg, hlp, proposal_includes_mb=True, **kwargs)
 
+
 def ev_death_move_hough_offset(sg, **kwargs):
     hough_kwargs = {"offset": True}
     return ev_death_move_hough(sg, hough_kwargs, **kwargs)
@@ -1002,7 +1003,6 @@ def ev_death_move_hough_offset(sg, **kwargs):
 def ev_death_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
     return ev_death_move_hough(sg, hough_kwargs, birth_type="dumb", **kwargs)
-
 
 def ev_death_move_correlation(sg, **kwargs):
     return ev_death_move_abstract(sg, correlation_location_proposal, proposal_includes_mb=False, **kwargs)
@@ -1540,16 +1540,16 @@ def phase_birth_move(sg, eid, site):
         return False
 
     lp_old = phase_lp(sg, eid, site, wns)
-    lp_old_full = sg.current_log_p()
+    #lp_old_full = sg.current_log_p()
 
     # call the birth helper
     lqf, replicate_birth, death_record = phase_birth_helper(sg, eid, site, phase)
 
     # get new logp
     lp_new = phase_lp(sg, eid, site, wns)
-    lp_new_full = sg.current_log_p()
+    #lp_new_full = sg.current_log_p()
 
-    assert( np.abs((lp_new_full - lp_old_full)  - (lp_new-lp_old)) < 1e-4 )
+    #assert( np.abs((lp_new_full - lp_old_full)  - (lp_new-lp_old)) < 1e-4 )
 
     # call the death helper
     lqb, replicate_death, birth_record = phase_death_helper(sg, eid, site, phase, fix_result=death_record)
@@ -1581,20 +1581,20 @@ def phase_death_move(sg, eid, site):
         return False
 
     lp_old = phase_lp(sg, eid, site, wns)
-    lp_old_full = sg.current_log_p()
+    #lp_old_full = sg.current_log_p()
 
     # call the birth helper
     lqf, replicate_death, birth_record = phase_death_helper(sg, eid, site, phase)
 
     # get new logp
     lp_new = phase_lp(sg, eid, site, wns)
-    lp_new_full = sg.current_log_p()
+    #lp_new_full = sg.current_log_p()
 
     # call the death helper
     lqb, replicate_birth, death_record = phase_birth_helper(sg, eid, site, phase, 
                                                             fix_result=birth_record)
 
-    assert( np.abs((lp_new_full - lp_old_full)  - (lp_new-lp_old)) < 1e-4 )
+    #assert( np.abs((lp_new_full - lp_old_full)  - (lp_new-lp_old)) < 1e-4 )
 
     # do mh acceptance
     def accept():
@@ -1805,6 +1805,23 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
     return ev_birth_move_abstract(sg, location_proposal=hlp, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=True, **kwargs)
 
+
+def prior_location_proposal(sg, fix_result=None):
+    ev, lp = sg.prior_sample_event(return_logp=True, fix_result=fix_result)
+    if fix_result is not None:
+        return lp
+    else:
+        return ev, lp, None
+
+def ev_birth_move_prior(sg, log_to_run_dir=None, **kwargs):
+    return ev_birth_move_abstract(sg, location_proposal=prior_location_proposal, 
+                                  proposal_includes_mb=True, 
+                                  proposal_type="dumb", **kwargs)
+
+def ev_death_move_prior(sg, log_to_run_dir=None, **kwargs):
+    return ev_death_move_abstract(sg, location_proposal=prior_location_proposal, 
+                                  proposal_includes_mb=True, 
+                                  birth_type="dumb", **kwargs)
 
 def ev_birth_move_hough_offset(sg, **kwargs):
     hough_kwargs = {"offset": True}

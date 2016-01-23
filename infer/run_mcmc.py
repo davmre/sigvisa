@@ -16,7 +16,7 @@ from sigvisa.infer.autoregressive_mcmc import arnoise_params_rw_move, arnoise_me
 from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
 from sigvisa.infer.mcmc_basic import gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
-from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_offset, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_offset, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation, phase_birth_move, phase_death_move
+from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_offset, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_offset, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation, phase_birth_move, phase_death_move, ev_birth_move_prior, ev_death_move_prior
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move, ev_source_type_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth_move, death_move_for_optimizing_birth, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
@@ -34,7 +34,9 @@ global_stds = {'coda_height': .7,
                'arrival_time': 0.3,
                'evloc': 0.15,
                'evloc_big': 0.4,
+               'evloc_ultra': 1.2,
                'evtime': 1.0,
+               'evtime_ultra': 15.0,
                'evmb': 0.2,
                'evdepth': 8.0,
                'signal_var': 0.4,
@@ -251,6 +253,7 @@ def run_open_world_MH(sg, steps=10000,
                       use_proxy_lp=False,
                       template_openworld_custom=None,
                       swapper=None,
+                      prior_births_only=False,
                       stop_condition=None):
 
 
@@ -269,8 +272,10 @@ def run_open_world_MH(sg, steps=10000,
                         'event_birth_correlation': (ev_birth_move_correlation, correlation_rate),
                         'event_death_correlation': (ev_death_move_correlation, correlation_rate),
         }
-                        #'event_birth_lstsqr': ev_birth_move_lstsqr,
-                        #'event_death_lstsqr': ev_death_move_lstsqr        }
+        if prior_births_only:
+           global_moves = {'event_birth_prior': (ev_birth_move_prior, hough_rate),
+                           'event_death_prior': (ev_death_move_prior, hough_rate),
+           }            
     else:
         if enable_template_openworld:
             # swap moves leave behind uatemplates, so only allow them
@@ -283,7 +288,9 @@ def run_open_world_MH(sg, steps=10000,
 
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
                             'evloc_big': ('loc', ('lon', 'lat')),
+                            'evloc_ultra': ('loc', ('lon', 'lat')),
                             'evtime': ('time', ('time',)),
+                            'evtime_ultra': ('time', ('time',)),
                             'evmb': ('mb', ('mb',)),
                             'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
     event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0)}
@@ -309,6 +316,9 @@ def run_open_world_MH(sg, steps=10000,
                          'arnoise_params': (arnoise_params_rw_move, 0.2)
             }
 
+    if sg.hack_coarse_signal is not None:
+        # don't try to infer the noise level if we've manually fixed it
+        del sta_moves["arnoise_std"]
 
     template_moves_special = {'indep_peak': (indep_peak_move, 1.0),
                               'peak_offset': (improve_offset_move_gaussian, 1.0),
@@ -389,7 +399,7 @@ def run_open_world_MH(sg, steps=10000,
                          move_prob=prob, sg=sg, eid=eid)
 
             for site in sg.site_elements.keys():
-                prob=0.5
+                prob=0.1
                 run_move(move_name="phase_birth", fn=phase_birth_move, 
                          step=step, n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,

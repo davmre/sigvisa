@@ -39,3 +39,17 @@ def next_unused_int_in_dir(path):
         except ValueError:
             continue
     return max_int+1
+
+def make_next_unused_dir(base_path, formatter):
+    # avoid race conditions if two processes are both trying to create a new dir 
+    i = next_unused_int_in_dir(base_path)
+    while True:
+        path = os.path.join(base_path, formatter(i))
+        try:
+            os.makedirs(path)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                i += 1
+                continue
+        break
+    return path

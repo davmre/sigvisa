@@ -46,14 +46,17 @@ class Sigvisa(threading.local):
 
     def __init__(self):
 
+
         # enforcing the singleton pattern: don't init if it's already been
         # done.
         try:
             self.dbconn
+            assert( self.pid == os.getpid() )
             return
         except:
             pass
 
+        self.pid = os.getpid()
         self.homedir = os.getenv("SIGVISA_HOME")
 
         st = 1237680000

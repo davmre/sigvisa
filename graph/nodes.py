@@ -7,9 +7,10 @@ from sigvisa.models import DummyModel
 
 class Node(object):
 
-    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False):
+    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False, hack_coarse_tts=None):
 
         self.hack_param_constraint = hack_param_constraint
+        self.hack_coarse_tts = hack_coarse_tts
 
         self.model = model
         self._fixed = fixed
@@ -306,14 +307,14 @@ class Node(object):
         return 0.0
 
     @staticmethod
-    def param_truncation_penalty(param, value):
+    def param_truncation_penalty(param, value, coarse_tts=False):
         p = 0
         if 'mult_wiggle_std' in param:
             if value > 1:
                 p = -np.exp(100*(value-1))
             if value < 0:
                 p = -np.exp(100*(-value))
-        if 'tt_residual' in param and np.abs(value) > 25:
+        if 'tt_residual' in param and (not coarse_tts) and np.abs(value) > 25:
             p = -(10*(np.abs(value)-25))**4
         elif 'peak_offset' in param and value > 3.0:
             p = -(10*(value-3))**4
@@ -340,7 +341,7 @@ class Node(object):
 
         # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
-            lp += self.param_truncation_penalty(self.label, v)
+            lp += self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None)
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))

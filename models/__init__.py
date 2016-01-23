@@ -97,3 +97,18 @@ class DummyModel(Distribution):
 
     def predict(self, **kwargs):
         return self.default_value
+
+class Constraint(DummyModel):
+
+    def __init__(self, a=0, b=0, **kwargs):
+        super(Constraint, self).__init__(**kwargs)
+        self.a=a
+        self.b=b
+
+    def log_p(self, x, **kwargs):
+        if self.a is not None and x < self.a:
+            return -np.inf
+        if self.b is not None and x > self.b:
+            return -np.inf
+        return 0.0
+

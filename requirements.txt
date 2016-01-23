@@ -21,6 +21,7 @@ pyublas
 pywavelets
 seaborn
 numdifftools
+pyzmq
 
 # not strictly necessary, but useful:
 

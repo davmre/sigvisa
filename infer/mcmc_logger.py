@@ -5,19 +5,19 @@ import time
 import shutil
 
 from sigvisa import Sigvisa
-from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
+from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir, make_next_unused_dir
 
 class MCMCLogger(object):
 
-    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval=50, template_move_step=True, print_interval=20, transient=False, write_gp_hparams=False):
+    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval_s=10, template_move_step=True, print_interval_s=10, transient=False, write_gp_hparams=False):
 
         s = Sigvisa()
 
         if run_dir is None:
             base_path = os.path.join(s.homedir, "logs", "mcmc")
-            mkdir_p(base_path)
-            run_dir = os.path.join(base_path, "%05d" % next_unused_int_in_dir(base_path))
-        mkdir_p(run_dir)
+            formatter = lambda i : "%05d" % i
+            run_dir = make_next_unused_dir(base_path, formatter)
+
         self.run_dir = run_dir
 
         with open(os.path.join(run_dir, 'cmd.txt'), 'w') as f:
@@ -29,8 +29,11 @@ class MCMCLogger(object):
         self.dumpsteps = dumpsteps
         self.write_template_vals=write_template_vals
         self.write_gp_hparams = write_gp_hparams
-        self.dump_interval = dump_interval
-        self.print_interval = print_interval
+        self.dump_interval_s = dump_interval_s
+        self.print_interval_s = print_interval_s
+
+        self.last_dump_time = time.time()
+        self.last_print_time = 0.0
 
         self.start_time = None
 
@@ -60,7 +63,9 @@ class MCMCLogger(object):
         self.log_handles['times'].write('%f\n' % elapsed)
 
 
-        if (step % self.dump_interval == self.dump_interval-1):
+        t = time.time()
+        if t - self.last_dump_time > self.dump_interval_s:
+            self.last_dump_time = t
             self.dump(sg)
 
         for (eid, evnodes) in sg.evnodes.items():
@@ -153,9 +158,10 @@ class MCMCLogger(object):
                 for wn in waves:
                     plot_with_fit_shapes(os.path.join(self.run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
 
-        if step > 0 and ((step % self.print_interval == 0) or (step < 5)):
+        if step > 0 and time.time() - self.last_print_time > self.print_interval_s:
             s = self.acceptance_string(sg, lp, step, n_accepted, n_attempted)
             print s
+            self.last_print_time = time.time()
 
             if "acceptance_rates" not in self.log_handles:
                 self.log_handles["acceptance_rates"] = open(os.path.join(self.run_dir, 'acceptance_rates.txt'), 'a')

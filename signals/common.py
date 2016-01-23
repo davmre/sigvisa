@@ -228,6 +228,7 @@ class Waveform(object):
                     raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
                 f = lambda x: ma.masked_array(data=scipy.signal.decimate(
                     x, rounded_ratio), mask=x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
+
                 fstats['srate'] = new_srate
         elif name == "forcehz":
             new_srate = float(pieces[1])

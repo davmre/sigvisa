@@ -91,7 +91,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, mw_env=None, **kwargs):
+    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, mw_env=None, hack_coarse_signal=None, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -121,10 +121,16 @@ class ObservedSignalNode(Node):
                 self.mw_env = mw_env
             self._cached_env = nan_under_mask(self.mw_env.data)
 
+        self.hack_coarse_signal = hack_coarse_signal
         nm_parents = [k for k in self.parents.keys() if "nm_" in k]
         assert(len(nm_parents) == 1)
         self.nm_node = self.parents[nm_parents[0]]
         self.nm, self.nm_env = self.nm_node.get_value(), self.nm_node.nm_env
+        if self.hack_coarse_signal is not None:
+            self.nm.em.std *= self.hack_coarse_signal
+            if self.nm_env is not None:
+                self.nm_env.em.std *= self.hack_coarse_signal
+
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
 
 
@@ -382,7 +388,10 @@ class ObservedSignalNode(Node):
 
         nm_changed = [k for (k, n) in parent_keys_changed if "nm" in k]
         if len(nm_changed) > 0:
+            old_std = self.nm.em.std
             self.nm, self.nm_env = self.nm_node.get_value(), self.nm_node.nm_env
+            if self.hack_coarse_signal is not None:
+                self.nm.em.std = old_std
             self.noise_arssm.set_process(self.nm.params, self.nm.em.std**2, 0.0, self.nm.c)
 
         # if any arrival times or templates might have changed, recompute the tssm

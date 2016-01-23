@@ -264,5 +264,4 @@ def run_client(name, modelspec, runspec, port):
     swapper = SwapClient(sg, name, socket, swap_socket)
 
     do_inference(sg, modelspec, runspec, 
-                 dump_interval = 10, print_interval = 10,
                  swapper=swapper, model_switch_lp_threshold=None)

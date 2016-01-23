@@ -17,7 +17,7 @@ from sigvisa.source.event import get_event, Event
 from sigvisa.learn.train_param_common import load_modelid as tpc_load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian, LogNormal, InvGamma, Beta, Laplacian
+from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian, LogNormal, InvGamma, Beta, Laplacian, Bernoulli
 from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel
 from sigvisa.models.conditional import ConditionalGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
@@ -141,6 +141,8 @@ class SigvisaGraph(DirectedGraphModel):
                  jointgp_hparam_prior=None,
                  jointgp_param_run_init=None,
                  force_event_wn_matching=False,
+                 hack_coarse_tts=None,
+                 hack_coarse_signal=None,
                  phase_existence_model="ga_logistic",
                  min_mb = 2.5,
                  inference_region=None):
@@ -156,7 +158,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.gpmodel_build_trees = gpmodel_build_trees
         self.hack_param_constraint = hack_param_constraint
-
+        self.hack_coarse_tts = hack_coarse_tts
+        self.hack_coarse_signal = hack_coarse_signal
 
         if template_model_type=="param":
             # sensible defaults
@@ -405,7 +408,7 @@ class SigvisaGraph(DirectedGraphModel):
                 k, node = get_parent_value(eid=eid, sta=sta, phase=phase, param_name=param, chan=chan, band=band, parent_values=self.nodes_by_key, return_key=True)
                 nodes[param]=(k, node)
             except KeyError:
-                if param =="mult_wiggle_std":
+                if self.raw_signals and param =="mult_wiggle_std":
                     pass
                 else:
                     raise
@@ -553,6 +556,13 @@ class SigvisaGraph(DirectedGraphModel):
         #      = n log RT - RT - n log T
         #      = n log R + (n log T - n log T) - RT
         #      = n log R - RT
+
+        if self.uatemplate_rate == 0:
+            if n > 0:
+                return -np.inf
+            else:
+                return 0.0
+
         lp = n * np.log(self.uatemplate_rate) - (self.uatemplate_rate * valid_len)
 
         return lp
@@ -907,6 +917,7 @@ class SigvisaGraph(DirectedGraphModel):
             self.next_eid += 1
         ev.eid = eid
         evnodes = setup_event(ev, mag_prior_model = self.ev_mag_prior, 
+                              inference_region=self.inference_region,
                               fixed=fixed)
         self.evnodes[eid] = evnodes
         self.ev_site_phases[eid] = defaultdict(set)
@@ -1083,6 +1094,12 @@ class SigvisaGraph(DirectedGraphModel):
 
     def get_model(self, param, sta, phase, model_type=None, chan=None, band=None, modelid=None, runids=None):
         modelid = None
+
+        if param == "tt_residual" and self.hack_coarse_tts is not None:
+            # deliberately generate coarse models in which traveltimes are loosely constrained
+            model = Laplacian(0, self.hack_coarse_tts)
+            return model, modelid
+
         if model_type is None:
             model_type = self._tm_type(param=param, site=sta)
         if runids is None:
@@ -1127,7 +1144,7 @@ class SigvisaGraph(DirectedGraphModel):
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
 
-            node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
+            node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint, hack_coarse_tts=self.hack_coarse_tts)
             node.modelid = modelid
 
             if model_type=="gp_joint":
@@ -1199,6 +1216,9 @@ class SigvisaGraph(DirectedGraphModel):
         ev_time = evnodes['time'].get_value()
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
+                if wave_node.is_env:
+                    has_env_child = True
+
                 if wave_node.st > ev_time + MAX_TRAVEL_TIME: continue
                 if wave_node.et < ev_time: continue
 
@@ -1207,8 +1227,6 @@ class SigvisaGraph(DirectedGraphModel):
                     pred_time = ev.time + tt_predict(ev, sta, "P")
                     if pred_time < wave_node.st or pred_time > wave_node.et: continue
 
-                if wave_node.is_env:
-                    has_env_child = True
                 child_wave_nodes.add(wave_node)
 
                 # wave nodes depend directly on event location
@@ -1393,10 +1411,12 @@ class SigvisaGraph(DirectedGraphModel):
                 pass
 
         nm_label = self._get_wave_label(wave=wave).replace("wave", "nm")
-        nm_node = NoiseModelNode(wave, label=nm_label, is_env="env" in wave['filter_str'], nmid=nmid)
+        nm_node = NoiseModelNode(wave, label=nm_label, 
+                                 is_env="env" in wave['filter_str'], 
+                                 nmid=nmid)
         self.add_node(nm_node)
 
-        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), **kwargs)
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), hack_coarse_signal=self.hack_coarse_signal, **kwargs)
 
         for n in hparam_nodes:
             wave_node.addParent(n)
@@ -1502,7 +1522,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         # TODO: optimize
 
-    def prior_sample_event(self, stime=None, etime=None):
+    def prior_sample_event(self, stime=None, etime=None, fix_result=None, return_logp=False):
         s = Sigvisa()
 
         stime = self.event_start_time if stime is None else stime
@@ -1514,23 +1534,52 @@ class SigvisaGraph(DirectedGraphModel):
 
         event_time_dist = Uniform(stime, etime)
 
+        if fix_result is not None and self.inference_region is not None:
+            if not self.inference_region.contains_event(fix_result):
+                return -np.inf
+
         region_constraint = False
         while not region_constraint:            
-            origin_time = event_time_dist.sample()
+            lp = 0.0
 
-            s.sigmodel.srand(np.random.randint(sys.maxint))
-            lon, lat, depth = s.sigmodel.event_location_prior_sample()
-            mb = self.ev_mag_prior.sample()
-            natural_source = True # TODO : sample from source prior
+            if fix_result is not None:
+                origin_time = fix_result.time
+            else:
+                origin_time = event_time_dist.sample()
+            lp += event_time_dist.log_p(origin_time)
 
-            ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+            if fix_result is not None:
+                lon, lat, depth = fix_result.lon, fix_result.lat, fix_result.depth
+            else:
+                s.sigmodel.srand(np.random.randint(sys.maxint))
+                lon, lat, depth = s.sigmodel.event_location_prior_sample()
+            lp += s.sigmodel.event_location_prior_logprob(lon, lat, depth)
+
+            if fix_result is not None:
+                mb = fix_result.mb
+            else:
+                mb = self.ev_mag_prior.sample()
+
+            lp += self.ev_mag_prior.log_p(mb)
+
+            natural_source_model = Bernoulli(.999)
+            if fix_result is not None:
+                natural_source = fix_result.natural_source
+            else:
+                natural_source = natural_source_model.sample()
+            lp += natural_source_model.log_p(natural_source)
+
+            ev = Event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
 
             if self.inference_region is not None:
                 region_constraint = self.inference_region.contains_event(ev)
             else:
                 region_constraint = True
 
-        return ev
+        if return_logp:
+            return ev, lp
+        else:
+            return ev
 
     def prior_sample_events(self, force_mb=None, stime=None, etime=None, n_events=None):
         # assume a fresh graph, i.e. no events already exist
