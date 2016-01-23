@@ -308,6 +308,6 @@ void EventLocationPrior_Sample(const EventLocationPrior_t * dist,
   
   double u = RAND_UNIFORM(0, 1);
   *p_depth = -log(1-u) * 5.0;
-  printf("WARNING: sampling depth from only the first (surface) mixture component because gamma distributions are hard.\n");
+  // printf("WARNING: sampling depth from only the first (surface) mixture component because gamma distributions are hard.\n");
 }
 

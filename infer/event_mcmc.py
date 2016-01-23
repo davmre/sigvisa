@@ -294,7 +294,7 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
                     lqf, re_death, death_record = ev_sta_template_death_helper(sg, wn, eid, phases=killed, 
                                                                                fix_result=fr_sta_death) 
                     log_qforward += lqf
-                    print sta, lqf, log_qforward
+
                     replicate_fns.append(re_death)
                 # we store the death record as the future 
                 # fixed_result of the reverse birth move
@@ -319,7 +319,6 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
                 else:
                     lqf, re_birth, birth_record = ev_sta_template_birth_helper(sg, wn, eid, site_phases=birthed, fix_result=fr_sta_birth, proposal_type=birth_type)
                     log_qforward += lqf
-                    print sta, lqf, log_qforward
                     replicate_fns.append(re_birth)
                 phasejump_record[wn.label]['death'] = birth_record
 
@@ -553,7 +552,6 @@ def propose_event_lsqr_prob(sg, eid, **kwargs):
     old_vals = np.array([old_ev.lon, old_ev.lat, old_ev.depth, old_ev.time])
     old_lp = rv.logpdf(old_vals)
 
-    print "backward lp", old_lp
 
     return old_lp
 
@@ -700,6 +698,7 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
         lp_new_full = sg.current_log_p()
         lps_new = dict([(n.label, n.log_p()) for n in sg.all_nodes.values() if not n.deterministic()])
 
+
         if node_lps1 is not None:
             print "updates from ev1 proposal"
             node_lps1.dump_debug_info()
@@ -708,6 +707,8 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
             node_lps2.dump_debug_info()
         print "actual changes:"
         node_lps1.dump_detected_changes(lps_old, lps_new, rn)
+
+
         assert( np.abs( (lp_new-lp_old) - (lp_new_full-lp_old_full) ) < 1e-8)
 
 

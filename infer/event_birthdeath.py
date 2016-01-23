@@ -178,7 +178,7 @@ def joint_association_distribution(sg, wn, eid, phases, associate_using_mb=True,
             if np.abs(atime - pred_atime) < max_ttr: 
                 odds = np.exp(template_association_logodds(sg, wn, tmid, eid, phase, ignore_mb=ignore_mb))
                 possible_associations[phase].append((tmid, odds))
-                print "odds for", phase, tmid, "are", odds
+                sg.logger.debug( "odds for %s %d are %s" % (phase, tmid, odds))
 
     vals = [possible_associations[k] for k in phases]
     joint_dist = Counter()
@@ -202,7 +202,6 @@ def template_association_logodds(sg, wn, tmid, eid, phase, ignore_mb=False):
     lp_ev = ev_phase_template_logprob(sg, wn, eid, phase, param_values, ignore_mb=ignore_mb)
 
     logodds = lp_ev - lp_unass
-    #print "%s %d logodds %f" % (sta, tmid, logodds)
     return logodds
 
 
@@ -783,7 +782,7 @@ def clean_propose_phase_template(sg, wn, eid, phase,
         tmvals[param] = n.get_value()
         if debug_info is not None:
             debug_info[param] = (tmvals[param], param_lp, param_lp)
-        print "param", param, "val", tmvals[param], "lp", param_lp
+        sg.logger.debug( "param %s val %f lp %f" % (param, tmvals[param], param_lp))
 
     #if "arrival_time" not in tmvals:
     #    tmvals["arrival_time"] = tmnodes["arrival_time"][1].get_value()
@@ -985,7 +984,7 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_out
                     f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
 
-    print "death move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
+    sg.logger.info( "death move acceptance %f from old %f new %f lqb %f lqf %f" %( (lp_new + log_qbackward) - (lp_old+log_qforward), lp_old, lp_new, log_qbackward, log_qforward) )
 
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=redeath, revert_move=None, force_outcome=force_outcome)
 
@@ -1059,14 +1058,14 @@ def ev_sta_template_death_helper(sg, wn, eid, phases=None,
                                  unassociate_template(sg, wn, eid, phase, tmid=tmid, 
                                                       remove_event_phase=True))
 
-            print "proposing to deassociate %s at %s (lp %.1f)" % (phase, sta, deassociate_logprob)
+            sg.logger.debug("proposing to deassociate %s at %s (lp %.1f)" % (phase, sta, deassociate_logprob))
             assoc_tmids[phase] = tmid
         else:
             template_param_array = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
             death_record[phase] = template_param_array
             sg.delete_event_phase(eid, site, phase, re_sort=False)
             replicate_fns.append(lambda eid=eid, site=site, phase=phase: sg.delete_event_phase(eid, site, phase))
-            print "proposing to delete %s at %s (lp %f)"% (phase, sta, deassociate_logprob)                
+            sg.logger.debug( "proposing to delete %s at %s (lp %f)"% (phase, sta, deassociate_logprob))
     sorted_tmids = [assoc_tmids[phase] if phase in assoc_tmids else None for phase in sorted(phases)]
     death_record["assoc_tmids"] = tuple(sorted_tmids)
 
@@ -1157,7 +1156,7 @@ def propose_tmvals_from_gibbs_scan(sg, wn, eid, phase, fix_result=None, debug_in
             debug_info[param] = (v, logq_param, n.log_p())
         
         tmvals[param] = v
-        print phase, param, v, logq_param, d.sample(), d.sample(), d.sample()
+        # print phase, param, v, logq_param, d.sample(), d.sample(), d.sample()
         
     return logq, tmvals
 
@@ -1179,7 +1178,7 @@ def propose_associations(sg, wn, eid, site_phases, fix_result=None,
     else:
         assoc_tmids = fix_result["assoc_tmids"]
         assoc_lp = np.log(jd[assoc_tmids]) if assoc_tmids in jd else -np.inf
-    print "using assoc", zip(site_phases, assoc_tmids), "with lp", assoc_lp
+    sg.logger.debug( "using assoc %s with lp %f" % ( zip(site_phases, assoc_tmids), assoc_lp) )
     log_qforward += assoc_lp
     
     if debug_info is not None:
@@ -1293,7 +1292,7 @@ def dumb_propose_phase_template(sg, wn, eid, phase,
         param_lp = n.log_p()
         log_q += param_lp
 
-        print "dumb logq", param, wn.sta, phase, n.get_value(), param_lp, " fixed" if fix_result is not None else " unfixed"
+        sg.logger.debug( "dumb logq %s %s %s %s %f %s" % (param, wn.sta, phase, n.get_value(), param_lp, " fixed" if fix_result is not None else " unfixed"))
 
         tmvals[param] = n.get_value()
         if debug_info is not None:
@@ -1340,7 +1339,7 @@ def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None,
             tmvals, tmpl_lp = clean_propose_phase_template(sg, wn, eid, phase=phase, 
                                                            fix_result=fr_phase, 
                                                            debug_info=debug_phase)      
-            print wn.sta, tmpl_lp
+            #sg.logger.debug("%s %f" % (wn.sta, tmplg_lp))
 
 
         # to replay this move, we just need to reset the proposed values
@@ -1741,7 +1740,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None,
             accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
 
 
-    print "birth move acceptance", (lp_new + log_qbackward) - (lp_old+log_qforward), "from", lp_old, lp_new, log_qbackward, log_qforward
+    sg.logger.info( "birth move acceptance %f from old %f new %f lqb %f lqf %f" % ( (lp_new + log_qbackward) - (lp_old+log_qforward), lp_old, lp_new, log_qbackward, log_qforward))
 
 
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert, force_outcome=force_outcome)
@@ -1752,7 +1751,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
         hough_array, eid, debug_info = proposal_extra
 
         if log_to_run_dir is None:
-            print "WARNING: not logging event because no rundir specified"
+            sg.logger.warning("WARNING: not logging event because no rundir specified")
             return
 
         log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
@@ -1782,10 +1781,10 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
                 
         if np.random.rand() < 1.0: #0.1:
             sites = sg.site_elements.keys()
-            print "saving hough array picture...",
+            sg.logger.info("saving hough array picture...")
             fname = 'last_hough%s.png' % ("_".join(["",] + hough_kwargs.keys()))
             visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, fname), region=sg.inference_region)
-            print "done"
+
 
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         hough_array, eid, debug_info = proposal_extra
@@ -1930,9 +1929,9 @@ def log_event_birth(sg, hough_array, run_dir, eid):
     # save Hough transform
     sites = sg.site_elements.keys()
     if hough_array is not None:
-        print "visualizing hough array...",
+        sg.logger.info("visualizing hough array...")
         visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'), region=sg.inference_region)
-    print "done"
+
 
 def prettyprint_debug(birth_debug):
     s = ""

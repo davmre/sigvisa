@@ -251,7 +251,7 @@ def preprocess_signal_for_sampling(wave_env):
     s = np.sum(d)
 
     if s <= 0:
-        print "WARNING: tried to sample from envelope with no positive part, using uniform distribution instead"
+        Sigvisa().logger.warning("tried to sample from envelope with no positive part, using uniform distribution instead")
         d = np.ones(wave_env.shape)
         d = np.sum(d)
 
@@ -586,7 +586,7 @@ def split_move_old(sg, wn, return_probs=False, force_accept=False, atime_width=M
 
     u = np.random.rand()
     if force_accept or ((lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u)):
-        print "split template %d from %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (-new_tmpl["arrival_time"].tmid, arr[1], lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
+        sg.logger.info("split template %d from %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (-new_tmpl["arrival_time"].tmid, arr[1], lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u)))
 
         if return_probs:
             return True, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
@@ -693,7 +693,7 @@ def merge_move_old(sg, wn, return_probs=False, split_atime_width=MERGE_PROPOSAL_
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
-        print "merged templates: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
+        sg.logger.info( "merged templates: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u)))
 
         uaid = lost_nodes['arrival_time'][1].tmid
         del sg.uatemplates[uaid]
@@ -701,7 +701,6 @@ def merge_move_old(sg, wn, return_probs=False, split_atime_width=MERGE_PROPOSAL_
 
 
         if return_probs:
-            print "proposed", arr1, arr2, keep1
             return True, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
         else:
             return True
@@ -726,7 +725,6 @@ def merge_move_old(sg, wn, return_probs=False, split_atime_width=MERGE_PROPOSAL_
         #assert(np.abs(lp - lp_old) < 1e-10)
 
         if return_probs:
-            print "proposed", arr1, arr2, keep1
             return False, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
         else:
             return False
@@ -1109,7 +1107,7 @@ def get_merge_distribution(sg, wn, keep_arr, keep_nodes, sorted_params,
     np.random.seed(1)
     sp, vals = single_template_MH(sg, wn, [(phase, keep_nodes)], steps=mh_burnin_steps+mh_samples, window_lps=window_lps, hamiltonian=False, sorted_params=sorted_params)
     t2 = time.time()
-    print "opt time %s mcmc time: %s" % (t1-t0, t2-t1)
+    sg.logger.debug( "template merge opt time %s mcmc time: %s" % (t1-t0, t2-t1))
 
     if (sp != sorted_params):
         print sp
@@ -1130,7 +1128,7 @@ def get_merge_distribution(sg, wn, keep_arr, keep_nodes, sorted_params,
         lb = lambda v : sg.joint_logprob(v, sorted_node_list, relevant_nodes, c=-1)
         lgrad = lambda v : sg.log_p_grad(v, sorted_node_list, relevant_nodes, c=-1)
 
-        print "at objective", lb(m)
+        sg.logger.debug( "at objective %f" % lb(m))
 
         try:
             t1 = time.time()
@@ -1155,10 +1153,10 @@ def get_merge_distribution(sg, wn, keep_arr, keep_nodes, sorted_params,
 
             #H2 = nd.Jacobian(lgrad).jacobian(m)
             t3 = time.time()
-            print t3-t2, t2-t1, np.max(H2-H)
+            #print t3-t2, t2-t1, np.max(H2-H)
 
-            print H
-            print H2
+            #print H
+            #print H2
 
 
             L = np.linalg.cholesky(H2)
@@ -1525,7 +1523,7 @@ def amp_decay_proposal_laplace_ar(wn, tg, env_window, window_start_idx, peak_off
         trials = 0
         while lbounds_violation.any() or hbounds_violation.any():
             if trials > 20:
-                print "WARNING: could not sample valid decay parameters"
+                sg.logger.warning("could not sample valid decay parameters")
                 sample[lbounds_violation] = lb[lbounds_violation]
                 sample[hbounds_violation] = hb[hbounds_violation]
                 break
@@ -1896,7 +1894,7 @@ def hamiltonian_move_reparameterized(sg, wn, tmnodes, window_lps=None, **kwargs)
 
         d = peak_time - arrival_time
         if d < 0:
-            print "WARNING BAD peak_time"
+            sg.logger.warning("hamiltonian move: BAD peak_time")
             d = 0.1
 
         peak_offset = np.log(d)
@@ -2145,7 +2143,7 @@ def amp_decay_proposal(*args, **kwargs):
     try:
         return amp_decay_proposal_linear(*args, **kwargs)
     except InvalidParamException:
-        print "failing back to laplace"
+        Sigvisa().logger.warning("amp decay proposal falling back to laplace")
         return amp_decay_proposal_laplace(*args, **kwargs)
 
 def get_fit_window_dist_bayes(wn, peak_time, env_diff_pos, incr_s=2.0, max_s=60.0, min_s=5.0):
@@ -2436,12 +2434,12 @@ def amp_decay_proposal_laplace(env, true_srate, downsample_by=1, fix_result=None
     logp = -.5 * np.sum(z**2) - half_logdet - 3/2.0 * np.log(2*np.pi)
 
 
-    print "*******************"
-    print "mean", x
-    print "cov", np.linalg.inv(prec)
-    print "sample", sample
-    print "z", z
-    print "logp", logp
+    #print "*******************"
+    #print "mean", x
+    #print "cov", np.linalg.inv(prec)
+    #print "sample", sample
+    #print "z", z
+    #print "logp", logp
 
 
     # truncate the proposals at reasonable bounds.  technically this

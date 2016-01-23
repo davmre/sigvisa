@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import time
+import sys
 from sigvisa.database import db
 import sigvisa.database.sites as db_sites
 from sigvisa.load_c_components import load_sigvisa, load_earth
@@ -8,6 +9,7 @@ import sigvisa.sigvisa_c
 
 from collections import defaultdict
 import threading
+import logging
 #from sigvisa.lockfile_pool import get_lock_from_pool
 
 class NestedDict(dict):
@@ -58,6 +60,10 @@ class Sigvisa(threading.local):
 
         self.pid = os.getpid()
         self.homedir = os.getenv("SIGVISA_HOME")
+
+        logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+        self.logger = logging.getLogger("sigvisa")
+
 
         st = 1237680000
         et = st + 24 * 3600

@@ -156,6 +156,9 @@ class SigvisaGraph(DirectedGraphModel):
 
         super(SigvisaGraph, self).__init__()
 
+        s = Sigvisa()
+        self.logger = s.logger
+
         self.gpmodel_build_trees = gpmodel_build_trees
         self.hack_param_constraint = hack_param_constraint
         self.hack_coarse_tts = hack_coarse_tts
@@ -1811,8 +1814,14 @@ class SigvisaGraph(DirectedGraphModel):
         os.system("tar cfz %s.tgz %s/*" % (dump_path, dump_path))
         print "generated tarball"
 
+    def __getstate__(self):
+        d = copy.copy(self.__dict__)
+        del d["logger"]
+        return d
+
     def __setstate__(self, d):
         self.__dict__ = d
+        self.logger = Sigvisa().logger
         for sta in self.station_waves.keys():
 
             gpmodels = self._joint_gpmodels[sta]
