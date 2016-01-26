@@ -6,6 +6,7 @@ import gzip
 import functools32
 import numpy as np
 import numpy.ma as ma
+import datetime
 
 from optparse import OptionParser
 from obspy.core import Trace, Stream, UTCDateTime
@@ -142,6 +143,15 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
 
 @functools32.lru_cache(maxsize=1024)
 def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
+    dt = datetime.datetime.utcfromtimestamp(stime)
+    if dt.year < 2009:
+        return fetch_waveform_sac(station, chan, stime, etime, pad_seconds=pad_seconds, cursor=cursor)
+    else:
+        return fetch_waveform_ims(station, chan, stime, etime, pad_seconds=pad_seconds, cursor=cursor)
+
+
+
+def fetch_waveform_ims(station, chan, stime, etime, pad_seconds=20, cursor=None):
     """
     Returns a single Waveform for the given channel at the station in
     the given interval. If there are periods for which data are not
@@ -308,3 +318,138 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
     # convert the raw values into nm (nanometers)
     calib = float(waveform['calib'])
     return [float(x) * calib for x in data]
+
+
+def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None):
+    
+    
+    """
+    - find and load all files that are relevant to this time period
+    - choose a common srate
+    - allocate an array (MA) for the entire time period at that srate
+    - move through files and copy over data as appropriate
+    """
+    
+    base_dir = "/media/usb0/llnl_data/"
+    
+    stime = stime - pad_seconds
+    etime = etime + pad_seconds
+
+    global_stime = stime
+    global_etime = etime
+    
+    s = Sigvisa()
+    close_cursor = False
+    if cursor is None:
+        cursor = s.dbconn.cursor()
+        close_cursor = True
+
+    if s.earthmodel.site_info(station, stime)[3] == 1:
+        cursor.execute("select refsta from static_site where sta='%s'" % station)
+        options = [v[0] for v in cursor.fetchall() if v[0] != station]
+        selection = options[0]
+    else:
+        selection = station
+
+    if chan == "auto":
+        chan = s.default_vertical_channel[selection]
+    chan = s.canonical_channel_name[chan]
+    chan_list = s.equivalent_channels(chan)
+    
+    sql = "select chan, stime, etime, hz, npts, subdir, fname from llnl_wfdisc where sta = '%s' and %s and stime < %f and etime > %f and hz > 9.0" % (
+        selection, sql_multi_str("chan", chan_list), global_etime, global_stime)
+    cursor.execute(sql)
+    waveforms = cursor.fetchall()
+    if not waveforms:
+        raise MissingWaveform("Can't find data for sta %s chan %s time %d"
+                              % (station, chan, global_stime))
+
+    if close_cursor:
+        cursor.close()
+    
+    hzs = [wf[3] for wf in waveforms]
+    hz = np.min(hzs)    
+    
+    npts = int((etime - stime) * hz)
+    global_data = np.empty((npts,))
+    global_data.fill(np.nan)
+    
+    for (chan, wave_stime, wave_etime, wave_hz, wave_npts, subdir, fname) in waveforms:
+        
+        # at which offset into this waveform should we start collecting samples
+        first_offset_time = max(stime - wave_stime, 0)
+        first_offset = int(np.floor(first_offset_time * wave_hz))
+        # how many samples are needed remaining
+        load_start_time = wave_stime + first_offset_time
+        desired_samples = int(np.floor((global_etime - load_start_time) * wave_hz))
+        # how many samples are actually available
+        available_samples = wave_npts - first_offset
+        samples_to_read = min(desired_samples, available_samples)
+        
+        
+        fullpath = os.path.join(base_dir, subdir, fname)
+        st =  obspy.read(fullpath)
+        wave = st[0].data[first_offset:first_offset+samples_to_read]
+        
+        if wave_hz != hz:
+            decimation = wave_hz/hz
+            wave = scipy.signal.decimate(wave, decimation)
+        
+        # copy the data we loaded into the global array
+        t_start = max(0, int((wave_stime - global_stime) * hz))
+        t_end = t_start + len(wave)
+        global_data[t_start:t_end] = wave
+
+        # do we have all the data that we need
+        if desired_samples <= available_samples:
+            break
+
+        # otherwise move the start time forward for the next file
+        stime = wave_etime
+        # and adust the end time to ensure that the correct number of samples
+        # will be selected in the next file
+        
+    masked_data = mirror_missing(ma.masked_invalid(global_data))
+
+    if pad_seconds > 0:
+        pad_samples = int(pad_seconds * hz)
+        masked_data[0:pad_samples] = ma.masked
+        masked_data[-pad_samples:] = ma.masked
+
+    return Waveform(data=masked_data, sta=selection, stime=global_stime, srate=hz, chan=chan)
+        
+
+
+def generate_sac_db():
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+    base_dir = "/media/usb0/llnl_data/"
+    for site in os.listdir(base_dir):
+        site_dir = os.path.join(base_dir, site)
+        for subdir in os.listdir(site_dir):
+            if "response" in subdir: continue
+            d = os.path.join(site_dir, subdir)
+            saclist = os.listdir(d)
+            for sacfile in saclist:
+                if not sacfile.endswith("SAC"): continue
+                fullpath = os.path.join(d, sacfile)
+                #print fullpath
+                
+                st = obspy.read(fullpath, debug_headers=True, headonly=True)
+                ss = st[0].stats
+                cmd = "INSERT into llnl_wfdisc (sta, chan, stime, etime, hz, delta, npts, subdir, fname) values ('%s', '%s', %f, %f, %f, %f, %d, '%s', '%s')"
+                fmt = cmd % (ss.station, ss.channel, 
+                             ss.starttime.timestamp, 
+                             ss.endtime.timestamp,
+                             ss.sampling_rate,
+                             ss.delta,
+                             ss.npts,
+                             os.path.join(site, subdir),
+                             sacfile)
+                cursor.execute(fmt)
+                print ".",
+            print
+            print "inserted %d records from %s" % (len(saclist), os.path.join(site, subdir))
+            s.dbconn.commit()
+                
+
