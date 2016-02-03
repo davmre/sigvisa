@@ -18,12 +18,16 @@ class MCMCLogger(object):
             base_path = os.path.join(s.homedir, "logs", "mcmc")
             formatter = lambda i : "%05d" % i
             run_dir = make_next_unused_dir(base_path, formatter)
+        else:
+            mkdir_p(run_dir)
 
         self.run_dir = run_dir
 
-        with open(os.path.join(run_dir, 'cmd.txt'), 'w') as f:
-            f.write(" ".join(sys.argv))
+        cmd_file = os.path.join(run_dir, "cmd.txt")
 
+        if not (os.path.exists(cmd_file)):
+            with open(cmd_file, 'w') as f:
+                f.write(" ".join(sys.argv))
 
         self.log_handles = dict()
 
@@ -46,7 +50,8 @@ class MCMCLogger(object):
 
 
     def start(self):
-        self.start_time = time.time()
+        if self.start_time is None:
+            self.start_time = time.time()
 
     def log(self, sg, step, n_accepted, n_attempted, move_times):
 
@@ -206,7 +211,14 @@ class MCMCLogger(object):
         labels = ('step', 'arrival_time', 'peak_offset', 'coda_height', 'peak_decay', 'coda_decay', 'mult_wiggle_std')
 
 
-        lps = np.loadtxt(os.path.join(self.run_dir, 'lp.txt'))
+        lp_fname = os.path.join(self.run_dir, 'lp.txt')
+        try:
+            lps = np.loadtxt(lp_fname)
+        except:
+            lps = np.genfromtxt(lp_fname, skip_footer=2)
+            n = len(lps)
+            vals = vals[:n]
+            
         return vals, labels, lps
 
     def acceptance_string(self, sg, lp, step, n_accepted, n_attempted):

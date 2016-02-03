@@ -338,6 +338,7 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
     global_stime = stime
     global_etime = etime
     
+
     s = Sigvisa()
     close_cursor = False
     if cursor is None:
@@ -356,7 +357,7 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
     chan = s.canonical_channel_name[chan]
     chan_list = s.equivalent_channels(chan)
     
-    sql = "select chan, stime, etime, hz, npts, subdir, fname from llnl_wfdisc where sta = '%s' and %s and stime < %f and etime > %f and hz > 9.0" % (
+    sql = "select chan, stime, etime, hz, npts, subdir, fname from llnl_wfdisc where sta = '%s' and %s and stime < %f and etime > %f and hz > 9.0 " % (
         selection, sql_multi_str("chan", chan_list), global_etime, global_stime)
     cursor.execute(sql)
     waveforms = cursor.fetchall()
@@ -368,13 +369,15 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
         cursor.close()
     
     hzs = [wf[3] for wf in waveforms]
-    hz = np.min(hzs)    
+    hz = np.min(hzs)
+    sorted_waves = sorted(waveforms, key = lambda wf : (wf[1], wf[3]))
+
     
     npts = int((etime - stime) * hz)
     global_data = np.empty((npts,))
     global_data.fill(np.nan)
     
-    for (chan, wave_stime, wave_etime, wave_hz, wave_npts, subdir, fname) in waveforms:
+    for (chan, wave_stime, wave_etime, wave_hz, wave_npts, subdir, fname) in sorted_waves:
         
         # at which offset into this waveform should we start collecting samples
         first_offset_time = max(stime - wave_stime, 0)

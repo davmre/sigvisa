@@ -3,6 +3,7 @@ import inspect
 import heapq, random
 
 import numpy as np
+import logging
 
 """
 
@@ -125,12 +126,18 @@ class Counter(dict):
 
         if total==np.inf:
             keys, vals = zip(*self.items())
-            f = np.isfinite(vals)
-            if np.sum(f) != len(vals)-1:
-                raise ValueError("trying to normalize a counter with multiple non-finite elements!")
-            nf_idx = np.arange(len(vals))[~f][0]
-            nf_key = keys[nf_idx]
-            self[nf_key] = 1.0
+
+            infs = np.isinf(vals)
+            n_infs = np.sum(infs)
+
+            if n_infs > 1:
+                l = logger.getLogger("counter")
+                l.warning("normalizing counter with multiple non-finite values")
+
+            inf_idxs = np.arange(len(vals))[infs]
+            for i in inf_idxs:
+                key = keys[i]
+                self[key] = 1.0/n_infs
 
 
     def sample(self):

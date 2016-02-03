@@ -68,16 +68,18 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
     yvars = np.asarray(yvars, dtype=np.float64).flatten()
 
     # remove outliers
-    bounds = {'tt_residual': (-20, 20),
-              'amp_transfer': (-6, 10),
+    bounds = {'tt_residual': (-30, 30),
+              'amp_transfer': (-6, 15),
               'coda_decay': (-6, 4),
               'peak_decay': (-6, 4),
               'mult_wiggle_std': (0, 1),
               'peak_offset': (-5, 5) }
-    tbounds = bounds[target]
-    valid = (ymeans <= tbounds[1])*(ymeans >= tbounds[0])
-    X = X[valid, :]
-    ymeans, yvars, evids = ymeans[valid], yvars[valid], evids[valid]
+    if not target.startswith("db"):
+        tbounds = bounds[target]
+        valid = (ymeans <= tbounds[1])*(ymeans >= tbounds[0])
+        X = X[valid, :]
+        ymeans, yvars, evids = ymeans[valid], yvars[valid], evids[valid]
+
 
     return X, ymeans, yvars, evids
 
@@ -164,6 +166,8 @@ def main():
                       help="additional variance allowed on top of global model params in the per-station params (1.0)")
     parser.add_option("--iterate", dest="iterate", default=0, type="int",
                       help="perform additional retraining iterations to shrink towards a global model (0)")
+    parser.add_option("--wiggle_srate", dest="wiggle_srate", default=None, type="float",
+                      help="sampling rate of signals for which to train latent wiggle models (only if preset=db...)")
     parser.add_option("--preset", dest="preset", default=None, type="str",
                       help="use preset models types to build models for all targets in one command. options are 'param' to build parametric models (amp_transfer: param_sin1, tt_residual: constant_laplacian, coda_decay: param_linear_distmb, peak_offset: param_linear_mb) or 'gp' to build nonparametric GP models")
 
@@ -217,13 +221,13 @@ def main():
         targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_decay', 'peak_offset', 'mult_wiggle_std'] if targets is None else targets
         model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'constant_beta'}
         iterations = 5
-    if options.preset == "gplocal":
-        targets = ['tt_residual', 'coda_decay', 'peak_offset', 'amp_transfer'] if targets is None else targets
-        model_types = {'amp_transfer': 'gplocal+lld+sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'gplocal+lld+linear_distmb', 'peak_offset': 'gplocal+lld+linear_mb'}
-        iterations = 5
+    if options.preset == "gpparam":
+        targets = ['coda_decay', 'peak_offset', 'amp_transfer', 'peak_decay'] if targets is None else targets
+        model_types = {'amp_transfer': 'gplocal+lld+sin1', 'coda_decay': 'gplocal+lld+linear_distmb', 'peak_decay': 'gplocal+lld+linear_distmb', 'peak_offset': 'gplocal+lld+linear_mb', }
+        iterations = 1
     if options.preset is not None and options.preset.startswith("db"):
         wiggle_family = options.preset
-        basis = construct_wavelet_basis(20.0, wavelet_str=wiggle_family)
+        basis = construct_full_basis(options.wiggle_srate, wavelet_str=wiggle_family)
         targets = [wiggle_family + "_%d" % i for i in range(basis.shape[0])]
         model_types = dict([(target, "gp_lld") for target in targets])
         iterations = 0
@@ -288,6 +292,11 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
+
+                if len(X) == 0:
+                    print "no data for %s %s %s, skipping..." % (site, target, phase)
+                    continue
+                    
 
                 model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=template_shape, unique=True)
 

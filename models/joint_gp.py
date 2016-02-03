@@ -126,6 +126,21 @@ class JointGP(object):
         noise_var, cov = self._get_cov()
         return self.ymean, cov.wfn_params[0] + noise_var
 
+    def prior_dist(self):
+        m, v = self.prior()
+        return Gaussian(m, std=np.sqrt(v)).sample()
+
+    def conditional_dist(self, cond):
+        eid, evdict = self._ev_from_pv(cond)
+
+        # get the conditional distribution on one template value given the others
+        try:
+            m, v = self.posterior(eid)
+        except Exception as e:
+            print e
+            m, v = self.prior()
+        return Gaussian(float(m), float(np.sqrt(v)))
+
     def posterior(self, holdout_eid, x=None, evdict=None):
         """
         posterior on value for event eid, given messages from all other events

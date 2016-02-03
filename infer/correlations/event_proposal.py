@@ -64,7 +64,6 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
     n = len(proposal_weights)
 
 
-
     # TODO: more intelligent choice of proposal stddev
     # 1deg ~= 100km
     # so stddev of 5km ~= 0.05deg
@@ -75,9 +74,9 @@ def correlation_location_proposal(sg, fix_result=None, proposal_dist_seed=None, 
         xx, signals = proposals[kernel]
         lon, lat, depth = xx[0,0], xx[0,1], xx[0,2]
 
-        londist = Gaussian(lon, 0.02)
-        latdist = Gaussian(lat, 0.02)
-        depthdist = TruncatedGaussian(depth, 10.0, a=0)
+        londist = Gaussian(lon, 0.001)
+        latdist = Gaussian(lat, 0.001)
+        depthdist = TruncatedGaussian(depth, 1.0, a=0)
 
         plon, plat, pdepth = (londist.sample(), latdist.sample(), depthdist.sample())
         ptime = sample_time_from_pdf(otime_dist, global_stime, srate=1.0)

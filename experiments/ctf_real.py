@@ -14,6 +14,7 @@ from optparse import OptionParser
 stas = "ASAR,FITZ,ILAR,MKAR,WRA,YKA,KURK,SONM,BVAR,CTA,CMAR,ZALV,AKTO,INK,AAK,AKBB,ARCES,CPUP,DZM,FINES,JKA,KBZ,KSRS,LPAZ,NOA,NVAR,PETK,PLCA,PMG,STKA,TORD,URZ,USRK,VNDA".split(",")
 #stas = "ASAR,MKAR,FITZ".split(",")
 
+
 #stas="MKAR,ASAR,WRA,PETK,FINES,FITZ,YKA,VNDA,JKA,HFS,MJAR".split(",")
 
 def generate_leb_truth(hour=0.0, len_hours=2.0, runid=37, hz=2.0, enable_uatemplates=False, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"]):

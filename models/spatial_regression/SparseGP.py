@@ -42,12 +42,14 @@ default_wavelet_params = (.0001, InvGamma(beta=0.001, alpha=10.0),
 
 
 start_params_lld = {"coda_decay": default_other_params,
+                    "peak_decay": default_other_params,
                     "amp_transfer": default_other_params,
                     "peak_offset": default_other_params,
                     "tt_residual": default_other_params,
                     "amp": default_amp_params,
                     "phase": default_phase_params,
                     "db4_2.0_3_30": default_wavelet_params,
+                    "db4_2.0_3_20.0": default_wavelet_params,
                     }
 
 

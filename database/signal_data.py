@@ -187,10 +187,10 @@ def execute_and_return_id(dbconn, query, idname, **kwargs):
     return lrid
 
 
-def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10, wiggle_family=None):
+def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10, wiggle_family=None):
     """
 
-    assumes "from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit"
+    assumes "from sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit"
 
     """
 
@@ -207,7 +207,7 @@ def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=Non
 
     wiggle_cond = "and fp.wiggle_family='%s'" % (wiggle_family) if wiggle_family is not None else ""
 
-    cond = "fp.fitid = fit.fitid and fp.coda_height > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond, wiggle_cond)
+    cond = "fp.fitid = fit.fitid and fp.coda_height > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.dist between %f and %f %s %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_dist, max_dist, approval_cond, cost_cond, wiggle_cond)
 
     return cond
 
@@ -247,7 +247,7 @@ def read_messages(message_fname, runid):
 def load_training_messages(cursor, **kwargs):
     cond = sql_param_condition(**kwargs)
 
-    sql_query = "select distinct lebo.evid, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.peak_decay, fp.coda_decay, fit.runid, fp.message_fname from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
+    sql_query = "select distinct fit.evid, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.peak_decay, fp.coda_decay, fit.runid, fp.message_fname from sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
 
     s = Sigvisa()
     ensure_dir_exists(os.path.join(s.homedir, "db_cache"))

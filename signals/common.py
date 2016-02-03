@@ -238,7 +238,12 @@ class Waveform(object):
                 x, rounded_ratio), mask=x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
             fstats['srate'] = new_srate
         elif name == "env":
-            f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
+            def f(x):
+                # don't allow envelopes to be affected by crazy things under the mask
+                d = x.data.copy()
+                d[x.mask] = 0.0
+                return ma.masked_array(data=obspy.signal.filter.envelope(d), mask=x.mask)
+            #f = lambda x: 
         elif name == "smooth":
             if len(pieces) > 1:
                 window_len = int(float(pieces[1]) * self['srate'])

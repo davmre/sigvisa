@@ -18,50 +18,33 @@ evids = [5335822, 5334501, 5334991, 5334726, 5335144, 5349684, 5348178, 5334971,
 
 
 
-def profile():
-    isc_evs = [load_isc(evid) for evid in evids]
-    
-    main_ev = isc_evs[0]
-    isc_evs = [ev for ev in isc_evs if ev is not None and dist_km((main_ev.lon, main_ev.lat), (ev.lon, ev.lat)) < 15]
+def sigvisa_fit_jointgp(stas, evs, runids,  max_hz=None, **kwargs):
 
-    rs = EventRunSpec(evs=isc_evs, stas=stas, runids=(1,), disable_conflict_checking=True)
-
-
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_30.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0, skip_levels=2)
-    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
-
-    #ms = [ms3,]
-    sg = rs.build_sg(ms3)
-    initialize_sg(sg, ms3, rs)
-    do_inference(sg, ms3, rs, max_steps=1000, model_switch_lp_threshold=-1000,  dump_interval=5)
-
-def sigvisa_locate_ctf():
-
-    seed=5
-
-    isc_evs = [load_isc(evid) for evid in evids]
-    main_ev = isc_evs[0]
+    #isc_evs = [load_isc(evid) for evid in evids]
+    #main_ev = isc_evs[0]
     #main_ev = get_event(evid=5335822)
-    isc_evs = [ev for ev in isc_evs if ev is not None and dist_km((main_ev.lon, main_ev.lat), (ev.lon, ev.lat)) < 15]
+    #isc_evs = [ev for ev in isc_evs if ev is not None and dist_km((main_ev.lon, main_ev.lat), (ev.lon, ev.lat)) < 15]
 
-    rs = EventRunSpec(evs=isc_evs, stas=stas, runids=(1,), disable_conflict_checking=True)
+    rs = EventRunSpec(evs=evs, stas=stas, runids=runids, disable_conflict_checking=True)
 
-    ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", max_hz=10.0, raw_signals=True, seed=seed)
+    ms1 = ModelSpec(template_model_type="dummyPrior", wiggle_family="iid", raw_signals=False, max_hz=1.0, **kwargs)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
     #ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
 
-    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0, seed=seed)
+    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", raw_signals=True, max_hz=max_hz, **kwargs)
     ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'])
 
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="dummy", raw_signals=True, max_hz=10.0, seed=seed)
+    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="dummy", raw_signals=True, max_hz=max_hz, **kwargs)
     ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
 
-    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=10.0, seed=seed)
+    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=max_hz,**kwargs)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True)
 
     ms = [ms1, ms2, ms4]
-    do_coarse_to_fine(ms, rs, max_steps_intermediate=20, dump_interval=5)
+    do_coarse_to_fine(ms, rs, max_steps_intermediate=100)
+
+
 
 
 def continue_from(old_sgfile):

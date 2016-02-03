@@ -23,7 +23,7 @@ from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
-global_stds = {'coda_height': .7,
+global_stds = {'coda_height': 0.7,
                'coda_height_small': .1,
                'coda_decay': 1.2,
                'peak_decay': 1.8,
@@ -242,6 +242,7 @@ def swap_move_checkin(swapper, step, checkpoint):
 def run_open_world_MH(sg, steps=10000,
                       enable_event_openworld=True,
                       enable_event_moves=True,
+                      enable_phase_openworld=True,
                       enable_template_openworld=True,
                       enable_template_moves=True,
                       enable_hparam_moves=True,
@@ -257,9 +258,10 @@ def run_open_world_MH(sg, steps=10000,
                       stop_condition=None):
 
 
+
     if enable_event_openworld:
-        hough_rate = 0.2
-        correlation_rate = 0.0
+        hough_rate = 0.0
+        correlation_rate = 0.2
         global_moves = {'event_swap': (swap_events_move_hough, 0.1),
                         'event_repropose': (repropose_event_move_hough, 0.1),
                         'event_threeway_swap': (swap_threeway_hough, 0.00),
@@ -398,17 +400,18 @@ def run_open_world_MH(sg, steps=10000,
                          n_accepted=n_accepted, move_times=move_times,
                          move_prob=prob, sg=sg, eid=eid)
 
-            for site in sg.site_elements.keys():
-                prob=0.1
-                run_move(move_name="phase_birth", fn=phase_birth_move, 
-                         step=step, n_attempted=n_attempted,
-                         n_accepted=n_accepted, move_times=move_times,
-                         move_prob=prob, sg=sg, site=site, eid=eid)
+            if enable_phase_openworld:
+                for site in sg.site_elements.keys():
+                    prob=0.3
+                    run_move(move_name="phase_birth", fn=phase_birth_move, 
+                             step=step, n_attempted=n_attempted,
+                             n_accepted=n_accepted, move_times=move_times,
+                             move_prob=prob, sg=sg, site=site, eid=eid)
 
-                run_move(move_name="phase_death", fn=phase_death_move, 
-                         step=step, n_attempted=n_attempted,
-                         n_accepted=n_accepted, move_times=move_times,
-                         move_prob=prob, sg=sg, site=site, eid=eid)
+                    run_move(move_name="phase_death", fn=phase_death_move, 
+                             step=step, n_attempted=n_attempted,
+                             n_accepted=n_accepted, move_times=move_times,
+                             move_prob=prob, sg=sg, site=site, eid=eid)
                 
 
         for (site, elements) in sg.site_elements.items():

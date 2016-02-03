@@ -18,6 +18,7 @@ class Node(object):
         self.mark = 0
         self.key_prefix = ""
 
+        # built up in sigvisa_graph.setup_site_param_node_indep
         self.params_modeled_jointly = set()
 
         if not keys:
@@ -318,14 +319,35 @@ class Node(object):
             p = -(10*(np.abs(value)-25))**4
         elif 'peak_offset' in param and value > 3.0:
             p = -(10*(value-3))**4
-        elif 'coda_decay' in param and value < -9:
-            p = -( 10 * -(value+9))**4
+        elif 'coda_decay' in param and value < -6:
+            p = -( 10 * -(value+6))**4
 
         return p
 
+    def modeled_as_joint(self):
+        if len(self.params_modeled_jointly) > 0:
+            assert (self.model is None or isinstance(self.model, DummyModel))
+            return True
+        return False
+
+    def joint_conditional_dist(self, parent_values=None):
+        assert( self.modeled_as_joint() )
+        if parent_values is None:
+            parent_values = self._parent_values()
+
+
+        joint_model = list(self.params_modeled_jointly)[0]
+        return joint_model.conditional_dist(cond=parent_values)
+        
 
     def log_p(self, parent_values=None, v=None):
         #  log probability of the values at this node, conditioned on all parent values
+
+        if self._fixed:
+            # allow fixing nodes to values that would otherwise give -inf probability
+            # for example, when constraining events to a region, we still allow
+            # fixed events outside of that region
+            return 0.0
 
         if parent_values is None:
             parent_values = self._parent_values()
@@ -404,7 +426,13 @@ class Node(object):
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        nv = self.model.sample(cond=parent_values)
+
+        if self.model is not None:
+            nv = self.model.sample(cond=parent_values)
+        else:
+            from sigvisa.graph.dag import ParentConditionalNotDefined
+            raise ParentConditionalNotDefined()
+        
         if set_new_value:
             self._set_values_from_model(nv)
         else:

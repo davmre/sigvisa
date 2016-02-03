@@ -14,15 +14,18 @@ from optparse import OptionParser
 #stas = "NEW,PDAR,ELK,NVAR,ANMO,TXAR,PFO,YKA,ULM,ILAR".split(",")
 stas = "NEW,PDAR,NVAR,ANMO,TXAR,PFO,YKA,ULM,ILAR".split(",")
 
+stas = "ANMO,ELK,ILAR,KDAK,NEW,NVAR,PDAR,PFO,TXAR,ULM,YBH,YKA".split(",")
+
 region_lon = (-126, -100)
 region_lat = (32, 49)
 
-stimes = {5411098: 1244065600,
-          5381051: 1242617900,
-          5356788: 1241373200,
-          5336072: 1240250500}
+#stimes = {5411098: 1244065600,
+#          5381051: 1242617900,
+#          5356788: 1241373200,
+#          5336072: 1240250500}
 
-training_stime = 1238889600
+#training_stime = 1238889600
+training_stime =  1167634400
 #region_stime = stimes[target_evid]
 #region_etime = region_stime + 7200
 
@@ -52,7 +55,9 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
     else:
         region_stime = training_stime + hour
 
-    rs = TimeRangeRunSpec(sites=stas, runids=(runid,), dataset="training", hour=hour, len_hours=len_hours)
+    region_etime = region_stime + len_hours*3600
+
+    rs = TimeRangeRunSpec(sites=stas, runids=(runid,), start_time=region_stime, end_time=region_etime)
 
     region_stime = rs.start_time
     region_etime = rs.end_time
@@ -100,7 +105,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
 
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=ev_steps, fix_outside_templates=fix_outside)
 
-    do_inference(sg, ms1, rs, dump_interval=10, print_interval=10, model_switch_lp_threshold=None)
+    do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
 
 
 if __name__ == "__main__":

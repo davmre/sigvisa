@@ -29,7 +29,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, absorb_n_phases=False, 
+                init_run_name, init_iteration, fit_hz=5, 
                 smoothing=0, dummy_fallback=False, raw_signals=False):
 
     """
@@ -50,7 +50,6 @@ def setup_graph(event, sta, chan, band,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, 
                       runids = runids,
-                      absorb_n_phases=absorb_n_phases,
                       dummy_fallback=dummy_fallback,
                       raw_signals=raw_signals)
 
@@ -75,7 +74,7 @@ def setup_graph(event, sta, chan, band,
 
 def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
 
-    nm1 = wn.nm_node.prior_nm.copy(), wn.nm_node.prior_nmid
+    nm1 = wn.nm_node.prior_nm.copy()
     #means = wn.signal_component_means()
     #noise_mean = means['noise']
     #noise_var = wn.signal_component_means(return_stds_instead=True)['noise']**2
@@ -94,7 +93,7 @@ def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
     best_vals = None
     best_prob = -np.inf
     best_nm = nm1
-    for v, (nm, nmid) in init_vs:
+    for v, nm in init_vs:
         #wn.set_noise_model(nm, nmid)
         sigvisa_graph.set_all(values=v, node_list=sigvisa_graph.template_nodes)
         sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
@@ -104,7 +103,7 @@ def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
         if v_p > best_prob:
             best_prob = v_p
             best_vals = v_result
-            best_nm = (nm, nmid)
+            best_nm = nm
 
     #nm, nmid = best_nm
     #wn.set_noise_model(nm, nmid)
@@ -120,7 +119,7 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
     m = v * (m1/v1 + m2/v2)
     return m, v
 
-def compute_template_messages(sg, wn, logger, burnin=50):
+def compute_template_messages(sg, wn, logger, burnin=50, target_eid=None):
     """
     After an MCMC run, compute a Gaussian approximation to the
     posterior distribution on template parameters. Then divide out the
@@ -134,6 +133,8 @@ def compute_template_messages(sg, wn, logger, burnin=50):
     gp_messages = defaultdict(dict)
     best_vals = dict()
     for (eid, phase) in wn.arrivals():
+        if target_eid is not None and eid != target_eid: 
+            continue
         tvals, labels, lps = logger.load_template_vals(eid, phase, wn)
 
         tnodes = sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
@@ -156,8 +157,16 @@ def compute_template_messages(sg, wn, logger, burnin=50):
             v = np.var(vals[burnin:]) + 1e-6 # avoid zero-variance problems
 
             pv = n._parent_values()
-            prior_mean = n.model.predict(cond=pv)
-            prior_var = n.model.variance(cond=pv, include_obs=True)
+            if n.modeled_as_joint():
+                # worry: using the conditional dist means that possibly messages are too weak.
+                # whereas using the prior means they are too strong.
+                # should figure out the right thing to do here. 
+                d = n.joint_conditional_dist()
+                prior_mean = d.predict()
+                prior_var = d.variance()
+            else:
+                prior_mean = n.model.predict(cond=pv)
+                prior_var = n.model.variance(cond=pv, include_obs=True)
 
             print "param", p, "prior", (prior_mean, prior_var), "posterior", (m, v)
             mm, mv = multiply_scalar_gaussian(m, v, prior_mean, -prior_var)
@@ -218,8 +227,8 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burni
     # run MCMC to sample from the posterior on template params
     st = time.time()
 
-    logger = MCMCLogger(run_dir="scratch/mcmc_fit_%s/" % (str(uuid.uuid4())), write_template_vals=True, dump_interval=50, transient=True)
-    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, logger=logger, disable_moves=['atime_xc', 'constpeak_atime_xc'])
+    logger = MCMCLogger(run_dir="scratch/mcmc_fit_%s/" % (str(uuid.uuid4())), write_template_vals=True, dump_interval_s=5, transient=True)
+    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_phase_openworld=False, enable_template_openworld=False, logger=logger, disable_moves=['atime_xc', 'constpeak_atime_xc'])
     et = time.time()
 
     # compute template posterior, and set the graph state to the best template params
@@ -237,17 +246,18 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burni
 
 
     tops=repr(tmpl_optim_params)[1:-1]
-    fitids = save_template_params(sigvisa_graph,
+    fitids = save_template_params(sigvisa_graph, 1, wn.mw['evid'],
                                   tmpl_optim_param_str = "mcmc",
                                   wiggle_optim_param_str = "mcmc",
-                                  elapsed=et - st, hz=fit_hz,
+                                  elapsed=et - st, 
                                   runid=output_runid,
                                   messages= messages)
     return fitids[0]
 
-def save_template_params(sg, tmpl_optim_param_str,
+def save_template_params(sg, eid, evid,
+                         tmpl_optim_param_str,
                          wiggle_optim_param_str,
-                         hz, elapsed,
+                         elapsed,
                          runid, messages):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -257,7 +267,13 @@ def save_template_params(sg, tmpl_optim_param_str,
     run_wiggle_dir = os.path.join(wiggle_dir, "runid_" + str(runid))
     ensure_dir_exists(run_wiggle_dir)
 
-    for wave_node in sg.leaf_nodes:
+    event = get_event(evid=evid)
+
+    wns = [wn for wns in sg.station_waves.values() for wn in wns]
+    for wave_node in wns:
+        eids = set([eeid for (eeid, phase) in wave_node.arrivals()])
+        if eid not in eids: continue
+
         wave = wave_node.mw
 
         sta = wave['sta']
@@ -271,7 +287,7 @@ def save_template_params(sg, tmpl_optim_param_str,
 
         st = wave['stime']
         et = wave['etime']
-        event = get_event(evid=wave['evid'])
+
 
         env_signals = "env" in wave["filter_str"]
 
@@ -299,11 +315,13 @@ def save_template_params(sg, tmpl_optim_param_str,
                                                  fname=nm_fname, hour=-1)
         print "saving inferred noise model as nmid", wave_node.nmid
 
-        sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid, env) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d, '%s')" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, sg.optim_log, 1 , st, et, hz, sg.current_log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid, 't' if env_signals else 'f')
+        sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, smooth, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid, env) values (%d, %d, '%s', '%s', '%s', '%d', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d, '%s')" % (runid, event.evid, sta, chan, band, smooth, tmpl_optim_param_str, wiggle_optim_param_str, sg.optim_log, 1 , st, et, wave_node.srate, sg.current_log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid, 't' if env_signals else 'f')
 
         fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 
-        for (eid, phase) in arrivals:
+        for (eeid, phase) in arrivals:
+            if eeid != eid:
+                continue
 
             fit_param_nodes = sg.get_template_nodes(eid=eid, phase=phase, chan=wave_node.chan, band=wave_node.band, sta=wave_node.sta)
             fit_params = dict([(p, n.get_value(k)) for (p,(k, n)) in fit_param_nodes.iteritems()])
@@ -376,7 +394,6 @@ def main():
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
     parser.add_option("--seed", dest="seed", default=0, type="int",
                       help="ranom seed for MCMC (0)")
-    parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true", help="")
     parser.add_option("--nocheck", dest="nocheck", default=False, action="store_true", help="don't check to see if we've already fit this arrival in this run")
 
 
@@ -425,7 +442,7 @@ def main():
                                 phases=phases,
                                 fit_hz=options.hz, 
                                 init_run_name = init_run_name, init_iteration = init_iteration,
-                                absorb_n_phases=options.absorb_n_phases, smoothing=options.smooth,
+                                smoothing=options.smooth,
                                 dummy_fallback=options.dummy_fallback, raw_signals=options.raw_signals)
 
     runid = get_fitting_runid(cursor, options.run_name, options.run_iteration, create_if_new = True)

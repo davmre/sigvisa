@@ -382,10 +382,11 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 
   if (isnan(step_ell)) {
     printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
-    print_vec(cache.obs_d);
-    printf("\n");
-    print_vec(cache.xk);
-    exit(-1);
+    //print_vec(cache.obs_d);
+    //printf("\n");
+    //print_vec(cache.xk);
+    //exit(-1);
+    step_ell = -INFINITY;
   }
 
   return step_ell;
@@ -543,7 +544,11 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   D(write_stuff("xk_prior", 0, cache.xk);)
 
 
-  ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
+  double step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
+  if (isinf(step_ell)) {
+    return step_ell;
+  }
+  ell += step_ell;
 
 
 
@@ -559,11 +564,14 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
     }
 
     D(write_stuff("U_post_predict", k, cache.pred_U);)
-      D(write_stuff("d_post_predict", k, cache.pred_d);)
-      D(write_stuff("xk_post_predict", k, cache.xk);)
+    D(write_stuff("d_post_predict", k, cache.pred_d);)
+    D(write_stuff("xk_post_predict", k, cache.xk);)
 
-    ell += kalman_observe_sqrt(ssm, cache, k, z(k));
-
+    double step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
+    if (isinf(step_ell)) {
+      return step_ell;
+    }
+    ell += step_ell;
 
       D(write_stuff("U_post_obs", k, cache.obs_U);)
       D(write_stuff("d_post_obs", k, cache.obs_d);)

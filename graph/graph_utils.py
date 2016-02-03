@@ -60,8 +60,9 @@ def get_parent_value(eid, phase, sta, param_name, parent_values, chan=None, band
     try:
         v = parent_values[k]
     except KeyError:
-        k = "%d;%s;%s;%s;%s;%s" % (eid, phase, sta, ":", ":", param_name)
-        v = parent_values[k]
+        k2 = "%d;%s;%s;%s;%s;%s" % (eid, phase, sta, ":", ":", param_name)
+        v = parent_values[k2]
+        k = k2
     if return_key:
         return (k, parent_values[k])
     else:

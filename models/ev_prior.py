@@ -18,7 +18,7 @@ class EventLocationPrior(Distribution):
         s = Sigvisa()
         lon, lat, depth = x[key_prefix + 'lon'], x[key_prefix + 'lat'], x[key_prefix + 'depth']
         if self.inference_region is not None:
-
+            
             if not self.inference_region.contains_event(lon=lon, lat=lat):
                 return -np.inf
 

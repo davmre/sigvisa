@@ -80,5 +80,15 @@ def build_signal_library(wn, phase):
         s = cssm.mean_obs(N)
         s /= np.linalg.norm(s)
         library.append((x, {wn_key: s}))
+
     return library
 
+def dump_signal_history(history, dump_dir):
+    mkdir_p(dump_dir)
+
+    from sigvisa.plotting.plot import basic_plot_to_file
+
+    for i, (ev, signals) in enumerate(history):
+        for (sta, chan, band), s in signals.items():
+            fname = "ev%d_%s_%s_%s.png" % (i, sta, chan, band)
+            basic_plot_to_file(os.path.join(dump_dir, fname), s)

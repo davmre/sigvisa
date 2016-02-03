@@ -18,9 +18,9 @@ def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
     canvas.print_figure(fname, **kwargs)
 
-def basic_plot_to_file(fname, data, data2=None, data3=None, xvals=None, title=None, xlabel=None, ylabel=None, xlim=None, ylim=None, **kwargs):
+def basic_plot_to_file(fname, data, data2=None, data3=None, xvals=None, title=None, xlabel=None, ylabel=None, xlim=None, ylim=None, figsize=(8, 5), **kwargs):
 
-    fig = Figure(figsize=(8, 5), dpi=300)
+    fig = Figure(figsize=figsize, dpi=300)
     axes = fig.add_subplot(111)
 
     def plotdata(d):
@@ -235,11 +235,21 @@ def plot_with_fit_shapes(fname, wn, title="",
 
     if plot_pred:
         pred_signal = wn.tssm.mean_obs(wn.npts)
+
         w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
         subplot_waveform(w, axes, color='red',
                          alpha = 0.8*alpha,
                          plot_dets=False, fill_y2=wn.nm.c,
                          **kwargs)
+
+        if plot_stddev:
+            pred_std = np.sqrt(wn.tssm.obs_var(wn.npts))
+
+            timevals = np.arange(wn.st, wn.st + wn.npts / wn.srate, 1.0 / wn.srate)[0:wn.npts]
+        
+            axes.fill_between(timevals, pred_signal+2*pred_std, 
+                            pred_signal-2*pred_std, facecolor="red", alpha=0.2)
+
 
 
     if fname is not None:

@@ -113,7 +113,21 @@ class EventRunSpec(RunSpec):
     def _get_waves_from_evs(self, modelspec, stas, cursor):
         waves = []
         for sta in stas:
-            ptimes = np.array([tt_predict(ev, sta, "P") + ev.time for ev in self.evs])
+            ptimes = []
+            for ev in self.evs:
+                t = None
+                t = tt_predict(ev, sta, "P") + ev.time 
+                #for phase in ["P", "Pg", "pP"]:
+                #    try:
+                # 
+                #        break
+                #    except:
+                #        continue
+
+
+                ptimes.append(t)
+            ptimes = np.array(ptimes)
+
             for i, ev in enumerate(self.evs):
                 ptime = ptimes[i]
                 stime = ptime - 10.0
@@ -166,12 +180,17 @@ class EventRunSpec(RunSpec):
                     continue
         return waves
 
+    def _get_events(self):
+        if self.evids is not None:
+            evs = [get_event(evid=evid) for evid in self.evids]
+        else:
+            evs = self.evs
+        return evs
+
     def get_init_events(self):
+
         if self.initialize_events:
-            if self.evids is not None:
-                evs = [get_event(evid=evid) for evid in self.evids]
-            else:
-                evs = self.evs
+            evs = self._get_events()
         else:
             evs = []
         return evs
@@ -186,6 +205,12 @@ class EventRunSpec(RunSpec):
         waves = self.get_waves(modelspec)
         for (wave, wave_env) in waves:
             sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking, wave_env=wave_env)
+
+        evs = self._get_events()
+        evtimes = [ev.time for ev in evs]
+        sg.event_end_time = max(sg.event_end_time,  np.max(evtimes) +100.0)
+        sg.event_start_time = min(sg.event_start_time,  np.min(evtimes) - 100.0)
+
         return sg
 
 
@@ -278,13 +303,14 @@ class ModelSpec(object):
             'wiggle_model_type': "dummy",
             'skip_levels': 1,
             'dummy_fallback': False,
+            'dummy_prior': None,
             'phases': ["P",],
             'arrays_joint': False,
             'uatemplate_rate': 1e-6,
             'min_mb': 2.5,
             'jointgp_hparam_prior': None,
             'jointgp_param_run_init': None,
-            'hack_param_constraint': False,
+            'hack_param_constraint': True,
             'hack_coarse_tts': None,
             'hack_coarse_signal': None,
             'inference_region': None,
@@ -367,6 +393,10 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
 
     # copy param values
     for k in sg_old.all_nodes.keys():
+        #if "nm_" in key:
+        #    # don't copy noise models because the shapes are usually 
+        #    continue
+
         try:
             n1 = sg_new.all_nodes[k]
             n2 = sg_old.all_nodes[k]
@@ -411,7 +441,8 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
         m1 = np.mean( lps[-10:])
         m2 = np.mean( lps[-20:])
         diff = m1-m2
-        return diff < model_switch_lp_threshold
+        t = diff < model_switch_lp_threshold
+        return t
 
     step = 0
 

@@ -91,24 +91,15 @@ def FitWiggleView(request, fpid):
     pmeans, pvars = messages[fphase.wiggle_family +"_posterior"]
     print "posterior vars", pvars
 
-    (sts, ets, ids, prototypes, N) = construct_implicit_basis_C(srate, fphase.wiggle_family, sort=False)
-    cssm = CompactSupportSSM(sts, ets, ids, prototypes, pmeans, pvars, 0.0, 1.0)
+    basis = construct_full_basis_implicit(srate=srate, wavelet_str=fphase.wiggle_family,
+                                          c_format=True)
+    (start_idxs, end_idxs, identities, basis_prototypes, levels, N) = basis
+    cssm = CompactSupportSSM(start_idxs, end_idxs, identities, basis_prototypes, pmeans, pvars, 0.0, 0.0)
+
 
     wiggle_mean = cssm.mean_obs(N)
     wiggle_var = cssm.obs_var(N)
-    samples = [cssm.prior_sample(N) for i in range(n_samples)]
-
-    import sigvisa.models.statespace.compact_support as cs
-    from sigvisa.models.wiggles.wavelets import construct_implicit_basis
-
-    #stspm, etsp, idsp, ptsp, Np = construct_implicit_basis(srate, fphase.wiggle_family, sort=False)
-    #ic = cs.ImplicitCompactSupportSSM(stspm, etsp, idsp, ptsp, pmeans, pvars, bias=1.0, obs_noise=0.0)
-    #wm = ic.mean_obs(N)
-    #wv = ic.obs_var(N)
-    #samples = [ic.prior_sample(N) for i in range(n_samples)]
-
-    #wiggle_mean = wm
-    #wiggle_var = wv
+    samples = [cssm.prior_sample(N, i) for i in range(n_samples)]
 
 
     fig = Figure(figsize=(10, 5), dpi=144)

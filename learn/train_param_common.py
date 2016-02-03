@@ -12,6 +12,8 @@ import numpy as np
 import scipy.linalg
 import hashlib
 
+import cPickle as pickle
+
 from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
 from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
@@ -176,24 +178,28 @@ def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal
     return LinearBasisModel(X=X, y=y, basis=basisfn_str, noise_std=std, compute_ll=True, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
 
 
-def subsample_data(X, y, k=250):
+def subsample_data(X, y, yvars=None, k=250):
     # subsample for efficient hyperparam learning
     n = len(y)
     if n > k:
         np.random.seed(0)
         perm = np.random.permutation(n)[0:k]
-        sX = X[perm, :]
-        sy = y[perm, :]
+        sX = X[perm]
+        sy = y[perm]
+        syvars = yvars[perm] if yvars is not None else yvars
     else:
         sX = X
         sy = y
-    return sX, sy
+        syvars = yvars
+
+    
+    return sX, sy, yvars
 
 def build_starting_hparams(kernel_str, target):
     noise_var, noise_prior, cov_main = start_params[kernel_str][target]
     return noise_var, noise_prior, cov_main, None
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prior=None, cov_main=None, cov_fic=None, target=None, optimize=True, optim_params=None, build_tree=True, array=False, k=500, bounds=None, max_n=10000, **kwargs):
+def learn_gp(sta, X, y, y_obs_variances, kernel_str, basisfn_str=None, noise_var=None, noise_prior=None, cov_main=None, cov_fic=None, target=None, optimize=True, optim_params=None, build_tree=True, array=False, k=500, bounds=None, max_n=10000, **kwargs):
 
     try:
         st = target.split('_')
@@ -212,7 +218,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
         kwargs["basis"] = basisfn_str
         kwargs["extract_dim"] = extract_dim
-        kwargs["featurizer_recover"] = featurizer_recovery
+        kwargs["featurizer_recovery"] = featurizer_recovery
     else:
         featurizer_recovery = None
         extract_dim = None
@@ -222,11 +228,11 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
 
     if optimize:
         if k is not None:
-            sX, sy = subsample_data(X=X, y=y, k=k)
+            sX, sy, syvars = subsample_data(X=X, y=y, yvars=y_obs_variances ,k=k)
         else:
             sX, sy = X, y
         print "learning hyperparams on", len(sy), "examples"
-        nllgrad, x0, bounds, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
+        nllgrad, x0, bounds, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, y_obs_variances=syvars, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
         #bounds = [(1e-2,50.0,),(1e-2, 50.0)] + [(1e-2,1000.0),] * (len(x0) -2) if bounds is None else bounds
         params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
@@ -234,10 +240,10 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         noise_var, cov_main, cov_fic = covs_from_vector(params)
 
     if len(y) > max_n:
-        X, y = subsample_data(X=X, y=y, k=max_n)
+        X, y, y_obs_variances = subsample_data(X=X, y=y, yvars=y_obs_variances, k=max_n)
 
 
-    gp = SparseGP(X=X, y=y, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
+    gp = SparseGP(X=X, y=y, y_obs_variances=y_obs_variances, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
     return gp
 
 
@@ -322,6 +328,9 @@ def load_model(*args, **kwargs):
     return load_model_notmemoized(*args, **kwargs)
 
 def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
+    if fname.startswith("parameters"):
+        fname = os.path.join(Sigvisa().homedir, fname)
+    
     if model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):
@@ -333,7 +342,11 @@ def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
     elif model_type == "constant_beta":
         model = baseline_models.ConstBetaModel(fname=fname)
     else:
-        raise Exception("invalid model type %s" % (model_type))
+        try:
+            with open(fname, "rb") as f:
+                model = pickle.load(f)
+        except Exception as e:
+            raise Exception("unrecognized model type %s" % (model_type))
     return model
 
 

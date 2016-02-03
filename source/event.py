@@ -25,7 +25,7 @@ class Event(object):
 
     __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'eid']
 
-    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, eid=None, autoload=True, cursor=None):
+    def __init__(self, evid=None, evtype="auto", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, eid=None, autoload=True, cursor=None):
 
         if (evid is not None or orid is not None) and evtype is not None and autoload:
 

@@ -14,7 +14,12 @@ applied to a local region of the unexplained envelope (proxylp_localenv).
 def proxylp_full(sg, wn, node):
     def proxylp(candidate):
         node.set_value(candidate)
-        lp = node.log_p() + wn.log_p()    
+        if node.model is not None:
+            nlp = node.log_p()
+        else:
+            cd = node.joint_conditional_dist()
+            nlp = cd.log_p(candidate)
+        lp = nlp + wn.log_p()    
         return float(lp)
     return proxylp
 
@@ -56,7 +61,11 @@ def approximate_scalar_gibbs_distribution(sg, wn, eid, phase, param,
 
     class priormodel(object):
         def __init__(self, node):
-            self.model = node.model
+            if node.model is not None:
+                self.model = node.model
+            else:
+                self.model = node.joint_conditional_dist()
+
             self.pv = node._pv_cache
         
         def log_p(self, x, **kwargs):
@@ -74,8 +83,14 @@ def approximate_scalar_gibbs_distribution(sg, wn, eid, phase, param,
     # somewhat to the data).
     pv = node._pv_cache
     v = float(node.get_value())
-    pred = node.model.predict(cond=pv)
-    std = np.sqrt(node.model.variance(cond=pv, include_obs=True))
+    if node.model is not None:
+        pred = node.model.predict(cond=pv)
+        std = np.sqrt(node.model.variance(cond=pv, include_obs=True))
+    else:
+        cd = node.joint_conditional_dist()
+        pred = cd.predict()
+        std = np.sqrt(cd.variance())
+        
     if param=="tt_residual":
         prior_min, prior_max = -25, 25
     elif param=="mult_wiggle_std":

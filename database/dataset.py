@@ -114,13 +114,20 @@ def read_event(cursor, evid=None, evtype="leb", runid=None, orid=None):
     else:
         ev_condition = "where evid=%d" % evid
 
-    if runid is None:
-        cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
-                       "%s" % (evtype, ev_condition))
+    if evtype=="auto":
+        cursor.execute("select lon, lat, depth, time, mb, orid, evid from leb_origin "
+                       "%s" % (ev_condition))
+        event = cursor.fetchone()
+        if event is None:
+            cursor.execute("select lon, lat, depth, time, mb, orid, evid from isc_origin "
+                           "%s" % (ev_condition))
+            event = cursor.fetchone()
     else:
         cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
                        "%s" % (evtype, ev_condition))
-    event = np.array(cursor.fetchone())
+        event = cursor.fetchone()
+    event = np.array(event)
+
     return event
 
 

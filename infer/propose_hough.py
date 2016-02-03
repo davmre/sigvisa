@@ -818,6 +818,8 @@ def iterative_mixture_hough(sg, hc):
 class HoughConfig(object):
     def __init__(self, stime, len_s, phases = ("P",), bin_width_deg=2.0, min_mb=2.5, max_mb=8.5, mbbins=1, depthbin_bounds=[0, 10, 50, 150, 400, 700], uatemplate_rate=1e-3, left_lon=-180, right_lon=180, bottom_lat=-90, top_lat=90, min_depth=0, max_depth=700, time_tick_s=10.0):
 
+        assert(len_s > 0)
+
         self.left_lon = left_lon
         self.right_lon = right_lon
         self.bottom_lat=bottom_lat

@@ -91,9 +91,17 @@ default_parametric_tmtypes = {'tt_residual': 'constant_laplacian',
                               'mult_wiggle_std': 'constant_beta',
                               'amp_transfer': 'param_sin1'}
 
+
+default_gp_parametric_tmtypes = {'amp_transfer': 'gplocal+lld+sin1', 
+                                 'tt_residual': 'constant_laplacian', 
+                                 'coda_decay': 'gplocal+lld+linear_distmb', 
+                                 'peak_decay': 'gplocal+lld+linear_distmb', 
+                                 'peak_offset': 'gplocal+lld+linear_mb', 
+                                 'mult_wiggle_std': 'constant_beta'}
+
 dummyPriorModel = {
 "tt_residual": Laplacian(center=0.0, scale=3.0),
-"amp_transfer": Gaussian(mean=0.0, std=2.0),
+"amp_transfer": Gaussian(mean=0.0, std=10.0),
 "peak_offset": TruncatedGaussian(mean=-0.5, std=1.0, b=4.0),
 "mult_wiggle_std": Beta(4.0, 1.0),
 "coda_decay": Gaussian(mean=0.0, std=1.0),
@@ -167,6 +175,9 @@ class SigvisaGraph(DirectedGraphModel):
         if template_model_type=="param":
             # sensible defaults
             self.template_model_type = default_parametric_tmtypes
+        if template_model_type=="gpparam":
+            # sensible defaults
+            self.template_model_type = default_gp_parametric_tmtypes
         else:
             self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -714,11 +725,13 @@ class SigvisaGraph(DirectedGraphModel):
         lp += self.joint_gp_ll()
         lp += self.phase_existence_lp()
 
-        #if lp < -1000000:
-        #import pdb; pdb.set_trace()
+        #if np.isinf(lp):
+        #    import pdb; pdb.set_trace()
 
         if np.isnan(lp):
             raise Exception('current_log_p is nan')
+
+
         return lp
 
     def check_phases(self):
@@ -925,6 +938,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.evnodes[eid] = evnodes
         self.ev_site_phases[eid] = defaultdict(set)
 
+        
         # use a set here to ensure we don't add the 'loc' node
         # multiple times, since it has multiple keys
         for n in set(evnodes.itervalues()):
@@ -1117,7 +1131,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                   chan=chan, band=band)
             except ModelNotFoundError:
                 if self.dummy_fallback:
-                    print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (sta, chan, band, phase, param)
+                    self.logger.debug("warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (sta, chan, band, phase, param))
                     model_type = "dummyPrior"
                 else:
                     raise
@@ -1141,7 +1155,12 @@ class SigvisaGraph(DirectedGraphModel):
         # appropriate parameter model.
         nodes = dict()
         for sta in self.site_elements[site]:
-            model, modelid = self.get_model(param, sta, phase, model_type, chan=chan, band=band, modelid=modelid)
+            if "joint" not in model_type:
+                model, modelid = self.get_model(param, sta, phase, model_type, 
+                                                chan=chan, band=band, 
+                                                modelid=modelid)
+            else:
+                model, modelid = None, None
             label = create_key(param=param, sta=sta,
                                phase=phase, eid=parents[0].eid,
                                chan=chan, band=band)
@@ -1328,7 +1347,8 @@ class SigvisaGraph(DirectedGraphModel):
         return fullnodes
 
 
-    def add_wave(self, wave, fixed=True, disable_conflict_checking=False, wave_env=None, nmid=None, **kwargs):
+    def add_wave(self, wave, fixed=True, disable_conflict_checking=False, wave_env=None, 
+                 nmid=None, **kwargs):
         """
         Add a wave node to the graph. Assume that all waves are added before all events.
         """
@@ -1381,14 +1401,17 @@ class SigvisaGraph(DirectedGraphModel):
             for phase in self.phases:
                 param_models[phase] = []
                 for param in joint_params:
-                    modelid = self.get_param_model_id(runids=self.runids, sta=wave['sta'],
-                                                      phase=phase, model_type=self.wiggle_model_type,
-                                                      param=param, template_shape=self.template_shape,
-                                                      chan=wave['chan'], band=wave['band'])
-                    #except ModelNotFoundError as e:
-                    #    print e
-                    #    continue
-                    model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+                    try:
+                        modelid = self.get_param_model_id(runids=self.runids, sta=wave['sta'],
+                                                          phase=phase, model_type=self.wiggle_model_type,
+                                                          param=param, template_shape=self.template_shape,
+                                                          chan=wave['chan'], band=wave['band'])
+                        model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+                    except ModelNotFoundError as e:
+                        if self.dummy_fallback:
+                            model = Gaussian(0.0, 1.0)
+                        else:
+                            raise e
                     param_models[phase].append(model)
 
                 for level in range(self.skip_levels-1, -1, -1):
@@ -1416,7 +1439,8 @@ class SigvisaGraph(DirectedGraphModel):
         nm_label = self._get_wave_label(wave=wave).replace("wave", "nm")
         nm_node = NoiseModelNode(wave, label=nm_label, 
                                  is_env="env" in wave['filter_str'], 
-                                 nmid=nmid)
+                                 nmid=nmid,
+                                 runids=self.runids)
         self.add_node(nm_node)
 
         wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), hack_coarse_signal=self.hack_coarse_signal, **kwargs)

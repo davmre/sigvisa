@@ -117,11 +117,12 @@ def ar_advantage(S, c, nm):
         double mnum = (g_b + f_a - g_b_a - f_0); // -(a' R^-1 (b-c))
         double mdenom = (2*(f_a - f_0)); // - a' R^-1 a;
 
-        double beta_hat =  mnum / mdenom;
-        // betas(k) = beta_hat;
-
-        beta_hat = beta_hat > 0 ? beta_hat : 0.0;
-        double lp_delta = .5 * mdenom * beta_hat * beta_hat - mnum * beta_hat;
+        double lp_delta = 0;
+        if (mdenom != 0) {
+           double beta_hat =  mnum / mdenom;
+           beta_hat = beta_hat > 0 ? beta_hat : 0.0;
+           lp_delta = .5 * mdenom * beta_hat * beta_hat - mnum * beta_hat;
+        }
         result(k) = lp_delta;
 
     }

@@ -220,6 +220,9 @@ class Sigvisa(threading.local):
 
 def get_sta_default_channel(cursor, sta, canonical_choices, equivalent_channels):
 
+    if sta=="YBH":
+        return "BHZ"
+
     sql_query = "select chan from static_sitechan where sta='%s'" % sta
     cursor.execute(sql_query)
     chans = [c[0] for c in cursor.fetchall()]

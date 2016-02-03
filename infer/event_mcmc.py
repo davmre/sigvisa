@@ -403,6 +403,11 @@ def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None,
         # compute the logp of only the relevant nodes for this move,
         # based on the record of where we added/removed phases
 
+        # if we're using GP wiggle models, we need to compute logps at every station
+        if sg.wiggle_model_type != "dummy":
+            return sg.current_log_p()
+
+
         lp = 0.0
         
         # always compute the ev prior, and
@@ -416,8 +421,6 @@ def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None,
         # compute the signal lp, and also include lps for all uatemplates
         # (since we might have associated or disassociated templates)
 
-        # if we're using GP wiggle models, we need to compute logps at every station
-        assert(sg.wiggle_model_type=="dummy")
 
         for wnlabel in phasejump_record.keys():
             if wnlabel == "births":

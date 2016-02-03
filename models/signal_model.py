@@ -739,6 +739,10 @@ class ObservedSignalNode(Node):
 
         #print "logp", lp, "for", self.sta, "signal npts", self.npts, "arrivals", len(self.arrivals()), "in", t1-t0, "max dimension", self.tssm.max_dimension()
 
+        # HACK
+        if np.isinf(lp):
+            lp = -1e60
+
         if arrivals is None:
             self.cached_logp = lp
 

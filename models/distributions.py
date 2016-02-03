@@ -70,6 +70,10 @@ class InvGamma(Distribution):
         s = scipy.stats.invgamma.rvs(a=self.alpha, size=1)
         return s * self.beta
 
+    def variance(self):
+        assert (self.alpha > 2)
+        return self.beta**2 / ((self.alpha-1)**2 * (self.alpha - 2))
+
 class LogNormal(Distribution):
     def __init__(self, mu, sigma):
         self.mu = mu
@@ -119,7 +123,6 @@ class Gaussian(Distribution):
 
     def log_p(self, x,  **kwargs):
         mu = self.mean
-        self.var = self.std**2 # todo: remove once I no longer need for backwards compatibility
         sigma2 = self.var
         lp = -.5 * np.log(2*np.pi*sigma2) - .5 * (x - mu)**2 / sigma2
         if sigma2==0:
@@ -237,6 +240,7 @@ class TruncatedGaussian(Distribution):
 class MultiGaussian(Distribution):
     def __init__(self, mean, cov, pre_inv=False):
         self.mean = mean
+        self.n_d = len(mean)
         self.cov = cov
         self.L = scipy.linalg.cholesky(cov, True)
 
@@ -245,7 +249,11 @@ class MultiGaussian(Distribution):
         else:
             self.invL = None
 
+    def predict(self, **kwargs):
+        return self.mean.copy()
+
     def log_p(self, x, **kwargs):
+        assert(len(x) == self.n_d)
         r = x-self.mean
 
         if self.invL is not None:

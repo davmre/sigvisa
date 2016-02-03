@@ -81,9 +81,9 @@ def main(seed=1,  resume_from="", server_only=False, client_only=None, ctf_only=
         mss.append(ms_coarse)
 
 
-    mss[0].add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], prior_births_only=True, steps=100000)
+    mss[0].add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], prior_births_only=True, steps=10000000)
     for i in range(1, len(mss)):
-        mss[i].add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], prior_births_only=True, steps=100000)
+        mss[i].add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], prior_births_only=True, steps=10000000)
 
     specs = dict([("coarse_%d" % i, (mss[i], rs))  for i in range(len(mss))])
     names = sorted(specs.keys())

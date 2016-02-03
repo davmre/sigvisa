@@ -113,6 +113,8 @@ def mcmc_lp_posterior(request, dirname):
     times = np.loadtxt(os.path.join(mcmc_run_dir, "times.txt"))
 
     n = min(len(lps), len(times))
+    if n > 1:
+        n -= 1 # avoid partially written final lines
     lps = lps[:n]
     times = times[:n]
 
@@ -389,7 +391,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
             ax.set_xlim([cstime, cetime])
             ax.set_ylim([np.min(w)-.5, np.max(w)+.5])
 
-            ax.set_title("lp %f" % (lp2))
+            ax.set_title("lp %f conditional" % (lp2))
             ax = f.add_subplot(gs[j, 1])
             #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
             #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
@@ -400,7 +402,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
 
             ax.set_xlim([cstime, cetime])
             ax.set_ylim([np.min(w)-.5, np.max(w)+.5])            
-            ax.set_title("lp %f" % (lp1))
+            ax.set_title("lp %f prior" % (lp1))
 
 
             ax = f.add_subplot(gs[j, 2])
@@ -412,7 +414,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
                             post_mean-2*np.sqrt(post_var), facecolor="green", alpha=0.2)
 
             ax.set_xlim([cstime, cetime])            
-            ax.set_title("lp %f" % (lp3))
+            ax.set_title("lp %f filtered" % (lp3))
             ax.set_ylim([np.min(w)-.5, np.max(w)+.5])
             j += 1
 
@@ -484,7 +486,21 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
     for wn in sg.station_waves[sta]:
         wn.pass_jointgp_messages()
         try:
-            ell, prior_means, prior_vars, posterior_means, posterior_vars = wn._coef_message_cache
+            ell, all_prior_means, all_prior_vars, all_posterior_means, all_posterior_vars = wn._coef_message_cache
+            idx = 0
+            for i, (eid, component_phase, scale, sidx, npts, component_type) in enumerate(wn.tssm_components):
+                if component_phase == phase:
+                    break
+                elif component_type=="wavelet":
+                    idx += basis.shape[0]
+
+            idx_end = idx +  basis.shape[0]
+            prior_means = all_prior_means[idx:idx_end]
+            prior_vars = all_prior_vars[idx:idx_end]
+            posterior_means = all_posterior_means[idx:idx_end]
+            posterior_vars = all_posterior_vars[idx:idx_end]
+
+                
         except:
             import pdb; pdb.set_trace()
 
@@ -1049,8 +1065,9 @@ def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
     vzoom = float(request.GET.get("vzoom", '1'))
-    plot_pred_signal = request.GET.get("pred_signal", 'false').lower().startswith('t')
-    pred_signal_var = request.GET.get("pred_signal_var", 'false').lower().startswith('t')
+    plot_pred_env = request.GET.get("pred_env", 'false').lower().startswith('t')
+    plot_pred_signal = request.GET.get("pred_signal", 'true').lower().startswith('t')
+    pred_signal_var = request.GET.get("pred_signal_var", 'true').lower().startswith('t')
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_dets = request.GET.get("plot_dets", 'leb')
     plot_template_arrivals = request.GET.get("plot_templates", 'true').lower().startswith('t')
@@ -1099,12 +1116,16 @@ def mcmc_wave_posterior(request, dirname, wn_label):
         except AttributeError:
             wn.tssm = wn.transient_ssm()
 
-
-        if plot_pred_signal:
+        if plot_pred_env:
             wn._parent_values()
             pred_env = wn.assem_env() + wn.nm_env.c
-            #pred_signal = wn.tssm.mean_obs(wn.npts)
             w = Waveform(pred_env, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+            subplot_waveform(w, axes, color='green', linewidth=2.5)
+            
+        if plot_pred_signal:
+            wn._parent_values()
+            pred_signal = wn.tssm.mean_obs(wn.npts)
+            w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
             subplot_waveform(w, axes, color='green', linewidth=2.5)
             if pred_signal_var:
                 signal_var = wn.tssm.obs_var(wn.npts)

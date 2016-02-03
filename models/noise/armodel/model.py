@@ -785,6 +785,8 @@ class ErrorModel:
         self.mean = mean
         self.std = std
 
+        assert (std > 0)
+
         self.entropy = -.5*np.log(2*np.pi*np.e*std*std)
 
     def sample(self):

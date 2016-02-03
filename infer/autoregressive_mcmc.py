@@ -1,11 +1,12 @@
 import numpy as np
 
-from sigvisa.models.distributions import Gaussian, InvGamma, MultiGaussian
+from sigvisa.models.distributions import Gaussian, InvGamma, MultiGaussian, TruncatedGaussian
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 from sigvisa.infer.mcmc_basic import mh_accept_util
 
 import scipy.weave as weave
 from scipy.weave import converters
+
 
 def ar_param_posterior(signal, signal_vars, armodel, prior_mean, prior_cov):
     # warning: this method has accumulated hacks, I don't think I have a good
@@ -93,7 +94,7 @@ def ar_mean_posterior(signal, signal_vars, arm, prior_mu, prior_sigma2):
     mu, sigma2 = returns
     return mu, sigma2
 
-
+"""
 def sample_ar_params_from_truncated_gaussian(param_mean, param_cov, arm, max_tries=10):
     stationary = False
     tries = 0
@@ -145,27 +146,39 @@ def posterior_armodel_from_signal(signal_mean, signal_var, nm_node):
     param_mean, param_cov = ar_param_posterior(signal_mean, signal_var, arm, prior_param_mean, prior_param_cov)
 
     return c_dist, var_dist, param_mean, param_cov
+"""
 
-
-def arnoise_mean_rw_move(sg, wn, std=0.05):
+def arnoise_mean_rw_move(sg, wn, std=None):
     if std is None:
-        std = wn.nm_node.prior_nm.c / 5.0
+        std = np.sqrt(wn.nm_node.prior_mean_dist.variance())/4.0
 
     nm1 = wn.nm_node.get_value()
     oldvals = (nm1)
     relevant_nodes = (wn.nm_node, wn)
-    lp_old = np.sum([n.log_p() for n in relevant_nodes])
+    lp_old =  sg.joint_logprob_keys(relevant_nodes)
+
+    if wn.is_env:
+        proposal_dist = TruncatedGaussian(nm1.c, std=std, a=0.0)
+        proposed = proposal_dist.sample()
+        log_qforward = proposal_dist.log_p(proposed)
+
+        reverse_dist = TruncatedGaussian(proposed, std=std, a=0.0)
+        log_qbackward = reverse_dist.log_p(nm1.c)
+    else:
+        proposed = nm1.c + np.random.randn() * std
+        log_qforward = 0.0
+        log_qbackward = 0.0
 
     nm2 = nm1.copy()
-    nm2.c += np.random.randn() * std
-
+    nm2.c = proposed
     wn.nm_node.set_value(nm2)
-    lp_new = np.sum([n.log_p() for n in relevant_nodes])
+    lp_new =  sg.joint_logprob_keys(relevant_nodes)
 
     def revert():
         wn.nm_node.set_value(nm1)
 
-    v = mh_accept_util(lp_old, lp_new, revert_move=revert)
+
+    v = mh_accept_util(lp_old, lp_new, log_qforward=log_qforward, log_qbackward=log_qbackward, revert_move=revert)
     #if "TX01" in wn.label:
     #    if v:
     #        print "TX01 accepted move from", nm1.c, "to", nm2.c
@@ -174,20 +187,20 @@ def arnoise_mean_rw_move(sg, wn, std=0.05):
 
     return v
 
-def arnoise_std_rw_move(sg, wn, std=0.01):
+def arnoise_std_rw_move(sg, wn, std=None):
     if std is None:
-        std = wn.nm_node.prior_nm.em.std / 10.0
+        std = np.sqrt(wn.nm_node.prior_var_dist.predict())/10.0
 
     nm1 = wn.nm_node.get_value()
     oldvals = (nm1)
     relevant_nodes = (wn.nm_node, wn)
-    lp_old = np.sum([n.log_p() for n in relevant_nodes])
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
 
     nm2 = nm1.copy()
     nm2.em.std += np.random.randn() * std
 
     wn.nm_node.set_value(nm2)
-    lp_new = np.sum([n.log_p() for n in relevant_nodes])
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
 
     def revert():
         wn.nm_node.set_value(nm1)
@@ -195,7 +208,7 @@ def arnoise_std_rw_move(sg, wn, std=0.01):
     return mh_accept_util(lp_old, lp_new, revert_move=revert)
 
 
-def arnoise_params_rw_move(sg, wn, std=0.05):
+def arnoise_params_rw_move(sg, wn, std=0.01):
     if std is None:
         std = np.array(wn.nm_node.prior_nm.params) / 5.0
     n_p = len(wn.nm_node.prior_nm.params)
@@ -203,13 +216,13 @@ def arnoise_params_rw_move(sg, wn, std=0.05):
     nm1 = wn.nm_node.get_value()
     oldvals = (nm1)
     relevant_nodes = (wn.nm_node, wn)
-    lp_old = np.sum([n.log_p() for n in relevant_nodes])
+    lp_old =  sg.joint_logprob_keys(relevant_nodes)
 
     nm2 = nm1.copy()
     nm2.params += np.random.randn(n_p) * std
 
     wn.nm_node.set_value(nm2)
-    lp_new = np.sum([n.log_p() for n in relevant_nodes])
+    lp_new =  sg.joint_logprob_keys(relevant_nodes)
 
     def revert():
         wn.nm_node.set_value(nm1)
@@ -217,6 +230,7 @@ def arnoise_params_rw_move(sg, wn, std=0.05):
     return mh_accept_util(lp_old, lp_new, revert_move=revert)
 
 
+"""
 def arnoise_mean_move(sg, wn):
     means = wn.signal_component_means()
     noise_mean = means['noise']
@@ -276,6 +290,7 @@ def arnoise_mh_move(sg, wn):
 
     import pdb; pdb.set_trace()
     return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, revert_move=revert)
+"""
 
 """
 def arnoise_gibbs_move(sg, wn):

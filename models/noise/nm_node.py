@@ -1,5 +1,6 @@
 import numpy as np
 import obspy.signal.filter
+import logging
 
 from sigvisa.graph.nodes import Node
 from sigvisa import Sigvisa
@@ -9,30 +10,97 @@ from sigvisa.models.noise.armodel.learner import ARLearner
 from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.noise.noise_model import NoiseModel
 
+from sigvisa.learn.train_param_common import load_model
+
+def load_noise_model_prior(sta, chan=None, band=None, hz=None, runids=None, env=False):
+    # currently no way to specify n_p or env status except implicitly through runid
+    
+    chan_cond = ("and chan='%s'" % chan) if chan is not None else ""
+    band_cond = ("and band='%s'" % band) if band is not None else ""
+    
+    runid_cond = ("and (%s)" % " or ".join(["fitting_runid=%d" % runid for runid in runids])) if runids is not None else ""
+    #hz_cond = ("and hz=%.2f" % hz) if hz is not None else ""
+    phase_name = "noise_%s" % ("env" if env else "raw")
+    conds = "site='%s' and phase='%s' %s %s %s" % (sta, phase_name, chan_cond, band_cond, runid_cond)
+    
+    
+    mean_query = "select model_fname, model_type from sigvisa_param_model where param='armean' and %s" % conds
+    var_query = "select model_fname, model_type from sigvisa_param_model where param='arvar' and %s" % conds
+    params_query = "select model_fname, model_type from sigvisa_param_model where param='arparams' and %s" % conds
+
+    s = Sigvisa()
+    c = s.dbconn.cursor()
+    c.execute(mean_query)
+    print mean_query
+    fmean, tmean = c.fetchone()
+    c.execute(var_query)
+    fvar, tvar = c.fetchone()
+    c.execute(params_query)
+    fparams, tparams = c.fetchone()
+    c.close()
+    
+    mean_model = load_model(fmean, tmean)
+    var_model = load_model(fvar, tvar)
+    params_model = load_model(fparams, tparams)
+    
+    return mean_model, var_model, params_model
+
+def waveform_dummy_prior(waveform, is_env=True):
+    srate = waveform["srate"]
+    n_p = int(np.ceil(srate/3.0))
+
+    prior_params = np.zeros((n_p,))
+    prior_params[0] = 0.3
+
+    wave_mean = np.mean(waveform.data)
+    wave_std = np.std(waveform.data)
+
+    if is_env:
+        if waveform["sta"] =="PD31":
+            wave_mean = 60
+        prior_mean_dist = TruncatedGaussian(wave_mean, std=wave_mean/2.0, a=0.0)
+    else:
+        prior_mean_dist = Gaussian(0.0, std=wave_std/5.0)
+
+    prior_alpha = 100.0
+    prior_var_dist = InvGamma(prior_alpha, (wave_std/4.0)**2 * (prior_alpha - 1))
+    prior_param_dist = MultiGaussian(prior_params, np.eye(n_p), pre_inv=True)
+
+
+    return prior_mean_dist, prior_var_dist, prior_param_dist
 
 class NoiseModelNode(Node):
     # a codaHeightNode is the descendent of an amp_transfer node.
     # it adds in the event source amplitude, deterministically
 
-    def __init__(self, waveform, nmid=None, is_env=False, **kwargs):
+    def __init__(self, waveform, force_dummy=False, is_env=False, 
+                 runids=None, nmid=None, **kwargs):
         self.is_env = is_env
-        if nmid is not None:
-            self.prior_nmid = nmid
-            self.prior_nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)            
+
+        try:
+            self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = \
+               load_noise_model_prior(sta=waveform["sta"], chan=waveform["chan"],
+                                      band=waveform["band"], hz=waveform["srate"],
+                                      runids=runids,
+                                      env = is_env)
+        except:
+            force_dummy = True
+
+            logging.warning("falling back to dummy noise prior for %s" % str(waveform))
+
+        if force_dummy:
+            self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = waveform_dummy_prior(waveform, is_env)
+
+
+        em = ErrorModel(mean=0.0, std=np.sqrt(self.prior_var_dist.predict()))
+
+        self.prior_nm = ARModel(params=self.prior_param_dist.predict(), em=em, 
+                                c=self.prior_mean_dist.predict())
+
+        if nmid is None:
+            nm = self.prior_nm.copy()
         else:
-            self.prior_nm, self.prior_nmid, _ = get_noise_model(waveform=waveform, model_type="ar", return_details=True)
-
-        if is_env:
-            self.prior_mean_dist = TruncatedGaussian(self.prior_nm.c, std=0.1, a=0.0)
-        else:
-            self.prior_mean_dist = Gaussian(self.prior_nm.c, std=0.1)
-
-        prior_alpha = 100
-        self.prior_var_dist = InvGamma(prior_alpha, (self.prior_nm.em.std**2) * (prior_alpha - 1))
-
-        n_p = len(self.prior_nm.params)
-        self.prior_param_dist = MultiGaussian(self.prior_nm.params, np.eye(n_p) * 0.01, pre_inv=True)
-        nm = self.prior_nm.copy()
+            nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)
 
         super(NoiseModelNode, self).__init__(initial_value=nm, **kwargs)
         self.set_value(nm)
@@ -63,6 +131,8 @@ class NoiseModelNode(Node):
             return nm
 
     def set_value(self, nm, **kwargs):
+        assert(len(nm.params) == len(self.prior_nm.params))
+
         super(NoiseModelNode, self).set_value(value=nm, **kwargs)
         if self.is_env:
             self.nm_env = nm
