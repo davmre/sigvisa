@@ -42,6 +42,7 @@ def next_unused_int_in_dir(path):
 
 def make_next_unused_dir(base_path, formatter):
     # avoid race conditions if two processes are both trying to create a new dir 
+    mkdir_p(base_path)
     i = next_unused_int_in_dir(base_path)
     while True:
         path = os.path.join(base_path, formatter(i))
