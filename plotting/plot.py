@@ -162,6 +162,7 @@ def plot_with_fit_shapes(fname, wn, title="",
                          plot_pred=False,
                          plot_stddev=False,
                          shape_colors=None,
+                         wave_alpha=1.0,
                          alpha=1.0,
                          **kwargs):
 
@@ -207,7 +208,7 @@ def plot_with_fit_shapes(fname, wn, title="",
             highlight_tmpl = (cmeans[(eid, phase)]["combined"], cmeans[(eid, phase)]["stime"])
 
     if plot_wave:
-        subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=plot_dets, **kwargs)
+        subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.5, plot_dets=plot_dets, alpha=wave_alpha, **kwargs)
 
 
     if model_lw is not None:
@@ -239,7 +240,7 @@ def plot_with_fit_shapes(fname, wn, title="",
         w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
         subplot_waveform(w, axes, color='red',
                          alpha = 0.8*alpha,
-                         plot_dets=False, fill_y2=wn.nm.c,
+                         plot_dets=False, #fill_y2=wn.nm.c,
                          **kwargs)
 
         if plot_stddev:

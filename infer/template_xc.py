@@ -5,6 +5,7 @@ from sigvisa.models.distributions import Gaussian
 from sigvisa.models.ttime import tt_predict
 from sigvisa.models.signal_model import ObservedSignalNode
 from sigvisa.infer.mcmc_basic import MH_accept
+from sigvisa.infer.correlations.ar_correlation_model import ar_advantage
 import scipy.weave as weave
 from scipy.weave import converters
 
@@ -294,3 +295,62 @@ def adjpeak_atime_xc_move(sg, wn, eid, phase, tmnodes, **kwargs):
                      log_qbackward = log_qbackward,
                      node_list = (n_atime,n_offset, n_amp_transfer),
                      relevant_nodes = relevant_nodes,)
+
+
+######################################################################
+
+def atime_align_gpwiggle_move(self, wn, eid, phase, tmnodes, **kwargs):
+    # propose a new atime based on the wiggles predicted from a GP wiggle prior
+    # (as opposed to other moves in this file which are based on correlations 
+    #  between source and target events jointly loaded as part of the same model)
+    # NOTE: I wrote this but have never tried running or debugging it, so it 
+    #  needs some love to be useful...
+
+    k_atime, n_atime = tmnodes['arrival_time']
+    current_atime = n_atime.get_value(key=k_atime)
+    relevant_nodes = [wn,]
+    relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
+
+    cssm = wn.arrival_ssms[(eid, phase)]
+    (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps) = wn.wavelet_basis
+    pred_wavelet = cssm.mean_obs(n_steps)
+    tmvals = wn.get_template_params_for_arrival(eid, phase)
+    env = np.exp(tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=n_steps))
+    pred_signal = pred_wavelet * env
+
+    pbu = wn.unexplained_kalman(exclude_eids=[eid,])
+    atime_ll = ar_advantage(pbu, pred_signal, wn.nm)
+
+    # temper the proposal distribution a bit
+    maxll = np.max(ll)
+    if maxll > 10:
+        atime_ll /= maxll/10.0
+        maxll = 10
+    atime_ll += 1
+    
+    proposal_dist = np.exp(atime_ll - maxll)
+    proposal_dist /= np.sum(proposal_dist)
+
+    proposed_idx = np.random.choice(np.arange(len(proposal_dist)), p=proposal_dist)
+
+    proposed_atime = idx_to_atime(proposed_idx)
+
+    log_qforward = np.log(proposal_dist[proposed_idx])
+    backwards_idx = atime_to_idx(current_atime)
+
+    log_qbackward = np.log(proposal_dist[backwards_idx])
+
+    return MH_accept(sg, keys=(k_atime,k_offset),
+                     oldvalues = (current_atime,),
+                     newvalues = (proposed_atime,),
+                     log_qforward = log_qforward,
+                     log_qbackward = log_qbackward,
+                     node_list = (n_atime,),
+                     relevant_nodes = relevant_nodes,)
+
+    
+
+
+
+
+

@@ -196,8 +196,16 @@ def arnoise_std_rw_move(sg, wn, std=None):
     relevant_nodes = (wn.nm_node, wn)
     lp_old = sg.joint_logprob_keys(relevant_nodes)
 
+
+    proposal_dist = TruncatedGaussian(nm1.em.std, std=std, a=0.0)
+    proposed = proposal_dist.sample()
+    log_qforward = proposal_dist.log_p(proposed)
+
+    reverse_dist = TruncatedGaussian(proposed, std=std, a=0.0)
+    log_qbackward = reverse_dist.log_p(nm1.em.std)
+
     nm2 = nm1.copy()
-    nm2.em.std += np.random.randn() * std
+    nm2.em.std = proposed
 
     wn.nm_node.set_value(nm2)
     lp_new = sg.joint_logprob_keys(relevant_nodes)
@@ -205,7 +213,7 @@ def arnoise_std_rw_move(sg, wn, std=None):
     def revert():
         wn.nm_node.set_value(nm1)
 
-    return mh_accept_util(lp_old, lp_new, revert_move=revert)
+    return mh_accept_util(lp_old, lp_new, log_qforward=log_qforward, log_qbackward=log_qbackward, revert_move=revert)
 
 
 def arnoise_params_rw_move(sg, wn, std=0.01):
