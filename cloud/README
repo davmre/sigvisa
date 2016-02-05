@@ -39,8 +39,8 @@ fab -f push_param_models.py  deploy_models:runid=1,dump_fname="whatever"
 
 To run independent inference on multiple time periods, create a file "cmds" of the form
 
-sudo su -c "bash /home/sigvisa/python/sigvisa/cloud/infer.sh --hour=0.0 --runid=1" sigvisa
-sudo su -c "bash /home/sigvisa/python/sigvisa/cloud/infer.sh --hour=2.0 --runid=1" sigvisa
+sudo su -c "bash /home/sigvisa/python/sigvisa/cloud/infer.sh experiments/ctf_real.py --hour=0.0 --runid=1" sigvisa
+sudo su -c "bash /home/sigvisa/python/sigvisa/cloud/infer.sh experiments/ctf_real.py --hour=2.0 --runid=1" sigvisa
 etc...
 
 and a file "machines" of the form
