@@ -544,7 +544,7 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   D(write_stuff("xk_prior", 0, cache.xk);)
 
 
-  double step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
+  double step_ell = kalman_observe_sqrt(ssm, cache, 0, z(0));
   if (isinf(step_ell)) {
     return step_ell;
   }
