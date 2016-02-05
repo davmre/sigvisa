@@ -191,6 +191,12 @@ class Sigvisa(threading.local):
             cursor.close()
 
     def get_default_sta(self, site):
+        # hardcode around some DB weirdness...
+        if site=="PDAR":
+            return "PD31"
+        elif site=="TXAR":
+            return "TX01"
+
         if self.earthmodel.site_info(site, 0.0)[3] == 1:
             cursor = self.dbconn.cursor()
             cursor.execute("select refsta from static_site where sta='%s'" % site)

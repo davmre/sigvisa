@@ -11,6 +11,11 @@
   copy:
     src=db_setup_config
     dest=/home/sigvisa/db_setup_config
+- name: upload isc_origin dump
+  become_user: sigvisa
+  copy:
+    src=isc_origin.dump
+    dest=/home/sigvisa/isc_origin.dump
 - name: set DB password
   mysql_user: login_user=root login_password=55rontob name=root password=55rontob check_implicit_admin=yes
 - name: add leb data to db
@@ -21,4 +26,5 @@
   args:
     creates: /home/sigvisa/python/sigvisa/database/setup_db_custom.sql
     chdir: /home/sigvisa/python/sigvisa/
-  
+- name: import isc_origin table
+  mysql_db: name=ctbt3mos state=import target=/home/sigvisa/isc_origin.dump login_user=root login_password=55rontob

@@ -63,7 +63,9 @@ def main():
     #ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, 
     #                        enable_template_openworld=True, enable_template_moves=True, steps=20)
     ms2.add_inference_round(enable_event_moves=True, enable_event_openworld=True, 
-                            enable_template_openworld=True, enable_template_moves=True, steps=500)
+                            enable_template_openworld=True, enable_template_moves=True, 
+                            propose_hough=True, propose_correlation=False,
+                            steps=500)
 
     ms = [ms1, ms2]
     do_coarse_to_fine(ms, rs, max_steps_intermediate=50, model_switch_lp_threshold=10)

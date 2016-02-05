@@ -180,12 +180,7 @@ def fetch_waveform_ims(station, chan, stime, etime, pad_seconds=20, cursor=None)
         cursor = s.dbconn.cursor()
         close_cursor = True
 
-    if s.earthmodel.site_info(station, stime)[3] == 1:
-        cursor.execute("select refsta from static_site where sta='%s'" % station)
-        options = [v[0] for v in cursor.fetchall() if v[0] != station]
-        selection = options[0]
-    else:
-        selection = station
+    selection = s.get_default_sta(station)
 
     if chan == "auto":
         chan = s.default_vertical_channel[selection]
@@ -345,12 +340,7 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
         cursor = s.dbconn.cursor()
         close_cursor = True
 
-    if s.earthmodel.site_info(station, stime)[3] == 1:
-        cursor.execute("select refsta from static_site where sta='%s'" % station)
-        options = [v[0] for v in cursor.fetchall() if v[0] != station]
-        selection = options[0]
-    else:
-        selection = station
+    selection = s.get_default_sta(station)
 
     if chan == "auto":
         chan = s.default_vertical_channel[selection]

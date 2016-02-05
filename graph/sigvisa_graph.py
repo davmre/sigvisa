@@ -175,7 +175,7 @@ class SigvisaGraph(DirectedGraphModel):
         if template_model_type=="param":
             # sensible defaults
             self.template_model_type = default_parametric_tmtypes
-        if template_model_type=="gpparam":
+        elif template_model_type=="gpparam":
             # sensible defaults
             self.template_model_type = default_gp_parametric_tmtypes
         else:
