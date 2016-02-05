@@ -3,7 +3,7 @@ VAGRANTFILE_API_VERSION = '2'
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
   config.ssh.username         = 'vagrant'
-  config.ssh.private_key_path = File.expand_path('~/.ssh/azurevagrant.pem')
+  config.ssh.private_key_path = File.expand_path('~/.ssh/fabric_is_terrible.key')
 
   # config.vm.provider = 'azure'
 
@@ -23,7 +23,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       azure.vm_location = 'West US'
 
       azure.ssh_port             = '22'
-      azure.private_key_file = File.expand_path('~/.ssh/azurevagrant.pem')
+      azure.private_key_file = File.expand_path('~/.ssh/fabric_is_terrible.key')
       #azure.ssh_certificate_file = File.expand_path('~/.ssh/azurevagrant.cer')
 
       azure.tcp_endpoints = '8001'

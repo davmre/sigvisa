@@ -9,16 +9,23 @@ import os
 
 import logging ; logging.basicConfig(level=logging.DEBUG)
 
-env.hosts = ['vagrant@sigvisa.cloudapp.net']
+env.hosts = ['sigvisa1.cloudapp.net']
 
 #env.use_ssh_config = True
-env.key_filename = '/home/dmoore/.ssh/azurevagrant.pem'
+env.user = 'vagrant'
+env.key_filename = '/home/dmoore/.ssh/fabric_is_terrible.key'
 
 remote_sigvisa_home = "/home/sigvisa/python/sigvisa"
 
 def dump_local_models(runid, dump_fname, shrinkage_iter=5):
     runid = int(runid)
-    sql_query = "select * from sigvisa_param_model where fitting_runid=%d and shrinkage_iter=%d;" % (runid, shrinkage_iter)
+    shrinkage_iter = int(shrinkage_iter)
+    if shrinkage_iter < 0:
+        # noise models
+        cond = "(shrinkage_iter=0 and phase like 'noise%%')" 
+    else:
+        cond = ("shrinkage_iter=%d" % shrinkage_iter)
+    sql_query = "select * from sigvisa_param_model where fitting_runid=%d and %s;" % (runid, cond)
     
     try:
         dbconn = connect()

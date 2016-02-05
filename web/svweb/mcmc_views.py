@@ -1065,9 +1065,9 @@ def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
     vzoom = float(request.GET.get("vzoom", '1'))
-    plot_pred_env = request.GET.get("pred_env", 'false').lower().startswith('t')
-    plot_pred_signal = request.GET.get("pred_signal", 'true').lower().startswith('t')
-    pred_signal_var = request.GET.get("pred_signal_var", 'true').lower().startswith('t')
+    plot_pred_env = request.GET.get("pred_env", 'true').lower().startswith('t')
+    plot_pred_signal = request.GET.get("pred_signal", 'false').lower().startswith('t')
+    pred_signal_var = request.GET.get("pred_signal_var", 'false').lower().startswith('t')
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_dets = request.GET.get("plot_dets", 'leb')
     plot_template_arrivals = request.GET.get("plot_templates", 'true').lower().startswith('t')

@@ -38,8 +38,8 @@
         - autossh
         - emacs24
     - include: tasks/swap_setup.yml
-    #- include: tasks/config_smb.yml
+    - include: tasks/config_smb.yml
     - include: tasks/python_package_setup.yml
     - include: tasks/sigvisa_setup.yml
     - include: tasks/gprf_setup.yml
-    #- include: tasks/db_setup.yml
+    - include: tasks/db_setup.yml

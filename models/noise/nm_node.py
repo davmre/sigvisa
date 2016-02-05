@@ -101,10 +101,10 @@ class NoiseModelNode(Node):
             nm = self.prior_nm.copy()
         else:
             nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)
-
+        
         super(NoiseModelNode, self).__init__(initial_value=nm, **kwargs)
         self.set_value(nm)
-
+        
 
     def log_p(self, parent_values=None, *kwargs):
         nm = self.get_value()
