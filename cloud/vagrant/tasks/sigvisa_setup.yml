@@ -30,6 +30,9 @@
 - name: create db_cache subdir
   file: path=/home/sigvisa/python/sigvisa/db_cache state=directory
   become_user: sigvisa
+- name: create scratch subdir
+  file: path=/home/sigvisa/python/sigvisa/scratch state=directory
+  become_user: sigvisa
 - name: build sigvisa
   become_user: sigvisa
   command: /home/sigvisa/.virtualenvs/sigvisa/bin/python setup.py build_ext  --inplace
