@@ -61,6 +61,10 @@ class Sigvisa(threading.local):
         self.pid = os.getpid()
         self.homedir = os.getenv("SIGVISA_HOME")
 
+        # currently this is used by llnl_wfdisc but NOT by idcx_wfdisc.
+        # ideally it should be used by both (so the DB only ever contains relative paths)
+        self.signals_base_dir = os.path.join(os.getenv("HOME"), "ctbt_data")
+
         logging.basicConfig(stream=sys.stdout, level=logging.INFO)
         self.logger = logging.getLogger("sigvisa")
 

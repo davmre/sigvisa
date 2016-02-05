@@ -325,16 +325,15 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
     - move through files and copy over data as appropriate
     """
     
-    base_dir = "/media/usb0/llnl_data/"
+    s = Sigvisa()
+    base_dir = os.path.join(s.signals_base_dir, "llnl_data") #"/media/usb0/llnl_data/"
     
     stime = stime - pad_seconds
     etime = etime + pad_seconds
 
     global_stime = stime
     global_etime = etime
-    
 
-    s = Sigvisa()
     close_cursor = False
     if cursor is None:
         cursor = s.dbconn.cursor()

@@ -16,6 +16,11 @@
   copy:
     src=isc_origin.dump
     dest=/home/sigvisa/isc_origin.dump
+- name: upload llnl_wfdisc dump
+  become_user: sigvisa
+  copy:
+    src=llnl_wfdisc.dump
+    dest=/home/sigvisa/llnl_wfdisc.dump
 - name: set DB password
   mysql_user: login_user=root login_password=55rontob name=root password=55rontob check_implicit_admin=yes
 - name: add leb data to db
@@ -28,3 +33,5 @@
     chdir: /home/sigvisa/python/sigvisa/
 - name: import isc_origin table
   mysql_db: name=ctbt3mos state=import target=/home/sigvisa/isc_origin.dump login_user=root login_password=55rontob
+- name: import llnl_wfdisc table
+  mysql_db: name=ctbt3mos state=import target=/home/sigvisa/llnl_wfdisc.dump login_user=root login_password=55rontob
