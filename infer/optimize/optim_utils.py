@@ -42,7 +42,7 @@ def construct_optim_params(optim_param_str=''):
     method = optim_params['method']
 
     # load appropriate defaults for each method
-    if method == "bfgscoord" or method == "bfgs_fastcoord":
+    if method == "bfgscoord" or method == "bfgs_fastcoord" or method=="bfgs_grad":
         copy_dict_entries(["bfgscoord_iters", "bfgs_factr", "bfgscoord_prefer_success"], src=defaults, dest=optim_params)
     elif method == "bfgs":
         copy_dict_entries(["bfgs_factr", ], src=defaults, dest=optim_params)

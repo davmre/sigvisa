@@ -93,6 +93,7 @@ class EventHeatmap(Heatmap):
         if self.event_yvals:
             self.plot_locations(self.event_locations,
                                 marker=".", s=6, facecolors="none",
+                                yval_colorbar=(self.f is None),
                                 yvals=self.event_yvals, alpha=event_alpha)
         else:
             evcolors=None

@@ -160,8 +160,8 @@ def main():
                       help="use a subset of the data to learn GP hyperparameters more quickly (500)")
     parser.add_option("--bounds", dest="bounds", default=None, type="str",
                       help="comma-separated list of hyperparam bounds low1,high1,low2,high2,... (None)")
-    parser.add_option("--param_var", dest="param_var", default=1.0, type="float",
-                      help="variance for the Gaussian prior on global model params (1.0)")
+    parser.add_option("--param_var", dest="param_var", default=100.0, type="float",
+                      help="variance for the Gaussian prior on global model params (100.0)")
     parser.add_option("--slack_var", dest="slack_var", default=1.0, type="float",
                       help="additional variance allowed on top of global model params in the per-station params (1.0)")
     parser.add_option("--iterate", dest="iterate", default=0, type="int",
@@ -170,6 +170,8 @@ def main():
                       help="sampling rate of signals for which to train latent wiggle models (only if preset=db...)")
     parser.add_option("--preset", dest="preset", default=None, type="str",
                       help="use preset models types to build models for all targets in one command. options are 'param' to build parametric models (amp_transfer: param_sin1, tt_residual: constant_laplacian, coda_decay: param_linear_distmb, peak_offset: param_linear_mb) or 'gp' to build nonparametric GP models")
+    parser.add_option("--centers", dest="cluster_centers_fname", default=None, type="str",
+                      help="file (np.savetxt) with list of cluster centers for local GPs")
 
 
 
@@ -218,13 +220,23 @@ def main():
     param_var = options.param_var
     slack_var = options.slack_var
     if options.preset == "param":
-        targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_decay', 'peak_offset', 'mult_wiggle_std'] if targets is None else targets
+        targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_decay', 'peak_offset', 'mult_wiggle_std', ] if targets is None else targets
         model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'constant_beta'}
         iterations = 5
     if options.preset == "gpparam":
-        targets = ['coda_decay', 'peak_offset', 'amp_transfer', 'peak_decay'] if targets is None else targets
-        model_types = {'amp_transfer': 'gplocal+lld+sin1', 'coda_decay': 'gplocal+lld+linear_distmb', 'peak_decay': 'gplocal+lld+linear_distmb', 'peak_offset': 'gplocal+lld+linear_mb', }
+        targets = ['coda_decay', 'peak_offset', 'amp_transfer', 'peak_decay', 'tt_residual'] if targets is None else targets
+        model_types = {'amp_transfer': 'gpparam+lld+sin1', 'coda_decay': 'gpparam+lld+linear_distmb', 'peak_decay': 'gpparam+lld+linear_distmb', 'peak_offset': 'gpparam+lld+linear_mb', 'tt_residual': 'gp_lld'}
         iterations = 1
+    if options.preset is not None and options.preset.startswith("db"):
+        wiggle_family = options.preset
+        basis = construct_full_basis(options.wiggle_srate, wavelet_str=wiggle_family)
+        targets = [wiggle_family + "_%d" % i for i in range(basis.shape[0])]
+        model_types = dict([(target, "gp_lld") for target in targets])
+        iterations = 0
+    if options.preset == "gplocal":
+        targets = ['coda_decay', 'peak_offset', 'amp_transfer', 'peak_decay', 'tt_residual'] if targets is None else targets
+        model_types = {'amp_transfer': 'gplocal+lld+sin1', 'coda_decay': 'gplocal+lld+linear_distmb', 'peak_decay': 'gplocal+lld+linear_distmb', 'peak_offset': 'gplocal+lld+linear_mb', 'tt_residual': 'gplocal+lld+none'}
+        iterations = 0
     if options.preset is not None and options.preset.startswith("db"):
         wiggle_family = options.preset
         basis = construct_full_basis(options.wiggle_srate, wavelet_str=wiggle_family)
@@ -236,7 +248,7 @@ def main():
         del model_types['mult_wiggle_std']
         targets.remove("mult_wiggle_std")
 
-    modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.template_shape, options.subsample, param_var + slack_var, options.optimize)
+    modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.template_shape, options.subsample, param_var + slack_var, options.optimize, options.cluster_centers_fname)
 
     for target in targets:
         model_type = model_types[target]
@@ -244,7 +256,7 @@ def main():
             print "training models for iteration %d..." % (i,)
             modelids[target] = retrain_models(modelids[target], model_type, global_var=param_var, station_slack_var=slack_var)
 
-def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, template_shape, subsample, prior_var, optimize):
+def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, template_shape, subsample, prior_var, optimize, cluster_centers_fname):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
@@ -309,7 +321,10 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                 st = time.time()
                 try:
                     print "training model for target", target
-                    model = learn_model(X, y,  model_type, yvars=yvars, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=subsample, bounds=bounds, param_var=prior_var, optimize=optimize)
+                    model = learn_model(X, y,  model_type, yvars=yvars, target=target, sta=site, 
+                                        optim_params=optim_params, gp_build_tree=False, k=subsample, 
+                                        bounds=bounds, param_var=prior_var, optimize=optimize,
+                                        cluster_centers_fname=cluster_centers_fname)
                 except Exception as e:
                     raise
                     print e

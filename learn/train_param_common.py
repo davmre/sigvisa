@@ -15,11 +15,12 @@ import hashlib
 import cPickle as pickle
 
 from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
+from sigvisa.models.spatial_regression.local_gp_ensemble import LocalGPEnsemble, optimize_localgp_hyperparams
 from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
-from sigvisa.treegp.features import ortho_poly_fit
+from sigvisa.treegp.features import ortho_poly_fit, featurizer_from_string, recover_featurizer
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
 
@@ -32,7 +33,7 @@ def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_ty
     return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams, shrinkage, shrinkage_iter) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams, :shrinkage, :shrinkage_iter)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams, shrinkage=shrinkage, shrinkage_iter=shrinkage_iter)
 
 def model_params(model, model_type):
-    if model_type.startswith('gplocal'):
+    if model_type.startswith('gpparam'):
         d = dict()
         d['cov_main'] =model.cov_main
         d['cov_fic'] =model.cov_fic
@@ -44,7 +45,32 @@ def model_params(model, model_type):
             del d['covar']
             r = repr(d)
         return r
-    if model_type.startswith('gp'):
+    if model_type.startswith('gplocal'):
+        d = {}
+        try:
+            d['mean'] = model.param_mean()
+            d['covar'] = model.param_covariance()
+        except:
+            pass
+        
+        noises = np.array([lgp.noise_var for lgp in model.local_gps])
+        svars = np.array([lgp.cov_main.wfn_params[0] for lgp in model.local_gps])
+        lscales = np.array([lgp.cov_main.dfn_params[0] for lgp in model.local_gps])
+
+        d["noise_min"]=np.min(noises)
+        d["noise_mean"]=np.mean(noises)
+        d["noise_max"]=np.max(noises)
+
+        d["svar_min"]=np.min(svars)
+        d["svar_mean"]=np.mean(svars)
+        d["svar_max"]=np.max(svars)
+
+        d["lscale_min"]=np.min(lscales)
+        d["lscale_mean"]=np.mean(lscales)
+        d["lscale_max"]=np.max(lscales)
+
+        return repr(d)
+    elif model_type.startswith('gp'):
         return str([model.noise_var, model.cov_main, model.cov_fic])
     elif model_type.startswith('param'):
         d = dict()
@@ -59,8 +85,8 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, optimize=True, **kwargs):
-    if model_type.startswith("gplocal"):
+def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, optimize=True, cluster_centers_fname=None, **kwargs):
+    if model_type.startswith("gpparam"):
         s = model_type.split('+')
         if "param_var" in kwargs:
             del kwargs['param_var']
@@ -72,6 +98,18 @@ def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=Non
                          target=target, build_tree=gp_build_tree,
                          optim_params=optim_params, k=k,
                          bounds=bounds, optimize=optimize, **kwargs)
+    if model_type.startswith("gplocal"):
+        s = model_type.split('+')
+
+        kernel_str = s[1]
+        basisfn_str = None if s[2]=="none" else s[2]
+        model = learn_localgps(X=X, y=y, y_obs_variances=yvars, sta=sta,
+                               basisfn_str=basisfn_str,
+                               kernel_str=kernel_str,
+                               target=target, 
+                               optim_params=optim_params, 
+                               cluster_centers_fname=cluster_centers_fname, 
+                               **kwargs)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
         if "param_var" in kwargs:
@@ -231,6 +269,7 @@ def learn_gp(sta, X, y, y_obs_variances, kernel_str, basisfn_str=None, noise_var
             sX, sy, syvars = subsample_data(X=X, y=y, yvars=y_obs_variances ,k=k)
         else:
             sX, sy = X, y
+            syvars = y_obs_variances
         print "learning hyperparams on", len(sy), "examples"
         nllgrad, x0, bounds, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, y_obs_variances=syvars, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
@@ -245,6 +284,63 @@ def learn_gp(sta, X, y, y_obs_variances, kernel_str, basisfn_str=None, noise_var
 
     gp = SparseGP(X=X, y=y, y_obs_variances=y_obs_variances, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
     return gp
+
+
+def learn_localgps(sta, X, y, y_obs_variances, kernel_str, basisfn_str=None, 
+                   noise_prior=None, cov_main=None, target=None, optim_params=None, 
+                   cluster_centers_fname=None, param_var=100, **kwargs):
+
+    try:
+        st = target.split('_')
+        int(st[-1])
+        target = "_".join(st[:-1])
+    except (ValueError, AttributeError):
+        pass
+
+    if basisfn_str is not None:
+        basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
+
+        kwargs["basis"] = basisfn_str
+        kwargs["extract_dim"] = extract_dim
+        kwargs["featurizer_recovery"] = featurizer_recovery
+
+        if featurizer_recovery is None:
+            if basisfn_str is not None:
+                H, _, _ = featurizer_from_string(X[:1], basisfn_str, extract_dim=extract_dim, transpose=True)
+        else:
+            f, _ = recover_featurizer(basisfn_str, featurizer_recovery, transpose=True)
+            H = f(X[:1])
+        nparams = H.shape[0]
+
+        kwargs["prior_mean"] = np.zeros((nparams,))
+        kwargs["prior_cov"] = np.eye(nparams)*param_var
+
+    else:
+        featurizer_recovery = None
+        extract_dim = None
+
+    cluster_centers = np.loadtxt(cluster_centers_fname)
+
+    if cov_main is None:
+        noise_var, noise_prior, cov_main, cov_fic = build_starting_hparams(kernel_str, target)
+
+
+    nllgrad, x0, build_gp, covs_from_vector = optimize_localgp_hyperparams(X=X, y=y, 
+                y_obs_variances=y_obs_variances, noise_prior=noise_prior, 
+                cov_main=cov_main, cluster_centers=cluster_centers, 
+                **kwargs)
+
+    params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included")
+    print "got params", params, "giving ll", ll
+    cluster_covs, cluster_noise_vars = covs_from_vector(np.exp(params))
+
+    gp = LocalGPEnsemble(X=X, y=y, y_obs_variances=y_obs_variances, 
+                         cluster_centers=cluster_centers,
+                         cluster_noise_vars=cluster_noise_vars,
+                         cluster_covs=cluster_covs,
+                         sta=sta,  **kwargs)
+    return gp
+
 
 
 def learn_linear(X, y, sta, optim_params=None):
@@ -331,7 +427,10 @@ def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
     if fname.startswith("parameters"):
         fname = os.path.join(Sigvisa().homedir, fname)
     
-    if model_type.startswith("gp"):
+    if model_type.startswith("gplocal"):
+        with open(fname, "rb") as f:
+            model = pickle.load(f)
+    elif model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):
         model = LinearBasisModel(fname=fname)

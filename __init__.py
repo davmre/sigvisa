@@ -228,6 +228,13 @@ class Sigvisa(threading.local):
                     stas.append(site)
         return stas
 
+    def sql(self, sql_query):
+        cursor = self.dbconn.cursor()
+        cursor.execute(sql_query)
+        r = cursor.fetchall()
+        cursor.close()
+        return r
+
 def get_sta_default_channel(cursor, sta, canonical_choices, equivalent_channels):
 
     if sta=="YBH":

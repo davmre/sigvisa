@@ -36,16 +36,21 @@ def event_bounds(X, quantile=0.98):
     X = X[:, 0:2]
 
 
-    center = find_center(X)
-    lon_distances = sorted(np.abs([geog.degdiff(pt[0], center[0]) for pt in X]))
-    lat_distances = sorted(np.abs([geog.degdiff(pt[1], center[1]) for pt in X]))
-    lon_width = lon_distances[int(np.floor(len(lon_distances) * float(quantile)))] * 2
-    lat_width = lat_distances[int(np.floor(len(lat_distances) * float(quantile)))] * 2
+    if quantile==1.0:
+        left_lon, bottom_lat = np.min(X, axis=0)
+        right_lon, top_lat = np.max(X, axis=0)
+    else:
 
-    left_lon = center[0] - lon_width/2.0
-    right_lon = center[0] + lon_width/2.0
-    bottom_lat = center[1] - lat_width/2.0
-    top_lat = center[1] + lat_width/2.0
+        center = find_center(X)
+        lon_distances = sorted(np.abs([geog.degdiff(pt[0], center[0]) for pt in X]))
+        lat_distances = sorted(np.abs([geog.degdiff(pt[1], center[1]) for pt in X]))
+        lon_width = lon_distances[int(np.floor(len(lon_distances) * float(quantile)))] * 2
+        lat_width = lat_distances[int(np.floor(len(lat_distances) * float(quantile)))] * 2
+
+        left_lon = center[0] - lon_width/2.0
+        right_lon = center[0] + lon_width/2.0
+        bottom_lat = center[1] - lat_width/2.0
+        top_lat = center[1] + lat_width/2.0
 
     return left_lon, right_lon, bottom_lat, top_lat
 
@@ -303,7 +308,9 @@ class Heatmap(object):
             max_yval = scipy.stats.scoreatpercentile(yvals, 90)
             yvals = np.array([min(max_yval, max(y, min_yval)) for y in yvals])
 
-            scplot = bmap.scatter(normed_locations[:, 0], normed_locations[:, 1], c=yvals, alpha=alpha, **plotargs)
+            scplot = bmap.scatter(normed_locations[:, 0], normed_locations[:, 1], 
+                                  zorder=zorder,
+                                  c=yvals, alpha=alpha, **plotargs)
 
             if yval_colorbar:
                 from mpl_toolkits.axes_grid import make_axes_locatable

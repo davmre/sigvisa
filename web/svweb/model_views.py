@@ -96,7 +96,7 @@ def plot_empirical_mb(request, xy_by_phase, axes):
     axes.set_xlim([xmin - r / 20.0, xmax + r / 20.0])
 
 
-def plot_linear_model_distance(request, model_record, axes):
+def plot_linear_model_distance(request, model_record, axes, mb=3.5):
 
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
@@ -104,7 +104,7 @@ def plot_linear_model_distance(request, model_record, axes):
     distances = np.linspace(0, 20000, 200)
     Xs = np.zeros((len(distances), 5))
     Xs[:,3] = distances
-    Xs[:,4] = 3.5
+    Xs[:,4] = mb
 
 
     pred = model.predict(Xs).flatten()
@@ -150,7 +150,7 @@ def plot_linear_model_mb(request, model_record, axes):
     except Exception as e:
         print e
 
-def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
+def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0, mb=3.5):
 
     xmax = float(request.GET.get('xmax', 10000))
 
@@ -166,7 +166,7 @@ def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
     distances = np.linspace(0, xmax, 40)
     pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
 
-    pred = np.array([model.predict(np.array(((pt[0], pt[1], depth, d, azi),)), **kwargs) for (pt, d) in zip(pts, distances)]).flatten()
+    pred = np.array([model.predict(np.array(((pt[0], pt[1], depth, d, mb),)), **kwargs) for (pt, d) in zip(pts, distances)]).flatten()
     axes.plot(distances, pred, 'k-')
 
     array_inputs = [np.array(((pt[0], pt[1], depth, d, azi),)) for (pt, d) in zip(pts, distances)]
@@ -180,7 +180,57 @@ def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
     var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
     axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
 
+def plot_localgp_hparams(request, modelid=None, param=None ):
+
+    model_record = SigvisaParamModel.objects.get(modelid=modelid)
+
+    fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+
+    full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
+    model = load_model(full_fname, model_record.model_type)
+    if param=="noise_var":
+        vs = [lgp.noise_var for lgp in model.local_gps]
+    elif param=="signal_var":
+        vs = [lgp.cov_main.wfn_params[0] for lgp in model.local_gps]
+    elif param=="horiz_lscale":
+        vs = [lgp.cov_main.dfn_params[0] for lgp in model.local_gps]
+    elif param=="depth_lscale":
+        vs = [lgp.cov_main.dfn_params[1] for lgp in model.local_gps]
+    vmin, vmax = np.min(vs), np.max(vs)
+    cluster_centers = model.cluster_centers
+
+    full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
+    model = load_model(full_fname, model_record.model_type)
+
+    def f(lon, lat):
+        d = {'lon': lon, 'lat': lat, 'depth': 0, 'mb': 4.0 }
+        x1 = model.standardize_input_array(d).astype(np.float)
+        i = model._x_to_cluster(x1)
+        return vs[i]
+
+    heatmap_fname = full_fname + "." +param  + ".heatmap"
+
+    hm = EventHeatmap(f=f, autobounds=cluster_centers, autobounds_quantile=1.0, n=50, fname = heatmap_fname)
+    hm.add_stations((model_record.site,))
+    hm.add_events(locations=model.X, )
+    hm.plot(axes=axes, nolines=True, smooth=True,
+            colorbar_format='%.3f',vmin=vmin, vmax=vmax)
+
+
+    process_plot_args(request, axes)
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
+    fig.tight_layout()
+    canvas.print_png(response)
+    return response
+
+
 def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
+
+    ngrid = int(request.GET.get('ngrid', "25"))
+
 
     vmin = request.GET.get('vmin', None)
     vmin = float(vmin) if vmin is not None else None
@@ -203,10 +253,10 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
         f = lambda lon, lat : np.sqrt(model.variance( cond={'lon': lon, 'lat': lat, 'depth': 0, 'mb': 4.0 } ))
     else:
         f = lambda lon, lat : model.predict( cond={'lon': lon, 'lat': lat, 'depth': 0, 'mb': 4.0 } )
-    heatmap_fname = full_fname + ('.std' if stddev else '')  + ".heatmap"
-    hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = heatmap_fname)
+    heatmap_fname = full_fname + ('.std' if stddev else '')  + ".heatmap." + str(ngrid)
+    hm = EventHeatmap(f=f, autobounds=ev_locs, n=ngrid, fname = heatmap_fname)
     hm.add_stations((model_record.site,))
-    hm.add_events(locations=ev_locs)
+    hm.add_events(locations=ev_locs, yvals=y)
     if draw_azi:
         hm.add_events(pts)
     hm.plot(axes=axes, nolines=True, smooth=True,
@@ -290,6 +340,8 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
 
+    mb = float(request.GET.get("mb", "3.5"))
+
     log_transform = bool(request.GET.get("log", False))
     d = {}
     if modelid is not None:
@@ -366,7 +418,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
                 raise Exception("don't know how to plot mb for model %s" % model.model_type)
         elif plot_type == "distance":
             if model.model_type.startswith("param_"):
-                plot_linear_model_distance(request, model_record=model, axes=axes)
+                plot_linear_model_distance(request, model_record=model, axes=axes, mb=mb)
             else:
                 nplots = int(request.GET.get('nplots', 1))
                 if nplots == 1:
@@ -374,7 +426,8 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
                 else:
                     plot_azis = np.linspace(d['min_azi'], d['max_azi'], nplots)
                 for azi in plot_azis:
-                    plot_gp_model_distance(request, model_record=model, axes=axes, azi=azi, depth=gp_plot_depth)
+                    plot_gp_model_distance(request, model_record=model, axes=axes, 
+                                           azi=azi, depth=gp_plot_depth, mb=mb)
         elif plot_type == "heatmap": # and model.model_type[:2] == "gp":
                 plot_gp_heatmap(request, model_record=model, X=xy_by_phase[model.phase][0], y=xy_by_phase[model.phase][1], axes=axes, stddev=False)
         elif plot_type == "heatmap_std": #and model.model_type[:2] == "gp":
@@ -397,7 +450,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         axes.set_xlabel("distance (km)", fontsize=8)
         axes.set_ylabel(param, fontsize=8)
 
-        default_bounds = {'coda_decay': [-8, 1], 'amp_transfer': [-7, 10], 'peak_offset': [-3, 5]}
+        default_bounds = {'coda_decay': [-8, 1], 'amp_transfer': [-7, 15], 'peak_offset': [-3, 5]}
         if param in default_bounds:
             axes.set_ylim(default_bounds[param])
     elif plot_type == "mb":

@@ -344,7 +344,7 @@ def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
     for modelid in modelids:
         model = load_modelid(modelid=modelid, memoize=False, gpmodel_build_trees=False)
 
-        if model_type.startswith("param") or model_type.startswith('gplocal'):
+        if model_type.startswith("param") or model_type.startswith('gpparam') or (model_type.startswith("gplocal") and "none" not in model_type):
             prior_mean, prior_cov = get_shrinkage(modelid,n)
             print "shrunk mean", prior_mean
             m,c = message_from_model(model, prior_mean, prior_cov,station_slack)
