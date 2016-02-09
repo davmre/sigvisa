@@ -35,3 +35,4 @@ ipython
 
 # to manage cloud instances
 fabric
+subprocess32

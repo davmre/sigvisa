@@ -29,6 +29,7 @@ from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel, ParentConditionalNotDefined
 from sigvisa.graph.graph_utils import extract_sta_node, predict_phases_sta, create_key, get_parent_value, parse_key
 from sigvisa.graph.region import Region
+from sigvisa.graph.serialization import load_serialized_from_file, save_serialized_to_file
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
@@ -1710,61 +1711,15 @@ class SigvisaGraph(DirectedGraphModel):
                     continue
                 self.create_unassociated_template(wn, atime, initial_vals=uadict)
 
-    def serialize_to_file(self, filename):
-        mkdir_p(filename)
-
-        import tarfile
-        tf = tarfile.TarFile.open(filename+".tgz", mode="w:gz")
-
-
+    def serialize_to_file(self, basename):
         evdicts = self.serialize_evs()
-        fname = "evstate.txt"
-        with open(os.path.join(filename, fname), 'w') as f:
-            for evdict in evdicts:
-                f.write(repr(evdict) + "\n")
-        tf.add(os.path.join(filename, fname), arcname=fname)
-
         uadicts_by_sta = self.serialize_uatemplates()
-        for (sta, chan, band), uadicts in uadicts_by_sta.items():
-            fname = "ua_%s;%s;%s.txt" % (sta, chan, band)
-            with open(os.path.join(filename, fname), 'w') as f:
-                for uadict in uadicts:
-                    f.write(repr(uadict) + "\n")
-            tf.add(os.path.join(filename, fname), arcname=fname)
-
-        fname = "config.txt"
-        with open(os.path.join(filename, fname), 'w') as f:
-            f.write(self.config_str())
-        tf.add(os.path.join(filename, fname), arcname=fname)
-
-        tf.close()
-        print "wrote to", filename+".tgz"
+        save_serialized_to_file(basename, evdicts, uadicts_by_sta, config_str=self.config_str())
 
     def deserialize_from_tgz(self, tgzfile):
-
-
-        import tarfile
-        tf = tarfile.TarFile.open(tgzfile, mode="r:gz")
-
-        fnames  = tf.getnames()
-
-        uadicts_by_sta = dict()
-        for fname in fnames:
-            if not fname.startswith("ua"): continue
-            sta, chan, band = fname[3:-4].split(";")
-            f = tf.extractfile(fname)
-            uadicts = [eval(l) for l in f.readlines()]
-            uadicts_by_sta[(sta, chan, band)] = uadicts
-            f.close()
-
-        ev_f = tf.extractfile("evstate.txt")
-        evdicts = [eval(l) for l in ev_f.readlines()]
-        ev_f.close()
-        tf.close()
-
+        evdicts, uadicts_by_sta = load_serialized_from_file(tgzfile)
         self.deserialize_evs(evdicts)
         self.deserialize_uatemplates(uadicts_by_sta)
-
 
     def config_str(self):
         import socket

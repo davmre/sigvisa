@@ -385,6 +385,8 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
         
         if wave_hz != hz:
             decimation = wave_hz/hz
+            assert( np.abs(decimation - int(decimation)) < 1e-8 )
+            decimation = int(decimation)
             wave = scipy.signal.decimate(wave, decimation)
         
         # copy the data we loaded into the global array

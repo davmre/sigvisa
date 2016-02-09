@@ -10,7 +10,7 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in
 
 class MCMCLogger(object):
 
-    def __init__(self, run_dir=None, dumpsteps=False, write_template_vals=False, dump_interval_s=10, template_move_step=True, print_interval_s=10, transient=False, write_gp_hparams=False):
+    def __init__(self, run_dir=None,  write_template_vals=False, dump_interval_s=10, template_move_step=True, print_interval_s=10, transient=False, write_gp_hparams=False, serialize_interval_s=10):
 
         s = Sigvisa()
 
@@ -31,13 +31,14 @@ class MCMCLogger(object):
 
         self.log_handles = dict()
 
-        self.dumpsteps = dumpsteps
         self.write_template_vals=write_template_vals
         self.write_gp_hparams = write_gp_hparams
         self.dump_interval_s = dump_interval_s
         self.print_interval_s = print_interval_s
+        self.serialize_interval_s = serialize_interval_s
 
         self.last_dump_time = time.time()
+        self.last_serialize_time = time.time()
         self.last_print_time = 0.0
 
         self.start_time = None
@@ -75,6 +76,10 @@ class MCMCLogger(object):
         if t - self.last_dump_time > self.dump_interval_s:
             self.last_dump_time = t
             self.dump(sg)
+
+        if t - self.last_serialize_time > self.serialize_interval_s:
+            self.last_serialize_time = t
+            self.serialize(sg)
 
         for (eid, evnodes) in sg.evnodes.items():
 
@@ -159,13 +164,6 @@ class MCMCLogger(object):
                 self.log_handles[move_name].write('%d %f\n' % (step, t));
             del move_times[move_name]
 
-        if self.dumpsteps:
-            # dump images for each station at each step
-            self.print_mcmc_acceptances(sg, lp, step, n_accepted, n_attempted)
-            for (sta, waves) in sg.station_waves.items():
-                for wn in waves:
-                    plot_with_fit_shapes(os.path.join(self.run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
-
         if step > 0 and time.time() - self.last_print_time > self.print_interval_s:
             s = self.acceptance_string(sg, lp, step, n_accepted, n_attempted)
             print s
@@ -178,6 +176,16 @@ class MCMCLogger(object):
     def dump(self, sg):
         step = self.last_step
         sg.debug_dump(dump_path = os.path.join(self.run_dir, 'step_%06d' % step), pickle_only=True)
+        for f in self.log_handles.values():
+            if type(f) == file:
+                f.flush()
+
+    def serialize(self, sg):
+        step = self.last_step
+        serial_dir = os.path.join(self.run_dir, "serialized")
+        mkdir_p(serial_dir)
+
+        sg.serialize_to_file(os.path.join(serial_dir, 'step_%06d' % step))
         for f in self.log_handles.values():
             if type(f) == file:
                 f.flush()
