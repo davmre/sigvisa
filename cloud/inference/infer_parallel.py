@@ -35,7 +35,7 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
                        block_s=3600, ncpus=4, 
                        inference_s=3600.0, sync_s=60):
 
-    infer_script = "python /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
+    infer_script = "/bin/bash /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
 
     s_homedir =  os.getenv("SIGVISA_HOME")
     jobdir = os.path.join(s_homedir, "cloud", "remote_jobs", label)

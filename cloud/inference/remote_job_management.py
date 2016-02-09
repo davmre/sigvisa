@@ -16,7 +16,6 @@ def nohup_return_pid(cmd, host, log_prefix, sudo=False, **kwargs):
                                                                  os.path.join(log_prefix, "out.txt"), 
                                                                  os.path.join(log_prefix, "err.txt"))
     r = run_as_host(full_cmd, host, sudo=sudo, **kwargs)
-    print r
     pid = int(r.split("\n")[-1])
     #pid = 1
     return pid
