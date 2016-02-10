@@ -406,7 +406,7 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
 
 def do_inference(sg, modelspec, runspec, max_steps=None, 
                  model_switch_lp_threshold=500, dump_interval_s=10, 
-                 print_interval_s=10, swapper=None):
+                 print_interval_s=10, swapper=None, run_dir=None):
 
     # save 'true' events if they are known
     # build logger
@@ -415,7 +415,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
     # run inference with appropriate params
     # and hooks to monitor convergence?
 
-    logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True)
+    logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True, run_dir=None)
     logger.dump(sg)
 
     sg.seed = modelspec.seed
@@ -463,7 +463,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
                           swapper=swapper,
                           **inference_params)
         step = logger.last_step
-
+    return logger.run_dir
 
 def do_coarse_to_fine(modelspecs, runspec,
                       model_switch_lp_threshold=1000,
@@ -474,15 +474,18 @@ def do_coarse_to_fine(modelspecs, runspec,
 
     sgs = [runspec.build_sg(modelspec) for modelspec in modelspecs]
 
+    run_dir = None
     for (sg, modelspec) in zip(sgs[:-1], modelspecs[:-1]):
         if sg_old is None:
             initialize_sg(sg, modelspec, runspec)
         else:
             initialize_from(sg, modelspec, sg_old, ms_old)
 
-        do_inference(sg, modelspec, runspec,
-                     model_switch_lp_threshold=model_switch_lp_threshold,
-                     max_steps = max_steps_intermediate, **kwargs)
+        run_dir = do_inference(sg, modelspec, runspec,
+                               model_switch_lp_threshold=model_switch_lp_threshold,
+                               max_steps = max_steps_intermediate, 
+                               run_dir=run_dir, **kwargs)
+        run_dir += "1"
         sg_old, ms_old = sg, modelspec
 
     sg, modelspec = sgs[-1], modelspecs[-1]

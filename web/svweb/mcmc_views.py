@@ -39,7 +39,7 @@ from stat import S_ISREG, ST_CTIME, ST_MODE
 
 
 
-def mcmc_list_view(request, sort_by_time=False):
+def mcmc_list_view(request, sort_by_time=True):
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")

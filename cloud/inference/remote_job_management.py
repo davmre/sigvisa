@@ -2,6 +2,15 @@ import os
 import fabric.api as fapi
 import fabric.context_managers as fcm
 import numpy as np
+import hashlib
+import uuid
+
+from StringIO import StringIO
+
+def get_from_host(fname, host, **kwargs):
+    with fcm.settings(host_string=host):
+        r = fapi.get(fname, **kwargs)
+    return f
 
 def run_as_host(cmd, host, sudo=False, **kwargs):
     with fcm.settings(host_string=host):
@@ -12,12 +21,14 @@ def run_as_host(cmd, host, sudo=False, **kwargs):
     return r
 
 def nohup_return_pid(cmd, host, log_prefix, sudo=False, **kwargs):
-    full_cmd = "mkdir -p %s && nohup %s > %s 2> %s & echo $!" % (log_prefix, cmd,
-                                                                 os.path.join(log_prefix, "out.txt"), 
-                                                                 os.path.join(log_prefix, "err.txt"))
+    
+    r = run_as_host("mkdir -p %s" % log_prefix, host, sudo=sudo, **kwargs)
+    full_cmd = "LOGDIR=%s nohup %s > %s 2> %s < /dev/null & echo $!" % (log_prefix, cmd,
+                                                                        os.path.join(log_prefix, "out.txt"), 
+                                                                        os.path.join(log_prefix, "err.txt"))
+
     r = run_as_host(full_cmd, host, sudo=sudo, **kwargs)
     pid = int(r.split("\n")[-1])
-    #pid = 1
     return pid
 
 def running_processes(host):
@@ -34,7 +45,6 @@ class JobManager(object):
 
     def __init__(self, hosts, ncpus=4, log_prefix=None):
         self.ncpus = ncpus
-        self.job_counter = 0
 
         # maps hosts to [{pid: (jobid, job_cpus)}]
         self.jobs_by_host = dict([(host, {}) for host in hosts])
@@ -65,8 +75,7 @@ class JobManager(object):
             raise Exception("job requires %d cpus but no host has spare capacity" % (job_cpus))
 
         target_host = get_free_host(job_cpus)
-        jobid = self.job_counter
-        self.job_counter += 1
+        jobid = str(uuid.uuid4())
 
         if self.log_prefix is None:
             prefix = ""
@@ -86,7 +95,12 @@ class JobManager(object):
         
     def kill_job(self, jobid):
         host, pid = self.hosts_by_job[jobid]
-        run_as_host("kill %d" % pid, host, sudo=True)
+        try:
+            run_as_host("pkill -TERM -P %d" % (pid), host, sudo=True)
+            run_as_host("kill %d" % (pid), host, sudo=True)
+        except:
+            pass
+        #run_as_host("kill %d" % pid, host, sudo=True)
         self._delete_job(jobid)
 
     def sync_jobs(self):

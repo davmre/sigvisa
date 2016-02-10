@@ -16,7 +16,7 @@ env.key_filename = '/home/dmoore/.ssh/fabric_is_terrible.key'
 
 
 def sync_serializations(hostname, jobid, local_dir):
-    serial_dir = os.path.join("/home/sigvisa/remote_jobs/", "mcmc_%06d" % jobid, "serialized")
+    serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
     subprocess.call(["rsync", "-avz", "-e", "ssh", "vagrant@%s:%s" % (hostname, serial_dir), local_dir])
     
 def last_serialization(dirname):
@@ -26,7 +26,8 @@ def last_serialization(dirname):
 def summarize_results(jobdir, jobs):
     serialized_periods = []
     for (jobid, cmd, stime, etime) in jobids:
-        final_state_file = last_serialization(os.path.join(jobdir, "%06d" % jobid))
+        serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
+        final_state_file = last_serialization(serial_dir)
         evdicts, uadicts_by_sta = load_serialized_from_file(final_state_file)
         serialized_periods.append((evdicts, uadicts_by_sta, stime, etime))
     return merge_serializations(*serialized_periods)
@@ -50,29 +51,37 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
     etimes = stimes + block_s
     etimes[-1] = etime
 
-    log_prefix = lambda jobid : "/home/sigvisa/remote_jobs/mcmc_%06d" % jobid
+    log_prefix = lambda jobid : "/home/sigvisa/python/sigvisa/logs/mcmc/%s" % jobid
     jm = JobManager(hostnames, ncpus, log_prefix)
 
-    jobs = []
-    for (block_stime, block_etime) in zip(stimes, etimes):
-        cmd = "%s --stime=%f --etime=%f" % (infer_script, block_stime, block_etime)
-        jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
-        jobs.append((jobid, cmd, block_stime, block_etime))
+    try:
+        jobs = []
+        for (block_stime, block_etime) in zip(stimes, etimes):
+            cmd = "%s --stime=%f --etime=%f" % (infer_script, block_stime, block_etime)
+            jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
+            jobs.append((jobid, cmd, block_stime, block_etime))
 
-    t0 = time.time()
-    t = time.time()
-    while t - t0 < inference_s:
-        
-        for (jobid, cmd, block_stime, block_etime) in jobs:
-            local_dir = os.path.join(jobdir, "%06d" % jobid)
-            mkdir_p(local_dir)
-
-            hostname, _ = jm.hosts_by_job[jobid]
-            sync_serializations(hostname, jobid, local_dir)
-
-        time.sleep(sync_s)        
+        t0 = time.time()
         t = time.time()
+        while t - t0 < inference_s:
 
+            for (jobid, cmd, block_stime, block_etime) in jobs:
+                local_dir = os.path.join(jobdir, "%s" % jobid)
+                mkdir_p(local_dir)
+
+                hostname, _ = jm.hosts_by_job[jobid]
+                sync_serializations(hostname, jobid, local_dir)
+
+            time.sleep(sync_s)        
+            t = time.time()
+    except KeyboardInterrupt as e:
+        yn = raw_input("Kill currently running jobs (y/n)?: ")
+        for (jobid, cmd, block_stime, block_etime) in jobs:
+            host, pid = jm.hosts_by_job[jobid]
+            print "jobid", jobid, "host", host, "pid", pid
+            if yn.lower().startswith("y"):
+                jm.kill_job(jobid)
+        raise e
 
     for (jobid, cmd, block_stime, block_etime) in jobs:
         print "killing job", jobid
@@ -81,7 +90,7 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
     evdicts, uadicts_by_sta = summarize_results(jobdir, jobs)
 
     save_serialized_to_file(os.path.join(jobdir, "merged"), evdicts, uadicts_by_sta)
-    
+        
 
 def main():
     

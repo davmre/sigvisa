@@ -15,11 +15,14 @@ class MCMCLogger(object):
         s = Sigvisa()
 
         if run_dir is None:
-            base_path = os.path.join(s.homedir, "logs", "mcmc")
-            formatter = lambda i : "%05d" % i
-            run_dir = make_next_unused_dir(base_path, formatter)
-        else:
-            mkdir_p(run_dir)
+            if os.getenv("LOGDIR") is None:
+                base_path = os.path.join(s.homedir, "logs", "mcmc")
+                formatter = lambda i : "%05d" % i
+                run_dir = make_next_unused_dir(base_path, formatter)
+            else:
+                run_dir = os.getenv("LOGDIR")
+
+        mkdir_p(run_dir)
 
         self.run_dir = run_dir
 
