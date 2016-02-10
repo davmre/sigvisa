@@ -15,7 +15,7 @@ from optparse import OptionParser
 stas = "NEW,PDAR,NVAR,ANMO,TXAR,PFO,YKA,ULM,ILAR".split(",")
 
 stas = "ANMO,ELK,ILAR,KDAK,NEW,NVAR,PDAR,PFO,TXAR,ULM,YBH,YKA".split(",")
-stas = ["ANMO", "PD31"]
+
 region_lon = (-126, -100)
 region_lat = (32, 49)
 
