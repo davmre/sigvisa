@@ -2,11 +2,13 @@ import os
 import subprocess32 as subprocess
 import time
 import numpy as np
+import shutil
 
 from optparse import OptionParser
 
 from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.cloud.inference.remote_job_management import JobManager
+from sigvisa.cloud.inference.merge_results import summarize_results
 from sigvisa.graph.serialization import load_serialized_from_file, save_serialized_to_file, merge_serializations, extract_time_period
 
 from fabric.api import env
@@ -18,19 +20,6 @@ env.key_filename = '/home/dmoore/.ssh/fabric_is_terrible.key'
 def sync_serializations(hostname, jobid, local_dir):
     serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
     subprocess.call(["rsync", "-avz", "-e", "ssh", "vagrant@%s:%s" % (hostname, serial_dir), local_dir])
-    
-def last_serialization(dirname):
-    fname = sorted(os.path.listdir(dirname))[:-1]
-    return os.path.join(dirname, fname)
-
-def summarize_results(jobdir, jobs):
-    serialized_periods = []
-    for (jobid, cmd, stime, etime) in jobids:
-        serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
-        final_state_file = last_serialization(serial_dir)
-        evdicts, uadicts_by_sta = load_serialized_from_file(final_state_file)
-        serialized_periods.append((evdicts, uadicts_by_sta, stime, etime))
-    return merge_serializations(*serialized_periods)
 
 def parallel_inference(infer_script, label, nnodes, stime, etime, 
                        block_s=3600, ncpus=4, 
@@ -40,6 +29,10 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
 
     s_homedir =  os.getenv("SIGVISA_HOME")
     jobdir = os.path.join(s_homedir, "cloud", "remote_jobs", label)
+    if os.path.exists(jobdir):
+        yn = raw_input("job directory %s already exists, overwrite (y/n)?" % jobdir)
+        if yn.lower().startswith("y"):
+            shutil.rmtree(jobdir)
     mkdir_p(jobdir)
 
     hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
@@ -60,6 +53,9 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
             cmd = "%s --stime=%f --etime=%f" % (infer_script, block_stime, block_etime)
             jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
             jobs.append((jobid, cmd, block_stime, block_etime))
+
+        with open(os.path.join(jobdir, "jobs.txt"), "w") as f:
+            f.write(repr(jobs))
 
         t0 = time.time()
         t = time.time()

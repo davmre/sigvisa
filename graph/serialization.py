@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 
+from collections import defaultdict
 from sigvisa.utils.fileutils import mkdir_p
 
 def load_serialized_from_file(tgzfile):
@@ -84,7 +85,7 @@ def extract_time_period(evdicts, uadicts_by_sta, stime, etime):
     filtered_evdicts = []
     filtered_uadicts_by_sta = defaultdict(list)
 
-    for (sta, chan, band), uadicts in uadicts_by_sta:
+    for (sta, chan, band), uadicts in uadicts_by_sta.items():
         for d in uadicts:
             t = d["arrival_time"]
             if stime <= t < etime:
