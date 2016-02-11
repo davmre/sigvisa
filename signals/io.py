@@ -359,12 +359,20 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
     
     hzs = [wf[3] for wf in waveforms]
     hz = np.min(hzs)
+
+    waveforms = [w for w in waveforms if ".HR." not in w[6]]
+
+    fnames = [wf[6] for wf in waveforms]
+    if np.any(([".10." in fname for fname in fnames])):
+        waveforms = [w for w in waveforms if ".10." in w[6]]
+
     sorted_waves = sorted(waveforms, key = lambda wf : (wf[1], wf[3]))
 
-    
-    npts = int((etime - stime) * hz)
+    npts = int(np.ceil((etime - stime) * hz))
     global_data = np.empty((npts,))
     global_data.fill(np.nan)
+
+    print sorted_waves
     
     for (chan, wave_stime, wave_etime, wave_hz, wave_npts, subdir, fname) in sorted_waves:
         
@@ -409,6 +417,8 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
         pad_samples = int(pad_seconds * hz)
         masked_data[0:pad_samples] = ma.masked
         masked_data[-pad_samples:] = ma.masked
+
+    masked_data[np.isnan(masked_data)] = ma.masked
 
     return Waveform(data=masked_data, sta=selection, stime=global_stime, srate=hz, chan=chan)
         

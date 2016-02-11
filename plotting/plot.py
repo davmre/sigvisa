@@ -203,7 +203,8 @@ def plot_with_fit_shapes(fname, wn, title="",
             if eid not in shape_colors:
                 shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5+.5)
             m = cmeans[(eid, phase)]
-            ev_tmpls.append((m["combined"], m["stime"], shape_colors[eid]))
+            if "combined" in m:
+                ev_tmpls.append((m["combined"], m["stime"], shape_colors[eid]))
         else:
             highlight_tmpl = (cmeans[(eid, phase)]["combined"], cmeans[(eid, phase)]["stime"])
 

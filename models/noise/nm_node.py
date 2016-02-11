@@ -92,16 +92,18 @@ class NoiseModelNode(Node):
             self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = waveform_dummy_prior(waveform, is_env)
 
 
-        em = ErrorModel(mean=0.0, std=np.sqrt(self.prior_var_dist.predict()))
+        v_pred, v_std = self.prior_var_dist.predict(), np.sqrt(self.prior_var_dist.variance())
+        em = ErrorModel(mean=0.0, std=np.sqrt(v_pred + 2*v_std))
 
+        m_pred, m_std = self.prior_mean_dist.predict(), np.sqrt(self.prior_mean_dist.variance())
         self.prior_nm = ARModel(params=self.prior_param_dist.predict(), em=em, 
-                                c=self.prior_mean_dist.predict())
+                                c=m_pred + 2*m_std, sf=waveform["srate"])
 
         if nmid is None:
             nm = self.prior_nm.copy()
         else:
             nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)
-        
+
         super(NoiseModelNode, self).__init__(initial_value=nm, **kwargs)
         self.set_value(nm)
         

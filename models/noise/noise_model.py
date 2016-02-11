@@ -19,7 +19,7 @@ class NoiseModel(TimeSeriesDist):
     def order(self):
         raise NotImplementedError('abstract base class')
 
-    def save_to_db(self, dbconn, sta, chan, band, smooth, hz, env, window_stime, window_len, fname, hour):
+    def save_to_db(self, dbconn, sta, chan, band, smooth, hz, env, window_stime, window_len, fname, hour, fitting_runid=None):
 
         model_type = self.noise_model_type()
         nparams = self.order()
@@ -27,7 +27,10 @@ class NoiseModel(TimeSeriesDist):
         mean = self.location()
         std = self.scale()
 
-        sql_query = "insert into sigvisa_noise_model (sta, chan, band, smooth, hz, env, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp) values ('%s', '%s', '%s', %d, %f, '%s', %f, %f, '%s', %d, %f, %f, '%s', %d, %f)" % (sta, chan, band, smooth, hz, 't' if env else 'f', window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time())
+        if fitting_runid is None:
+            sql_query = "insert into sigvisa_noise_model (sta, chan, band, smooth, hz, env, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp) values ('%s', '%s', '%s', %d, %f, '%s', %f, %f, '%s', %d, %f, %f, '%s', %d, %f)" % (sta, chan, band, smooth, hz, 't' if env else 'f', window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time())
+        else:
+            sql_query = "insert into sigvisa_noise_model (sta, chan, band, smooth, hz, env, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp, fitting_runid) values ('%s', '%s', '%s', %d, %f, '%s', %f, %f, '%s', %d, %f, %f, '%s', %d, %f, %d)" % (sta, chan, band, smooth, hz, 't' if env else 'f', window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time(), fitting_runid)
         return execute_and_return_id(dbconn, sql_query, "nmid")
 
     @staticmethod

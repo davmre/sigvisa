@@ -247,6 +247,7 @@ def run_open_world_MH(sg, steps=10000,
                       enable_template_moves=True,
                       enable_hparam_moves=True,
                       template_move_type="rw", # can be "hamiltonian", "rw" (i.e. random-walk MH), or "both"
+                      tmpl_birth_rate=0.5,
                       logger=None,
                       disable_moves=[],
                       start_step=0,
@@ -304,8 +305,9 @@ def run_open_world_MH(sg, steps=10000,
         sta_moves = template_openworld_custom
     else:
         if enable_template_openworld:
-            sta_moves = {'tmpl_birth': (optimizing_birth_move, 0.5),
-                         'tmpl_death': (death_move_for_optimizing_birth, 0.5),
+            
+            sta_moves = {'tmpl_birth': (optimizing_birth_move, tmpl_birth_rate),
+                         'tmpl_death': (death_move_for_optimizing_birth, tmpl_birth_rate),
                          'tmpl_split': (split_move, 0.0),
                          'tmpl_merge': (merge_move, 0.0),
                          'swap_association': (swap_association_move, 0.2),

@@ -105,8 +105,8 @@ dummyPriorModel = {
 "amp_transfer": Gaussian(mean=0.0, std=10.0),
 "peak_offset": TruncatedGaussian(mean=-0.5, std=1.0, b=4.0),
 "mult_wiggle_std": Beta(4.0, 1.0),
-"coda_decay": Gaussian(mean=0.0, std=1.0),
-"peak_decay": Gaussian(mean=0.0, std=1.0)
+"coda_decay": Gaussian(mean=-2.0, std=1.0),
+"peak_decay": Gaussian(mean=-2.0, std=1.0)
 }
 
                 
@@ -1735,7 +1735,7 @@ class SigvisaGraph(DirectedGraphModel):
         cs += "smoothing: %s\n" % self.smoothing
         cs += "dummy_fallback: %s\n" % self.dummy_fallback
         cs += "phases: %s\n" % self.phases
-        cs += "runids: %s\n" % self.runids
+        cs += "runids: %s\n" % self.runids if len(self.runids) > 0 else "none"
         cs += "start_time: %s\n" % self.start_time
         cs += "event_start_time: %s\n" % self.event_start_time
         cs += "end_time: %s\n" % self.end_time

@@ -2091,6 +2091,9 @@ def get_fit_window(wn, peak_time, env_diff_pos, incr_s=5.0, max_s=60.0, smoothin
     # amplitude and decay parameters, conditioned on peak time
 
     peak_s = peak_time - wn.st
+    if (peak_s < 0):
+        raise Exception("cannot extract a fit window because peak precedes wn start")
+
     peak_idx1 = int(np.floor(peak_s * wn.srate))
     peak_idx2 = int(np.ceil(peak_s * wn.srate))
     try:
@@ -2543,7 +2546,10 @@ def amp_decay_proposal_laplace_reparam(wn, tg, env, true_srate, downsample_by=1,
     init_peak_decay = init_coda_decay # coda and peak decay are empirically correlated,
                                       # so we'll start by assuming they're the same.
     init_noise_mean = np.log(wn.nm_env.c)
-    init_noise_var = .1 * np.log(np.var(w))
+    try:
+        init_noise_var = .1 * np.log(np.var(w))
+    except:
+        init_noise_var = 1.0
     x0 = np.array((init_amp, init_peak_decay, init_coda_decay, init_noise_mean, init_noise_var))
 
     # find the most likely set of parameters
@@ -2659,7 +2665,11 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False, lapla
         (coda_height, peak_decay, coda_decay), proposal_lp = amp_decay_mixture_proposal(wn, peak_time, env_diff_pos, fix_result=x)
         fitting_window = None
     else:
-        fitting_window = get_fit_window(wn, peak_time, env_diff_pos)
+        fitting_window = None
+        try:
+            fitting_window = get_fit_window(wn, peak_time, env_diff_pos)
+        except:
+            pass
 
         if fitting_window is None:
             (coda_height, peak_decay, coda_decay), proposal_lp = propose_from_prior(sg, wn, x)

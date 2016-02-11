@@ -29,7 +29,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, 
+                init_run_name, init_iteration, fit_hz=5, uatemplate_rate=1e-4,
                 smoothing=0, dummy_fallback=False, raw_signals=False):
 
     """
@@ -50,6 +50,7 @@ def setup_graph(event, sta, chan, band,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, 
                       runids = runids,
+                      uatemplate_rate=1e-4,
                       dummy_fallback=dummy_fallback,
                       raw_signals=raw_signals)
 
@@ -57,12 +58,19 @@ def setup_graph(event, sta, chan, band,
     if not raw_signals:
         filter_str += ";env"
 
-    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True, phases=None if phases=="leb" else phases).filter(filter_str)
+    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor, exclude_other_evs=True, phases=None if phases=="leb" else phases, pre_s=100.0).filter(filter_str)
     cursor.close()
     if smoothing > 0:
         wave = wave.filter('smooth_%d' % smoothing)
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
+
+    if len(mask_blocks(wave.data.mask)) > 2:
+        raise Exception("wave contains missing data")
+
+    if (not raw_signals) and  (np.sum(wave.data < 0.0001) > 10):
+        raise Exception("wave contains regions of zeros")
+
     sg.add_wave(wave=wave)
     sg.add_event(ev=event)
     #sg.fix_arrival_times()
@@ -181,7 +189,7 @@ def compute_template_messages(sg, wn, logger, burnin=50, target_eid=None):
 
     return gp_messages, best_vals
 
-def compute_wavelet_messages(sg, wn):
+def compute_wavelet_messages(sg, wn, target_eid=None):
 
     gp_messages = dict()
     gp_posteriors = dict()
@@ -191,6 +199,9 @@ def compute_wavelet_messages(sg, wn):
 
     for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(wn.tssm_components):
 
+        if target_eid is not None and eid != target_eid:
+            continue
+        
         posterior_means, posterior_vars = marginals[i]
         if len(posterior_means)==0:
             continue
@@ -217,7 +228,7 @@ def compute_wavelet_messages(sg, wn):
 
     return gp_messages, gp_posteriors
 
-def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burnin):
+def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burnin, enable_uatemplates=False):
 
     # initialize the MCMC by finding a good set of template params
     wn = sigvisa_graph.station_waves.values()[0][0]
@@ -227,18 +238,19 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burni
     # run MCMC to sample from the posterior on template params
     st = time.time()
 
-    logger = MCMCLogger(run_dir="scratch/mcmc_fit_%s/" % (str(uuid.uuid4())), write_template_vals=True, dump_interval_s=5, transient=True)
-    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_phase_openworld=False, enable_template_openworld=False, logger=logger, disable_moves=['atime_xc', 'constpeak_atime_xc'])
+    logger = MCMCLogger(run_dir="scratch/mcmc_fit_%s/" % (str(uuid.uuid4())), write_template_vals=True, dump_interval_s=1000, transient=True, serialize_interval_s=1000, print_interval_s=5)
+    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_phase_openworld=False, enable_template_openworld=enable_uatemplates, logger=logger, disable_moves=['atime_xc', 'constpeak_atime_xc'], tmpl_birth_rate=0.1)
     et = time.time()
+    logger.dump(sigvisa_graph)
 
     # compute template posterior, and set the graph state to the best template params
-    messages, best_tmvals = compute_template_messages(sigvisa_graph, wn, logger, burnin=burnin)
+    messages, best_tmvals = compute_template_messages(sigvisa_graph, wn, logger, burnin=burnin, target_eid=1)
     for (vals, nodes) in best_tmvals.values():
         for (v, n) in zip(vals, nodes):
             n.set_value(v)
 
     # compute wavelet posterior
-    wavelet_messages, wavelet_posteriors = compute_wavelet_messages(sigvisa_graph, wn)
+    wavelet_messages, wavelet_posteriors = compute_wavelet_messages(sigvisa_graph, wn, target_eid=1)
 
     for k, v in wavelet_messages.items():
         messages[k][sigvisa_graph.wiggle_family] = v
@@ -303,8 +315,13 @@ def save_template_params(sg, eid, evid,
         optim_log = wiggle_optim_param_str.replace("\n", "\\\\n")
 
         nm_fname = model_path(sta, chan, wave['filter_str'], wave_node.srate, wave_node.nm.p, window_stime=wave_node.st, model_type="ar") + "_inferred"
+        c = 0
         full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
         ensure_dir_exists(os.path.dirname(full_fname))
+        while os.path.exists(full_fname + "_%d" % c):
+            c += 1
+        nm_fname = nm_fname + "_%d" % c
+        full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
         wave_node.nm.dump_to_file(full_fname)
         wave_node.nmid = wave_node.nm.save_to_db(dbconn=s.dbconn, sta=wave_node.sta, 
                                                  chan=wave_node.chan,
@@ -312,6 +329,7 @@ def save_template_params(sg, eid, evid,
                                                  env=env_signals, smooth=smooth,
                                                  window_stime=wave_node.st, 
                                                  window_len=wave_node.et-wave_node.st,
+                                                 fitting_runid=runid,
                                                  fname=nm_fname, hour=-1)
         print "saving inferred noise model as nmid", wave_node.nmid
 
@@ -381,6 +399,7 @@ def main():
                       help="template model type to fit parameters under (lin_polyexp)")
     parser.add_option("--template_model", dest="template_model", default="dummyPrior", type="str", help="")
     parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true", help="")
+    parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=None, type="float", help="if nonzero, allow uatemplate births to explain signal spikes")
     parser.add_option("--raw_signals", dest="raw_signals", default=False, action="store_true", help="fit on raw signals instead of envelopes")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", type="str", help="")
 
@@ -435,12 +454,15 @@ def main():
         template_model = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'dummyPrior'}
         
 
+    uatemplate_rate = options.uatemplate_rate
+    enable_uatemplates = uatemplate_rate is not None
 
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
                                 wm_family=options.wiggle_family, wm_type=options.wiggle_model,
                                 phases=phases,
                                 fit_hz=options.hz, 
+                                uatemplate_rate = uatemplate_rate if enable_uatemplates else 1e-4,
                                 init_run_name = init_run_name, init_iteration = init_iteration,
                                 smoothing=options.smooth,
                                 dummy_fallback=options.dummy_fallback, raw_signals=options.raw_signals)
@@ -461,7 +483,7 @@ def main():
     if options.seed >= 0:
         np.random.seed(options.seed)
 
-    fitid = run_fit(sigvisa_graph,  fit_hz = options.hz,
+    fitid = run_fit(sigvisa_graph,  fit_hz = options.hz, enable_uatemplates=enable_uatemplates,
                     tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
                     output_runid = runid, steps=options.steps, burnin=options.burnin)
 
