@@ -93,7 +93,7 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
     #    lp_new_true = lp_new
 
     #if np.isfinite(lp_new):
-    #    assert(np.abs( (lp_new - lp_old) - (lp_new_true - lp_old_true) ) < 1e-8 )
+    #    assert(np.abs( (lp_new - lp_old) - (lp_new_true - lp_old_true) ) < 1e-1 )
     #    print "assertion passed", keys
 
     u = np.random.rand()

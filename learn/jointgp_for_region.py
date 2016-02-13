@@ -74,6 +74,7 @@ def main():
     parser.add_option("--min_lat", dest="min_lat", default=None, type=float)
     parser.add_option("--max_time", dest="max_time", default=None, type=float)
     parser.add_option("--min_time", dest="min_time", default=None, type=float)
+    parser.add_option("--evidfile", dest="evidfile", default=None, type=str)
     parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     parser.add_option("--precision", dest="precision", default=None, type=float)
 
@@ -89,12 +90,16 @@ def main():
     else:
         runids = ()
 
-    evs = get_evs(options.min_lon, options.max_lon, 
-                  options.min_lat, options.max_lat, 
-                  options.min_time, options.max_time,
-                  evtype=options.evtype,
-                  precision=options.precision)
-
+    if options.evidfile is not None:
+        evids = np.loadtxt(options.evidfile)
+        evs = [get_event(evid=int(evid)) for evid in evids]
+    else:
+        evs = get_evs(options.min_lon, options.max_lon, 
+                      options.min_lat, options.max_lat, 
+                      options.min_time, options.max_time,
+                      evtype=options.evtype,
+                      precision=options.precision)
+        
     # HACK for weird llnl signal amplitudes
     from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian, LogNormal,InvGamma, Beta, Laplacian, Bernoulli
     dummyPrior = dummyPriorModel = {

@@ -652,6 +652,8 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
         lp_old_full = sg.current_log_p()
         lps_old = dict([(n.label, n.log_p()) for n in sg.all_nodes.values() if not n.deterministic()])
     lp_old = sg.joint_logprob_keys(rn)
+    #lp_old_full = sg.current_log_p()
+    #lp_old_bd = sg.current_log_p_breakdown()
 
     # swap proposal is symmetric, but we still need to track
     # probabilities of the event proposals.
@@ -694,6 +696,8 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
             node_lps2.update_relevant_nodes_for_lpnew(rn)
 
     lp_new = sg.joint_logprob_keys(rn)
+    #lp_new_full = sg.current_log_p()
+    #lp_new_bd = sg.current_log_p_breakdown()
     lp_new += lp_new_delta1 + lp_new_delta2
     lp_old += lp_old_delta1 + lp_old_delta2
 
@@ -713,7 +717,6 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
 
 
         assert( np.abs( (lp_new-lp_old) - (lp_new_full-lp_old_full) ) < 1e-8)
-
 
     u = np.random.rand()
 

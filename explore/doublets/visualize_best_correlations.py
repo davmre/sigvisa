@@ -27,7 +27,8 @@ from sigvisa.source.event import get_event
 
 
 def normalize(x):
-    return x / np.std(x) - np.mean(x)
+    v1 = x - np.mean(x)
+    return v1 / np.std(v1)
 
 
 def main():
@@ -36,7 +37,7 @@ def main():
     parser.add_option("-s", "--sta", dest="sta", default=None, type="str", help="name of station")
     parser.add_option("-c", "--chan", dest="chan", default="BHZ", type="str", help="channel to correlate")
     parser.add_option(
-        "-f", "--filter_str", dest="filter_str", default="freq_0.8_3.5", type="str", help="filter string to process waveforms")
+        "-f", "--filter_str", dest="filter_str", default="freq_0.8_4.5", type="str", help="filter string to process waveforms")
     parser.add_option(
         "--window_len", dest="window_len", default=30.0, type=float, help="length of window to extract / cross-correlate")
     parser.add_option("-t", "--xc_threshold", dest="xc_threshold", default=0.75, type="float",
@@ -100,10 +101,12 @@ def main():
 
         axes = plt.subplot(gs[1, 0:2], sharey=None)
 
-        p1 = normalize(filtered1.data)
-        p2 = normalize(filtered2.data)
-        p1 = p1[pad_samples:-pad_samples]
-        p2 = p2[pad_samples:-pad_samples]
+        p1 = normalize(filtered1.data[pad_samples:-pad_samples])
+        p2 = normalize(filtered2.data[pad_samples:-pad_samples])
+        #p1 = p1[pad_samples:-pad_samples]
+        #p2 = p2[pad_samples:-pad_samples]
+
+
 
 #        print p1
 #        import pdb

@@ -58,13 +58,13 @@ def main():
     parser.add_option("-s", "--sta", dest="sta", default=None, type="str", help="name of station")
     parser.add_option("-c", "--chan", dest="chan", default="vertical", type="str", help="channel to correlate")
     parser.add_option(
-        "-f", "--filter_str", dest="filter_str", default="freq_0.8_3.5", type="str", help="filter string to process waveforms")
+        "-f", "--filter_str", dest="filter_str", default="freq_0.8_4.5", type="str", help="filter string to process waveforms")
     parser.add_option(
         "-i", "--pairsfile", dest="pairsfile", default="", type="str", help="load potential doublets from this file")
     parser.add_option("-o", "--outfile", dest="outfile", default="", type="str", help="save doublets to this file")
 #    parser.add_option("-p", "--phase", dest="phase", default="P", type="str", help="phase to extract / cross-correlate")
     parser.add_option(
-        "--window_lengths", dest="window_lengths", default="10, 30.0", type="str", help="comma-separated lengths of window to extract / cross-correlate")
+        "--window_lengths", dest="window_lengths", default="10,30.0", type="str", help="comma-separated lengths of window to extract / cross-correlate")
 
     (options, args) = parser.parse_args()
 

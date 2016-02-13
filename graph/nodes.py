@@ -352,7 +352,7 @@ class Node(object):
         if parent_values is None:
             parent_values = self._parent_values()
 
-        if self.model is None and len(self.params_modeled_jointly) > 0:
+        if self.modeled_as_joint():
             from sigvisa.graph.dag import ParentConditionalNotDefined
             raise ParentConditionalNotDefined()
 

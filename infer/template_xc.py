@@ -94,7 +94,7 @@ def get_arrival_signal(sg, eid, phase, wn, pre_s, post_s, pred_atime=False, atim
     if et_idx_clipped <= st_idx_clipped:
         raise Exception("arrival is not supported at this wave node")
 
-    d = wn.get_value()
+    d = wn.get_value().data.copy()
     return d[st_idx_clipped:et_idx_clipped], atime, (st_idx_clipped-st_idx)
 
 def atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase,
@@ -199,11 +199,15 @@ def atime_xc_move(sg, wn, eid, phase, tmnodes, **kwargs):
     source event.
     """
 
+    #lp1 = sg.current_log_p()
     try:
         current_atime, proposed_atime, log_qforward, log_qbackward, k_atime, n_atime, relevant_nodes, source_v = xc_move(sg, wn, eid, phase, tmnodes, **kwargs)
     except Exception as e:
         print e
         return False
+    #lp2 = sg.current_log_p()
+
+    #assert(np.abs(lp2-lp1) < 1e-8)
 
     return MH_accept(sg, keys=(k_atime,),
                      oldvalues = (current_atime,),

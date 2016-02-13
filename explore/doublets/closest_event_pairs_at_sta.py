@@ -50,7 +50,7 @@ def main():
     parser = OptionParser()
 
     parser.add_option("-s", "--sta", dest="sta", default=None, type="str", help="name of station for which to fit templates")
-    parser.add_option("-e", "--evid_file", dest="evid_file", default=None, type="int", help="event ID")
+    parser.add_option("-e", "--evid_file", dest="evid_file", default=None, type="str", help="event ID file")
     parser.add_option("-o", "--outfile", dest="outfile", default="", type="str", help="save potential doublets to this file")
     parser.add_option("-p", "--phase", dest="phase", default="P", type="str", help="phase to require")
     parser.add_option(
@@ -83,6 +83,9 @@ def main():
     else:
         sta = options.sta
 
+    phase = options.phase
+    phases = [phase,]
+
     if not options.evid_file:
 
         p = pdt.Calendar()
@@ -101,16 +104,14 @@ def main():
             st = calendar.timegm(st)
             et = calendar.timegm(et)
 
-        phase = options.phase
-        phases = [phase,]
         evids = read_evids_detected_at_station(s.dbconn, sta, st, et, phases, min_mb=options.min_mb, max_mb=options.max_mb, min_snr=options.min_snr, max_snr=options.max_snr, time_filter_direct=True, min_distance=options.min_sdistance, max_distance=options.max_sdistance)
     else:
         f = open(options.evid_file, 'r')
         evids = [int(line) for line in f]
         f.close()
 
-    if len(evids) > 1000:
-        evids = set(list(evids)[:1000])
+    #if len(evids) > 1000:
+    #    evids = set(list(evids)[:1000])
 
     print "loading", len(evids), "events..."
     events = [get_event(evid) for evid in evids]
@@ -134,8 +135,12 @@ def main():
         f = open(options.outfile, 'w')
 
     for pair in p:
-        atime1, phase1 = pair[3].time + tt_predict(pair[3], sta, phase), phase
-        atime2, phase2 = pair[4].time + tt_predict(pair[4], sta, phase), phase
+        try:
+            atime1, phase1 = pair[3].time + tt_predict(pair[3], sta, phase), phase
+            atime2, phase2 = pair[4].time + tt_predict(pair[4], sta, phase), phase
+        except Exception as e:
+            print e
+            continue
         #(atime1, phase1) = arrival_dict[pair[3]]
         #(atime2, phase2) = arrival_dict[pair[4]]
 

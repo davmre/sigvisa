@@ -372,8 +372,6 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
     global_data = np.empty((npts,))
     global_data.fill(np.nan)
 
-    print sorted_waves
-    
     for (chan, wave_stime, wave_etime, wave_hz, wave_npts, subdir, fname) in sorted_waves:
         
         # at which offset into this waveform should we start collecting samples

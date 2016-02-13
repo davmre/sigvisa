@@ -371,7 +371,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         sta = request.GET.get("sta", None)
         chan = request.GET.get("chan", None)
         band = request.GET.get("band", None)
-        max_acost = float(request.GET.get("max_acost", "200"))
+        max_acost = float(request.GET.get("max_acost", "100000"))
         phases = request.GET.get("phases", "P").split(',')
         min_amp = float(request.GET.get("min_amp", "-10"))
         template_shape = request.GET.get("shape", "paired_exp")

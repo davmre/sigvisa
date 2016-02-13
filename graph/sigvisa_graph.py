@@ -629,15 +629,35 @@ class SigvisaGraph(DirectedGraphModel):
                     except ParentConditionalNotDefined:
                         pass
                 elif  "amp_transfer" in node.label:
-                    ev_amp_transfer_lp += node.log_p()
+                    try:
+                        ev_amp_transfer_lp += node.log_p()
+                    except ParentConditionalNotDefined:
+                        pass
+
                 elif  "coda_decay" in node.label:
-                    ev_coda_decay_lp += node.log_p()
+                    try:
+                        ev_coda_decay_lp += node.log_p()
+                    except ParentConditionalNotDefined:
+                        pass
+
                 elif  "peak_decay" in node.label:
-                    ev_peak_decay_lp += node.log_p()
+                    try:
+                        ev_peak_decay_lp += node.log_p()
+                    except ParentConditionalNotDefined:
+                        pass
+
                 elif  "peak_offset" in node.label:
-                    ev_peak_offset_lp += node.log_p()
+                    try:
+                        ev_peak_offset_lp += node.log_p()
+                    except ParentConditionalNotDefined:
+                        pass
+
                 elif  "mult_wiggle_std" in node.label:
-                    ev_mult_wiggle_std_lp += node.log_p()
+                    try:
+                        ev_mult_wiggle_std_lp += node.log_p()
+                    except ParentConditionalNotDefined:
+                        pass
+
                 elif "obs" in node.label:
                     ev_obs_lp += node.log_p()
                 else:

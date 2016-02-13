@@ -380,7 +380,7 @@ class JointGP(object):
         depth_lscale = self.hparam_nodes["depth_lscale"].get_value()
         horiz_lscale = self.hparam_nodes["horiz_lscale"].get_value()
         #wfn_str = parent_values[param_prefix + "wfn_str"]
-        wfn_str = "se"
+        wfn_str = "matern32"
 
         cov = GPCov(wfn_str=wfn_str, wfn_params=np.array((signal_var,)),
                     dfn_str="lld", dfn_params=np.array((horiz_lscale, depth_lscale)))

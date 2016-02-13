@@ -166,14 +166,34 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
     if move_name in extra_move_args:
         kwargs.update(extra_move_args[move_name])
 
+
+    """
+    sg = None
+    if "sg" in kwargs:
+        sg = kwargs["sg"]
+        try:
+            sg.check_lps
+            
+            lp1 = sg.current_log_p()
+        except:
+            sg = None
+    """
+
+    #if move_name=="atime_xc" and n_attempted[move_name] == 6:
+    #    import pdb; pdb.set_trace()
+
     t0  = time.time()
     accepted = fn(**kwargs)
     t1 = time.time()
 
-    if "sg" in kwargs:
-        sg = kwargs["sg"]
-        sg.check_phases()
-
+    """
+    if sg is not None:
+        lp2 = sg.current_log_p()
+        print "move", move_name, "delta", lp2-lp1
+        if lp2 - lp1 < -10:
+            import pdb; pdb.set_trace()
+    """
+    
     if n_accepted is not None:
         n_accepted[move_name] += accepted
     if move_times is not None:
@@ -299,7 +319,7 @@ def run_open_world_MH(sg, steps=10000,
                             'evtime_ultra': ('time', ('time',)),
                             'evmb': ('mb', ('mb',)),
                             'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
-    event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0)}
+    event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0)} if enable_event_moves else {}
 
     if template_openworld_custom is not None:
         sta_moves = template_openworld_custom
