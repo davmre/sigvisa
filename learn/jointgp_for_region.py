@@ -34,7 +34,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  max_hz=None, **kwargs):
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False)
 
     ms = [ms1, ms2, ms3, ms4]
-    do_coarse_to_fine(ms, rs, max_steps_intermediate=50, model_switch_lp_threshold=10)
+    do_coarse_to_fine(ms, rs, max_steps_intermediate=50, model_switch_lp_threshold=10, max_steps_final=300)
 
 
 def get_evs(min_lon, max_lon, min_lat, max_lat, min_time, max_time, evtype="isc", precision=None):
