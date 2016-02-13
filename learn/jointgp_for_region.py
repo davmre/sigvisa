@@ -83,7 +83,7 @@ def main():
     if options.phases is not None:
         phases = options.phases.split(",")
     else:
-        phases=["P", "Lg", "S", "Pg"]
+        phases="P,Pg,pP,PcP,S,ScP,Lg,Rg,PKP,PKPab,PKPbc,PKKPbc".split(",")
 
     if options.runid is not None:
         runids = (options.runid,)
