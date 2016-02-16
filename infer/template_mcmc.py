@@ -323,7 +323,11 @@ def sample_peak_time_from_cdf(cdf, stime, srate, return_lp=False):
 
     if return_lp:
         lp = np.log(cdf[idx]-cdf[idx-1])
-        assert(not np.isnan(lp))
+    
+        if np.isnan(lp):
+            Sigvisa().logger.warning("nan lp when sampling from cdf %s, returning as if uniform" % str(cdf))
+            lp = -np.log(len(cdf))
+
         lp += np.log(srate)
         return peak_time, lp
         #return peak_time, np.log(1.0/len(cdf))
