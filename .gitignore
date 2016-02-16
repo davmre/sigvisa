@@ -97,3 +97,6 @@ matrices/
 /synthetic/worlds
 /web/matrices/
 notebooks/*.txt
+notebooks/thesis/.ipynb_checkpoints
+*.pem
+*.key

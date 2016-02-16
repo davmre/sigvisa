@@ -4,13 +4,20 @@ import fabric.context_managers as fcm
 import numpy as np
 import hashlib
 import uuid
+import time
 
 from StringIO import StringIO
 
 def get_from_host(fname, host, **kwargs):
     with fcm.settings(host_string=host):
         r = fapi.get(fname, **kwargs)
-    return f
+    return r
+
+def put_to_host(host, *args, **kwargs):
+    with fcm.settings(host_string=host):
+        r = fapi.put(*args, **kwargs)
+    return r
+
 
 def run_as_host(cmd, host, sudo=False, **kwargs):
     with fcm.settings(host_string=host):
@@ -32,9 +39,28 @@ def nohup_return_pid(cmd, host, log_prefix, sudo=False, **kwargs):
     return pid
 
 def running_processes(host):
-    r = run_as_host("ps ax -o pid")
-    pids = [int(l) for l in r.split("\n")]
+    r = run_as_host("ps ax -o pid", host)
+    pids = [int(l) for l in r.split("\n") if not l=="PID"]
     return pids
+
+class NoFreeCPUs(Exception):
+    pass
+
+def blocking_run_job(jm, cmd, sync_s=30.0, **kwargs):
+    """
+    Run a job, blocking until CPU space is available.
+    """
+
+    job_ran = False
+    while not job_ran:
+        try:
+            jm.sync_jobs()
+            r = jm.run_job(cmd, **kwargs)
+            job_ran = True
+        except NoFreeCPUs:
+            time.sleep(sync_s)
+
+    return r
 
 class JobManager(object):
 
@@ -72,7 +98,7 @@ class JobManager(object):
             for host in self.jobs_by_host.keys():
                 if self._host_cpus_free(host) >= job_cpus:
                     return host
-            raise Exception("job requires %d cpus but no host has spare capacity" % (job_cpus))
+            raise NoFreeCPUs("job requires %d cpus but no host has spare capacity" % (job_cpus))
 
         target_host = get_free_host(job_cpus)
         jobid = str(uuid.uuid4())
@@ -104,15 +130,12 @@ class JobManager(object):
         self._delete_job(jobid)
 
     def sync_jobs(self):
-        
-        def running_processes(host):
-            pass
 
         jobs_to_delete = []
-        for h, jobs in self.jobs_by_host.items():
+        for host, jobs in self.jobs_by_host.items():
             pids = running_processes(host)
             for pid, (jobid, job_cpus) in jobs.items():
-                if pid not in running_processes:
+                if pid not in pids:
                     jobs_to_delete.append(jobid)
         
         for jobid in jobs_to_delete:

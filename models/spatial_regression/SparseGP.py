@@ -18,17 +18,17 @@ from sigvisa.models.distributions import InvGamma, LogNormal
 
 
 default_other_params = (2.0, InvGamma(beta=5.0, alpha=.1),
-        GPCov([3.4,], [ 100.0, 40.0], dfn_str="lld",
+        GPCov([3.4,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
               wfn_priors=[InvGamma(beta=5.0, alpha=.5),],
               dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 default_amp_params = (.1, InvGamma(beta=.1, alpha=1),
-        GPCov([.1,], [ 100.0, 40.0], dfn_str="lld",
+        GPCov([.1,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
               wfn_priors=[InvGamma(beta=.1, alpha=1.0),],
               dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 default_phase_params = (1.0, InvGamma(beta=1.0, alpha=1),
-        GPCov([1.0,], [ 100.0, 40.0], dfn_str="lld",
+        GPCov([1.0,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
               wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
               dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
@@ -37,7 +37,7 @@ default_phase_params = (1.0, InvGamma(beta=1.0, alpha=1),
 default_wavelet_params = (.0001, InvGamma(beta=0.001, alpha=10.0),
         GPCov([0.265,], [ 11.0, 5.0], dfn_str="lld",
               wfn_priors=[InvGamma(beta=1.0, alpha=3.0),],
-              wfn_str="compact2",
+              wfn_str="matern32",
               dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 

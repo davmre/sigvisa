@@ -406,6 +406,7 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
 
 def do_inference(sg, modelspec, runspec, max_steps=None, 
                  model_switch_lp_threshold=500, dump_interval_s=10, 
+                 max_dumps=5,
                  print_interval_s=10, swapper=None, run_dir=None):
 
     # save 'true' events if they are known
@@ -415,7 +416,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
     # run inference with appropriate params
     # and hooks to monitor convergence?
 
-    logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True, run_dir=None)
+    logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True, max_dumps=max_dumps, run_dir=None)
     logger.dump(sg)
 
     sg.seed = modelspec.seed

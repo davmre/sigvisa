@@ -26,7 +26,7 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
 
         self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
                          "peak_decay": Gaussian(-2.5, 1.),
-                         "coda_height": Gaussian(0.5, 3),
+                         "coda_height": Gaussian(3.0, 3.),
                          "coda_decay": Gaussian(-2.5, 1.5),
                          "mult_wiggle_std": Beta(4.23342488227, 1.41958698073)}
 

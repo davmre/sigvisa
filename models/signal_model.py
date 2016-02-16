@@ -529,7 +529,7 @@ class ObservedSignalNode(Node):
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
         envs = [None] * n
-        min_logenv = max(-7.0, np.log(self.nm_env.c)-2)
+        min_logenv = max(-7.0, np.log(self.nm_env.c)-3)
 
         if self.wavelet_basis is not None:
             try:

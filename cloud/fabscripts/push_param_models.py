@@ -9,7 +9,7 @@ import os
 
 import logging ; logging.basicConfig(level=logging.DEBUG)
 
-env.hosts = ['sigvisa1.cloudapp.net']
+env.hosts = ['sigvisa3.cloudapp.net',]
 
 #env.use_ssh_config = True
 env.user = 'vagrant'
@@ -36,7 +36,7 @@ def dump_local_models(runid, dump_fname, shrinkage_iter=5):
         run_name, run_iter = r[0][0], r[0][1]
         reverse_code = "insert into sigvisa_coda_fitting_run (runid, run_name, iter) values (%d, '%s', %d) on duplicate key update runid=runid;" % (runid, run_name, run_iter)
 
-        with open(dump_fname+".csv", "w") as csvfile:
+        with open(dump_fname+".csv", "wb") as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=',',
                                     quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
@@ -48,7 +48,9 @@ def dump_local_models(runid, dump_fname, shrinkage_iter=5):
                 # explicitly represent None elements as NULL
                 rr = [x if x is not None else "\\N" for x in row ]
                 spamwriter.writerow(rr)
-        reverse_code += "load data local infile \'/home/sigvisa/python/sigvisa/%s.csv\' into table sigvisa_param_model fields terminated by ',' optionally enclosed by '|';" % dump_fname
+        reverse_code += "load data local infile \'/home/sigvisa/python/sigvisa/%s.csv\' into table sigvisa_param_model fields terminated by ',' optionally enclosed by '|' lines terminated by '\r\n';" % dump_fname
+    except Exception as e:
+        print e
     finally:
         cursor.close()
         dbconn.close()

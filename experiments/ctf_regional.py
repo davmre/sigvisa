@@ -124,7 +124,7 @@ if __name__ == "__main__":
                       help="downsample signals to this rate")
     parser.add_option("--bands", dest="bands", default="freq_0.8_4.5", type=str,
                       help="comma-separated frequency bands")
-    parser.add_option("--phases", dest="phases", default="P", type=str,
+    parser.add_option("--phases", dest="phases", default="P,Pg,pP,PcP,S,ScP,Lg,Rg,PKP,PKPab,PKPbc,PKKPbc", type=str,
                       help="comma-separated phases")
     parser.add_option("--fix_outside_templates", dest="fix_outside_templates", default=False, action="store_true",
                       help="don't do inference over templates of events outside the region")

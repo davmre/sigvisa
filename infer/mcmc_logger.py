@@ -10,7 +10,7 @@ from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in
 
 class MCMCLogger(object):
 
-    def __init__(self, run_dir=None,  write_template_vals=False, dump_interval_s=10, template_move_step=True, print_interval_s=10, transient=False, write_gp_hparams=False, serialize_interval_s=10):
+    def __init__(self, run_dir=None,  write_template_vals=False, dump_interval_s=10, template_move_step=True, print_interval_s=10, transient=False, write_gp_hparams=False, serialize_interval_s=10, max_dumps=None):
 
         s = Sigvisa()
 
@@ -39,6 +39,7 @@ class MCMCLogger(object):
         self.dump_interval_s = dump_interval_s
         self.print_interval_s = print_interval_s
         self.serialize_interval_s = serialize_interval_s
+        self.max_dumps = max_dumps
 
         self.last_dump_time = time.time()
         self.last_serialize_time = time.time()
@@ -182,6 +183,17 @@ class MCMCLogger(object):
         for f in self.log_handles.values():
             if type(f) == file:
                 f.flush()
+        self.gc_dumps()
+
+    def gc_dumps(self):
+        if self.max_dumps is None:
+            return
+
+        dump_dirs = sorted([dname for dname in os.listdir(self.run_dir) if fname.startswith("step_")])
+        if len(dump_dirs)  > self.max_dumps:
+            to_delete = dump_dirs[1: -self.max_dumps]
+            for ddir in to_delete:
+                shutil.rmtree(os.path.join(self.run_dir, ddir))
 
     def serialize(self, sg):
         step = self.last_step

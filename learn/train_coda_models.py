@@ -150,7 +150,7 @@ def main():
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
     parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
                       help="train models even if a model of the same type already appears in the DB")
-    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 1", type="str", help="fitting param string")
+    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 2", type="str", help="fitting param string")
     parser.add_option("--no_optimize", dest="optimize", default=True, action="store_false", help="don't optimize hyperparameters")
     parser.add_option("--raw_signals", dest="raw_signals", default=False, action="store_true",
                       help="don't learn a mult_wiggle_std param (False)")
@@ -222,7 +222,7 @@ def main():
     if options.preset == "param":
         targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_decay', 'peak_offset', 'mult_wiggle_std', ] if targets is None else targets
         model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb', 'peak_decay': 'param_linear_distmb', 'mult_wiggle_std': 'constant_beta'}
-        iterations = 5
+        #iterations = 5
     if options.preset == "gpparam":
         targets = ['coda_decay', 'peak_offset', 'amp_transfer', 'peak_decay', 'tt_residual'] if targets is None else targets
         model_types = {'amp_transfer': 'gpparam+lld+sin1', 'coda_decay': 'gpparam+lld+linear_distmb', 'peak_decay': 'gpparam+lld+linear_distmb', 'peak_offset': 'gpparam+lld+linear_mb', 'tt_residual': 'gp_lld'}
