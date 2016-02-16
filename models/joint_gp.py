@@ -218,7 +218,6 @@ class JointGP(object):
         the Z's computed as upwards_message_normalizers.
 
         """
-
         try:
             gp = self.train_gp()
             if gp is None:
@@ -231,7 +230,7 @@ class JointGP(object):
 
         noise_var, cov = self._get_cov()
 
-        k = (holdout_eid, noise_var, cov)
+        k = (holdout_eid, noise_var, tuple(cov.flatten()))
 
         if k not in self._cached_gp:
             eids, X, y, yvar = self._gp_inputs()
@@ -334,6 +333,9 @@ class JointGP(object):
 
     def _clear_cache(self):
         self._input_cache=False
+        keys = self._cached_gp.keys()
+        for k in keys:
+            del self._cached_gp[k]
         self._cached_gp = dict()
         self.Z = 0
 
