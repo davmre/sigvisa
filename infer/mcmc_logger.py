@@ -189,7 +189,7 @@ class MCMCLogger(object):
         if self.max_dumps is None:
             return
 
-        dump_dirs = sorted([dname for dname in os.listdir(self.run_dir) if fname.startswith("step_")])
+        dump_dirs = sorted([dname for dname in os.listdir(self.run_dir) if dname.startswith("step_")])
         if len(dump_dirs)  > self.max_dumps:
             to_delete = dump_dirs[1: -self.max_dumps]
             for ddir in to_delete:
