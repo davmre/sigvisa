@@ -27,10 +27,41 @@ from sigvisa.signals.io import *
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
+
+def set_templates_from_fitid(sg, eid, fitid, wave):
+    s = Sigvisa()
+    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, peak_decay, coda_decay, mult_wiggle_std, wiggle_family from sigvisa_coda_fit_phase where fitid=%d" % fitid
+    phase_details = s.sql(phase_sql_query)
+    phases = [p[1] for p in phase_details]
+    templates = {}
+
+    for (phase, p) in zip(phases, phase_details):
+        tparams = {'arrival_time': p[3], 'peak_offset': p[4], 'coda_height': p[5], 'coda_decay': p[7]}
+        if p[2]=="lin_polyexp":
+            tparams['peak_decay'] = p[6]
+        if not sg.raw_signals:
+            tparams['mult_wiggle_std'] = p[8]
+        templates[phase] = tparams
+
+    for phase in templates.keys():
+        sg.set_template(eid=eid, sta=wave['sta'], band=wave['band'],
+                        chan=wave['chan'], phase=phase,
+                        values = templates[phase])
+        print "setting template", eid, phase, "to", templates[phase]
+
+
+def get_previous_fitid(runid, evid, sta):
+    sql = "select fitid from sigvisa_coda_fit where evid=%d and sta='%s' and runid=%d" % (evid, sta, runid)
+    s = Sigvisa()
+    r = s.sql(sql)
+    fitid = int(r[0][0])
+    return fitid
+
+
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
                 init_run_name, init_iteration, fit_hz=5, uatemplate_rate=1e-4,
-                smoothing=0, dummy_fallback=False, raw_signals=False):
+                smoothing=0, dummy_fallback=False, raw_signals=False, init_templates=False):
 
     """
     Set up the graph with the signal for a given training event.
@@ -73,6 +104,11 @@ def setup_graph(event, sta, chan, band,
 
     sg.add_wave(wave=wave)
     sg.add_event(ev=event)
+
+    if init_templates:
+        fitid = get_previous_fitid(input_runid, event.evid, sta)
+        set_templates_from_fitid(sg, 1, fitid, wave)
+
     #sg.fix_arrival_times()
 
     sg.uatemplate_rate = 1e-6
@@ -228,11 +264,15 @@ def compute_wavelet_messages(sg, wn, target_eid=None):
 
     return gp_messages, gp_posteriors
 
-def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burnin, enable_uatemplates=False):
+def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, 
+            steps, burnin, init_templates=False, enable_uatemplates=False):
 
     # initialize the MCMC by finding a good set of template params
     wn = sigvisa_graph.station_waves.values()[0][0]
-    optimize_template_params(sigvisa_graph, wn, tmpl_optim_params)
+    if not init_templates:
+        # if we didn't already initialize from previously fit templates,
+        # start by running an optimization to find reasonable values
+        optimize_template_params(sigvisa_graph, wn, tmpl_optim_params)
 
 
     # run MCMC to sample from the posterior on template params
@@ -401,6 +441,7 @@ def main():
     parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true", help="")
     parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=None, type="float", help="if nonzero, allow uatemplate births to explain signal spikes")
     parser.add_option("--raw_signals", dest="raw_signals", default=False, action="store_true", help="fit on raw signals instead of envelopes")
+    parser.add_option("--init_templates", dest="init_templates", default=False, action="store_true", help="initialize optimization from previous template fits (False)")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", type="str", help="")
 
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
@@ -465,6 +506,7 @@ def main():
                                 uatemplate_rate = uatemplate_rate if enable_uatemplates else 1e-4,
                                 init_run_name = init_run_name, init_iteration = init_iteration,
                                 smoothing=options.smooth,
+                                init_templates=options.init_templates,
                                 dummy_fallback=options.dummy_fallback, raw_signals=options.raw_signals)
 
     runid = get_fitting_runid(cursor, options.run_name, options.run_iteration, create_if_new = True)
@@ -485,6 +527,7 @@ def main():
 
     fitid = run_fit(sigvisa_graph,  fit_hz = options.hz, enable_uatemplates=enable_uatemplates,
                     tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
+                    init_templates=options.init_templates,
                     output_runid = runid, steps=options.steps, burnin=options.burnin)
 
     print "fit id %d completed successfully." % fitid
