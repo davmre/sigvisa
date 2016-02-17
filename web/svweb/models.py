@@ -185,6 +185,7 @@ class SigvisaNoiseModel(models.Model):
     chan = models.CharField(max_length=10)
     band = models.CharField(max_length=15)
     smooth = models.IntegerField(null=True, blank=True)
+    env = models.CharField(max_length=1)
     hz = models.FloatField()
     window_stime = models.FloatField()
     window_len = models.FloatField()
@@ -202,7 +203,8 @@ class SigvisaNoiseModel(models.Model):
         return NoiseModel.load_from_file(self.fname, self.model_type)
 
     def get_data(self):
-        return fetch_waveform(str(self.sta), str(self.chan), self.window_stime, self.window_stime + self.window_len).filter('%s;env;smooth_%d;hz_%.2f' % (self.band, self.smooth or 0, self.hz))
+        env_filter = ";env" if self.env.startswith("t") else ""
+        return fetch_waveform(str(self.sta), str(self.chan), self.window_stime, self.window_stime + self.window_len).filter('%s;%ssmooth_%d;hz_%.2f' % (self.band, env_filter, self.smooth or 0, self.hz))
 
 
 class SigvisaCodaFittingRun(models.Model):
