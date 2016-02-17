@@ -19,18 +19,28 @@ def sigvisa_fit_jointgp(stas, evs, runids,  max_hz=None, **kwargs):
     #main_ev = get_event(evid=5335822)
     #isc_evs = [ev for ev in isc_evs if ev is not None and dist_km((main_ev.lon, main_ev.lat), (ev.lon, ev.lat)) < 15]
 
+    jgp_runid = runids[0]
+
     rs = EventRunSpec(evs=evs, stas=stas, runids=runids, disable_conflict_checking=True)
 
     ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", raw_signals=False, max_hz=1.0, **kwargs)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=True)
 
-    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", raw_signals=True, max_hz=max_hz, **kwargs)
+    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", 
+                    jointgp_param_run_init=jgp_runid, raw_signals=True, max_hz=max_hz, **kwargs)
     ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False)
 
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="dummy", raw_signals=True, max_hz=max_hz, **kwargs)
-    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False)
+    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
+                    wiggle_model_type="dummy", raw_signals=True, max_hz=max_hz, 
+                    jointgp_param_run_init=jgp_runid, **kwargs)
+    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, 
+                            enable_template_openworld=False, enable_template_moves=True, 
+                            enable_phase_openworld=False)
 
-    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", wiggle_model_type="gp_joint", raw_signals=True, max_hz=max_hz,**kwargs)
+    ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
+                    wiggle_model_type="gp_joint", raw_signals=True, max_hz=max_hz,
+                    jointgp_param_run_init=jgp_runid,
+                    **kwargs)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False)
 
     ms = [ms1, ms2, ms3, ms4]
