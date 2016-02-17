@@ -53,7 +53,7 @@ def get_amp_transfer_model(sg, sta, phase, chan, band):
         model = sg.dummy_prior["amp_transfer"]
     return model
 
-def generate_sta_hough(sta, sta_hough_array, atimes, amps,
+def generate_sta_hough(sta, sta_hough_array, atimes, amps, tmids,
                        ttimes_centered, ttimes_corners, amp_transfers,
                        amp_transfer_stds, detprobs, stime,
                        time_tick_s, bin_width_deg, mb_bin_width,
@@ -68,6 +68,7 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
 
     amps = np.asarray(amps, dtype=np.float)
     atimes = np.asarray(atimes, dtype=np.float)
+    tmids = np.asarray(tmids, dtype=np.int)
 
     ua_amp_lps = np.array([ua_amp_model.log_p(amp) for amp in amps])
 
@@ -161,9 +162,8 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
         adj = np.log(1 - detprobs[:,:,:,:,phase_idx])
         #print "adj min %f max %f" % (np.min(adj), np.max(adj))
         sta_hough_array += adj[:,:,:,:,np.newaxis] 
-    #sha = sta_hough_array.copy()
-    
 
+    #sha = sta_hough_array.copy()
 
     # optimization to avoid looping through all timebins for each
     # lon/lat/depth/mb bin. We represent the set of timebins with
@@ -184,7 +184,6 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps,
     debug_lonbin = -1
     debug_latbin = -1
     debug_depthbin = -1
-
 
         
     code = """
@@ -363,7 +362,7 @@ for (int i=0; i < lonbins; ++i) {
                         double mb_lp = log(bin_weight) - log(at_residual_left-at_residual_right);
 
                         if(verbose) {
-    printf("phase %d template %d mbbin %d at_residuals %.2f %.2f weight %f lp %f\\n", phaseidx, t, mbbin, at_residual_left, at_residual_right, bin_weight, mb_lp);
+    printf("phase %d tmid %d (idx %d) mbbin %d at_residuals %.2f %.2f weight %f lp %f\\n", phaseidx, tmids(t), t, mbbin, at_residual_left, at_residual_right, bin_weight, mb_lp);
     }
 
                         // probability the signal is above the noise floor
@@ -465,7 +464,7 @@ for (int i=0; i < lonbins; ++i) {
                        'source_logamps', 'phase_score', 'assoc',
                        'bin_width_deg', 'time_tick_s', 'mb_bin_width',
                        'bin_width_km', 'stime', 'min_mb', 'detprobs',
-                       'amps', 'atimes', 'ntemplates', 'debug_lonbin', 'debug_depthbin', 'debug_latbin', 'ua_poisson_lp_incr', 'ua_amp_lps', 'full_assoc', 'phase_scores', 'save_assoc', 'lognoise', 'timebin_lps', 'timebins_used_phase', 'timebins_used_flag_phase', 'timebins_used', 'timebins_used_flag', 'null_ll'],
+                       'amps', 'atimes', 'tmids', 'ntemplates', 'debug_lonbin', 'debug_depthbin', 'debug_latbin', 'ua_poisson_lp_incr', 'ua_amp_lps', 'full_assoc', 'phase_scores', 'save_assoc', 'lognoise', 'timebin_lps', 'timebins_used_phase', 'timebins_used_flag_phase', 'timebins_used', 'timebins_used_flag', 'null_ll'],
                  support_code=cdfs, headers=["<math.h>", "<unordered_set>", "<time.h>"], type_converters = converters.blitz,verbose=2,compiler='gcc', extra_compile_args=["-std=c++11"], extra_link_args=["-lrt",])
 
     
@@ -699,7 +698,7 @@ def get_uatemplates(sg, stas=None, tmid_whitelist=None):
                 v, _ = wn.get_template_params_for_arrival(eid, phase)
                 atimes.append(v['arrival_time'])
                 amps.append(v['coda_height'])
-                tmids.append(-i)
+                tmids.append(-eid)
             uatemplates_by_sta[wn]= (atimes, amps, tmids)
 
     return uatemplates_by_sta
@@ -1144,7 +1143,7 @@ def station_hough(sg, hc, wn, uatemplates, fill_assoc=False):
 
     lognoise = float(np.log(wn.nm_env.c))
     null_ll, full_assoc, phase_scores = generate_sta_hough(sta, array,
-                                                           atimes, amps,
+                                                           atimes, amps, tmids,
                                                            ttimes_centered,
                                                            ttimes_corners,
                                                            amp_transfer_means,
@@ -1276,40 +1275,41 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
     coords = hc.index_to_coords(bin_idx)
     left, right = zip(*coords)
     left, right = np.asarray(left), np.asarray(right)
-    clon, clat, cdepth, cmb, ctime = left + (right-left)/2.0
-    
+    clon, clat, cdepth, cmb, ctime = left + (right-left)/2.0    
+
     full_score = 0
-    gnll = 0
+    gnll =0
     for wn_label in debug.keys():
         wn = sg.all_nodes[wn_label]
         sta = wn.sta
 
         assocs, scores, nll = debug[wn_label]
-        tm_idx = int(assocs[bin_idx])-1
-        score = scores[bin_idx][0]
+        atimes, amps, tmids = uatemplates_by_sta[wn]
+        
+        for i_phase, phase in enumerate(hc.phases):
 
+            bidx = list(bin_idx)
+            bidx.append(i_phase)
+            bidx = tuple(bidx)
 
-        detprobs = hc.precompute_detprob_grid(sg, sta, wn.chan, wn.band)
-        dbin = (bin_idx[0], bin_idx[1], bin_idx[2], bin_idx[3], 0)
-        detprob = detprobs[dbin]
+            tm_idx = int(assocs[bidx])-1
+            score = scores[bidx]
+            tmid = tmids[tm_idx] if tm_idx > 0 else None
 
+            detprobs = hc.precompute_detprob_grid(sg, sta, wn.chan, wn.band)
+            dbin = (bin_idx[0], bin_idx[1], bin_idx[2], bin_idx[3], i_phase)
+            detprob = detprobs[dbin]
+            dscore = np.log(1-detprob)
 
-        dscore = np.log(1-detprob)
+            print sta, phase, "assoc", tmid, score, dscore, score+dscore
 
-        print sta, "assoc", tm_idx, score, dscore, score+dscore
+            full_score += score +dscore
 
-        full_score += score+dscore
         gnll += nll
-
-        if tm_idx<0: continue
 
 
         #ttgrid_centered, ttgrid_corners = hc.precompute_ttime_grid(sta)
 
-
-
-
-        
         """
         loc_bin = bin_idx[:3]
         tt = ttgrid_centered[loc_bin]
@@ -1330,20 +1330,22 @@ def score_assoc(sg, hc, uatemplates_by_sta, debug, bin_idx):
 class CTFProposer(object):
 
     def __init__(self, sg, bin_widths, depthbin_bounds, mbbins, 
-                 phases=("P",), offset=False, **kwargs):
+                 phases=("P",), offset=False, stime =None, 
+                 etime=None, **kwargs):
         # precompute ttime and amp_transfer patterns
         global_bin_width = bin_widths[0]
 
         if sg.inference_region is not None:
-            stime = sg.inference_region.stime
-            etime = sg.inference_region.etime
+            stime = sg.inference_region.stime if stime is None else stime
+            etime = sg.inference_region.etime if etime is None else etime
             left_lon, right_lon = sg.inference_region.left_lon, sg.inference_region.right_lon
             bottom_lat, top_lat = sg.inference_region.bottom_lat, sg.inference_region.top_lat
+
         else:
             left_lon, right_lon, bottom_lat, top_lat = -180, 180, -90, 90
-            stime = sg.event_start_time
+            stime = sg.event_start_time  if stime is None else stime
             try:
-                etime = sg.event_end_time
+                etime = sg.event_end_time if etime is None else etime
             except AttributeError:
                 print "WARNING: no event end time specified"
                 etime = sg.end_time
@@ -1419,7 +1421,8 @@ class CTFProposer(object):
             return ev, np.log(prob) + evlp, global_dist
 
 def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
-                            offset=None, one_event_semantics=True, P_only=False):
+                            offset=None, one_event_semantics=True, mbbins=None,
+                            phases=None, stime=None, etime=None, bin_width_multiplier=1.0):
     s = Sigvisa()
     if proposal_dist_seed is not None:
         np.random.seed(proposal_dist_seed)
@@ -1431,14 +1434,12 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     #if one_event_semantics is None:
     #    one_event_semantics = np.random.choice([True, False])
 
-    if P_only:
-        phases = ("P",)
-    else:
-        phases = sg.phases
-    # HACK
-    print "WARNING I AM HARDCODING PHASES TO BE LAZY"
-    phases = ("P", "S", "Lg")
-    #phases = ("P", )
+    if phases is None:
+        phases = ("P", "S", "Lg") #sg.phases
+
+    if mbbins is None:
+        mbbins = [12, 2, 2]
+
 
     try:
         ctf = s.hough_proposer[offset]
@@ -1446,12 +1447,14 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
         bin_widths = [10,5,2]        
         if sg.inference_region is not None:
             bin_area = sg.inference_region.area_deg() / 1500.
-            bw1 = np.sqrt(bin_area)
+            bw1 = np.sqrt(bin_area) * bin_width_multiplier
             bin_widths = [bw1, bw1/2., bw1/4.]
 
         ctf = CTFProposer(sg, bin_widths, phases=phases,
                           depthbin_bounds=[0,10,50,150,400,700], 
-                          mbbins=[12,2,2], offset=offset, min_mb=sg.min_mb)
+                          mbbins=mbbins, offset=offset, 
+                          min_mb=sg.min_mb, 
+                          stime=stime, etime=etime)
         s.hough_proposer[offset] = ctf
 
     r = ctf.propose_event(sg, fix_result=fix_result,

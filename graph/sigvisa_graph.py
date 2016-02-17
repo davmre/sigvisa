@@ -53,7 +53,8 @@ import cPickle as pickle
 #                         type(obj), repr(obj))
 #        super(SpyingPickler, self).save(obj)
 
-MAX_TRAVEL_TIME = 2000.0
+# appropriate for regional data
+MAX_TRAVEL_TIME = 500.0
 
 @lru_cache(maxsize=1024)
 def get_param_model_id(runids, sta, phase, model_type, param,

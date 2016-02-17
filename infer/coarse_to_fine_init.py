@@ -92,7 +92,7 @@ class EventRunSpec(RunSpec):
         if stas is None:
             stas = s.sites_to_stas(self.sites, refsta_only=not modelspec.sg_params['arrays_joint'])
 
-
+        
         k = hashlib.md5(repr(self.__dict__) + repr(modelspec.sg_params) + repr(modelspec.signal_params)).hexdigest()[:10]
         cache_fname = os.path.join(s.homedir, 'scratch/evwaves_%s.pkl' % k)
         try:
@@ -100,71 +100,69 @@ class EventRunSpec(RunSpec):
                 waves = pickle.load(f)
         except IOError:
 
-            if self.evids is not None:
-                waves = self._get_waves_from_evids(modelspec, stas, cursor)
-            else:
-                waves = self._get_waves_from_evs(modelspec, stas, cursor)
+            waves = self._get_waves_from_evs(modelspec, stas, cursor, evs=self._get_events())
             cursor.close()
             with open(cache_fname, 'wb') as f:
                 pickle.dump(waves, f)
 
         return waves
 
-    def _get_waves_from_evs(self, modelspec, stas, cursor):
+    def _get_waves_from_evs(self, modelspec, stas, cursor, evs=None):
+
+        if evs is None:
+            evs = self.evs
+
+        def merge_overlaps(sorted_intervals, slack=3600.0):
+            intervals_new = []
+            merged = set()
+
+            for i, (s1, e1) in enumerate(sorted_intervals):
+
+                if i in merged:
+                    # if we've already merged with a previous interval
+                    continue
+
+                for j, (s2, e2) in enumerate(sorted_intervals[i+1:]):
+                    if (s2 < e1 + slack):
+                        new_interval = (s1, max(e1, e2))
+                        intervals_new.append(new_interval)
+                        merged.add(i)
+                        merged.add(i+j+1)
+                        break
+
+                if i not in merged:
+                    intervals_new.append((s1, e1))
+
+            return intervals_new
+
         waves = []
         for sta in stas:
             ptimes = []
-            for ev in self.evs:
-                t = None
-                t = tt_predict(ev, sta, "P") + ev.time 
-                #for phase in ["P", "Pg", "pP"]:
-                #    try:
-                # 
-                #        break
-                #    except:
-                #        continue
+            for ev in evs:
+                min_t = None
+                max_t = None
+                for phase in ["P", "S", "Lg", "PcP", "ScP", "pP", "Pg"]:
+                    try:
+                        t = tt_predict(ev, sta, phase) + ev.time 
+                    except:
+                        continue
+                    if min_t is None or min_t > t:
+                        min_t = t
+                    if max_t is None or max_t < t:
+                        max_t = t
 
+                if min_t is not None:
+                    ptimes.append((min_t - self.pre_s, max_t + self.post_s))
+    
+            wave_intervals_new = sorted(ptimes)
+            wave_intervals = []
+            while len(wave_intervals) != len(wave_intervals_new):
+                wave_intervals = sorted(wave_intervals_new)
+                wave_intervals_new = merge_overlaps(wave_intervals)
 
-                ptimes.append(t)
-            ptimes = np.array(ptimes)
-
-            for i, ev in enumerate(self.evs):
-                ptime = ptimes[i]
-                stime = ptime - 10.0
-                etime = ptime + 150.0
-                try:
-                    next_ptime = np.min(ptimes[ptimes > ptime])
-                    etime = min(etime, next_ptime - 25)
-                except ValueError:
-                    pass
-
+            for (stime, etime) in wave_intervals:
                 try:
                     wave = fetch_waveform(sta, chan="auto", stime=stime, etime=etime, cursor=cursor)
-                    bands = modelspec.signal_params['bands']
-                    hz = modelspec.signal_params['max_hz']
-                    assert(len(bands)==1)
-
-                    wave_env = wave.filter("%s;env;hz_%.1f" % (bands[0], hz))
-                    if modelspec.signal_params['raw_signals']:
-                        wave = wave.filter("%s;hz_%.1f" % (bands[0], hz))
-                        waves.append((wave, wave_env))
-                    else:
-                        waves.append((wave_env, None))
-                except MissingWaveform as e:
-                    print e
-                    continue
-        return waves
-
-    def _get_waves_from_evids(self, modelspec, stas, cursor):
-        waves = []
-        for evid in self.evids:
-            for sta in stas:
-                try:
-                    wave=load_event_station_chan(evid, sta, chan="auto", cursor=cursor,
-                                                 pre_s=self.pre_s,
-                                                 post_s=self.post_s,
-                                                 exclude_other_evs=True,
-                                                 phases=modelspec.sg_params['phases'])
                     bands = modelspec.signal_params['bands']
                     hz = modelspec.signal_params['max_hz']
                     assert(len(bands)==1)

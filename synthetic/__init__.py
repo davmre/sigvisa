@@ -63,8 +63,14 @@ def sample_event(runid, seed, wiggle_model_type, wiggle_family, sites, phases, t
 
     #sg.debug_dump(dump_path=os.path.join(BASE_DIR, 'sampled_seed%d' % seed))
 
+    #
+    
     waves = []
     for (sta, wn) in wns.items():
+
+        nm_node = wn.nm_node
+        nm_node.parent_sample()
+
         wn.unfix_value()
         wn.parent_sample()
 

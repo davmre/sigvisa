@@ -122,11 +122,20 @@ class NoiseModelNode(Node):
         else:
             return nm
 
-    def parent_sample(self, set_new_value=True):
+    def parent_sample(self, set_new_value=True, max_tries=20):
         nm = self.prior_nm.copy()
-        nm.c = self.prior_mean_dist.sample()
-        nm.emd.std = np.sqrt(self.prior_var_dist.sample())
-        nm.params = self.prior_param_dist.sample()
+        nm.c = float(self.prior_mean_dist.sample())
+        nm.em.std = float(np.sqrt(self.prior_var_dist.sample()))
+
+        stationary = False
+        tries = 0
+        while not stationary and tries < max_tries:
+            nm.params = np.asarray(self.prior_param_dist.sample(), dtype=np.float)
+            stationary = nm.stationary()
+            tries += 1
+        if not stationary:
+            raise Exception("Gibbs sampling new AR coefficients failed")
+
         if set_new_value:
             self.set_value(nm)
         else:

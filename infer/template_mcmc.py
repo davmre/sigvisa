@@ -171,7 +171,9 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
 
     if provided_coda_height is not None:
         tmvals['coda_height'] = provided_coda_height
-    p = PiecewiseLinear(candidates, np.array(lps))
+
+
+    p = PiecewiseLinear(candidates, np.array(lps), mix_dist=prior_dist, mix_weight=0.001)
 
 
     return p

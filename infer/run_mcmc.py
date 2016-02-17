@@ -16,7 +16,7 @@ from sigvisa.infer.autoregressive_mcmc import arnoise_params_rw_move, arnoise_me
 from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
 from sigvisa.infer.mcmc_basic import gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
-from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_offset, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_offset, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation, phase_birth_move, phase_death_move, ev_birth_move_prior, ev_death_move_prior
+from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_meta, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_meta, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation, phase_birth_move, phase_death_move, ev_birth_move_prior, ev_death_move_prior
 from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move, ev_source_type_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth_move, death_move_for_optimizing_birth, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
@@ -284,16 +284,14 @@ def run_open_world_MH(sg, steps=10000,
 
     if enable_event_openworld:
         
-        hough_rate = 0.2 if propose_hough else 0.0
+        hough_rate = 0.4 if propose_hough else 0.0
         correlation_rate = 0.2 if propose_correlation else 0.0
         global_moves = {'event_swap': (swap_events_move_hough, 0.1),
                         'event_repropose': (repropose_event_move_hough, 0.1),
                         'event_threeway_swap': (swap_threeway_hough, 0.00),
-                        'event_birth_hough': (ev_birth_move_hough, hough_rate),
-                        'event_birth_hough_offset': (ev_birth_move_hough_offset, hough_rate),
+                        'event_birth_hough_meta': (ev_birth_move_hough_meta, hough_rate),
                         'event_birth_hough_dumb': (ev_birth_move_hough_dumb, hough_rate),
-                        'event_death_hough': (ev_death_move_hough, hough_rate),
-                        'event_death_hough_offset': (ev_death_move_hough_offset, hough_rate),
+                        'event_death_hough_meta': (ev_death_move_hough_meta, hough_rate),
                         'event_death_hough_dumb': (ev_death_move_hough_dumb, hough_rate),
                         'event_birth_correlation': (ev_birth_move_correlation, correlation_rate),
                         'event_death_correlation': (ev_death_move_correlation, correlation_rate),

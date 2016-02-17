@@ -68,16 +68,16 @@ def find_true_false_guess(gold_events, guess_events):
     return true, false, mat
 
 
-def find_unmatched(gold_events, guess_events):
-    mat = find_matching(gold_events, guess_events)
+def find_unmatched(gold_events, guess_events, **kwargs):
+    mat = find_matching(gold_events, guess_events, **kwargs)
     mat_gold = set()
     for i, j in mat:
         mat_gold.add(i)
     return [x for x in range(len(gold_events)) if x not in mat_gold]
 
 
-def find_matched(gold_events, guess_events):
-    return list(set(i for (i, j) in find_matching(gold_events, guess_events)))
+def find_matched(gold_events, guess_events, **kwargs):
+    return list(set(i for (i, j) in find_matching(gold_events, guess_events, **kwargs)))
 
 
 def f1_and_error(gold_events, guess_events, max_delta_deg=1.0):

@@ -986,7 +986,7 @@ def ev_death_executor(sg, location_proposal,
         replicate_death()
         sg._topo_sort()
 
-    proposal_extra = (extra, eid, debug_info)
+    proposal_extra = (extra, eid, ev, debug_info)
     return lp_new, lp_old, log_qforward, log_qbackward, redeath, rebirth, proposal_extra
 
 def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_outcome=None, **kwargs):
@@ -1000,14 +1000,8 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_out
     lp_new, lp_old, log_qforward, log_qbackward, redeath, rebirth, proposal_extra = r
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
-        hough_array, eid, associations = proposal_extra
+        hough_array, eid, proposed_ev, associations = proposal_extra
         log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
-
-        # proposed event should be the most recently created
-        try:
-            proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
-        except:
-            proposed_ev = None
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s\n" % proposed_ev)
@@ -1028,9 +1022,10 @@ def ev_death_move_hough(sg, hough_kwargs={}, **kwargs):
     return ev_death_move_abstract(sg, hlp, proposal_includes_mb=True, **kwargs)
 
 
-def ev_death_move_hough_offset(sg, **kwargs):
-    hough_kwargs = {"offset": True}
-    return ev_death_move_hough(sg, hough_kwargs, **kwargs)
+def ev_death_move_hough_meta(sg, **kwargs):
+    hough_kwargs = sample_hough_kwargs(sg)
+    proposal_type = np.random.choice(("mh", "smart", ))
+    return ev_death_move_hough(sg, hough_kwargs, birth_type = proposal_type, **kwargs)
 
 def ev_death_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
@@ -1459,6 +1454,9 @@ def phase_birth_helper(sg, eid, site, phase, proposal_type="mh", fix_result=None
                 fr_sta = fix_result[wn.label]                
 
             if (wn.st <= atime and wn.et >= atime) or fr_sta is not None:
+                # WARNING: can get errors if we have multiple wns matching
+                # the same time period at this station
+
                 r = ev_sta_template_birth_helper(sg, wn, eid, site_phases=(phase,),
                                                  fix_result=fr_sta,
                                                  associate_using_mb=True,
@@ -1772,8 +1770,8 @@ def ev_birth_executor(sg, location_proposal,
     # should get rid of this (and corresponding line in death move) at
     # some point once I'm confident, since it's actually pretty
     # expensive
-    lp_old2 = sg.current_log_p()
-    assert(np.abs(lp_old2 - lp_old) < 1e-6)
+    #lp_old2 = sg.current_log_p()
+    #assert(np.abs(lp_old2 - lp_old) < 1e-6)
 
     def rebirth():
         replicate_birth()
@@ -1785,7 +1783,7 @@ def ev_birth_executor(sg, location_proposal,
         replicate_death()
         sg._topo_sort()
 
-    proposal_extra = (extra, eid, debug_info)
+    proposal_extra = (extra, eid, ev, debug_info)
     return lp_new, lp_old, log_qforward, log_qbackward, rebirth, redeath, proposal_extra
 
 def ev_birth_move_abstract(sg, location_proposal, revert_action=None, 
@@ -1818,7 +1816,7 @@ def ev_birth_move_abstract(sg, location_proposal, revert_action=None,
 def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
-        hough_array, eid, debug_info = proposal_extra
+        hough_array, eid, proposed_ev, debug_info = proposal_extra
 
         if log_to_run_dir is None:
             sg.logger.warning("WARNING: not logging event because no rundir specified")
@@ -1828,10 +1826,8 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
         ev_log_file = os.path.join(log_to_run_dir, "birth_proposal_%d.txt" % eid)
 
         # proposed event should be the most recently created
-        try:
-            proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
-        except:
-            proposed_ev = None
+        if eid is None:
+            eid = np.max(sg.evnodes.keys())
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s\n" % proposed_ev)
@@ -1843,7 +1839,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
 
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
-        hough_array, eid, debug_info = proposal_extra
+        hough_array, eid, proposed_ev, debug_info = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
 
         if log_to_run_dir is None:
@@ -1857,7 +1853,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
 
 
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
-        hough_array, eid, debug_info = proposal_extra
+        hough_array, eid, proposed_ev, debug_info = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
 
         if log_to_run_dir is None:
@@ -1892,15 +1888,51 @@ def ev_death_move_prior(sg, log_to_run_dir=None, **kwargs):
                                   proposal_includes_mb=True, 
                                   birth_type="dumb", **kwargs)
 
-def ev_birth_move_hough_offset(sg, **kwargs):
-    hough_kwargs = {"offset": True}
-    return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, **kwargs)
-
 def ev_birth_move_hough_dumb(sg, **kwargs):
-    hough_kwargs = {"one_event_semantics": False}
+    hough_kwargs = {"one_event_semantics": False, "phases": ("P", "Pg", "S", "Lg")}
     return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, 
                                proposal_type="dumb", **kwargs)
 
+def sample_hough_kwargs(sg):
+    phase_choices = ( ("P",), ("P", "S"), ("P", "Lg"), ("P", "S", "Lg", "Pg"), )
+    mbbins_choices = ( (12, 2, 2), (1, 1, 12))
+    multipliers = (1.0, 1.5)
+    offsets = (False, True)
+    one_event_semantics = (False, True)
+
+    # avoid stupid "must be one dimensional" error
+    mbbin_idx = np.random.choice(np.arange(len(mbbins_choices))) 
+    hough_kwargs = {"one_event_semantics": np.random.choice(one_event_semantics),
+                    "offset": np.random.choice(offsets),
+                    "bin_width_multiplier": np.random.choice(multipliers),
+                    "mbbins": mbbins_choices[mbbin_idx],
+                    "phases": np.random.choice(phase_choices)}
+
+    if sg.inference_region is not None:
+        stime = sg.inference_region.stime
+        etime = sg.inference_region.etime
+
+        restricted_length = 1200.0
+        restricted_windows = int(np.ceil((etime - stime) /restricted_length))
+        restricted_length = (etime-stime) / restricted_windows
+        restricted_stime = np.linspace(stime, etime, restricted_windows)
+        restricted_etime = restricted_stime + restricted_length
+        intervals = zip(restricted_stime, restricted_etime)
+
+        if np.random.rand() < 0.5:
+            idx = np.random.choice(np.arange(len(intervals)))
+            interval = intervals[idx]
+            hough_kwargs["stime"] = interval[0]
+            hough_kwargs["etime"] = interval[1]
+
+    return hough_kwargs
+
+def ev_birth_move_hough_meta(sg, **kwargs):
+    hough_kwargs = sample_hough_kwargs(sg)
+    proposal_type = np.random.choice(("mh", "smart",))
+    return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, 
+                               proposal_type=proposal_type, **kwargs)
+    
 
 def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):
 

@@ -94,6 +94,9 @@ class LogNormal(Distribution):
         if x == 0.0: return 1000.0
         return (-1 -(np.log(x) - mu)/(sigma**2)) / x
 
+    def sample(self):
+        return np.exp(np.random.randn() * self.sigma + self.mu)
+
     def variance(self):
         return (np.exp(self.sigma**2) - 1 ) * ( np.exp(2*self.mu + self.sigma**2))
 
