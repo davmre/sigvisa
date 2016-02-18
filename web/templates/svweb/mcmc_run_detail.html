@@ -33,7 +33,7 @@
 </ol></p>
 
 {% if evs %}
-<p>Inferred events: <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=0">global posterior</a> <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{bounds.left}};right_lon={{bounds.right}};top_lat={{bounds.top}};bottom_lat={{bounds.bottom}};burnin=0;stds=2.0">regional posterior</a></p>
+<p>Inferred events: <a href="{% url 'mcmcrun_proposals' dirname=dirname %}?zoom=1.0">proposals</a>, <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=0">global posterior</a>, <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{bounds.left}};right_lon={{bounds.right}};top_lat={{bounds.top}};bottom_lat={{bounds.bottom}};burnin=0;stds=2.0">regional posterior</a></p>
 <table>
 <tr><td><b>eid</b></td><td><b>info</b></td><td><b>azimuth gap</b></td><td><b>match</b></td><td><b>loc error (km)</b></td><td><b>(lon, lat) std</b></td><td><b>vis</b></td><td><b>inspect</b></td></tr>
 {% for ev in evs %}

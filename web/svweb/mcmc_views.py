@@ -272,7 +272,7 @@ def mcmc_run_detail(request, dirname):
         evdict = {'eid': eid,
                   'evstr': str(ev),
                   'azgap': 0.0, #azimuth_gap(ev.lon, ev.lat, site_info),
-                  'matched': matched,
+                  'matched': matched+1,
                   'dist': dist,
                   'lon_std_km': results['lon_std_km'] if "lon_std_km" in results else "",
                   'lat_std_km': results['lat_std_km'] if "lat_std_km" in results else "",
@@ -284,11 +284,21 @@ def mcmc_run_detail(request, dirname):
         }
         evs.append(evdict)
 
+    
+
     X = np.array(X, dtype=np.float)
-    try:
-        left_bound, right_bound, bottom_bound, top_bound = event_bounds(X, quantile=0.99)
-    except:
-        left_bound, right_bound, bottom_bound, top_bound= -180, 180, -90, 90
+    X = np.vstack((X, np.asarray(trueX)[:, :2]))
+
+    if sg.inference_region is not None:
+        r = sg.inference_region
+        left_bound, right_bound = r.left_lon, r.right_lon
+        bottom_bound, top_bound = r.bottom_lat, r.top_lat
+    else:
+        try:
+            left_bound, right_bound, bottom_bound, top_bound = event_bounds(X, quantile=0.9999)
+        except:
+            left_bound, right_bound, bottom_bound, top_bound= -180, 180, -90, 90
+
     bounds = dict()
     bounds["top"] = top_bound + 0.2
     bounds["bottom"] = bottom_bound - 0.2
@@ -830,6 +840,89 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
     f.tight_layout()
     canvas.print_png(response)
     return response
+
+
+def mcmc_event_proposals(request, dirname):
+
+    zoom = float(request.GET.get('zoom', '1.0'))
+
+
+    def extract_proposal(line):
+        parts = line.split(",")
+        loc = parts[1]
+        m = re.match(r" loc ([0-9\.]+) ([EW]) ([0-9\.]+) ([NS])", loc)
+        lon, ew, lat, ns = m.groups()
+        if ew=="E":
+            lon = float(lon)
+        else:
+            lon = -float(lon)
+        if ns == "N":
+            lat = float(lat)
+        else:
+            lat = -float(lat)
+
+        depth = float(parts[2][6:-2])
+        t = float(parts[3][5:])
+        mb = float(parts[4][3:])
+        return (lon, lat, depth, mb, t)
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    proposedX = []
+    with open(os.path.join(mcmc_run_dir, "hough_proposals.txt"), 'r') as f:
+        for line in f:
+            if line.startswith("proposed ev: "):
+                proposedX.append(extract_proposal(line))
+    proposedX = np.asarray(proposedX).reshape((-1, 5))
+
+    try:
+        with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as evfile:
+            true_evs = pickle.load(evfile)
+    except Exception as e:
+        print e
+        true_evs = []
+    trueX = np.asarray([(ev.lon, ev.lat, ev.depth, ev.mb, ev.time) for ev in true_evs]).reshape((-1, 5))
+
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    inferred_evs = [sg.get_event(eid) for eid in sg.evnodes.keys()]
+    inferredX = np.asarray([(ev.lon, ev.lat, ev.depth, ev.mb, ev.time) for ev in inferred_evs]).reshape((-1, 5))
+
+    allX = np.vstack((proposedX, trueX, inferredX))
+
+
+    f = Figure((12*zoom, 12*zoom))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(5, 1)
+    ax = f.add_subplot(gs[:4, 0])
+
+    hm = EventHeatmap(f=None, calc=False, autobounds = allX, autobounds_quantile=1.0)
+    hm.add_stations(sg.station_waves.keys())
+    hm.init_bmap(axes=ax, nofillcontinents=True, projection="cyl", resolution="c")
+
+    hm.plot(axes=ax, nolines=True, smooth=True,
+            colorbar_format='%.3f')
+
+    hm.plot_locations(trueX,  labels=None, marker="*", ms=16, mfc="none", mew=2, alpha=1)
+    hm.plot_locations(inferredX,  labels=None, marker="+", ms=16, mew=2, mec="blue", alpha=1.0)
+    hm.plot_locations(proposedX,  labels=None, marker=".", ms=12, mfc="red", mew=0, mec="none", alpha=0.5)
+
+
+    ax = f.add_subplot(gs[4, 0])
+    ax.scatter(trueX[:, 4], trueX[:, 1], marker="*", s=32)
+    ax.scatter(inferredX[:, 4], inferredX[:, 1], marker="+", color="blue", s=32)
+    ax.scatter(proposedX[:, 4], proposedX[:, 1], marker=".", color="red")
+    ax.set_ylabel("lat")
+    ax.set_xlabel("time")
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
 
 
 #@cache_page(60 * 60 * 60)
