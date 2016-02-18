@@ -312,8 +312,8 @@ class Exponential(Distribution):
         x = x - self.min_value
         if x < 0:
             lp = np.float("-inf")
-
-        lp = np.log(rate) - rate * x
+        else:
+            lp = np.log(rate) - rate * x
 
         return lp
 
