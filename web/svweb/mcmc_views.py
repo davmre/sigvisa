@@ -265,7 +265,7 @@ def mcmc_run_detail(request, dirname):
         matched = ""
         dist = ""
         if len(matches) > 0:
-            matched = idx + 1
+            matched = matches[0] + 1
             true_ev = true_evs[idx]
             dist = dist_km((ev.lon, ev.lat), (true_ev.lon, true_ev.lat))
 
@@ -284,10 +284,11 @@ def mcmc_run_detail(request, dirname):
         }
         evs.append(evdict)
 
-    
-
     X = np.array(X, dtype=np.float)
-    X = np.vstack((X, np.asarray(trueX)[:, :2]))
+    if len(X) > 0:
+        X = np.vstack((X, np.asarray(trueX)[:, :2]))
+    else:
+        X = np.asarray(trueX)[:, :2]
 
     if sg.inference_region is not None:
         r = sg.inference_region
