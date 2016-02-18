@@ -911,9 +911,9 @@ def mcmc_event_proposals(request, dirname):
 
 
     ax = f.add_subplot(gs[4, 0])
-    ax.scatter(trueX[:, 4], trueX[:, 1], marker="*", s=32)
+    ax.scatter(proposedX[:, 4], proposedX[:, 1], marker=".", color="red", alpha=0.5)
     ax.scatter(inferredX[:, 4], inferredX[:, 1], marker="+", color="blue", s=32)
-    ax.scatter(proposedX[:, 4], proposedX[:, 1], marker=".", color="red")
+    ax.scatter(trueX[:, 4], trueX[:, 1], marker="*", s=32)
     ax.set_ylabel("lat")
     ax.set_xlabel("time")
 
