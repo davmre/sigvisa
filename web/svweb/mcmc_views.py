@@ -265,14 +265,14 @@ def mcmc_run_detail(request, dirname):
         matched = ""
         dist = ""
         if len(matches) > 0:
-            matched = idx
+            matched = idx + 1
             true_ev = true_evs[idx]
             dist = dist_km((ev.lon, ev.lat), (true_ev.lon, true_ev.lat))
 
         evdict = {'eid': eid,
                   'evstr': str(ev),
                   'azgap': 0.0, #azimuth_gap(ev.lon, ev.lat, site_info),
-                  'matched': matched+1,
+                  'matched': matched,
                   'dist': dist,
                   'lon_std_km': results['lon_std_km'] if "lon_std_km" in results else "",
                   'lat_std_km': results['lat_std_km'] if "lat_std_km" in results else "",
