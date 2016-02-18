@@ -34,9 +34,7 @@ from sigvisa.utils.geog import dist_deg, dist_km
 
 import mwmatching
 
-DELTA_TIME = 50                         # in seconds
-
-def find_matching(gold_events, guess_events, max_delta_deg=1.0):
+def find_matching(gold_events, guess_events, max_delta_deg=1.0, max_delta_time=50.0):
     """
     We want a max cardinality min cost matching.
     Returns a list of pairs of gold,guess indices
@@ -44,7 +42,7 @@ def find_matching(gold_events, guess_events, max_delta_deg=1.0):
     edges = []
     for goldnum, gold in enumerate(gold_events):
         for guessnum, guess in enumerate(guess_events):
-            if ((abs(gold[EV_TIME_COL] - guess[EV_TIME_COL]) <= DELTA_TIME)
+            if ((abs(gold[EV_TIME_COL] - guess[EV_TIME_COL]) <= max_delta_time)
                     and (dist_deg(gold[:2], guess[:2]) <= max_delta_deg)):
                 edges.append((goldnum, len(gold_events) + guessnum,
                               -dist_deg(gold[:2], guess[:2])))
