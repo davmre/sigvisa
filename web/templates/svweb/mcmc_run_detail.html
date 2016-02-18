@@ -26,18 +26,18 @@
 <tr>
 <td valign=top width=50%>
 <h3>Event posteriors</h3>
-<p>True events:<ul>
+<p>True events:<ol>
 {% for tev in true_ev_strs %}
 <li> {{tev}}</li>
 {% endfor %}
-</ul></p>
+</ol></p>
 
 {% if evs %}
 <p>Inferred events: <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon=-180;right_lon=180;top_lat=90;bottom_lat=-90;burnin=0">global posterior</a> <a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{bounds.left}};right_lon={{bounds.right}};top_lat={{bounds.top}};bottom_lat={{bounds.bottom}};burnin=0;stds=2.0">regional posterior</a></p>
 <table>
-<tr><td><b>eid</b></td><td><b>info</b></td><td><b>azimuth gap</b></td><td><b>loc error (km)</b></td><td><b>(lon, lat) std</b></td><td><b>vis</b></td><td><b>inspect</b></td></tr>
+<tr><td><b>eid</b></td><td><b>info</b></td><td><b>azimuth gap</b></td><td><b>match</b></td><td><b>loc error (km)</b></td><td><b>(lon, lat) std</b></td><td><b>vis</b></td><td><b>inspect</b></td></tr>
 {% for ev in evs %}
-<tr><td><a href="{% url 'mcmc_ev_detail' dirname=dirname eid=ev.eid %}">{{ ev.eid }}</a></td><td>{{ ev.evstr }}</td><td>{{ ev.azgap|floatformat }}</td><td>{{ ev.dist_mean|floatformat }}km</td><td>({{ ev.lon_std_km|floatformat }}, {{ ev.lat_std_km|floatformat }})</td><td><a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{ ev.left_lon }};right_lon={{ ev.right_lon }};top_lat={{ ev.top_lat }};bottom_lat={{ ev.bottom_lat }};burnin=0">local</a></td><td><a href="{% url 'mcmc_param_posterior' dirname=dirname node_label=ev.example_node %}">e.g.</a></td></tr>
+<tr><td><a href="{% url 'mcmc_ev_detail' dirname=dirname eid=ev.eid %}">{{ ev.eid }}</a></td><td>{{ ev.evstr }}</td><td>{{ ev.azgap|floatformat }}</td><td>{{ ev.matched }}</td><td>{{ ev.dist|floatformat }}km</td><td>({{ ev.lon_std_km|floatformat }}, {{ ev.lat_std_km|floatformat }})</td><td><a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{ ev.left_lon }};right_lon={{ ev.right_lon }};top_lat={{ ev.top_lat }};bottom_lat={{ ev.bottom_lat }};burnin=0">local</a></td><td><a href="{% url 'mcmc_param_posterior' dirname=dirname node_label=ev.example_node %}">e.g.</a></td></tr>
 {% endfor %}
 </table>
 {% endif %}

@@ -15,9 +15,10 @@ import sys
 import os
 import time
 import cPickle as pickle
+from sigvisa.results.compare import find_matching
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
-from sigvisa.utils.geog import azimuth_gap
+from sigvisa.utils.geog import azimuth_gap, dist_km
 from sigvisa.infer.analyze_mcmc import load_trace, trace_stats, match_true_ev
 from sigvisa.infer.template_xc import get_arrival_signal, fastxc
 from sigvisa.models.ttime import tt_predict
@@ -202,6 +203,8 @@ def mcmc_run_detail(request, dirname):
         print e
         true_evs = []
 
+    true_evs = sorted(true_evs, key = lambda ev : ev.time)
+
     sg, max_step = final_mcmc_state(mcmc_run_dir)
 
 
@@ -234,11 +237,17 @@ def mcmc_run_detail(request, dirname):
         burnin = 100 if max_step > 150 else 10 if max_step > 10 else 0
 
     X = []
-    for eid in sorted(eids):
+
+    eids = sorted(eids)
+    inferred_evs = [sg.get_event(eid) for eid in eids]
+    trueX = [(ev.lon, ev.lat, ev.depth, ev.time, ev.mb) for ev in true_evs]
+    inferredX = [(ev.lon, ev.lat, ev.depth, ev.time, ev.mb) for ev in inferred_evs]
+    indices = find_matching(trueX, inferredX, max_delta_deg=5.0, max_delta_time=100.0)
+
+    for i, eid in enumerate(eids):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
-        
-        
+
         llon, rlon, blat, tlat = event_bounds(trace)
         X.append([llon, tlat])
         X.append([llon, blat])
@@ -252,10 +261,19 @@ def mcmc_run_detail(request, dirname):
         except:
             enode = None
 
+        matches = [idx for (idx, j) in indices if j==i]
+        matched = ""
+        dist = ""
+        if len(matches) > 0:
+            matched = idx
+            true_ev = true_evs[idx]
+            dist = dist_km((ev.lon, ev.lat), (true_ev.lon, true_ev.lat))
+
         evdict = {'eid': eid,
                   'evstr': str(ev),
                   'azgap': 0.0, #azimuth_gap(ev.lon, ev.lat, site_info),
-                  'dist_mean': results['dist_mean'] if "dist_mean" in results else "",
+                  'matched': matched,
+                  'dist': dist,
                   'lon_std_km': results['lon_std_km'] if "lon_std_km" in results else "",
                   'lat_std_km': results['lat_std_km'] if "lat_std_km" in results else "",
                   'top_lat': tlat,
