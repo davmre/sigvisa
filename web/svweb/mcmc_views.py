@@ -288,7 +288,8 @@ def mcmc_run_detail(request, dirname):
 
     X = np.array(X, dtype=np.float)
     if len(X) > 0:
-        X = np.vstack((X, np.asarray(trueX)[:, :2]))
+        if len(trueX) > 0:
+            X = np.vstack((X, np.asarray(trueX)[:, :2]))
     else:
         X = np.asarray(trueX)[:, :2]
 
