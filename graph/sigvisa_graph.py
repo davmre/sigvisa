@@ -214,7 +214,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.phases = phases
 
-        self.phases_used = set()
+        #self.phases_used = set()
 
         self.runids = runids if runids is not None else ()
         if run_name is not None and iteration is not None:
@@ -444,6 +444,7 @@ class SigvisaGraph(DirectedGraphModel):
         vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
         return vals
 
+    """
     def get_template_nodes_byphase(self, eid, sta, band, chan):
         allnodes = dict()
         for phase in self.phases_used:
@@ -453,6 +454,7 @@ class SigvisaGraph(DirectedGraphModel):
             except KeyError:
                 continue
         return allnodes
+    """
 
     def set_template(self, eid, sta, phase, band, chan, values):
         for (param, value) in values.items():
@@ -485,7 +487,9 @@ class SigvisaGraph(DirectedGraphModel):
                 elif band in wn.label and chan in wn.label:
                     return wn
         if len(matching_wns) > 0:
-            return matching_wns
+            if len(matching_wns) > 1:
+                self.logger.warning("multiple wns match query %s %d %s %s %s, returning arbitrarily" % (sta, eid, phase, band, chan))
+            return matching_wns[0]
 
         if revert_to_atime:
             ev = self.get_event(eid)
@@ -732,12 +736,11 @@ class SigvisaGraph(DirectedGraphModel):
             sites = self.site_elements.keys()
 
         for eid in eids:
+            ev = self.get_event(eid)
             for site in sites:
                 real_phases = self.ev_site_phases[eid][site]
-                for phase in self.phases_used:
-                    pm = self.get_phase_existence_model(phase)
-                    lp += pm.log_p(phase in real_phases,
-                                   ev = self.get_event(eid), site=site)
+                _, site_lp = self.sample_phases_site(ev, site, fix_result=real_phases)
+                lp += site_lp
         return lp
 
     def current_log_p(self, **kwargs):
@@ -893,6 +896,11 @@ class SigvisaGraph(DirectedGraphModel):
         lp = 0.0
         phases = set()
 
+        if fix_result is not None:
+            for phase in fix_result:
+                if phase not in phase_set:
+                    return fix_result, -np.inf
+
         for phase in phase_set:
             pm = self.get_phase_existence_model(phase)
 
@@ -977,7 +985,6 @@ class SigvisaGraph(DirectedGraphModel):
 
             for phase in site_phases:
                 #print "adding phase", phase, "at site", site
-                self.phases_used.add(phase)
                 tg = self.template_generator(phase)
                 try:
                     tt = tt_predict(ev, site, phase=phase)
@@ -1248,6 +1255,8 @@ class SigvisaGraph(DirectedGraphModel):
                 return n.values()
             except AttributeError:
                 return [n,]
+
+        #self.phases_used.add(phase)
 
         eid = evnodes['mb'].eid
 

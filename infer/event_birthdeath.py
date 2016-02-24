@@ -989,7 +989,10 @@ def ev_death_executor(sg, location_proposal,
     proposal_extra = (extra, eid, ev, debug_info)
     return lp_new, lp_old, log_qforward, log_qbackward, redeath, rebirth, proposal_extra
 
-def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_outcome=None, **kwargs):
+def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, 
+                           accept_action=None,
+                           revert_action=None,
+                           force_outcome=None, **kwargs):
 
     #n_current_events = len(sg.evnodes) - len(sg.fixed_events)
     #reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
@@ -999,37 +1002,55 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, force_out
         return False
     lp_new, lp_old, log_qforward, log_qbackward, redeath, rebirth, proposal_extra = r
 
+    sg.logger.info( "death move acceptance %f from old %f new %f lqb %f lqf %f" %( (lp_new + log_qbackward) - (lp_old+log_qforward), lp_old, lp_new, log_qbackward, log_qforward) )
+
+    def revert():
+        if revert_action is not None:
+            revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+
+    def accept():
+        redeath()
+        if accept_action is not None:
+            accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
+
+    accepted =  mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert, force_outcome=force_outcome)
+    return accepted
+
+def ev_death_move_hough(sg, hough_kwargs={},log_to_run_dir=None,  **kwargs):
+
+    def hlp(sg, fix_result=None, **kwargs):
+        kwargs.update(hough_kwargs)
+        return hough_location_proposal(sg, fix_result=fix_result, **kwargs)
+
+
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        if log_to_run_dir is None:
+            return
+        
         hough_array, eid, proposed_ev, associations = proposal_extra
-        log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
+        log_file = os.path.join(log_to_run_dir, "hough_deaths.txt")
 
         with open(log_file, 'a') as f:
-            f.write("proposed ev: %s\n" % proposed_ev)
+            f.write("proposing to kill eid %d: %s\n" % (eid, proposed_ev))
             f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
             for (wn, phase), (assoc, tmvals) in associations.items():
                 if assoc:
                     f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
 
-    sg.logger.info( "death move acceptance %f from old %f new %f lqb %f lqf %f" %( (lp_new + log_qbackward) - (lp_old+log_qforward), lp_old, lp_new, log_qbackward, log_qforward) )
-
-    return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=redeath, revert_move=None, force_outcome=force_outcome)
-
-def ev_death_move_hough(sg, hough_kwargs={}, **kwargs):
-    def hlp(sg, fix_result=None, **kwargs):
-        kwargs.update(hough_kwargs)
-        return hough_location_proposal(sg, fix_result=fix_result, **kwargs)
-    return ev_death_move_abstract(sg, hlp, proposal_includes_mb=True, **kwargs)
+    return ev_death_move_abstract(sg, hlp, proposal_includes_mb=True, 
+                                  accept_action=log_action, 
+                                  revert_action=log_action, **kwargs)
 
 
 def ev_death_move_hough_meta(sg, **kwargs):
     hough_kwargs = sample_hough_kwargs(sg)
     proposal_type = np.random.choice(("mh", "smart", ))
-    return ev_death_move_hough(sg, hough_kwargs, birth_type = proposal_type, **kwargs)
+    return ev_death_move_hough(sg, hough_kwargs=hough_kwargs, birth_type = proposal_type, **kwargs)
 
 def ev_death_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
-    return ev_death_move_hough(sg, hough_kwargs, birth_type="dumb", **kwargs)
+    return ev_death_move_hough(sg, hough_kwargs=hough_kwargs, birth_type="dumb", **kwargs)
 
 def ev_death_move_correlation(sg, **kwargs):
     return ev_death_move_abstract(sg, correlation_location_proposal, proposal_includes_mb=False, use_correlation=True, birth_type="smart", **kwargs)
@@ -1195,6 +1216,9 @@ def propose_associations(sg, wn, eid, site_phases, fix_result=None,
     Sample a joint association of all phases at this station,
     and update the graph to reflect the new association.
     """
+
+    # ensure the phase list is sorted so that it matches up with assoc_tmids
+    site_phases = sorted(site_phases)
 
     log_qforward = 0    
     band, chan = wn.band, wn.chan
@@ -1399,6 +1423,9 @@ def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None,
         nop = lambda : None
         return 0.0, nop, {"assoc": ((), 0.0, 0.0 )}
 
+    # ensure site_phases is sorted so that it matches up with assoc_tmids
+    site_phases = sorted(site_phases)
+
     # propose a set of associations to existing uatemplates
     log_qforward, replicate_fns, assoc_tmids, birth_record = \
         propose_associations(sg, wn, eid, site_phases, 
@@ -1412,6 +1439,11 @@ def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None,
     #  - a 'semismart' proposal which attempts to adapt atime and amplitude based on the signal
     #  - a smart proposal that internally runs MH steps to find good params
     new_phases = [phase for (phase, assoc) in zip(site_phases, assoc_tmids) if assoc is None]
+
+    if fix_result is not None:
+        for phase in new_phases:
+            assert(phase in fix_result.keys())
+
     if proposal_type=="mh":
         lqf, rfns = propose_new_phases_mh(sg, wn, eid, new_phases, 
                                           fix_result=fix_result,
@@ -1673,6 +1705,7 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
                 prebirth_unexplained[wn.label] = wn.unexplained_kalman(exclude_eids=exclude_eids)
 
     proposed_ev = sg.get_event(eid)
+    lqf_stas = {}
     for site,elements in sg.site_elements.items():
         key = "%s_phases" % site
         fr_phases = None
@@ -1682,6 +1715,7 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
         site_phases = sorted(list(site_phases))
         death_records[key] = site_phases
         log_qforward += lqf
+        lqf_stas[site + "_phases"] = lqf
 
         #site_phases = sorted(sg.predict_phases_site(proposed_ev, site=site))
         for sta in elements:
@@ -1707,6 +1741,7 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
                                                  proposal_type=proposal_type,
                                                  **kwargs)
                 log_qforward += lqf_sta
+                lqf_stas[wn.label] = lqf_sta
                 replicate_fns.append(replicate_sta)
                 death_records[wn.label] = death_sta
                 

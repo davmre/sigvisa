@@ -309,7 +309,7 @@ class Node(object):
 
     @staticmethod
     def param_truncation_penalty(param, value, coarse_tts=False):
-        p = 0
+        p = 0.0
         if 'mult_wiggle_std' in param:
             if value > 1:
                 p = -np.exp(100*(value-1))
@@ -428,7 +428,17 @@ class Node(object):
             parent_values = self._parent_values()
 
         if self.model is not None:
-            nv = self.model.sample(cond=parent_values)
+            
+            # reject samples until we meet the hacked hard constraints
+            while True:
+                nv = self.model.sample(cond=parent_values)
+                if self.hack_param_constraint:
+                    penalty = self.param_truncation_penalty(self.label, nv, coarse_tts=self.hack_coarse_tts is not None)
+                    if penalty > -1.0:
+                        break
+                else:
+                    break
+
         else:
             from sigvisa.graph.dag import ParentConditionalNotDefined
             raise ParentConditionalNotDefined()

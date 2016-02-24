@@ -97,7 +97,7 @@ class NoiseModelNode(Node):
 
         m_pred, m_std = self.prior_mean_dist.predict(), np.sqrt(self.prior_mean_dist.variance())
         self.prior_nm = ARModel(params=self.prior_param_dist.predict(), em=em, 
-                                c=m_pred + 2*m_std, sf=waveform["srate"])
+                                c=m_pred + (2*m_std if is_env else 0.0), sf=waveform["srate"])
 
         if nmid is None:
             nm = self.prior_nm.copy()

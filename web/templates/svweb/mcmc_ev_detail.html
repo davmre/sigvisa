@@ -9,8 +9,22 @@
 
 <h2>eid {{ eid }} from MCMC run {{ dirname }} step {{ step }} </h2>
 
-<table><tr><td>{{ ev_str }}</td><td align=right>
-<a href="{% url 'mcmcrun_browsedir' dirname=dirname path=proposalpath %}"><img src="{% url 'mcmcrun_browsedir' dirname=dirname path=proposalpath %}" width=30% ></a></td></tr></table>
+<table><tr>
+
+<td colspan=4>{{ ev_str }}</td>
+<td align=right rowspan=2 valign=top>
+<a href="{% url 'mcmcrun_browsedir' dirname=dirname path=proposalpath %}"><img src="{% url 'mcmcrun_browsedir' dirname=dirname path=proposalpath %}" width=400 height=250></a><br>proposal distribution</td></tr>
+
+<tr>
+<td><a href="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='lon' param2='lat' %}?burnin=0">
+<img src="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='lon' param2='lat' %}" width=200 height=200></a><br><center>lon vs lat</center></td>
+<td><a href="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='lon' param2='depth' %}?burnin=0">
+<img src="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='lon' param2='depth' %}" width=200 height=200></a><br><center>lon vs depth</center></td>
+<td><a href="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='time' param2='lat' %}?burnin=0">
+<img src="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='time' param2='lat' %}" width=200 height=200></a><br><center>time vs lat</center></td>
+<td><a href="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='time' param2='depth' %}?burnin=0">
+<img src="{% url 'mcmc_ev_trace_pairwise_plot' dirname=dirname eid=eid param1='time' param2='depth' %}" width=200 height=200></a><br><center>time vs depth</center></td>
+</tr></table>
 
 <table width=100%>
 

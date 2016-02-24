@@ -24,7 +24,7 @@ import numdifftools as nd
 #################################################################################
 
 
-def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targets=None, return_full=False, init_z=None, n_restarts=10, no_cov=False):
+def ev_lstsqr_dist(sg, eid=None, stas=None, atimes=None, snrs=None, targets=None, return_full=False, init_z=None, n_restarts=10, no_cov=False):
     """
     we start with a bunch of arrival times. take these as gospel.
     we can do this for *all* phases if we like. or just choose a phase, or a subset of stations, or whatever.
@@ -32,11 +32,14 @@ def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targe
     to do this, we can
     """
 
-    def get_atime(eid, sta, phase):
-        n = get_parent_value(eid=eid, sta=sta, phase=phase, param_name='arrival_time', chan=None, band=None,
-                             parent_values=sg.nodes_by_key, return_key=False)
-        return n.get_value()
 
+    def get_atime_snr(eid, sta, phase):
+        wn = sg.get_arrival_wn(sta, eid, phase, band=None, chan=None)
+        tmvals, _ = wn.get_template_params_for_arrival(eid, phase)
+        atime = tmvals["arrival_time"]
+        snr = np.exp(tmvals["coda_height"]) / wn.nm_env.c
+        return atime, snr
+        
     if stas is None:
         stas = sg.station_waves.keys()
 
@@ -49,8 +52,36 @@ def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targe
                 targets.append((sta, phase))
 
     if atimes is None:
-        assert(eid is not None)
-        atimes = np.array([get_atime(eid, sta, phase) for (sta, phase) in targets])
+        atimes = []
+        snrs = []
+        for (sta, phase) in targets:
+            try:
+                atime, snr = get_atime_snr(eid, sta, phase)
+            except:
+                atime = np.nan
+                snr = np.nan
+            atimes.append(atime)
+            snrs.append(snr)
+        atimes = np.asarray(atimes)
+        snrs = np.asarray(snrs)
+
+    # ignore targets for which we couldn't get an atime/snr
+    # (probably because they're not associated with any wn)
+    mask = np.isnan(atimes)
+    atimes = atimes[~mask]
+    snrs = snrs[~mask]
+    targets = [(sta, phase) for i, (sta, phase) in enumerate(targets) if not mask[i]]
+
+    if len(targets) == 0:
+        return init_z, np.eye(4) * 100.0
+
+    # snr 10000 maps to weight 1
+    # snr of 1 maps to weight 0.2
+    weights = 1.0 - 1.0 / (1.0 + 0.2 * snrs)
+    weights[snrs < 0.5] = 0.00001
+
+    # default residual var is 5.0
+    residual_stds = 5.0 / weights
 
     # assume any station with a tt residual greater than 30s is a bad association,
     # which we don't want to use.
@@ -62,12 +93,16 @@ def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targe
     # 1 degree ~= 100 km ~= 20s of traveltime
     # 1km of depth ~= 0.2s of traveltime
     scaling = np.array((20.0, 20.0, 0.2, 1.0))
-    p0 = np.array((0.0, 0.0, 0.0, np.min(atimes)-500))
+
+    if init_z is not None:
+        p0 = init_z.copy()
+    else:
+        p0 = np.array((0.0, 0.0, 0.0, np.min(atimes)-500))
 
     # assume a tt residual stddev of 5.0
     # TODO: use the actual values learned from data
-    sigma = np.ones((len(targets)+1,)) * residual_var
-
+    sigma = np.concatenate((residual_stds, (1.0,)))
+    
     def tt_residuals_jac(x):
         lon, lat, depth, origin_time = x / scaling + p0
 
@@ -79,7 +114,6 @@ def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targe
         if (~np.isfinite(x)).any():
             return np.ones(x.shape) * np.nan, np.ones(jac.shape) * np.nan
 
-
         for i, (sta, phase) in enumerate(targets):
             try:
                 tt, grad = tt_predict_grad(lon, lat, depth, origin_time, sta, phase=phase)
@@ -89,11 +123,10 @@ def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targe
                 pred_tts[i] = 1e10
         residuals = atimes-(origin_time + pred_tts)
 
-        # give a smooth warning to the optimizer that we're
-        # about to exceed the depth limit
-        if depth < 700:
-            depth_penalty = np.exp(1.0/(700-depth)) - 1
-            jac[2, len(targets)] = ( (depth_penalty + 1) / (depth-700)**2 ) / scaling[2]
+        if depth < 699:
+            # encode a hacky Gaussian prior on depth
+            depth_penalty = (depth - 10.0) / 5.0
+            jac[2, len(targets)] = (1.0 / 5.0) / scaling[2]
         else:
             depth_penalty = 1e40
         rr = np.concatenate([residuals, (   depth_penalty,  )])
@@ -146,6 +179,14 @@ def ev_lstsqr_dist(sg, eid=None, stas=None, residual_var=2.0, atimes=None, targe
         z0 = init_z
         x0 = (z0-p0) * scaling
         x1, cov_x, info_dict, mesg, ier = scipy.optimize.leastsq(ttrcache.ttr, x0, Dfun=ttrcache.jac, full_output=True, col_deriv=True)
+
+
+        #j1 = ttrcache.jac(x1)
+        #import numdifftools as nd
+        #Jfun = nd.Jacobian(ttrcache.ttr)
+        #j2 = Jfun(x1)
+        #import pdb; pdb.set_trace()
+
         best_x = x1
         best_cov= cov_x
     else:

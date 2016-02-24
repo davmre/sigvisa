@@ -17,7 +17,7 @@ from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, ad
 from sigvisa.infer.mcmc_basic import gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, swap_threeway_hough
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_meta, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_meta, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation, phase_birth_move, phase_death_move, ev_birth_move_prior, ev_death_move_prior
-from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move, ev_source_type_move
+from sigvisa.infer.event_mcmc import ev_move_full, swap_association_move, ev_source_type_move, ev_lsqr_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth_move, death_move_for_optimizing_birth, indep_peak_move, improve_offset_move_gaussian, improve_atime_move, hamiltonian_template_move, hamiltonian_move_reparameterized
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
@@ -33,12 +33,11 @@ global_stds = {'coda_height': 0.7,
                'arrival_time_big': 4.0,
                'arrival_time': 0.3,
                'evloc': 0.15,
-               'evloc_big': 0.4,
-               'evloc_ultra': 1.2,
-               'evtime': 1.0,
-               'evtime_ultra': 15.0,
+               'evloc_big': 0.7,
+               'evtime': 2.0,
                'evmb': 0.2,
                'evdepth': 8.0,
+               'evdepth_big': 30.0,
                'signal_var': 0.4,
                'noise_var': 0.4,
                'noise_var_small': 0.05,
@@ -278,6 +277,7 @@ def run_open_world_MH(sg, steps=10000,
                       propose_correlation=False,
                       swapper=None,
                       prior_births_only=False,
+                      n_naive_evmoves=10,
                       stop_condition=None):
 
 
@@ -286,7 +286,7 @@ def run_open_world_MH(sg, steps=10000,
         
         hough_rate = 0.4 if propose_hough else 0.0
         correlation_rate = 0.2 if propose_correlation else 0.0
-        global_moves = {'event_swap': (swap_events_move_hough, 0.1),
+        global_moves = {'event_swap': (swap_events_move_hough, hough_rate),
                         'event_repropose': (repropose_event_move_hough, 0.1),
                         'event_threeway_swap': (swap_threeway_hough, 0.00),
                         'event_birth_hough_meta': (ev_birth_move_hough_meta, hough_rate),
@@ -295,6 +295,8 @@ def run_open_world_MH(sg, steps=10000,
                         'event_death_hough_dumb': (ev_death_move_hough_dumb, hough_rate),
                         'event_birth_correlation': (ev_birth_move_correlation, correlation_rate),
                         'event_death_correlation': (ev_death_move_correlation, correlation_rate),
+                        'event_birth_prior': (ev_birth_move_prior, hough_rate),
+                        'event_death_prior': (ev_death_move_prior, hough_rate),
         }
         if prior_births_only:
            global_moves = {'event_birth_prior': (ev_birth_move_prior, hough_rate),
@@ -312,12 +314,12 @@ def run_open_world_MH(sg, steps=10000,
 
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
                             'evloc_big': ('loc', ('lon', 'lat')),
-                            'evloc_ultra': ('loc', ('lon', 'lat')),
                             'evtime': ('time', ('time',)),
-                            'evtime_ultra': ('time', ('time',)),
                             'evmb': ('mb', ('mb',)),
-                            'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
-    event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0)} if enable_event_moves else {}
+                            'evdepth': ('depth', ('depth',)),
+                            'evdepth_big': ('depth', ('depth',))} if enable_event_moves else {}
+    event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0),
+                           'ev_lsqr': (ev_lsqr_move, 1.0)} if enable_event_moves else {}
 
     if template_openworld_custom is not None:
         sta_moves = template_openworld_custom
@@ -410,18 +412,34 @@ def run_open_world_MH(sg, steps=10000,
                 #print "skipping fixed eid %d" % (eid,)
                 continue
 
+            # run event moves with phasejump/decoupling
             for (move_name, (node_name, params)) in event_moves_gaussian.items():
                 run_move(move_name=move_name, fn=ev_move_full, step=step,
                          n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
-                         sg=sg, ev_node=evnodes[node_name], 
+                         sg=sg, ev_node=evnodes[node_name],
+                         eid=eid,
                          std=stds[move_name], 
                          params=params, logger=logger)
+
+            # run event moves that should never require signal logps
+            for i in range(n_naive_evmoves):
+                for (move_name, (node_name, params)) in event_moves_gaussian.items():
+                    run_move(move_name=move_name + "_naive", fn=ev_move_full, step=step,
+                             n_attempted=n_attempted,
+                             n_accepted=n_accepted, move_times=move_times,
+                             sg=sg, ev_node=evnodes[node_name],
+                             eid=eid,
+                             std=stds[move_name], 
+                             decouple_templates = False,
+                             forward_type="dumb",
+                             reverse_type="dumb",
+                             params=params, logger=logger)
 
             for (move_name, (fn, prob)) in event_moves_special.items():
                 run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
-                         move_prob=prob, sg=sg, eid=eid)
+                         move_prob=prob, sg=sg, eid=eid, logger=logger)
 
             if enable_phase_openworld:
                 for site in sg.site_elements.keys():

@@ -122,6 +122,9 @@ def tt_predict_grad(lon, lat, depth, origin_time, sta, phase=None, phaseid=None)
     assert(origin_time >= 1)
 
     meantt, dlon, dlat, ddepth = s.sigmodel.mean_travel_time_grad(lon, lat, depth, origin_time, sta, phaseid - 1)
+    #if np.isnan(ddepth) or np.isnan(dlat) or np.isnan(dlon):
+    #    import pdb; pdb.set_trace()
+
     return meantt, np.array((dlon, dlat, ddepth, 1.0))
 
 

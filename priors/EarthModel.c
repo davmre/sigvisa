@@ -1293,6 +1293,13 @@ static double ellipticity_corr_jac (double delta, double esaz, double ecolat,
   double  adepth, azim, edist, ellip_corr = 0.0;
   double  sc0, sc1, sc2, t0, t1, t2;
 
+  // initialize derivatives to zero, in case we short-circuit to return zero correction
+  *d_ec_delta = 0.0;
+  *d_ec_depth = 0.0;
+  *d_ec_esaz = 0.0;
+  *d_ec_ecolat = 0.0;
+
+
   static  double  t[][8][10] =
     {
       {
@@ -1491,6 +1498,8 @@ t1+2 t2 x+3 t3 x^2+4 t5 x^3+t7 y+2 t9 x y+t8 y^2
   *d_ec_depth = sc0*d_t0_depth + sc1*cos(azim)*d_t1_depth + sc2*cos(2.0*azim)*d_t2_depth;
   *d_ec_esaz = -sc1*t1*sin(azim)*d_azim_esaz - 2*sc2*t2*sin(2.0*azim)*d_azim_esaz;
   *d_ec_ecolat = t0*d_sc0_ecolat + cos(azim)*t1*d_sc1_ecolat + t2*cos(2.0*azim)*d_sc2_ecolat;
+
+  // printf("ecolat %f %f %f %f %f %f %f %f\n", t0, d_sc0_ecolat, t1, d_sc1_ecolat, t2, azim,d_sc2_ecolat, *d_ec_ecolat);
 
 /*
         printf ("dist = %5.1f  t0 = %7.3f  t1 = %7.3f  t2 = %7.3f  ellip_corr = %7.3f\n", delta, t0, t1, t2, ellip_corr);
@@ -1822,7 +1831,6 @@ double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
 
   travel_time_jac(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle, &d_trvtime1_depth, &d_trvtime1_delta);
 
-
   if (trvtime < 0)
     return -1;
 
@@ -1842,8 +1850,6 @@ double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
   *d_atime_lon = d_trvtime1_delta * d_delta_lon + d_ec_delta * d_delta_lon + d_ec_esaz * d_esaz_lon;
   *d_atime_lat = d_trvtime1_delta * d_delta_lat + d_ec_delta * d_delta_lat + d_ec_esaz * d_esaz_lat + d_ec_lat;
   *d_atime_depth = d_trvtime1_depth + d_ec_depth;
-
-
 
   if (siteelev >= -998)
     trvtime += siteelev / p_phase->surf_vel;

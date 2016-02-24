@@ -5,7 +5,6 @@ import traceback
 import pickle
 import copy
 
-
 from sigvisa import Sigvisa
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
@@ -74,11 +73,11 @@ def swap_threeway_hough(sg, **kwargs):
     return swap_events_move(sg, n_events=3, location_proposal=hough_location_proposal, **kwargs)
 
 
-def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, return_probs=False):
+def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, return_probs=False, **kwargs):
     eids, lp_swap = sample_events_to_swap(sg, n_events=n_events)
     if eids is None:
         return False
-    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, location_proposal=location_proposal)
+    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, location_proposal=location_proposal, **kwargs)
     log_qforward += lp_swap
     log_qbackward += sample_events_to_swap(sg, fix_result=eids)
 
@@ -86,6 +85,7 @@ def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, ret
         return lp_old, lp_new, log_qforward, log_qbackward, revert_move
     else:
         return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)
+
 
 def swap_events_move_hough(*args, **kwargs):
     kwargs['location_proposal']=hough_location_proposal
@@ -95,14 +95,17 @@ def swap_events_move_lstsqr(*args, **kwargs):
     kwargs['location_proposal']=overpropose_new_locations
     return swap_events_move(*args, **kwargs)
 
-def rebirth_events_helper(sg, eids, location_proposal, 
+def rebirth_events_helper(sg, eids, 
+                          location_proposal=None,
+                          forward_location_proposal=None, 
+                          reverse_location_proposal=None, 
                           forward_birth_type="dumb", 
                           reverse_birth_type="dumb"):
     """
     Given a list of events, propose killing them all and rebirthing
     new events from the resulting uatemplates.
 
-    dumb_birth_forward asks whether we should propose the new event 
+    dumb_birth_forward asks whether we should propose templates for the new event 
     from a dumb birth distribution. This is more reasonable than you'd
     think since all the templates that really need to fit the signal are
     hopefully being re-associated (having been de-associated by the death 
@@ -118,7 +121,14 @@ def rebirth_events_helper(sg, eids, location_proposal,
     - dumb_birth_forward and dumb_birth_reverse are the same (so this move correctly computes its own reverse probability)
     - they are different, but we choose the ordering uniformly at random, i.e. flip a coin to decide which one is true. this is smart/dumb, dumb/smart. 
 
+    The same validity constraints apply to forward_location_proposal and reverse_location_proposal.
+
     """
+
+    if forward_location_proposal is None:
+        forward_location_proposal = location_proposal
+    if reverse_location_proposal is None:
+        reverse_location_proposal = location_proposal
 
     old_evs = [sg.get_event(eid) for eid in eids]
 
@@ -132,7 +142,7 @@ def rebirth_events_helper(sg, eids, location_proposal,
     lp_old = None
 
     for i, eid in enumerate(eids):
-        lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
+        lp = lambda *args, **kwargs : reverse_location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
 
         r = ev_death_executor(sg, force_kill_eid=eid, location_proposal=lp, 
                               birth_type=reverse_birth_type)
@@ -155,7 +165,7 @@ def rebirth_events_helper(sg, eids, location_proposal,
         revert_moves.append(rebirth_old)
 
     for i, eid in enumerate(eids):
-        lp = lambda *args, **kwargs : location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
+        lp = lambda *args, **kwargs : forward_location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
         r = ev_birth_executor(sg, location_proposal=lp, force_eid=eid, 
                               proposal_type=forward_birth_type)
         if r is None:
@@ -178,3 +188,46 @@ def rebirth_events_helper(sg, eids, location_proposal,
             r()
 
     return lp_new, lp_old, log_qforward, log_qbackward, revert_move
+
+def repropose_lsqr_new(sg, eid, **kwargs):
+
+    def cache_location_proposal():
+        old_ev = sg.get_event(eid)
+        init_z = np.array((old_ev.lon, old_ev.lat, old_ev.depth, old_ev.time))
+
+        z, C = ev_lstsqr_dist(sg, eid, init_z=init_z)
+        rv = scipy.stats.multivariate_normal(z, C)
+
+        def loc_prop(sg, fix_result=None, **kwargs):
+            if fix_result is not None:
+                new_ev = fix_result
+                proposed_vals = np.array((new_ev.lon, new_ev.lat, new_ev.depth, new_ev.time))
+            else:
+                proposed_vals = rv.rvs(1)
+
+
+            lon, lat, depth, time = proposed_vals
+
+            # this definitely breaks Gaussianity, we should be explicitly truncating the distribution
+            if depth > 700:
+                depth = 700
+            elif depth < 0:
+                depth = 0
+
+            proposal_lp = np.logaddexp(rv.logpdf(proposed_vals), -50)
+
+            # this breaks Gaussianity, technically we should be using a
+            # circular (von Mises?) distribution. but hopefully it doesn't
+            # matter.
+            lon, lat = wrap_lonlat(lon, lat)
+
+            new_ev = Event(lon=lon, lat=lat, depth=depth, time=time, mb=old_ev.mb)
+
+            if fix_result is not None:
+                return proposal_lp
+            else:
+                return new_ev, proposal_lp, (z, C)
+
+        return loc_prop
+
+    return swap_events_move(sg, n_events=1, location_proposal=cache_location_proposal(), **kwargs)

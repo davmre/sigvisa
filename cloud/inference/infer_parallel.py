@@ -21,8 +21,11 @@ def sync_serializations(hostname, jobid, local_dir):
     serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
     subprocess.call(["rsync", "-avz", "-e", "ssh", "vagrant@%s:%s" % (hostname, serial_dir), local_dir])
 
-def parallel_inference(infer_script, label, nnodes, stime, etime, 
-                       block_s=3600, ncpus=4, 
+def parallel_inference(infer_script, label, nnodes, 
+                       stime, etime, 
+                       block_s=3600, 
+                       nseeds=None,
+                       ncpus=4, 
                        inference_s=3600.0, sync_s=60):
 
     infer_script = "/bin/bash /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
@@ -37,22 +40,28 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
 
     hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
 
-    total_len = etime-stime
-    nblocks = int(np.floor(total_len / float(block_s)))
-
-    stimes = np.array([stime + k * block_s for k in range(nblocks)], dtype=np.float)
-    etimes = stimes + block_s
-    etimes[-1] = etime
-
     log_prefix = lambda jobid : "/home/sigvisa/python/sigvisa/logs/mcmc/%s" % jobid
     jm = JobManager(hostnames, ncpus, log_prefix)
 
     try:
         jobs = []
-        for (block_stime, block_etime) in zip(stimes, etimes):
-            cmd = "%s --stime=%f --etime=%f" % (infer_script, block_stime, block_etime)
-            jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
-            jobs.append((jobid, cmd, block_stime, block_etime))
+        if stime is not None:
+            total_len = etime-stime
+            nblocks = int(np.floor(total_len / float(block_s)))
+
+            stimes = np.array([stime + k * block_s for k in range(nblocks)], dtype=np.float)
+            etimes = stimes + block_s
+            etimes[-1] = etime
+
+            for (block_stime, block_etime) in zip(stimes, etimes):
+                cmd = "%s --stime=%f --etime=%f" % (infer_script, block_stime, block_etime)
+                jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
+                jobs.append((jobid, cmd, (block_stime, block_etime)))
+        else:
+            for seed in np.arange(nseeds):
+                cmd = "%s --seed=%d" % (infer_script, seed)
+                jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
+                jobs.append((jobid, cmd, seed))
 
         with open(os.path.join(jobdir, "jobs.txt"), "w") as f:
             f.write(repr(jobs))
@@ -61,7 +70,7 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
         t = time.time()
         while t - t0 < inference_s:
 
-            for (jobid, cmd, block_stime, block_etime) in jobs:
+            for (jobid, cmd, desc) in jobs:
                 local_dir = os.path.join(jobdir, "%s" % jobid)
                 mkdir_p(local_dir)
 
@@ -72,20 +81,21 @@ def parallel_inference(infer_script, label, nnodes, stime, etime,
             t = time.time()
     except KeyboardInterrupt as e:
         yn = raw_input("Kill currently running jobs (y/n)?: ")
-        for (jobid, cmd, block_stime, block_etime) in jobs:
+        for (jobid, cmd, desc) in jobs:
             host, pid = jm.hosts_by_job[jobid]
             print "jobid", jobid, "host", host, "pid", pid
             if yn.lower().startswith("y"):
                 jm.kill_job(jobid)
         raise e
 
-    for (jobid, cmd, block_stime, block_etime) in jobs:
+    for (jobid, cmd, desc) in jobs:
         print "killing job", jobid
         jm.kill_job(jobid)
 
-    evdicts, uadicts_by_sta = summarize_results(jobdir, jobs)
-
-    save_serialized_to_file(os.path.join(jobdir, "merged"), evdicts, uadicts_by_sta)
+    if stime is not None:
+        evdicts, uadicts_by_sta = summarize_results(jobdir, jobs)
+        save_serialized_to_file(os.path.join(jobdir, "merged"), evdicts, uadicts_by_sta)
+        
         
 
 def main():
@@ -96,9 +106,11 @@ def main():
                       help="number of cloud nodes to execute on")
     parser.add_option("--ncpus", dest="ncpus", default=4, type="int",
                       help="number of cpus per node")
+    parser.add_option("--nseeds", dest="nseeds", default=None, type="int",
+                      help="number of seeds to run (for synthetic examples)")
     parser.add_option("--block_s", dest="block_s", default=3600.0, type="float",
                       help="length in seconds of each inference block")
-    parser.add_option("--inference_s", dest="inference_s", default=3600.0, type="float",
+    parser.add_option("--inference_s", dest="inference_s", default=36000.0, type="float",
                       help="time to run the remote inference processes")
     parser.add_option("--label", dest="label", default="", type="str",
                       help="arbitrary label given to this inference run")
@@ -123,6 +135,7 @@ def main():
                        etime=options.etime,
                        block_s = options.block_s, 
                        ncpus = options.ncpus,
+                       nseeds=  options.nseeds,
                        inference_s=options.inference_s, 
                        sync_s=options.sync_s)
 

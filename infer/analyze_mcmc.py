@@ -22,7 +22,7 @@ from sigvisa.models.ttime import tt_predict
 
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
-def match_true_ev(trace, true_evs):
+def match_true_ev(trace, true_evs, max_delta_time=100.0):
     mean_lon, mean_lat = find_center(trace[:, 0:2])
     mean_time = np.mean(trace[:,3])
 
@@ -32,7 +32,7 @@ def match_true_ev(trace, true_evs):
     for ev in true_evs:
         dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
         dist += np.abs(ev.time - mean_time) * 5 # equate one second of error with 5km
-        if dist < best_distance:
+        if dist < best_distance and np.abs(mean_time - ev.time) < max_delta_time:
             best_distance = dist
             true_ev = ev
     return true_ev

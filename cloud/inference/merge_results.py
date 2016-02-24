@@ -15,7 +15,7 @@ def last_serialization(dirname):
 def summarize_results(jobdir, jobs):
     serialized_periods = []
     s_homedir =  os.getenv("SIGVISA_HOME")
-    for (jobid, cmd, stime, etime) in jobs:
+    for (jobid, cmd, (stime, etime)) in jobs:
         serial_dir = os.path.join(jobdir, jobid, "serialized")
         final_state_file = last_serialization(serial_dir)
         evdicts, uadicts_by_sta = load_serialized_from_file(final_state_file)

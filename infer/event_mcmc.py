@@ -22,6 +22,7 @@ from sigvisa.signals.io import load_segments
 from sigvisa.infer.event_birthdeath import ev_sta_template_death_helper, ev_sta_template_birth_helper
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import mh_accept_util
+from sigvisa.infer.propose_lstsqr import ev_lstsqr_dist
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move, get_sorted_arrivals, relevant_nodes_hack
 from sigvisa.graph.graph_utils import create_key, parse_key
 from sigvisa.models.distributions import TruncatedGaussian, Bernoulli
@@ -85,7 +86,7 @@ def propose_phasejump_births(sg, eid, new_phases, fix_result=None):
 
 
 
-def cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes):
+def cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes, sta_relevant_nodes):
 
     # if no arrivals will be preserved at this station,
     # it's meaningless whether we decouple or not
@@ -100,16 +101,37 @@ def cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes):
         # if the max template is smaller than half a noise std, it can't be telling us much
         return True
     elif score > 6:
-        # if the max template is bigger than six noise stds, it must be affecting the signal
-        # (might be able to get away with less here, but being cautious for now...)
-        return False
+        # if the max template is bigger than six noise stds, it must
+        # be affecting the signal (might be able to get away with less
+        # here, but being cautious for now...)  our default now should
+        # be to *not* decouple, so we keep the signal explanation
+        # constant. 
+
+
+
+        # the only exception is if the new
+        # event location will violate a param constraint, making the
+        # resulting state extraordinarily unlikely.
+        # in this case we defer to the expensive proposal.
+        residual_nodes = [n for n in sta_relevant_nodes if "tt_residual" in n.label ]
+        penalty = np.sum([n.param_truncation_penalty(n.label, n.get_value(), coarse_tts=n.hack_coarse_tts is not None) for n in residual_nodes if n.hack_param_constraint])
+        if penalty < -100:
+            return None
+        else:
+            return False
     else:
         # in the intermediate cases, we'll do a more expensive proposal using the actual
         # signal probabilities
         return None
 
 def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases, 
-                                   adaptive_decouple=False, fix_result=None):
+                                   decouple_templates="adaptive", fix_result=None):
+
+    # to "decouple" means that when an evtime changes, the atime also
+    # changes (i.e., tt_residual remains constant). I'm not sure why
+    # past-me chose this terminology; it almost seems backwards. but
+    # I'm sticking with it now.
+
     evdict = new_ev.to_dict()
     evnodes = sg.evnodes[eid]
 
@@ -181,13 +203,11 @@ def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases,
                     n.set_value(fixed_vals[n.label])                    
 
 
-            currently_decoupled=True
-            if adaptive_decouple:
-                do_preserve()
-                currently_decoupled=False
-
+            do_preserve()
+            currently_decoupled=False
+            if decouple_templates=="adaptive":
                 wn = wns[0]
-                decouple_heuristic = cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes)
+                decouple_heuristic = cheap_decouple_proposal(sg, wn, eid, sta_fixable_nodes, sta_relevant_nodes)
                 if decouple_heuristic is not None:
                     p_decoupled = 1.0 - 1e-6 if decouple_heuristic else 1e-6
                 else:
@@ -212,7 +232,7 @@ def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases,
 
                 # print "decouple %s at %s with p_decoupled %.3f lqf %.3f heuristic %s" % (decouple, wn.sta, p_decoupled, lqf, decouple_heuristic)
             else:
-                decouple = False
+                decouple = decouple_templates
                 
             decouple_record[wnlabel] = decouple
 
@@ -236,7 +256,7 @@ def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases,
 
 
 def ev_phasejump_helper(sg, eid, new_ev, params_changed, 
-                        adaptive_decouple=False,
+                        decouple_templates=False,
                         birth_type="mh", fix_result=None):
     # assume: we are proposing to update eid to new_ev, but have not 
     # yet done so in the graph. 
@@ -256,7 +276,7 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
     new_phases, invalid_phases = phases_changed(sg, eid, new_ev)
     
     # set the event to the new position, and either let the arrival times and coda_heights shift, or don't
-    lqf, rset, decouple_record = set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases, fix_result=fix_result, adaptive_decouple=adaptive_decouple)
+    lqf, rset, decouple_record = set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases, fix_result=fix_result, decouple_templates=decouple_templates)
     replicate_fns.append(rset)
     log_qforward += lqf
     for wnlabel in decouple_record.keys():
@@ -335,8 +355,58 @@ def ev_phasejump_helper(sg, eid, new_ev, params_changed,
     return log_qforward, replicate_move, phasejump_record
 
 
-def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None, 
-                 adaptive_decouple="auto",
+
+def phasejump_reduced_logp(sg, eid, phasejump_record):
+    # compute the logp of only the relevant nodes for this move,
+    # based on the record of where we added/removed phases
+
+    # if we're using GP wiggle models, we need to compute logps at every station
+    if sg.wiggle_model_type != "dummy":
+        return sg.current_log_p()
+
+
+    lp = 0.0
+
+    # always compute the ev prior, and
+    # always compute all params at all stations, since
+    #  - if we're not using GPs, this is cheap (though maybe not necessary)
+    #  - if we're using GPs, this is necessary, since any parent-conditional 
+    #    distribution can be changed by a change in ev location. 
+    lp += np.sum([n.log_p() for n in sg.extended_evnodes[eid] if not n.deterministic()])
+
+
+    # always compute phase existence model at all stations because I'm lazy and this should be cheap
+    lp += sg.phase_existence_lp()
+
+    # at every station where we've changed the set of arriving phases,
+    # compute the signal lp, and also include lps for all uatemplates
+    # (since we might have associated or disassociated templates)
+
+
+    for wnlabel in phasejump_record.keys():
+        if wnlabel == "births":
+            continue
+        # include any wns where our signal explanation will have changed.
+        # if the only record is that we didn't decouple, we can skip this wn.
+        if len(phasejump_record[wnlabel]) == 1 and not phasejump_record[wnlabel]['decoupled']:
+            continue
+
+        wn = sg.all_nodes[wnlabel]
+        lp += wn.log_p()
+
+        tmids = [-eid for (eid, phase) in wn.arrivals() if phase=="UA"]
+        lp += sg.ntemplates_sta_log_p(wn, n=len(tmids))
+        for tmid in tmids:
+            uanodes = sg.uatemplates[tmid]
+            lp += np.sum([n.log_p() for n in uanodes.values()])
+
+    return lp
+
+def ev_move_full(sg, ev_node, std, params, eid=None,
+                 decouple_templates="auto",
+                 proposer=None,
+                 forward_type=None,
+                 reverse_type=None,
                  logger=None, return_debug=False):
     def update_ev(old_ev, params, new_v):
         new_ev = copy.copy(old_ev)
@@ -399,96 +469,55 @@ def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None,
         
         return old_ev, new_ev, log_qforward, log_qbackward
 
-    def reduced_logp(sg, eid, phasejump_record):
-        # compute the logp of only the relevant nodes for this move,
-        # based on the record of where we added/removed phases
-
-        # if we're using GP wiggle models, we need to compute logps at every station
-        if sg.wiggle_model_type != "dummy":
-            return sg.current_log_p()
-
-
-        lp = 0.0
-        
-        # always compute the ev prior, and
-        # always compute all params at all stations, since
-        #  - if we're not using GPs, this is cheap (though maybe not necessary)
-        #  - if we're using GPs, this is necessary, since any parent-conditional 
-        #    distribution can be changed by a change in ev location. 
-        lp += np.sum([n.log_p() for n in sg.extended_evnodes[eid] if not n.deterministic()])
-
-        # at every station where we've changed the set of arriving phases,
-        # compute the signal lp, and also include lps for all uatemplates
-        # (since we might have associated or disassociated templates)
-
-
-        for wnlabel in phasejump_record.keys():
-            if wnlabel == "births":
-                continue
-            # include any wns where our signal explanation will have changed.
-            # if the only record is that we didn't decouple, we can skip this wn.
-            if len(phasejump_record[wnlabel]) == 1 and not phasejump_record[wnlabel]['decoupled']:
-                continue
-
-            wn = sg.all_nodes[wnlabel]
-            lp += wn.log_p()
-
-            tmids = [-eid for (eid, phase) in wn.arrivals() if phase=="UA"]
-            lp += sg.ntemplates_sta_log_p(wn, n=len(tmids))
-            for tmid in tmids:
-                uanodes = sg.uatemplates[tmid]
-                lp += np.sum([n.log_p() for n in uanodes.values()])
-
-        return lp
             
+    if eid is None:
+        eid = int(ev_node.label.split(';')[0])
 
-    eid = int(ev_node.label.split(';')[0])
-
-    if force_proposed_ev is not None:
-        new_ev = force_proposed_ev
-        old_ev = sg.get_event(eid)
-        log_qforward = 0.0
-        log_qbackward = 0.0
+    if proposer is not None:
+        old_ev, new_ev, log_qforward, log_qbackward = proposer(sg, eid, params)
     else:
         old_ev, new_ev, log_qforward, log_qbackward = propose_ev(ev_node, eid, params)
 
-    dumb_forward = np.random.rand() < 0.2
-    forward_type = "dumb" if dumb_forward else "mh" 
-    dumb_backward = np.random.rand() < 0.2
-    reverse_type = "dumb" if dumb_backward else "mh" 
+    if forward_type is None:
+        dumb_forward = np.random.rand() < 0.2
+        forward_type = "dumb" if dumb_forward else "mh" 
+    if reverse_type is None:
+        dumb_backward = np.random.rand() < 0.2
+        reverse_type = "dumb" if dumb_backward else "mh" 
 
-    if adaptive_decouple=="auto":        
+    if decouple_templates=="auto":        
         adaptive_decouple = ("lon" in params or "time" in params or "depth" in params)
+        decouple_templates = "adaptive" if adaptive_decouple else False
 
     # set the event, and propose values for new and removed phases, as needed
     lqf, replicate_forward, phasejump_record = ev_phasejump_helper(sg, eid, new_ev, params, 
-                                                                   adaptive_decouple=adaptive_decouple,
+                                                                   decouple_templates=decouple_templates,
                                                                    birth_type=forward_type)
     log_qforward += lqf
 
     #lp_new = sg.current_log_p()
-    lp_new_quick = reduced_logp(sg, eid, phasejump_record)
+    lp_new_quick = phasejump_reduced_logp(sg, eid, phasejump_record)
     
     # set the old event and propose values 
     lqb, _, phasejump_reverse_record = ev_phasejump_helper(sg, eid, old_ev, params, 
                                                            birth_type=reverse_type,
-                                                           adaptive_decouple=adaptive_decouple,
+                                                           decouple_templates=decouple_templates,
                                                            fix_result=phasejump_record)
     log_qbackward += lqb
 
     #lp_old = sg.current_log_p()
-    lp_old_quick = reduced_logp(sg, eid, phasejump_reverse_record)
+    lp_old_quick = phasejump_reduced_logp(sg, eid, phasejump_reverse_record)
 
     #diff1 = lp_new - lp_old
     #diff2 = lp_new_quick - lp_old_quick
-    #assert(np.abs(diff2 - diff1) < 1e-6)
+    #assert(np.abs(diff2 - diff1) < 1e-1)
     
-
     accepted = mh_accept_util(lp_old_quick, lp_new_quick, log_qforward, log_qbackward, accept_move=replicate_forward)
 
     if logger is not None:
                             
-        phasejump_reverse_record["dumb"] = ("forward " if dumb_forward else "") + ("backward_ " if dumb_backward else "")
+        phasejump_reverse_record["forward_type"] = forward_type
+        phasejump_reverse_record["reverse_type"] = reverse_type
 
         logger.log_event_move(sg, eid, old_ev, new_ev, 
                               phasejump_reverse_record,
@@ -497,10 +526,73 @@ def ev_move_full(sg, ev_node, std, params, force_proposed_ev=None,
                               accepted=accepted)
 
     if return_debug:
-        return lp_old_quick, lp_new_quick, log_qforward, log_qbackward, replicate_forward
+        return lp_old_quick, lp_new_quick, log_qforward, log_qbackward, replicate_forward, phasejump_reverse_record
     else:
         return accepted
     
+def ev_lsqr_move(sg, eid, 
+                 forward_type=None, 
+                 reverse_type=None,
+                 decouple_templates="adaptive",
+                 logger=None,
+                 return_debug=False):
+
+
+    old_ev, new_ev, log_qforward, z, C = propose_event_lsqr(sg, eid)
+
+    if forward_type is None:
+        dumb_forward = np.random.rand() < 0.4
+        forward_type = "dumb" if dumb_forward else "smart"
+    if reverse_type is None:
+        dumb_backward = np.random.rand() < 0.4
+        reverse_type = "dumb" if dumb_backward else "smart"
+
+    params = ["lon", "lat", "depth", "time"]
+
+    # set the event, and propose values for new and removed phases, as needed
+    lqf, replicate_forward, phasejump_record = ev_phasejump_helper(sg, eid, new_ev, params, 
+                                                                   decouple_templates=decouple_templates,
+                                                                   birth_type=forward_type)
+    log_qforward += lqf
+
+    #lp_new = sg.current_log_p()
+    lp_new_quick = phasejump_reduced_logp(sg, eid, phasejump_record)
+    
+
+    _, _, log_qbackward, _, _ = propose_event_lsqr(sg, eid, fix_result=old_ev)
+
+    # set the old event and propose values 
+    lqb, _, phasejump_reverse_record = ev_phasejump_helper(sg, eid, old_ev, params, 
+                                                           birth_type=reverse_type,
+                                                           decouple_templates=decouple_templates,
+                                                           fix_result=phasejump_record)
+    log_qbackward += lqb
+
+    #lp_old = sg.current_log_p()
+    lp_old_quick = phasejump_reduced_logp(sg, eid, phasejump_reverse_record)
+
+    #diff1 = lp_new - lp_old
+    #diff2 = lp_new_quick - lp_old_quick
+    #assert(np.abs(diff2 - diff1) < 1e-1)
+    
+    accepted = mh_accept_util(lp_old_quick, lp_new_quick, log_qforward, log_qbackward, accept_move=replicate_forward)
+
+    if logger is not None:
+                            
+        phasejump_reverse_record["forward_type"] = forward_type
+        phasejump_reverse_record["reverse_type"] = reverse_type
+
+        logger.log_event_move(sg, eid, old_ev, new_ev, 
+                              ("lsqr", " ".join(["%.2f" %x for x in z]), C, phasejump_reverse_record),
+                              lp_old_quick, lp_new_quick, 
+                              log_qforward, log_qbackward,
+                              accepted=accepted)
+
+    if return_debug:
+        return lp_old_quick, lp_new_quick, log_qforward, log_qbackward, replicate_forward, phasejump_reverse_record
+    else:
+        return accepted
+
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):
 
@@ -548,22 +640,33 @@ def ev_lonlat_frames():
         ev_lonlat_density(frame=i, fname='ev_viz_step%06d.png' % i)
 
 
-def propose_event_lsqr_prob(sg, eid, **kwargs):
-    z, C = ev_lstsqr_dist(sg, eid, **kwargs)
-    rv = scipy.stats.multivariate_normal(z, C)
+def propose_event_lsqr(sg, eid, fix_result=None):
+
+    # breaks reversibility to initialize at current location
+    # but I don't super care
     old_ev = sg.get_event(eid)
-    old_vals = np.array([old_ev.lon, old_ev.lat, old_ev.depth, old_ev.time])
-    old_lp = rv.logpdf(old_vals)
+    init_z = np.array((old_ev.lon, old_ev.lat, old_ev.depth, old_ev.time))
 
+    z, C = ev_lstsqr_dist(sg, eid, init_z=init_z)
+    try:
+        rv = scipy.stats.multivariate_normal(z, C)
+    except:
+        C = np.eye(4) * 50.0
+        rv = scipy.stats.multivariate_normal(z, C)
 
-    return old_lp
+    if fix_result is None:
+        proposed_vals = rv.rvs(1)
+        lon, lat, depth, time = proposed_vals
+    else:
+        lon, lat, depth, time = fix_result.lon, fix_result.lat, fix_result.depth, fix_result.time
+        proposed_vals = np.array((lon, lat, depth, time))
 
-def propose_event_lsqr(sg, eid, **kwargs):
-    z, C = ev_lstsqr_dist(sg, eid, **kwargs)
-    rv = scipy.stats.multivariate_normal(z, C)
-    proposed_vals = rv.rvs(1)
-    lon, lat, depth, time = proposed_vals
     proposal_lp = rv.logpdf(proposed_vals)
+
+    # hack: pretend we propose from a mix of the given Gaussian and a
+    # "dumb" uniform-ish distribution, in order to keep the reverse
+    # logps reasonable.
+    proposal_lp = np.logaddexp(proposal_lp, -10)
 
     # this breaks Gaussianity, technically we should be using a
     # circular (von Mises?) distribution. but hopefully it doesn't
@@ -576,18 +679,13 @@ def propose_event_lsqr(sg, eid, **kwargs):
     elif depth < 0:
         depth = 0
 
-    old_ev = sg.get_event(eid)
     new_ev = copy.copy(old_ev)
     new_ev.lon = lon
     new_ev.lat = lat
     new_ev.depth=depth
     new_ev.time=time
 
-    move_logprob, reverse_logprob, revert_move, jump_required, node_lps = ev_phasejump(sg, eid, new_ev, params_changed=['lon', 'lat', 'depth', 'time'])
-
-    move_logprob += proposal_lp
-
-    return move_logprob, reverse_logprob, revert_move, jump_required, node_lps
+    return old_ev, new_ev, proposal_lp, z, C
 
 
 def sample_uniform_pair_to_swap(sg, wn, adjacency_decay=0.8):
@@ -735,7 +833,7 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
         return False
 
 
-def ev_source_type_move(sg, eid):
+def ev_source_type_move(sg, eid, logger=None, **kwargs):
     evnode = sg.evnodes[eid]["natural_source"]
     # propose a new source type while holding coda heights constant
     coda_heights = [(n, n.get_value()) for n in sg.extended_evnodes[eid] if "coda_height" in n.label]

@@ -179,6 +179,7 @@ def mcmc_ev_detail(request, dirname, eid):
                                'proposalpath': proposalpath,
                                }, context_instance=RequestContext(request))
 
+
 def mcmc_run_detail(request, dirname):
     s = Sigvisa()
     burnin = int(request.GET.get('burnin', '-1'))
@@ -244,6 +245,7 @@ def mcmc_run_detail(request, dirname):
     inferredX = [(ev.lon, ev.lat, ev.depth, ev.time, ev.mb) for ev in inferred_evs]
     indices = find_matching(trueX, inferredX, max_delta_deg=5.0, max_delta_time=100.0)
 
+
     for i, eid in enumerate(eids):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
         trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
@@ -266,7 +268,7 @@ def mcmc_run_detail(request, dirname):
         dist = ""
         if len(matches) > 0:
             matched = matches[0] + 1
-            true_ev = true_evs[idx]
+            true_ev = true_evs[matched-1]
             dist = dist_km((ev.lon, ev.lat), (true_ev.lon, true_ev.lat))
 
         evdict = {'eid': eid,
@@ -1342,3 +1344,43 @@ def mcmcrun_browsedir(request, dirname, path):
     else:
         mimetype=mimetypes.guess_type(path)[0]
         return HttpResponse(open(current_path).read(), content_type=mimetype)
+
+def mcmc_ev_trace_pairwise_plot(request, dirname, eid, param1, param2):
+
+
+    cols = {"step": 0, "lon": 1, "lat": 2, "depth": 3, "time": 4, "mb": 5, "natural_source": 6}
+
+    burnin = int(request.GET.get('burnin', '0'))
+    eid = int(eid)
+    
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    eidfile = os.path.join(mcmc_run_dir, "ev_%05d.txt" % eid)
+    trace = np.loadtxt(eidfile)
+
+    col1 = cols[param1]
+    col2 = cols[param2]
+
+    steps = trace[burnin:, 0]
+    steps -= np.min(steps)
+    nsteps = len(steps)
+    alphas = (steps + 1.0) / float(nsteps)
+    
+    x = trace[burnin:, col1]
+    y = trace[burnin:, col2]
+
+    f = Figure((5, 5))
+    f.patch.set_facecolor('white')
+    ax = f.add_subplot(111)
+    for (xp, yp, alpha) in zip(x, y, alphas):
+        ax.scatter(xp, yp, alpha=alpha)
+    ax.set_xlabel(param1)
+    ax.set_ylabel(param2)
+    
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response

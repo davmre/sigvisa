@@ -21,7 +21,7 @@ region_lat = (32, 49)
 region_stime = 1239040000.0
 region_etime = region_stime + 3600.0
 
-def main(seed=1, n_events=5, resume_from=""):
+def main(seed=1, n_events=5, resume_from="", no_hough=False):
 
 
     evs = None
@@ -51,7 +51,7 @@ def main(seed=1, n_events=5, resume_from=""):
                     phases=phases,
                     inference_region=region,
                     dummy_fallback=True,
-                    hack_param_constraint=True,
+                    hack_param_constraint=False,
                     min_mb=min_mb,
                     vert_only=True)
 
@@ -75,7 +75,7 @@ def main(seed=1, n_events=5, resume_from=""):
     #                    birth_type="mh", fix_result=None)
 
 
-    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc',], steps=1000)
+    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=not no_hough, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc',], steps=1000)
     do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
 
 
@@ -86,8 +86,9 @@ if __name__ == "__main__":
         parser.add_option("--seed", dest="seed", default=1, type=int)
         parser.add_option("--n_events", dest="n_events", default=2, type=int)
         parser.add_option("--resume_from", dest="resume_from", default="", type=str)
+        parser.add_option("--no_hough", dest="no_hough", default=False, action="store_true")
         (options, args) = parser.parse_args()
-        main(seed=options.seed, n_events=options.n_events, resume_from=options.resume_from)
+        main(seed=options.seed, n_events=options.n_events, resume_from=options.resume_from, no_hough=options.no_hough)
     except KeyboardInterrupt:
         raise
     except Exception as e:
