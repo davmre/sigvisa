@@ -647,7 +647,13 @@ def propose_event_lsqr(sg, eid, fix_result=None):
     old_ev = sg.get_event(eid)
     init_z = np.array((old_ev.lon, old_ev.lat, old_ev.depth, old_ev.time))
 
-    z, C = ev_lstsqr_dist(sg, eid, init_z=init_z)
+    try:
+        z, C = ev_lstsqr_dist(sg, eid, init_z=init_z)
+    except Exception as e:
+        sg.logger.warning("exception proposing lsqr location for eid %d: %s" % (eid, str(e)))
+        z = init_z
+        C = np.eye(4)
+
     try:
         rv = scipy.stats.multivariate_normal(z, C)
     except:
