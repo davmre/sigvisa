@@ -291,7 +291,8 @@ def mcmc_run_detail(request, dirname):
         if len(trueX) > 0:
             X = np.vstack((X, np.asarray(trueX)[:, :2]))
     else:
-        X = np.asarray(trueX)[:, :2]
+        if len(trueX) > 0:
+            X = np.asarray(trueX)[:, :2]
 
     if sg.inference_region is not None:
         r = sg.inference_region
