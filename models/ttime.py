@@ -128,18 +128,6 @@ def tt_predict_grad(lon, lat, depth, origin_time, sta, phase=None, phaseid=None)
     return meantt, np.array((dlon, dlat, ddepth, 1.0))
 
 
-def tt_log_p(x, event, sta, phase):
-    s = Sigvisa()
-    phaseid = s.phaseids[phase]
-    ref_siteid = s.ref_siteid[sta]
-
-    if event.time < 1:
-        import pdb; pdb.set_trace()
-
-
-    meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1)
-    ll = s.sigmodel.arrtime_logprob(x, meantt, 0, ref_siteid-1, phaseid - 1)
-    return ll
 
 def tt_residual(event, sta, atime, phase=None, phaseid=None):
     pred_atime = event.time + tt_predict(event, sta, phase=phase, phaseid=phaseid)

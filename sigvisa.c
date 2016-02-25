@@ -12,7 +12,6 @@ static void py_sig_model_dealloc(SigModel_t * self);
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_mean_travel_time_grad(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,PyObject *args);
-static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_depth_prior_logprob(SigModel_t * p_sigmodel, PyObject * args);
 
@@ -29,9 +28,6 @@ static PyMethodDef SigModel_methods[] = {
   {"mean_travel_time_coord", (PyCFunction)py_mean_travel_time_coord, METH_VARARGS,
    "mean_travel_time(evlon, evlat, evdepth, sitelon, sitelat, sitedepth, phaseid-1)"
    " -> travel time in seconds"},
-  {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
-   "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid-1, phaseid-1)"
-   " -> log probability"},
   {"event_location_prior_logprob", (PyCFunction)py_event_location_prior_logprob, METH_VARARGS,
    "event_location_prior_logprob(evlon, evlat, evdepth)"
    " -> log prior probability of event location"},
@@ -241,12 +237,7 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   self->p_earth = p_earth;
   Py_INCREF((PyObject *)self->p_earth);
 
-  NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
   EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
-  ArrivalTimeJointPrior_Init_Params(&self->arr_time_joint_prior, arrtime_fname);
-  ArrivalAzimuthPrior_Init_Params(&self->arr_az_prior, arrazi_fname);
-  ArrivalSlownessPrior_Init_Params(&self->arr_slo_prior, arrslo_fname);
-  ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
 
   //int numsites = EarthModel_NumSites(p_earth);
 
@@ -359,9 +350,6 @@ static PyObject * py_mean_travel_time_grad(SigModel_t * p_sigmodel,
 
   int ref_siteid = p_site->ref_siteid;
 
-  trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,
-                                           ref_siteid-1, phaseid);
-
   return Py_BuildValue("dddd", trvtime, d_atime_lon, d_atime_lat, d_atime_depth);
 }
 
@@ -396,9 +384,6 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
   }
 
   int ref_siteid = p_site->ref_siteid;
-
-  trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,
-                                           ref_siteid-1, phaseid);
 
   return Py_BuildValue("d", trvtime);
 }
@@ -463,27 +448,6 @@ static PyObject * py_event_location_prior_sample(SigModel_t * p_sigmodel,
 
 
 
-static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,
-                                     PyObject * args)
-{
-  double arrtime;
-  double pred_arrtime;
-  double det_deltime;
-  int siteid;
-  int phaseid;
-
-  double logprob;
-
-  if (!PyArg_ParseTuple(args, "dddii", &arrtime, &pred_arrtime, &det_deltime,
-                        &siteid, &phaseid))
-    return NULL;
-
-  logprob = ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_joint_prior.single_prior,
-                                     arrtime, pred_arrtime,
-                                     det_deltime, siteid, phaseid);
-
-  return Py_BuildValue("d", logprob);
-}
 
 static void py_sig_model_dealloc(SigModel_t * self)
 {
@@ -493,9 +457,6 @@ static void py_sig_model_dealloc(SigModel_t * self)
       self->p_earth = NULL;
     }
 
-
-  EventLocationPrior_UnInit(&self->event_location_prior);
-  ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
 
 
 }
