@@ -21,7 +21,7 @@ from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential
 from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel
 from sigvisa.models.conditional import ConditionalGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
-from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
+from sigvisa.models.ttime import tt_predict, ArrivalTimeNode
 from sigvisa.models.joint_gp import JointGP, JointIndepGaussian
 from sigvisa.models.noise.nm_node import NoiseModelNode
 from sigvisa.models.phase_existence import PhaseExistenceModel
@@ -295,7 +295,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.fixed_events = set()
         self.fully_fixed_events = set()
         if inference_region is not None:
-            self.event_rate = inference_region.estimate_event_rate()
+            self.event_rate = inference_region.event_rate
 
         self.ev_site_phases = dict() # keys: eid, values: defaultdict(set) keyed by site
         self.phase_existence_model = phase_existence_model

@@ -10,7 +10,8 @@ import os
 import logging ; logging.basicConfig(level=logging.DEBUG)
 
 env.hosts = ['sigvisa1.cloudapp.net',
-             'sigvisa2.cloudapp.net',]
+             'sigvisa2.cloudapp.net',
+             'sigvisa3.cloudapp.net',]
 
 #env.use_ssh_config = True
 env.user = 'vagrant'

@@ -744,6 +744,11 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
     t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wn.sta, band=wn.band, chan=wn.chan)
     t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wn.sta, band=wn.band, chan=wn.chan)
     rn = set(relevant_nodes_hack(t1nodes) + relevant_nodes_hack(t2nodes))
+
+    # if we're using GP wiggle models, swapping templates will affect the wiggle prior
+    if len(wn.wavelet_param_models) > 0 and not isinstance(wn.wavelet_param_models[0], Gaussian):
+        rn.add(wn)
+
     if repropose_events:
         if arr1[1] > 0:
             evnodes = set([n for n in sg.extended_evnodes[arr1[1]] if not n.deterministic()])
@@ -769,8 +774,6 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
             log_qbackward += propose_event_lsqr_prob(sg, eid=arr1[1], stas=stas)
         if (arr2[1] != arr1[1]) and arr2[1] > 0:
             log_qbackward += propose_event_lsqr_prob(sg, eid=arr2[1], stas=stas)
-
-
 
     # switch their parameters
     atime1, atime2 = swap_params(t1nodes, t2nodes)
@@ -829,14 +832,12 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
             fn()
         atime1, atime2 = swap_params(t1nodes, t2nodes)
 
-    #return lp_new, lp_old, log_qbackward, log_qforward, arr1, arr2, revert_all
-
-
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
         return True
     else:
         revert_all()
         return False
+
 
 
 def ev_source_type_move(sg, eid, logger=None, **kwargs):

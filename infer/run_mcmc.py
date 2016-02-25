@@ -330,14 +330,14 @@ def run_open_world_MH(sg, steps=10000,
                          'tmpl_death': (death_move_for_optimizing_birth, tmpl_birth_rate),
                          'tmpl_split': (split_move, 0.0),
                          'tmpl_merge': (merge_move, 0.0),
-                         'swap_association': (swap_association_move, 0.2),
+                         'swap_association': (swap_association_move, 1.0),
                          'arnoise_mean': (arnoise_mean_rw_move, 0.2),
                          'arnoise_std': (arnoise_std_rw_move, 0.2),
                          'arnoise_params': (arnoise_params_rw_move, 0.2)
             }
 
         else:
-            sta_moves = {'swap_association': (swap_association_move, 0.2),
+            sta_moves = {'swap_association': (swap_association_move, 1.0),
                          'arnoise_mean': (arnoise_mean_rw_move, 0.2),
                          'arnoise_std': (arnoise_std_rw_move, 0.2),
                          'arnoise_params': (arnoise_params_rw_move, 0.2)

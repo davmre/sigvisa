@@ -78,8 +78,8 @@ def find_matched(gold_events, guess_events, **kwargs):
     return list(set(i for (i, j) in find_matching(gold_events, guess_events, **kwargs)))
 
 
-def f1_and_error(gold_events, guess_events, max_delta_deg=1.0):
-    indices = find_matching(gold_events, guess_events, max_delta_deg=max_delta_deg)
+def f1_and_error(gold_events, guess_events, max_delta_deg=1.0, max_delta_time=50.0):
+    indices = find_matching(gold_events, guess_events, max_delta_deg=max_delta_deg, max_delta_time=max_delta_time)
     # compute precision
     if len(guess_events):
         p = 100. * float(len(indices)) / len(guess_events)

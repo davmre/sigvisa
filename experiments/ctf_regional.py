@@ -66,7 +66,12 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
 
     region_stime = rs.start_time
     region_etime = rs.end_time
-    region = Region(lons=region_lon, lats=region_lat, times=(region_stime, region_etime))
+    region = Region(lons=region_lon, lats=region_lat, 
+                    times=(region_stime, region_etime),
+                    rate_bulletin="isc", 
+                    rate_train_start=1167609600,
+                    rate_train_end=1199145600)
+
 
     ms1 = ModelSpec(template_model_type="param",
                     wiggle_family="iid",

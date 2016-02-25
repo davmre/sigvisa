@@ -1720,7 +1720,7 @@ def ev_template_birth_helper(sg, eid, fix_result=None,
         #site_phases = sorted(sg.predict_phases_site(proposed_ev, site=site))
         for sta in elements:
             debug_info_sta = None
-            if fix_result is None and debug_info is not None:
+            if debug_info is not None:
                 if sta not in debug_info:
                     debug_info[sta] = dict()
                 debug_info_sta = debug_info[sta]
@@ -2097,7 +2097,6 @@ def prettyprint_debug(birth_debug):
     delta = total_lp - lq_ev
     s += "total %.2f, delta %.2f\n" % (total_lp, delta)
     overall_score = delta
-
     
     for sta in birth_debug.keys():
         if sta=="ev": continue

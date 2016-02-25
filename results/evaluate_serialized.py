@@ -46,6 +46,8 @@ def main():
                       help="")
     parser.add_option("--max_delta_deg", dest="max_delta_deg", default=1.0, type="float",
                       help="")
+    parser.add_option("--max_delta_time", dest="max_delta_time", default=50.0, type="float",
+                      help="")
 
     (options, args) = parser.parse_args()
     
@@ -70,7 +72,7 @@ def main():
 
     print "sel3"
     sel3_bulletin = get_bulletin(options.stime, options.etime, origin_type="sel3")
-    f, p, r, err = f1_and_error(isc_bulletin, sel3_bulletin, max_delta_deg=options.max_delta_deg)
+    f, p, r, err = f1_and_error(isc_bulletin, sel3_bulletin, max_delta_deg=options.max_delta_deg, max_delta_time=50.0)
     print "f1", f
     print "precision", p
     print "recall", r
@@ -78,8 +80,10 @@ def main():
     print
 
     evdicts, uadicts_by_sta = load_serialized_from_file(options.serialized)
-    inferred_bulletin = np.array([(d["lon"], d["lat"], d["depth"], d["mb"], d["time"]) for d in evdicts])
+    inferred_bulletin = np.array([(d["lon"], d["lat"], d["depth"], d["time"], d["mb"]) for d in evdicts])
     nevs = len(inferred_bulletin)
+
+    """
     print "prior (10 simulations of %d events)" % nevs
     fs = []
     ps = []
@@ -87,7 +91,7 @@ def main():
     errs = []
     for i in range(10):
         prior_bulletin = simulate_prior(nevs, options.stime, options.etime)
-        f, p, r, err = f1_and_error(isc_bulletin, prior_bulletin, max_delta_deg=options.max_delta_deg)
+        f, p, r, err = f1_and_error(isc_bulletin, prior_bulletin, max_delta_deg=options.max_delta_deg, max_delta_time=50.0)
         fs.append("%.3f" % f)
         ps.append("%.3f" % p)
         rs.append("%.3f" % r)
@@ -97,19 +101,24 @@ def main():
     print "recall", rs
     print "err", errs
     print
+    """
 
     print "inferred"
-    f, p, r, err = f1_and_error(isc_bulletin, inferred_bulletin, max_delta_deg=options.max_delta_deg)
+    f, p, r, err = f1_and_error(isc_bulletin, inferred_bulletin, max_delta_deg=options.max_delta_deg, max_delta_time=50.0)
     print "f1", f
     print "precision", p
     print "recall", r
     print "err", err
     print
 
-    indices = find_matching(isc_bulletin, inferred_bulletin, max_delta_deg=options.max_delta_deg)
+    
+
+    indices = find_matching(isc_bulletin, inferred_bulletin, max_delta_deg=options.max_delta_deg, max_delta_time=50.0)
     for (i,j) in indices:
         print "matched isc", fmt_ev(isc_bulletin[i])
         print "with inferred", fmt_ev(inferred_bulletin[j])
+
+
 
 if __name__ == "__main__":
     main()

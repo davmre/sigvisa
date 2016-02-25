@@ -2,13 +2,18 @@ from sigvisa import Sigvisa
 
 class Region(object):
 
-    def __init__(self, lons, lats, times):
+    def __init__(self, lons, lats, times, rate_bulletin="leb", 
+                 rate_train_start=1238889600, rate_train_end=1245456000):
         self.left_lon = lons[0] if lons is not None else None
         self.right_lon = lons[1] if lons is not None else None
         self.bottom_lat = lats[0] if lats is not None else None
         self.top_lat = lats[1] if lats is not None else None
         self.stime = times[0] if times is not None else None
         self.etime = times[1] if times is not None else None
+
+        self.rate_train_start = 1238889600
+        self.rate_train_end = 1245456000
+        self.event_rate = self._estimate_event_rate(rate_train_start, rate_train_end, bulletin=rate_bulletin)
 
     def contains_event(self, ev=None, lon=None, lat=None, time=None):
         if ev is not None:
@@ -34,8 +39,8 @@ class Region(object):
         height = self.top_lat - self.bottom_lat
         return width*height
 
-    def estimate_event_rate(self, train_start=1238889600, train_end=1245456000):
-        sql_query = "select evid from leb_origin where (lon between %.1f and %.1f) and (lat between %.1f and %.1f) and (time between %.1f and %.1f) " % (self.left_lon, self.right_lon, self.bottom_lat, self.top_lat, train_start, train_end)
+    def _estimate_event_rate(self, train_start, train_end, bulletin="leb"):
+        sql_query = "select evid from %s_origin where (lon between %.1f and %.1f) and (lat between %.1f and %.1f) and (time between %.1f and %.1f) " % (bulletin, self.left_lon, self.right_lon, self.bottom_lat, self.top_lat, train_start, train_end)
         s = Sigvisa()
         cursor = s.dbconn.cursor()
         cursor.execute(sql_query)

@@ -2,10 +2,10 @@ import numpy as np
 
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event, Event
-from sigvisa.infer.coarse_to_fine_init import ModelSpec, SyntheticRunSpec, do_coarse_to_fine, initialize_from, do_inference
+from sigvisa.infer.coarse_to_fine_init import ModelSpec, SyntheticRunSpec, do_coarse_to_fine, initialize_from, do_inference, initialize_sg
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.treegp.gp import GPCov
-from sigvisa.synthetic.doublets import SampledWorld
+from sigvisa.synthetic.doublets import SampledWorld, build_joint_sg
 from sigvisa.graph.region import Region
 
 import os, sys, traceback
@@ -21,13 +21,9 @@ region_lat = (32, 49)
 region_stime = 1239040000.0
 region_etime = region_stime + 3600.0
 
-def main(seed=1, n_events=5, resume_from="", no_hough=False):
+def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False):
 
 
-    evs = None
-    if n_events==-1:
-        ev = Event(lon=-105.427, lat=43.731, depth=0.0, time=1239041017.07, mb=4.0, natural_source=False)
-        evs = [ev,]
 
     min_mb = 2.5
     uatemplate_rate=1e-4
@@ -35,10 +31,14 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False):
     runid=10
     phases=["P", "S", "Lg", "PcP", "ScP", "pP", "Pg"]
 
-    region = Region(lons=region_lon, lats=region_lat, times=(region_stime, region_etime))
+    region = Region(lons=region_lon, lats=region_lat, 
+                    times=(region_stime, region_etime),
+                    rate_bulletin="isc", 
+                    rate_train_start=1167609600,
+                    rate_train_end=1199145600)
 
     sw = SampledWorld(seed=seed)
-    sw.sample_sg(runid=runid, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=min_mb, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=evs, region=region)
+    sw.sample_sg(runid=runid, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=min_mb, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=None, region=region)
 
     rs = SyntheticRunSpec(sw=sw, runid=runid)
 
@@ -58,6 +58,11 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False):
     if len(resume_from) > 0:
         with open(resume_from, 'rb') as f:
             sg = pickle.load(f)
+    elif init_true:
+        sg = rs.build_sg(ms1)
+        initialize_sg(sg, ms1, rs)
+        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False, disable_moves=['atime_xc'], steps=100)
+        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=200)
     else:
         sg = rs.build_sg(ms1)
         ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=300)
@@ -87,8 +92,12 @@ if __name__ == "__main__":
         parser.add_option("--n_events", dest="n_events", default=2, type=int)
         parser.add_option("--resume_from", dest="resume_from", default="", type=str)
         parser.add_option("--no_hough", dest="no_hough", default=False, action="store_true")
+        parser.add_option("--init_true", dest="init_true", default=False, action="store_true")
+
         (options, args) = parser.parse_args()
-        main(seed=options.seed, n_events=options.n_events, resume_from=options.resume_from, no_hough=options.no_hough)
+        main(seed=options.seed, n_events=options.n_events, 
+             resume_from=options.resume_from, no_hough=options.no_hough,
+             init_true=options.init_true)
     except KeyboardInterrupt:
         raise
     except Exception as e:

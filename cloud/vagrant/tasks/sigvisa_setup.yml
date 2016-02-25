@@ -27,6 +27,9 @@
        recursive=true
        force=yes
   become_user: sigvisa
+- name: delete db_cache subdir
+  shell: 'rm -r /home/sigvisa/python/sigvisa/db_cache'
+  become_user: sigvisa
 - name: create db_cache subdir
   file: path=/home/sigvisa/python/sigvisa/db_cache state=directory
   become_user: sigvisa
