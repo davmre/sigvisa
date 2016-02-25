@@ -38,6 +38,9 @@ typedef struct EventLocationPrior_t
   double zstep;
   int numlon;
   int numlat;
+
+  double minlon;
+  double minz;
   
   double * p_bucketprob;  /* numlon x numlat array of probabilities */
 

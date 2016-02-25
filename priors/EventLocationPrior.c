@@ -41,6 +41,7 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
 {
   FILE * fp;
   double uniform;
+  double minlon, maxlon, minz, maxz;
   int lonidx;
   int latidx;
   double cum_lon_prob;
@@ -58,6 +59,13 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
     fprintf(stderr, "error reading uniform prior from %s\n", filename);
     exit(1);
   }
+
+  if (4 != fscanf(fp, "%lg %lg %lg %lg\n", &minlon, &maxlon, &minz, &maxz))
+  {
+    fprintf(stderr, "error reading region bounds from %s\n", filename);
+    exit(1);
+  }
+
   
   if (2 != fscanf(fp, "%lg %lg\n", &dist->lonstep, &dist->zstep))
   {
@@ -65,8 +73,11 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
     exit(1);
   }
 
-  dist->numlon = (int) (360.0 / dist->lonstep);
-  dist->numlat = (int) (2.0 / dist->zstep);
+  dist->numlon = (int) ((maxlon-minlon) / dist->lonstep);
+  dist->numlat = (int) ((maxz-minz) / dist->zstep);
+
+  dist->minlon = minlon;
+  dist->minz = minz;
 
   dist->p_bucketprob = (double *)calloc(dist->numlon * dist->numlat, 
                                         sizeof(*dist->p_bucketprob));
@@ -192,11 +203,18 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
     if (lon == 180)
       lon = -180;
 
-    lonidx = (int) floor((lon - (-180)) / dist->lonstep);
-    latidx = (int) floor((LAT2Z(lat) - (-1)) / dist->zstep);
+    lonidx = (int) floor((lon - (dist->minlon)) / dist->lonstep);
+    latidx = (int) floor((LAT2Z(lat) - (dist->minz)) / dist->zstep);
+
+
+    if (lonidx >= dist->numlon || latidx >= dist->numlat) {
+      // if location is valid but outside of the region,
+      // return some tiny fixed value
+      return -40;
+    }
     
-    lon_rem = lon - (-180) - (lonidx * dist->lonstep);
-    z_rem = LAT2Z(lat) - (-1) - (latidx * dist->zstep);
+    lon_rem = lon - (dist->minlon) - (lonidx * dist->lonstep);
+    z_rem = LAT2Z(lat) - (dist->minz) - (latidx * dist->zstep);
 
     lonidx2 = (lonidx + 1) % dist->numlon;
     
@@ -223,7 +241,7 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
   if (depth == -1){
     return r;
   } else {
-    return depth_lp(depth);
+    return r + depth_lp(depth);
   }
 }
 
@@ -300,10 +318,10 @@ void EventLocationPrior_Sample(const EventLocationPrior_t * dist,
   int latidx;
   
   lonidx = sample_vec(dist->numlon, dist->p_lonprob);
-  *p_lon = -180 + (lonidx + RAND_DOUBLE) * dist->lonstep;
+  *p_lon = dist->minlon + (lonidx + RAND_DOUBLE) * dist->lonstep;
 
   latidx = sample_vec(dist->numlat, dist->p_latprob + lonidx * dist->numlat);
-  *p_lat = RAD2DEG * asin(-1 + (latidx + RAND_DOUBLE) * dist->zstep);
+  *p_lat = RAD2DEG * asin(dist->minz + (latidx + RAND_DOUBLE) * dist->zstep);
 
   
   double u = RAND_UNIFORM(0, 1);
