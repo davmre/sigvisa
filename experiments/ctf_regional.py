@@ -46,7 +46,7 @@ def relevant_events(region):
     return evs
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
 
     if target_evid > 0:
         region_stime = stimes[target_evid]
@@ -69,6 +69,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
     region = Region(lons=region_lon, lats=region_lat, 
                     times=(region_stime, region_etime),
                     rate_bulletin="isc", 
+                    min_mb=2.5,
                     rate_train_start=1167609600,
                     rate_train_end=1199145600)
 
@@ -82,7 +83,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     inference_region=region,
                     dummy_fallback=True,
                     raw_signals=raw_signals,
-                    hack_param_constraint=True,
+                    hack_param_constraint=hack_constraint,
                     vert_only=True)
 
 
@@ -133,6 +134,8 @@ if __name__ == "__main__":
                       help="comma-separated phases")
     parser.add_option("--fix_outside_templates", dest="fix_outside_templates", default=False, action="store_true",
                       help="don't do inference over templates of events outside the region")
+    parser.add_option("--no_hack_constraint", dest="no_hack_constraint", default=False, action="store_true",
+                      help="don't force template params to reasonable values")
     parser.add_option("--target_evid", dest="target_evid", default=-1, type=int,
                       help="evid in training set to attempt to infer. overrides --hour.")
     parser.add_option("--hour", dest="hour", default=0.0, type=float,
@@ -161,4 +164,4 @@ if __name__ == "__main__":
     bands = options.bands.split(",")
     phases = options.phases.split(",")
 
-    main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid, stime=options.stime, etime=options.etime)
+    main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid, stime=options.stime, etime=options.etime, hack_constraint=not options.no_hack_constraint)
