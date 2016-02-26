@@ -21,7 +21,7 @@ region_lat = (32, 49)
 region_stime = 1239040000.0
 region_etime = region_stime + 3600.0
 
-def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False):
+def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, hack_event_rate=True):
 
 
 
@@ -66,6 +66,10 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False):
     else:
         sg = rs.build_sg(ms1)
         ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=300)
+
+
+    if hack_event_rate:
+        sg.event_rate = n_events / float(sg.event_end_time - sg.event_start_time)
 
     #k = sg.evnodes.keys()
     #for eid in k:

@@ -102,6 +102,9 @@ def main():
         phase1 = phase1.strip()
         phase2 = phase2.strip()
 
+        if str(evid1).startswith("33") or str(evid2).startswith("33"):
+            import pdb; pdb.set_trace()
+        
         leadin_s = 5.0
         try:
             wave1,srate = extract_phase_window(options.sta, chan, phase1, atime1, max_len+5, options.filter_str, evid1, leadin_s=leadin_s)

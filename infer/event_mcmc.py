@@ -746,7 +746,7 @@ def swap_association_move(sg, wn, repropose_events=False, debug_probs=False, sta
     rn = set(relevant_nodes_hack(t1nodes) + relevant_nodes_hack(t2nodes))
 
     # if we're using GP wiggle models, swapping templates will affect the wiggle prior
-    if len(wn.wavelet_param_models) > 0 and not isinstance(wn.wavelet_param_models[0], Gaussian):
+    if len(wn.wavelet_param_models) > 0:
         rn.add(wn)
 
     if repropose_events:

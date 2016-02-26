@@ -51,10 +51,19 @@ def set_templates_from_fitid(sg, eid, fitid, wave):
 
 
 def get_previous_fitid(runid, evid, sta):
-    sql = "select fitid from sigvisa_coda_fit where evid=%d and sta='%s' and runid=%d" % (evid, sta, runid)
+
     s = Sigvisa()
-    r = s.sql(sql)
-    fitid = int(r[0][0])
+
+    try:
+        sql = "select fitid from sigvisa_coda_fit where evid=%d and sta='%s' and runid=%d" % (evid, sta, runid)
+        r = s.sql(sql)
+        fitid = int(r[0][0])
+    except:
+        sta = s.get_default_sta(sta)
+        sql = "select fitid from sigvisa_coda_fit where evid=%d and sta='%s' and runid=%d" % (evid, sta, runid)
+        r = s.sql(sql)
+        fitid = int(r[0][0])
+        
     return fitid
 
 
@@ -81,7 +90,8 @@ def setup_graph(event, sta, chan, band,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, 
                       runids = runids,
-                      uatemplate_rate=1e-4,
+                      uatemplate_rate=uatemplate_rate,
+                      min_mb=1.0,
                       dummy_fallback=dummy_fallback,
                       raw_signals=raw_signals)
 
@@ -111,7 +121,10 @@ def setup_graph(event, sta, chan, band,
 
     #sg.fix_arrival_times()
 
-    sg.uatemplate_rate = 1e-6
+
+    phases = sg.ev_arriving_phases(1, wave["sta"])
+    assert( "P"  in phases or "Pg"  in phases or "Pn"  in phases or "pP"  in phases)
+        
 
     return sg
 
@@ -148,6 +161,8 @@ def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
             best_prob = v_p
             best_vals = v_result
             best_nm = nm
+
+
 
     #nm, nmid = best_nm
     #wn.set_noise_model(nm, nmid)
