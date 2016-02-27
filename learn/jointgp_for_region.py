@@ -99,7 +99,6 @@ def main():
     parser.add_option("--subsample_evs", dest="subsample_evs", default=None, type=int)    
     parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     parser.add_option("--precision", dest="precision", default=None, type=float)
-    parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     (options, args) = parser.parse_args()
 
     if options.phases is not None:
