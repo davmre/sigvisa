@@ -416,7 +416,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
     # run inference with appropriate params
     # and hooks to monitor convergence?
 
-    logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True, max_dumps=max_dumps, run_dir=None)
+    logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True, max_dumps=max_dumps, run_dir=run_dir)
     logger.dump(sg)
 
     sg.seed = modelspec.seed
@@ -494,13 +494,14 @@ def do_coarse_to_fine(modelspecs, runspec,
                                model_switch_lp_threshold=model_switch_lp_threshold,
                                max_steps = max_steps_intermediate, 
                                run_dir=run_dir, **kwargs)
-        run_dir += "1"
+        run_dir = run_dir + ".1"
         sg_old, ms_old = sg, modelspec
 
     sg, modelspec = sgs[-1], modelspecs[-1]
     initialize_from(sg, modelspec, sg_old, ms_old)
     do_inference(sg, modelspec, runspec,
                  model_switch_lp_threshold=None,
+                 run_dir=run_dir,
                  max_steps = max_steps_final, **kwargs)
 
 
