@@ -62,7 +62,9 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
     if etime is not None:
         region_etime = etime
 
-    rs = TimeRangeRunSpec(sites=stas, runids=(runid,), start_time=region_stime, end_time=region_etime)
+    runids=(runid,), 
+
+    rs = TimeRangeRunSpec(sites=stas, start_time=region_stime, end_time=region_etime)
 
     region_stime = rs.start_time
     region_etime = rs.end_time
@@ -80,6 +82,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     max_hz=hz,
                     phases=phases,
                     bands=bands,
+                    runids=runids,
                     inference_region=region,
                     dummy_fallback=True,
                     raw_signals=raw_signals,

@@ -22,7 +22,7 @@ class RunSpec(object):
         if modelspec.signal_params['raw_signals']:
             kwargs["raw_signals"] = True
 
-        sg = SigvisaGraph(runids=self.runids, **kwargs)
+        sg = SigvisaGraph(**kwargs)
         waves = self.get_waves(modelspec)
         for (wave, wave_env) in waves:
             sg.add_wave(wave, wave_env=wave_env)
@@ -35,9 +35,8 @@ class RunSpec(object):
 
 class SyntheticRunSpec(RunSpec):
 
-    def __init__(self, sw, runid, init_noise=False, raw_signals=False):
+    def __init__(self, sw, init_noise=False, raw_signals=False):
         self.sw = sw
-        self.runids = (runid,)
         self.init_noise = init_noise
         self.raw_signals = raw_signals
 
@@ -70,12 +69,11 @@ class SyntheticRunSpec(RunSpec):
 
 class EventRunSpec(RunSpec):
 
-    def __init__(self, sites=None, stas=None, evids=None, evs=None, runids=None, initialize_events=True,
+    def __init__(self, sites=None, stas=None, evids=None, evs=None,  initialize_events=True,
                  pre_s=10, post_s=120, force_event_wn_matching=True, disable_conflict_checking=False):
 
         self.sites = sites
         self.stas = stas
-        self.runids = runids
         self.evids = evids
         self.evs = evs
         self.pre_s = pre_s
@@ -199,7 +197,7 @@ class EventRunSpec(RunSpec):
         if modelspec.signal_params['raw_signals']:
             kwargs["raw_signals"] = True
 
-        sg = SigvisaGraph(runids=self.runids, **kwargs)
+        sg = SigvisaGraph(**kwargs)
         waves = self.get_waves(modelspec)
         for (wave, wave_env) in waves:
             sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking, wave_env=wave_env)
@@ -213,10 +211,9 @@ class EventRunSpec(RunSpec):
 
 
 class TimeRangeRunSpec(RunSpec):
-    def __init__(self, sites, dataset="training", hour=0.0, len_hours=2.0, start_time=None, end_time=None, runids=None, initialize_events=None):
+    def __init__(self, sites, dataset="training", hour=0.0, len_hours=2.0, start_time=None, end_time=None, initialize_events=None):
 
         self.sites = sites
-        self.runids = runids
 
         if start_time is not None:
             self.start_time = start_time
@@ -265,25 +262,28 @@ class TimeRangeRunSpec(RunSpec):
 
         return waves
 
+    def _get_events_bulletin(self, bulletin):
+        s = Sigvisa()
+        cursor = s.dbconn.cursor()
+
+        events, orid2num = read_events(cursor, self.start_time, self.end_time, bulletin)
+        events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
+        evs = []
+        eid = 1
+        for evarr in events:
+            ev = get_event(evid=evarr[EV_EVID_COL])
+            ev.eid = eid
+            eid += 1
+            evs.append(ev)
+
+        cursor.close()
+        return evs
 
     def get_init_events(self):
         if self.initialize_events is None:
             evs = []
-        elif self.initialize_events == "leb":
-            s = Sigvisa()
-            cursor = s.dbconn.cursor()
-
-            events, orid2num = read_events(cursor, self.start_time, self.end_time, 'leb')
-            events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
-            evs = []
-            eid = 1
-            for evarr in events:
-                ev = get_event(evid=evarr[EV_EVID_COL])
-                ev.eid = eid
-                eid += 1
-                evs.append(ev)
-
-            cursor.close()
+        elif self.initialize_events == "leb" or self.initialize_events=="isc":
+            evs = self._get_events_bulletin(self.initialize_events)
         elif isinstance(self.initialize_events, list) or \
              isinstance(self.initialize_events, tuple):
             evs = [get_event(evid=evid) for evid in self.initialize_events]
@@ -312,6 +312,7 @@ class ModelSpec(object):
             'hack_coarse_tts': None,
             'hack_coarse_signal': None,
             'inference_region': None,
+            'runids': (),
         }
         signal_params = {
             'max_hz': 5.0,
@@ -405,7 +406,8 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
 def do_inference(sg, modelspec, runspec, max_steps=None, 
                  model_switch_lp_threshold=500, dump_interval_s=10, 
                  max_dumps=5,
-                 print_interval_s=10, swapper=None, run_dir=None):
+                 print_interval_s=10, 
+                 swapper=None, run_dir=None):
 
     # save 'true' events if they are known
     # build logger
@@ -429,6 +431,14 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
 
         with open(os.path.join(logger.run_dir, "sw.pkl"), "wb") as f:
             pickle.dump(sw, f)
+
+    try:
+        evs = runspec._get_events_bulletin("isc")
+        with open(os.path.join(logger.run_dir, "events.pkl"), "wb") as f:
+            pickle.dump(evs, f)
+    except:
+        pass
+
 
     np.random.seed(modelspec.seed)
 

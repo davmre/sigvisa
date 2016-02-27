@@ -28,7 +28,7 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, ha
     min_mb = 2.5
     uatemplate_rate=1e-4
     hz = 2.0
-    runid=10
+    runids=10
     phases=["P", "S", "Lg", "PcP", "ScP", "pP", "Pg"]
 
     region = Region(lons=region_lon, lats=region_lat, 
@@ -40,7 +40,7 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, ha
     sw = SampledWorld(seed=seed)
     sw.sample_sg(runid=runid, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=min_mb, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=None, region=region)
 
-    rs = SyntheticRunSpec(sw=sw, runid=runid)
+    rs = SyntheticRunSpec(sw=sw)
 
 
 
@@ -49,6 +49,7 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, ha
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
                     phases=phases,
+                    runids=(runid,),
                     inference_region=region,
                     dummy_fallback=True,
                     hack_param_constraint=False,

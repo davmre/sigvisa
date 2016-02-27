@@ -31,7 +31,7 @@ def load_noise_model_prior(sta, chan=None, band=None, hz=None, runids=None, env=
     s = Sigvisa()
     c = s.dbconn.cursor()
     c.execute(mean_query)
-    print mean_query
+    #print mean_query
     fmean, tmean = c.fetchone()
     c.execute(var_query)
     fvar, tvar = c.fetchone()

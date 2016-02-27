@@ -21,6 +21,24 @@ def sync_serializations(hostname, jobid, local_dir):
     serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
     subprocess.call(["rsync", "-avz", "-e", "ssh", "vagrant@%s:%s" % (hostname, serial_dir), local_dir])
 
+def write_syncscript(jobdir, jobs, jm, fname):
+    with open(os.path.join(jobdir, fname), "w") as f:
+        for (jobid, cmd, desc) in jobs:
+            local_dir = os.path.join(jobdir, "%s" % jobid)
+            hostname, _ = jm.hosts_by_job[jobid]
+            serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
+            sync_cmd = "rsync -avz -e ssh vagrant@%s:%s %s" % (hostname, serial_dir, local_dir)
+            f.write(sync_cmd + "\n")
+
+def write_killscript(jobdir, jobs, jm, fname):
+    with open(os.path.join(jobdir, fname), "w") as f:
+        for (jobid, cmd, desc) in jobs:
+            host, pid = jm.hosts_by_job[jobid]
+            cmd1 = "ssh vagrant@%s 'sudo pkill -TERM -P %d'" % (host, pid)
+            cmd2 = "ssh vagrant@%s 'sudo kill %d'" % (host, pid)
+            f.write(cmd1 + "\n")
+            f.write(cmd2 + "\n")
+
 def parallel_inference(infer_script, label, nnodes, 
                        stime, etime, 
                        block_s=3600, 
@@ -76,6 +94,9 @@ def parallel_inference(infer_script, label, nnodes,
 
                 hostname, _ = jm.hosts_by_job[jobid]
                 sync_serializations(hostname, jobid, local_dir)
+
+            write_syncscript(jobdir, jobs, jm, "sync.sh")
+            write_killscript(jobdir, jobs, jm, "kill.sh")
 
             time.sleep(sync_s)        
             t = time.time()
