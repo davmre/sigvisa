@@ -12,7 +12,7 @@ import os, sys, traceback
 import cPickle as pickle
 from optparse import OptionParser
 
-def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, **kwargs):
+def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, rundir=None, **kwargs):
 
     #isc_evs = [load_isc(evid) for evid in evids]
     #main_ev = isc_evs[0]
@@ -54,7 +54,8 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, **kwargs):
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False)
 
     ms = [ms1, ms2, ms3, ms4]
-    do_coarse_to_fine(ms, rs, max_steps_intermediate=None, model_switch_lp_threshold=None, max_steps_final=300)
+    do_coarse_to_fine(ms, rs, max_steps_intermediate=None, model_switch_lp_threshold=None, 
+                      max_steps_final=300, rundir=rundir)
 
 
 def get_evs(min_lon, max_lon, min_lat, max_lat, min_time, max_time, evtype="isc", precision=None):
@@ -99,6 +100,7 @@ def main():
     parser.add_option("--subsample_evs", dest="subsample_evs", default=None, type=int)    
     parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     parser.add_option("--precision", dest="precision", default=None, type=float)
+    parser.add_option("--rundir", dest="rundir", default=None, type=str)
 
     (options, args) = parser.parse_args()
 
@@ -153,6 +155,7 @@ def main():
                         max_hz=options.max_hz,
                         phases=phases,
                         dummy_prior=dummyPrior,
+                        rundir=options.rundir,
                         dummy_fallback=True)
 
 

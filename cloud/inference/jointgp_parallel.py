@@ -3,6 +3,8 @@ import subprocess32 as subprocess
 import time
 import numpy as np
 import shutil
+import uuid
+import cPickle as pickle
 
 from optparse import OptionParser
 
@@ -16,10 +18,13 @@ from fabric.api import env
 env.user = 'vagrant'
 env.key_filename = '/home/dmoore/.ssh/fabric_is_terrible.key'
 
+def dump_jobs(jobs, jobfile):
+    with open(jobfile, "wb") as f:
+        pickle.dump(jobs, f)
 
-def parallel_jointgp_alignment(label, clusters_evids, stas, runid, nnodes=2, ncpus=4):
 
-    infer_script = "learn/jointgp_for_region.py  --runid=1 "
+def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script, jobfile=None, nnodes=2, ncpus=4):
+
     infer_script = "/bin/bash /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
 
 
@@ -41,14 +46,19 @@ def parallel_jointgp_alignment(label, clusters_evids, stas, runid, nnodes=2, ncp
         for sta in stas:
             for evidfile in clusters_evids:
                 fname = os.path.basename(evidfile)
-                cmd = "%s --sta=%s --evidfile=%s" % (infer_script, sta, fname)
+                rundir = "%s_%s_%s_%s" % (sta, fname, label, str(uuid.uuid4())[:4])
+                cmd = "%s --sta=%s --evidfile=%s --rundir=%s" % (infer_script, sta, fname, rundir)
                 print cmd
                 jobid = blocking_run_job(jm, cmd, sudo=True, user="sigvisa")
-                jobs.append((jobid, cmd, sta, evidfile))
+
+                host, pid = jm.hosts_by_job[jobid]
+                jobs.append((jobid, cmd, sta, evidfile, host, pid, rundir))
+                if jobfile is not None:
+                    dump_jobs(jobs, jobfile)
 
     except KeyboardInterrupt as e:
         yn = raw_input("Kill currently running jobs (y/n)?: ")
-        for (jobid, cmd, sta, evidfile) in jobs:
+        for (jobid, cmd, sta, evidfile, host, pid, rundir) in jobs:
             host, pid = jm.hosts_by_job[jobid]
             print "jobid", jobid, "host", host, "pid", pid
             if yn.lower().startswith("y"):
@@ -65,16 +75,14 @@ def main():
                       help="number of cloud nodes to execute on")
     parser.add_option("--ncpus", dest="ncpus", default=4, type="int",
                       help="number of cpus per node")
-    parser.add_option("--runid", dest="runid", default=11, type="int",
-                      help="runid from which to load param models for envelopes")
-    parser.add_option("--runid_raw", dest="runid_raw", default=12, type="int",
-                      help="runid from which to load param models for raw signals")
     parser.add_option("--label", dest="label", default="", type="str",
                       help="arbitrary label given to this inference run")
     parser.add_option("--cluster_dir", dest="cluster_dir", default="", type="str",
                       help="directory containing files listing evids for each cluster")
     parser.add_option("--stations", dest="stations", default="", type="str",
                       help="comma-separated list of stations")
+    parser.add_option("--jobfile", dest="jobfile", default="", type="str",
+                      help="file in which to record job progress")
 
 
     (options, args) = parser.parse_args()
@@ -83,7 +91,8 @@ def main():
 
     assert(len(options.label) > 0)
     assert(len(options.stations) > 0)
-
+    assert(len(options.jobfile) > 0)
+    assert(len(infer_script) > 0)
 
     cevids = []
     bdir = "train_clusters"
@@ -92,7 +101,9 @@ def main():
     
     stas = options.stations.split(",")
 
-    parallel_jointgp_alignment(options.label, cevids, stas, nnodes=options.nnodes, ncpus=options.ncpus)
+    parallel_jointgp_alignment(options.label, cevids, stas, infer_script, 
+                               jobfile=options.jobfile,
+                               nnodes=options.nnodes, ncpus=options.ncpus)
 
 
 if __name__ == "__main__":

@@ -477,31 +477,31 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
 def do_coarse_to_fine(modelspecs, runspec,
                       model_switch_lp_threshold=1000,
                       max_steps_intermediate=100,
-                      max_steps_final=5000, **kwargs):
+                      max_steps_final=5000, rundir=None,
+                      **kwargs):
 
     sg_old, ms_old = None, None
 
     sgs = [runspec.build_sg(modelspec) for modelspec in modelspecs]
 
-    run_dir = None
     for (sg, modelspec) in zip(sgs[:-1], modelspecs[:-1]):
         if sg_old is None:
             initialize_sg(sg, modelspec, runspec)
         else:
             initialize_from(sg, modelspec, sg_old, ms_old)
 
-        run_dir = do_inference(sg, modelspec, runspec,
+        rundir = do_inference(sg, modelspec, runspec,
                                model_switch_lp_threshold=model_switch_lp_threshold,
                                max_steps = max_steps_intermediate, 
-                               run_dir=run_dir, **kwargs)
-        run_dir = run_dir + ".1"
+                               run_dir=rundir, **kwargs)
+        rundir = rundir + ".1"
         sg_old, ms_old = sg, modelspec
 
     sg, modelspec = sgs[-1], modelspecs[-1]
     initialize_from(sg, modelspec, sg_old, ms_old)
     do_inference(sg, modelspec, runspec,
                  model_switch_lp_threshold=None,
-                 run_dir=run_dir,
+                 run_dir=rundir,
                  max_steps = max_steps_final, **kwargs)
 
 
