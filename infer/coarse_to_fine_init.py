@@ -110,7 +110,7 @@ class EventRunSpec(RunSpec):
         if evs is None:
             evs = self.evs
 
-        def merge_overlaps(sorted_intervals, slack=3600.0):
+        def merge_overlaps(sorted_intervals, slack=600.0):
             intervals_new = []
             merged = set()
 
