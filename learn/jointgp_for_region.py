@@ -12,7 +12,7 @@ import os, sys, traceback
 import cPickle as pickle
 from optparse import OptionParser
 
-def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, **kwargs):
+def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, resume_from=None, **kwargs):
 
     #isc_evs = [load_isc(evid) for evid in evids]
     #main_ev = isc_evs[0]
@@ -57,9 +57,16 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, **kwargs):
                     **kwargs)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False)
 
-    ms = [ms1, ms2, ms3, ms4]
-    do_coarse_to_fine(ms, rs, max_steps_intermediate=None, model_switch_lp_threshold=None, max_steps_final=300)
-
+    if resume_from is None:
+        ms = [ms1, ms2, ms3, ms4]
+        do_coarse_to_fine(ms, rs, max_steps_intermediate=None, model_switch_lp_threshold=None, max_steps_final=300)
+    else:
+        with open(resume_from, 'rb') as f:
+            sg = pickle.load(f)
+        do_inference(sg, ms4, rs, dump_interval_s=10, 
+                     print_interval_s=10, 
+                     max_steps=300,
+                     model_switch_lp_threshold=None)
 
 def get_evs(min_lon, max_lon, min_lat, max_lat, min_time, max_time, evtype="isc", precision=None):
     if evtype=="isc" and precision is not None:
@@ -103,6 +110,7 @@ def main():
     parser.add_option("--subsample_evs", dest="subsample_evs", default=None, type=int)    
     parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     parser.add_option("--precision", dest="precision", default=None, type=float)
+    parser.add_option("--resume_from", dest="resume_from", default=None, type=str)
     (options, args) = parser.parse_args()
 
     if options.phases is not None:
@@ -156,7 +164,8 @@ def main():
                         max_hz=options.max_hz,
                         phases=phases,
                         dummy_prior=dummyPrior,
-                        dummy_fallback=True)
+                        dummy_fallback=True,
+                        resume_from=options.resume_from)
 
 
 if __name__ == "__main__":

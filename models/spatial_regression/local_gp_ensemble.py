@@ -185,6 +185,15 @@ class LocalGPEnsemble(ParamModel):
 
         return features
 
+    def sample(self, cond, include_obs=True):
+
+        mean = self.predict(cond)
+        variance = self.variance(cond, include_obs=include_obs)
+
+        return np.random.randn() * np.sqrt(variance) + mean
+
+        
+
     def predict(self, cond):
 
         # TODO: cache features and R between predict and variance calls..
