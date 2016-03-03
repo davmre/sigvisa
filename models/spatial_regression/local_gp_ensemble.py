@@ -329,11 +329,14 @@ class LocalGPEnsemble(ParamModel):
         with open(fname, "wb") as f:
             pickle.dump(self, f)
 
-        
+
 
 def optimize_localgp_hyperparams(noise_prior=None,
                                  cov_main=None, 
                                  cluster_centers=None,
+                                 y_list = None,
+                                 yvars_list = None,
+                                 force_unit_var=False,
                                  **kwargs):
 
     n_clusters = len(cluster_centers)
@@ -343,6 +346,93 @@ def optimize_localgp_hyperparams(noise_prior=None,
     nparams = 1 + n_wfn + n_dfn 
     nparams *= n_clusters
 
+    if y_list is None:
+        y_list = [kwargs["y"],]
+        del kwargs["y"]
+
+    if yvars_list is None:
+        if "yvars" in kwargs:
+            yvars_list = [kwargs["yvars"]]
+            del kwargs["yvars"]
+        else:
+            yvars_list = [None,] * len(y_list)
+
+    def expand_reduced_params(rparams):
+        # given a set of params that includes only the signal/noise
+        # ratio, expand to the full parameterization assuming unit
+        # total variance.
+        
+        # standard param order:
+        # noise var, signal var, lscale horiz, lscale depth
+
+        params = []
+        for i in range(0, len(rparams), 3):
+            # ratio = nv/sv = nv / (1-nv)
+            ratio10 = rparams[i]
+            ratio = ratio10 / 10.0
+
+            nv = ratio / (1.+ratio)
+            if nv == 1.0:
+                nv = 1.-1e-10
+            elif nv == 0.0:
+                nv = 1e-10
+
+            sv = 1.0-nv
+
+            lscale_horiz = rparams[i+1]
+            lscale_depth = rparams[i+2]
+            
+            params.append(nv)
+            params.append(sv)
+            params.append(lscale_horiz)
+            params.append(lscale_depth)
+
+
+        return np.array(params)
+
+    def reduce_params(params):
+        rparams = []
+        for i in range(0, len(params), 4):
+            # ratio = nv/sv = nv / (1-nv)
+            nv = params[i]
+            sv = params[i+1]
+            ratio = nv/sv
+            ratio10 = ratio * 10
+
+            lscale_horiz = params[i+2]
+            lscale_depth = params[i+3]
+            
+            rparams.append(ratio10)
+            rparams.append(lscale_horiz)
+            rparams.append(lscale_depth)
+        
+        return np.array(rparams)
+
+    def grad_reduced_params(gfull, params):
+        rgrad = []
+        
+        for i in range(0, len(gfull), 4):
+            d_nv = gfull[i]
+            d_sv = gfull[i+1]
+            d_lhoriz = gfull[i+2]
+            d_ldepth = gfull[i+3]
+
+            nv = params[i]
+            sv = params[i+1]
+            ratio = nv/sv
+
+            # dll_dratio = dll_dnv dnv_dratio + dll_dsv dsv_dratio            
+            d_ratio = d_nv * 1./(ratio+1.)**2 + d_sv * -1. / (ratio+1.)**2
+
+            d_ratio10 = d_ratio / 10.0
+
+            rgrad.append(d_ratio10)
+            rgrad.append(d_lhoriz)
+            rgrad.append(d_ldepth)
+
+        return np.array(rgrad)
+
+            
     def covs_from_vector(params):
         covs = []
         noise_vars = []
@@ -372,17 +462,26 @@ def optimize_localgp_hyperparams(noise_prior=None,
 
         try:
             expv = np.exp(v)
+            if force_unit_var:
+                expv = expand_reduced_params(expv)
+
             cluster_covs, cluster_noise_vars = covs_from_vector(expv)
 
-            grad_v = np.zeros(v.shape)
+            grad_expv = np.zeros(expv.shape)
 
+            ll = 0.0
+            for i, (y, yvars) in enumerate(zip(y_list, yvars_list)):
 
-            lgps = LocalGPEnsemble(cluster_centers=cluster_centers, 
-                                   cluster_covs=cluster_covs,
-                                   cluster_noise_vars=cluster_noise_vars, **kwargs)
-            ll = lgps.log_likelihood()
-            grad_expv = lgps.log_likelihood_gradient()
-            del lgps
+                lgps = LocalGPEnsemble(cluster_centers=cluster_centers, 
+                                       cluster_covs=cluster_covs,
+                                       cluster_noise_vars=cluster_noise_vars, 
+                                       y=y, yvars=yvars, **kwargs)
+
+                param_ll = lgps.log_likelihood()
+                ll += param_ll
+                grad_expv += lgps.log_likelihood_gradient()
+                del lgps
+
 
             prior_grad = []
             priorll = 0.0
@@ -398,12 +497,19 @@ def optimize_localgp_hyperparams(noise_prior=None,
             ll += priorll
 
 
+            if force_unit_var:
+                grad_expv = grad_reduced_params(grad_expv, expv)
 
-            grad_v = grad_expv * expv
+            grad_v = grad_expv * np.exp(v)
 
+            
+            #print "expv", expv, "ll", ll
+        
             if np.isinf(ll):
                 import pdb; pdb.set_trace()
 
+            if np.isinf(np.sum(grad_v)):
+                import pdb; pdb.set_trace()
 
             if np.isnan(grad_v).any():
                 print "warning: nans in gradient", grad_v
@@ -430,18 +536,44 @@ def optimize_localgp_hyperparams(noise_prior=None,
         #    grad = np.zeros((len(v),))
         #print "hyperparams", v, "ll", ll, 'grad', grad
 
+
         return -1 * ll, (-1 * grad_v  if grad_v is not None else None)
 
     def build_gp(v, **kwargs2):
-        cluster_covs, cluster_noise_vars = covs_from_vector(v)
-        kw = dict(kwargs.items() + kwargs2.items())
-        gp = LocalGPEnsemble(cluster_centers=cluster_centers,
-                             cluster_noise_vars=cluster_noise_vars, 
-                             cluster_covs=cluster_covs, **kw)
-        return gp
+        expv = np.exp(v)
+        if force_unit_var:
+            expv = expand_reduced_params(expv)
 
+        cluster_covs, cluster_noise_vars = covs_from_vector(expv)
+        kw = dict(kwargs.items() + kwargs2.items())
+
+        gps = []
+
+        for (y, yvars) in zip(y_list, yvars_list):
+            gp = LocalGPEnsemble(cluster_centers=cluster_centers,
+                                 cluster_noise_vars=cluster_noise_vars, 
+                                 cluster_covs=cluster_covs, 
+                                 y=y, yvars=yvars, **kw)
+            gps.append(gp)
+
+        if len(gps) == 1:
+            return gp
+        else:
+            return gps
 
     noise_var_default = noise_prior.predict()
-    x0 = [[noise_var_default,] + list(cov_main.flatten()) for i in range(n_clusters)]
-    x0 = np.log(np.concatenate(x0))
+    if force_unit_var:
+        x0 = np.concatenate([[0.4, 0.6,] + list(cov_main.flatten())[1:] for i in range(n_clusters)])
+        x0 = reduce_params(x0)
+    else:
+        x0 = np.concatenate([[noise_var_default,] + list(cov_main.flatten()) for i in range(n_clusters)])
+
+
+    x0 = np.log(x0)
+
+
+    
+
     return nllgrad, x0, build_gp, covs_from_vector
+
+

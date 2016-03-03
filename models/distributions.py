@@ -353,6 +353,9 @@ class Beta(Distribution):
         lp = (alpha-1)*np.log(x) + (beta-1)*np.log(1-x) - scipy.special.betaln(alpha, beta)
         return lp
 
+    def deriv_log_p(self, x, *args, **kwargs):
+        return (self.alpha-1.) / x + (self.beta-1.) / (x-1.)
+
     def predict(self, **kwargs):
         return self.alpha/(self.alpha+self.beta)
 

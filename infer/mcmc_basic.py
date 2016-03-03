@@ -130,11 +130,9 @@ def mh_accept_util(lp_old, lp_new, log_qforward=0, log_qbackward=0, jacobian_det
             revert_move()
         return False
 
-
 def hmc_step_reversing(q, logpdf, logpdf_grad, L_blocks, eps,
                        block_size=5, min_block_std=1,
                        max_block_std=1000, force_p=None):
-
 
     def final_state(states, backstates):
         blocks_remaining  = L_blocks-i_blocks

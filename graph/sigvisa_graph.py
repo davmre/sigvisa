@@ -95,7 +95,7 @@ default_parametric_tmtypes = {'tt_residual': 'constant_laplacian',
 
 
 default_gp_parametric_tmtypes = {'amp_transfer': 'gplocal+lld+sin1', 
-                                 'tt_residual': 'constant_laplacian', 
+                                 'tt_residual': 'gplocal+lld+none', 
                                  'coda_decay': 'gplocal+lld+linear_distmb', 
                                  'peak_decay': 'gplocal+lld+linear_distmb', 
                                  'peak_offset': 'gplocal+lld+linear_mb', 

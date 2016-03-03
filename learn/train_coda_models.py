@@ -21,7 +21,9 @@ from sigvisa.models.wiggles.wavelets import construct_full_basis
 
 
 
-def get_training_data(runid, site, chan, band, phases, target,  require_human_approved=False, max_acost=np.inf, min_amp=-10, array=False, **kwargs):
+def get_training_data(runid, site, chan, band, phases, target,  
+                      require_human_approved=False, max_acost=np.inf, 
+                      min_amp=-10, array=False, **kwargs):
 
     s = Sigvisa()
     try:
@@ -54,7 +56,16 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
         if param_num is None:
             ymeans, yvars = zip(*[fit.messages[target] for fit in fits])
         else:
-            ymeans, yvars = zip(*[(fit.messages[target][0][param_num], fit.messages[target][1][param_num]) for fit in fits])
+            ymeans = []
+            yvars = []
+            for fit in fits:
+                try:
+                    ym, yv = fit.messages[target][0][param_num], fit.messages[target][1][param_num]
+                except:
+                    #print "no wiggle messages available for fit to evid %d at %s %s" % (fit.ev.evid, fit.sta, fit.phase)
+                    ym, yv = 0.0, 1e20
+                ymeans.append(ym)
+                yvars.append(yv)
         yvars = np.abs(yvars)
 
     except AttributeError:
@@ -83,16 +94,14 @@ def get_training_data(runid, site, chan, band, phases, target,  require_human_ap
 
     return X, ymeans, yvars, evids
 
-def chan_for_site(site, options):
+def chan_for_site(site, chan):
     s = Sigvisa()
-    if options.chan=="vertical":
+    if chan=="vertical":
         if s.earthmodel.site_info(site, 0.0)[3] == 1:
             chan = s.array_default_channel(site)
         else:
             sta=site
             chan = s.default_vertical_channel[sta]
-    else:
-        chan = options.chan
     chan = s.canonical_channel_name[chan]
     return chan
 
@@ -104,7 +113,7 @@ def explode_sites(options):
         sites = [s.get_default_sta(site) for site in sites]
     return sites
 
-def load_site_data(elems, target, param_num, **kwargs):
+def load_site_data(elems, target, **kwargs):
     X, y, yvars, evids = None, None, None, None
     for array_elem in elems:
         try:
@@ -119,6 +128,18 @@ def load_site_data(elems, target, param_num, **kwargs):
     if X is None:
         raise NoDataException("no data for target '%s' at any element of %s" % (target, elems))
     return X, y, yvars, evids
+
+def check_duplicates(cursor, model_type, site, chan, band, phase, runid, target):
+    # check for duplicate model
+    sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s'" % (
+        model_type, site, chan, band, phase, runid, target)
+    cursor.execute(sql_query)
+    dups = cursor.fetchall()
+    if len(dups) > 0 :
+        modelid = sorted(dups, key = lambda x : -x[1])[0][0]
+        return modelid
+    else:
+        return None
 
 def main():
     parser = OptionParser()
@@ -210,7 +231,7 @@ def main():
     sitechans = {}
     for site in allsites:
         try:
-            sitechans[site] = chan_for_site(site, options)
+            sitechans[site] = chan_for_site(site, options.chan)
         except KeyError as e:
             print "skipping site %s:" % site, e
             continue
@@ -267,7 +288,7 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
         except KeyError as e:
             continue
 
-        for (param_num, target) in enumerate(targets):
+        for target in targets:
 
             # we throw out all training examples below a certain
             # minimum amplitude.  in order to avoid biasing the
@@ -282,16 +303,11 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
             model_type = model_types[target]
 
             for phase in phases:
-                # check for duplicate model
-                sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s'" % (
-                    model_type, site, chan, band, phase, runid, target)
-                cursor.execute(sql_query)
-                dups = cursor.fetchall()
-                if len(dups) > 0 and not enable_dupes:
-                    modelid = sorted(dups, key = lambda x : -x[1])[0][0]
-                    modelids[target].append(modelid)
-                    print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, modelid)
 
+                dupe_modelid = check_duplicates(cursor, model_type, site, chan, band, phase, runid, target)
+                if dupe_modelid is not None and not enable_dupes:
+                    modelids[target].append(dupe_modelid)
+                    print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dupe_modelid)
                     continue
 
                 if array_joint:
@@ -300,7 +316,7 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     elems = [site,]
 
                 try:
-                    X, y, yvars, evids = load_site_data(elems, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, array = array_joint)
+                    X, y, yvars, evids = load_site_data(elems, target=target, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, array = array_joint)
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
@@ -309,7 +325,6 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
                     
-
                 model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=template_shape, unique=True)
 
                 evid_fname = os.path.splitext(os.path.splitext(os.path.splitext(model_fname)[0])[0])[0] + '.evids'

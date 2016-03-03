@@ -7,6 +7,8 @@ from svweb.event_views import *
 from svweb.site_views import *
 from svweb.wave_views import *
 from svweb.nm_views import *
+from svweb.predictive_views import *
+
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
@@ -27,6 +29,7 @@ urlpatterns = patterns('',
                        url(r'^runs/(?P<runid>\d+)/distance_decay.png$', data_distance_plot, name="distance_decay"),
                        url(r'^runs/(?P<runid>\d+)/pairwise.png$', data_pairwise_plot, name="pairwise_params"),
                        url(r'^runs/(?P<runid>\d+)/histogram.png$', data_histogram_plot, name="param_histogram"),
+                       url(r'^runs/(?P<runid>\d+)/pred_signal.png$', PredictedSignalView, name="pred_signal"),
                        url(r'^fits/(?P<fitid>\d+)/detail$', fit_detail, name="fit_run_detail"),
                        url(r'^fits/(?P<fitid>\d+)/rate/$', rate_fit, name="rate_fit"),
                        url(r'^fits/(?P<fitid>\d+).png$', FitImageView, name='visual'),

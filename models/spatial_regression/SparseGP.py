@@ -13,30 +13,28 @@ import marshal
 
 from sigvisa.treegp.gp import GP, GPCov
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
-from sigvisa.models.distributions import InvGamma, LogNormal
+from sigvisa.models.distributions import InvGamma, LogNormal, Beta
 
 
 
-default_other_params = (2.0, InvGamma(beta=5.0, alpha=.1),
+default_other_params = (2.0, InvGamma(beta=1.0, alpha=3.0),
         GPCov([3.4,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
-              wfn_priors=[InvGamma(beta=5.0, alpha=.5),],
-              dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
+              wfn_priors=[InvGamma(beta=3.0, alpha=4.0),],
+              dfn_priors =[LogNormal(mu=3, sigma=3.0), LogNormal(mu=3, sigma=3.0)]))
 
-default_amp_params = (.1, InvGamma(beta=.1, alpha=1),
-        GPCov([.1,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
-              wfn_priors=[InvGamma(beta=.1, alpha=1.0),],
-              dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
-
-default_phase_params = (1.0, InvGamma(beta=1.0, alpha=1),
-        GPCov([1.0,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
-              wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
-              dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 # wavelets should have almost no obs noise because that's already implicit in the kalman
 # filter posterior uncertainty
-default_wavelet_params = (.0001, InvGamma(beta=0.001, alpha=10.0),
-        GPCov([0.265,], [ 11.0, 5.0], dfn_str="lld",
-              wfn_priors=[InvGamma(beta=1.0, alpha=3.0),],
+#default_wavelet_params = (.0001, InvGamma(beta=0.001, alpha=10.0),
+#        GPCov([0.265,], [ 11.0, 5.0], dfn_str="lld",
+#              wfn_priors=[InvGamma(beta=1.0, alpha=3.0),],
+#              wfn_str="matern32",
+#              dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
+
+
+default_wavelet_params = (.5, Beta(beta=1.0, alpha=2.0),
+        GPCov([0.5,], [ 30.0, 30.0], dfn_str="lld",
+              wfn_priors=None,
               wfn_str="matern32",
               dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
@@ -46,8 +44,6 @@ start_params_lld = {"coda_decay": default_other_params,
                     "amp_transfer": default_other_params,
                     "peak_offset": default_other_params,
                     "tt_residual": default_other_params,
-                    "amp": default_amp_params,
-                    "phase": default_phase_params,
                     "db4_2.0_3_30": default_wavelet_params,
                     "db4_2.0_3_20.0": default_wavelet_params,
                     }

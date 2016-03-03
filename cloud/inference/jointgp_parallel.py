@@ -22,8 +22,9 @@ def dump_jobs(jobs, jobfile):
     with open(jobfile, "wb") as f:
         pickle.dump(jobs, f)
 
-
-def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script, jobfile=None, nnodes=2, ncpus=4):
+def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script, 
+                               old_jobfile=None, 
+                               jobfile=None, nnodes=2, ncpus=4):
 
     infer_script = "/bin/bash /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
 
@@ -33,36 +34,52 @@ def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script, jobfil
     hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
 
     remote_sigvisa_home = "/home/sigvisa/python/sigvisa"
-    for hostname in hostnames:
-        for evidfile in clusters_evids:
-            put_to_host(hostname, evidfile, remote_sigvisa_home, use_sudo=True)
+    #for hostname in hostnames:
+    #    for evidfile in clusters_evids:
+    #        put_to_host(hostname, evidfile, remote_sigvisa_home, use_sudo=True)
 
     log_prefix = lambda jobid : "/home/sigvisa/python/sigvisa/logs/mcmc/%s" % jobid
     jm = JobManager(hostnames, ncpus, log_prefix)
 
     jobs = []
 
+    if old_jobfile is not None:
+        with open(old_jobfile, "rb") as f:
+            oldjobs = pickle.load(f)
+    else:
+        oldjobs = None
+
     try:
         for sta in stas:
             for evidfile in clusters_evids:
                 fname = os.path.basename(evidfile)
-                rundir = "%s_%s_%s_%s" % (sta, fname, label, str(uuid.uuid4())[:4])
-                cmd = "%s --sta=%s --evidfile=%s --rundir=%s" % (infer_script, sta, fname, rundir)
+                cmd = "%s --sta=%s --evidfile=%s " % (infer_script, sta, fname)
                 print cmd
+
+                if oldjobs is not None and len([jb2 for (jb2, cmd2, sta2, evidfile2, host2, pid2) in oldjobs if cmd2==cmd]) > 0:
+                    print "skipping because we've already run this command"
+                    continue
+                else:
+                    print "not skipping"
+
+
                 jobid = blocking_run_job(jm, cmd, sudo=True, user="sigvisa")
 
                 host, pid = jm.hosts_by_job[jobid]
-                jobs.append((jobid, cmd, sta, evidfile, host, pid, rundir))
+                jobs.append((jobid, cmd, sta, evidfile, host, pid))
                 if jobfile is not None:
                     dump_jobs(jobs, jobfile)
 
     except KeyboardInterrupt as e:
         yn = raw_input("Kill currently running jobs (y/n)?: ")
-        for (jobid, cmd, sta, evidfile, host, pid, rundir) in jobs:
-            host, pid = jm.hosts_by_job[jobid]
-            print "jobid", jobid, "host", host, "pid", pid
-            if yn.lower().startswith("y"):
-                jm.kill_job(jobid)
+        for (jobid, cmd, sta, evidfile, host, pid) in jobs:
+            try:
+                host, pid = jm.hosts_by_job[jobid]
+                print "jobid", jobid, "host", host, "pid", pid
+                if yn.lower().startswith("y"):
+                    jm.kill_job(jobid)
+            except Exception as ee:
+                print "exception:", ee
         raise e
 
         
@@ -83,6 +100,8 @@ def main():
                       help="comma-separated list of stations")
     parser.add_option("--jobfile", dest="jobfile", default="", type="str",
                       help="file in which to record job progress")
+    parser.add_option("--old_jobfile", dest="old_jobfile", default=None, type="str",
+                      help="file from which to read job progress")
 
 
     (options, args) = parser.parse_args()
@@ -103,6 +122,7 @@ def main():
 
     parallel_jointgp_alignment(options.label, cevids, stas, infer_script, 
                                jobfile=options.jobfile,
+                               old_jobfile=options.old_jobfile,
                                nnodes=options.nnodes, ncpus=options.ncpus)
 
 

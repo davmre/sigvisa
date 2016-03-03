@@ -133,6 +133,7 @@ class JointGP(object):
     def conditional_dist(self, cond):
         eid, evdict = self._ev_from_pv(cond)
 
+
         # get the conditional distribution on one template value given the others
         try:
             m, v = self.posterior(eid)
@@ -228,6 +229,7 @@ class JointGP(object):
 
     def train_gp(self, holdout_eid=None, force_ll=False):
 
+
         noise_var, cov = self._get_cov()
 
         k = (holdout_eid, noise_var, tuple(cov.flatten()))
@@ -244,6 +246,8 @@ class JointGP(object):
                 y = y[mask]
                 yvar = yvar[mask]
                 compute_ll = force_ll
+                if len(y) == 0:
+                    return None
             else:
                 self.Z = np.sum([self.messages[eid][2] for eid in eids])
 

@@ -41,7 +41,7 @@
   command: /home/sigvisa/.virtualenvs/sigvisa/bin/python setup.py build_ext  --inplace
   args:
     chdir: /home/sigvisa/python/sigvisa 
-    creates: /home/sigvisa/python/sigvisa/ssms_c.so
+    # creates: /home/sigvisa/python/sigvisa/ssms_c.so
 - name: build treegp
   become_user: sigvisa
   command: /home/sigvisa/.virtualenvs/sigvisa/bin/python setup.py build_ext  --inplace

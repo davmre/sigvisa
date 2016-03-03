@@ -19,13 +19,26 @@ extract fits from a jointGP
 """
 
 
+def delete_fit_if_exists(runid, evid, wn, cursor):
+
+     sql_query = "select fitid from sigvisa_coda_fit where runid=%d and evid=%d and sta='%s' and chan='%s' and band='%s' " % (runid, evid, wn.sta, wn.chan, wn.band)
+     cursor.execute(sql_query)
+     r = cursor.fetchall()
+     for fitid in np.array(r).flatten():
+          sql_query = "delete from sigvisa_coda_fit_phase where fitid=%d" % fitid
+          cursor.execute(sql_query)
+          sql_query = "delete from sigvisa_coda_fit where fitid=%d" % fitid
+          cursor.execute(sql_query)
+          print "deleted existing fit", fitid
+          
 
 
-def main(sg_fname, run_name, run_iter=1, burnin=20):
+def extract_jointgp_fits(sg_fname, run_name, run_iter=1, burnin=20, delete_existing=False):
      #with open("/home/dmoore/python/sigvisa/logs/mcmc/01962/step_000019/pickle.sg", 'rb') as f:
      #    sg_joint = pickle.load(f)
      with open(sg_fname, 'rb') as f:
           sg = pickle.load(f)
+
 
      # assume the fname is of the form run_dir/step_xxxxxx/pickle.sg
      run_dir = os.path.dirname(os.path.dirname(sg_fname))
@@ -46,9 +59,11 @@ def main(sg_fname, run_name, run_iter=1, burnin=20):
                eids = set([eeid for (eeid, phase) in wn.arrivals()])
                if eid not in eids: continue
 
-               
+               if delete_existing:
+                    delete_fit_if_exists(runid, evid, wn, cursor)
 
                # compute template posterior, and set the graph state to the best template params
+               print "computing template messages for", wn.label, "eid", eid
                messages, best_tmvals = compute_template_messages(sg, wn, logger, 
                                                                  burnin=burnin,
                                                                  target_eid=eid)
@@ -57,6 +72,7 @@ def main(sg_fname, run_name, run_iter=1, burnin=20):
                          n.set_value(v)
 
                # compute wavelet posterior
+               print "computing wavelet messages", wn.label, "eid", eid
                wavelet_messages, wavelet_posteriors = compute_wavelet_messages(sg, wn)
 
                for k, v in wavelet_messages.items():
@@ -84,5 +100,5 @@ if __name__=="__main__":
      
      (options, args) = parser.parse_args()
 
-     main(sg_fname=options.sg_fname, run_name=options.run_name, 
-          run_iter=options.run_iter, burnin=options.burnin)
+     extract_jointgp_fits(sg_fname=options.sg_fname, run_name=options.run_name, 
+                          run_iter=options.run_iter, burnin=options.burnin)

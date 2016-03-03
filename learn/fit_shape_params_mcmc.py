@@ -196,6 +196,11 @@ def compute_template_messages(sg, wn, logger, burnin=50, target_eid=None):
             continue
         tvals, labels, lps = logger.load_template_vals(eid, phase, wn)
 
+
+        if len(tvals) < burnin + 5:
+            print "skipping (%d, %s) because chain has not burned in" % (eid, phase)
+            continue
+
         tnodes = sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
         for p, (k, n) in tnodes.items():
             try:
@@ -235,8 +240,10 @@ def compute_template_messages(sg, wn, logger, burnin=50, target_eid=None):
                 gp_messages[(eid, phase)][p] = float(mm), -float(mv)
             gp_messages[(eid, phase)][p+"_posterior"] = m, v
 
+
         best_lp_idx = np.argmax(lps)
         best_vals[(eid, phase)] = (tvals[best_lp_idx,1:], [tnodes[lbl][1] for lbl in labels[1:] if lbl in tnodes])
+
 
     return gp_messages, best_vals
 
@@ -264,7 +271,7 @@ def compute_wavelet_messages(sg, wn, target_eid=None):
         message_vars = posterior_vars.copy()
         for j, (prm, prv, psm, psv) in enumerate(zip(prior_means, prior_vars, posterior_means, posterior_vars)):
 
-            if psv < 1e-8:
+            if psv < 1e-10:
                 print "large posterior!"
                 import pdb; pdb.set_trace()
 
@@ -426,7 +433,8 @@ def save_template_params(sg, eid, evid,
                 ensure_dir_exists(run_message_dir)
                 message_fname = "%d.msg" % (fpid,)
                 with open(os.path.join(run_message_dir, message_fname), 'w') as f:
-                    f.write(repr(messages[(eid, phase)] ))
+                    rr = repr(messages[(eid, phase)] )
+                    f.write(rr)
                 sql_query = "update sigvisa_coda_fit_phase set message_fname='%s' where fpid=%d" % (message_fname, fpid,)
                 cursor.execute(sql_query)
 

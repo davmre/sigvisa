@@ -27,12 +27,14 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, **kwargs):
     ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", 
                     min_mb=1.0,
                     runids=runids, 
+                    hack_param_constraint=True,
                     raw_signals=False, max_hz=2.0, **kwargs)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=True, steps=150)
 
     ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", 
                     min_mb=1.0,
                     runids=runids_raw, 
+                    hack_param_constraint=True,
                     jointgp_param_run_init=jgp_runid, raw_signals=True, max_hz=max_hz, **kwargs)
     ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=50)
 
@@ -40,6 +42,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, **kwargs):
                     min_mb=1.0,
                     wiggle_model_type="dummy", raw_signals=True, max_hz=max_hz, 
                     runids=runids_raw, 
+                    hack_param_constraint=True,
                     jointgp_param_run_init=jgp_runid, **kwargs)
     ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, 
                             enable_template_openworld=False, enable_template_moves=True, 
@@ -49,6 +52,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, **kwargs):
                     min_mb=1.0,
                     wiggle_model_type="gp_joint", raw_signals=True, max_hz=max_hz,
                     runids=runids_raw, 
+                    hack_param_constraint=True,
                     jointgp_param_run_init=jgp_runid,
                     **kwargs)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False)

@@ -241,7 +241,7 @@ def read_messages(message_fname, runid):
         message_full_fname = os.path.join(message_dir, message_fname)
         with open(message_full_fname, 'r') as f:
             message_str = f.read()
-        messages = eval(message_str, {'array': np.array})
+        messages = eval(message_str, {'array': np.array, 'nan': np.nan})
     return messages
 
 def load_training_messages(cursor, **kwargs):
