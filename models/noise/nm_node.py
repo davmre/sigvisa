@@ -12,23 +12,30 @@ from sigvisa.models.noise.noise_model import NoiseModel
 
 from sigvisa.learn.train_param_common import load_model
 
+from sigvisa.database.dataset import sql_multi_str
+
 def load_noise_model_prior(sta, chan=None, band=None, hz=None, runids=None, env=False):
     # currently no way to specify n_p or env status except implicitly through runid
+
+    s = Sigvisa()
     
-    chan_cond = ("and chan='%s'" % chan) if chan is not None else ""
-    band_cond = ("and band='%s'" % band) if band is not None else ""
-    
+    if chan is not None:
+        chan_list = s.equivalent_channels(chan)
+        chan_cond = "and " + sql_multi_str("chan", chan_list)
+    else:
+        chan_cond = ""
+
+    band_cond = ("and band='%s'" % band) if band is not None else ""    
     runid_cond = ("and (%s)" % " or ".join(["fitting_runid=%d" % runid for runid in runids])) if runids is not None else ""
     #hz_cond = ("and hz=%.2f" % hz) if hz is not None else ""
     phase_name = "noise_%s" % ("env" if env else "raw")
     conds = "site='%s' and phase='%s' %s %s %s" % (sta, phase_name, chan_cond, band_cond, runid_cond)
     
-    
     mean_query = "select model_fname, model_type from sigvisa_param_model where param='armean' and %s" % conds
     var_query = "select model_fname, model_type from sigvisa_param_model where param='arvar' and %s" % conds
     params_query = "select model_fname, model_type from sigvisa_param_model where param='arparams' and %s" % conds
 
-    s = Sigvisa()
+
     c = s.dbconn.cursor()
     c.execute(mean_query)
 
@@ -83,8 +90,9 @@ class NoiseModelNode(Node):
                                       band=waveform["band"], hz=waveform["srate"],
                                       runids=runids,
                                       env = is_env)
-        except:
+        except Exception as e:
             force_dummy = True
+            print e
             logging.warning("falling back to dummy noise prior for %s" % str(waveform))
 
         if force_dummy:

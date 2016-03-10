@@ -91,7 +91,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, has_jointgp=False, mw_env=None, hack_coarse_signal=None, **kwargs):
+    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, wavelet_param_modelids=None, has_jointgp=False, mw_env=None, hack_coarse_signal=None, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -154,6 +154,7 @@ class ObservedSignalNode(Node):
 
         self.wavelet_basis = wavelet_basis
         self.wavelet_param_models = wavelet_param_models
+        self.wavelet_param_modelids = wavelet_param_modelids
 
         self.has_jointgp = has_jointgp
         if self.has_jointgp:
@@ -164,6 +165,8 @@ class ObservedSignalNode(Node):
         self.cached_logp = None
         self._coef_message_cache = None
         self._unexplained_cache = None
+
+        self._lazy_wpm = False
 
     def __str__(self):
         try:
@@ -1057,6 +1060,18 @@ class ObservedSignalNode(Node):
         if "iid_arssm" in d:
             del d['iid_arssm']
 
+
+        # don't save expensively large param models
+        wpm = {}
+        for phase, wpm_phase in self.wavelet_param_models.items():
+            wpm_phase_new = copy.copy(wpm_phase)
+            for i, modelid in enumerate(self.wavelet_param_modelids[phase]):
+                if modelid is not None:
+                    wpm_phase_new[i] = None
+            wpm[phase] = wpm_phase_new
+        self._lazy_wpm = True
+        d["wavelet_param_models"] = wpm
+
         # avoid hitting the recursion depth limit
         # by removing upwards pointers to
         # GP hyperparam nodes.
@@ -1072,12 +1087,34 @@ class ObservedSignalNode(Node):
 
         return d
 
+    def __getattr__(self, name):
+
+        if name == "wavelet_param_models" and (("_lazy_wpm" not in self.__dict__) or self._lazy_wpm):
+            from sigvisa.learn.train_param_common import load_modelid as load_modelid
+            if "wavelet_param_modelids" in self.__dict__:
+                for phase, modelids in self.wavelet_param_modelids.items():
+                    for i, modelid in enumerate(modelids):
+                        if modelid is not None:
+                            self.wavelet_param_models[phase][i] = load_modelid(modelid)
+            self._lazy_wpm = False
+
+        return getattr(self, name)
+
     def __setstate__(self, d):
         self.__dict__ = d
         #if "uatemplate_wiggle_var" not in d:
         #    self.uatemplate_wiggle_var = 1.0
         #    self.graph.uatemplate_wiggle_var = self.uatemplate_wiggle_var
 
+        # reload param models
+        """
+        from sigvisa.learn.train_param_common import load_modelid as load_modelid
+        if "wavelet_param_modelids" in d:
+            for phase, modelids in self.wavelet_param_modelids.items():
+                for i, modelid in enumerate(modelids):
+                    if modelid is not None:
+                        self.wavelet_param_models[phase][i] = load_modelid(modelid)
+        """ 
 
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)

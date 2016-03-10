@@ -22,6 +22,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, resume_from
     jgp_runid = runids_raw[0]
 
     rs = EventRunSpec(evs=evs, stas=stas, pre_s=50.0, 
+                      force_event_wn_matching=False,
                       disable_conflict_checking=True)
 
     ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", 

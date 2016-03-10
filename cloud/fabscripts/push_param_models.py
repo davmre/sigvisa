@@ -9,9 +9,9 @@ import os
 
 import logging ; logging.basicConfig(level=logging.DEBUG)
 
-env.hosts = ['sigvisa1.cloudapp.net',
-             'sigvisa2.cloudapp.net',
-             'sigvisa3.cloudapp.net',]
+
+env.hosts = open('fabric_hosts', 'r').readlines()
+#env.hosts = ['sigvisa%d.cloudapp.net' % i for i in range(1, 15)]
 
 #env.use_ssh_config = True
 env.user = 'vagrant'
@@ -57,11 +57,16 @@ def dump_local_models(runid, dump_fname, shrinkage_iter=5):
         cursor.close()
         dbconn.close()
 
-    tf = tarfile.TarFile.open(dump_fname+".tgz", mode="w:gz")
-    sigvisa_home = os.getenv("SIGVISA_HOME")
-    for fname in fnames:
-        tf.add(os.path.join(sigvisa_home, fname), arcname=fname)
-    tf.close()
+    tgz_fname = dump_fname+".tgz"
+    if os.path.exists(tgz_fname):
+        print "not creating tarfile", tgz_fname, "because it already exists"
+    else:
+        tf = tarfile.TarFile.open(tgz_fname, mode="w:gz")
+        sigvisa_home = os.getenv("SIGVISA_HOME")
+        for fname in fnames:
+            tf.add(os.path.join(sigvisa_home, fname), arcname=fname)
+        tf.close()
+
     return reverse_code
 
 def push_models(dump_fname):

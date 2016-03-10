@@ -356,10 +356,10 @@ class Beta(Distribution):
     def deriv_log_p(self, x, *args, **kwargs):
         return (self.alpha-1.) / x + (self.beta-1.) / (x-1.)
 
-    def predict(self, **kwargs):
+    def predict(self, *args, **kwargs):
         return self.alpha/(self.alpha+self.beta)
 
-    def sample(self, **kwargs):
+    def sample(self, *args, **kwargs):
         return scipy.stats.beta(self.alpha, self.beta, loc=0, scale=1).rvs(1)[0]
 
     def variance(self, **kwargs):

@@ -71,13 +71,14 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
     region = Region(lons=region_lon, lats=region_lat, 
                     times=(region_stime, region_etime),
                     rate_bulletin="isc", 
-                    min_mb=2.5,
+                    min_mb=2.0,
                     rate_train_start=1167609600,
                     rate_train_end=1199145600)
 
 
-    ms1 = ModelSpec(template_model_type="param",
-                    wiggle_family="iid",
+    ms1 = ModelSpec(template_model_type="gpparam",
+                    wiggle_family="db4_2.0_3_20.0",
+                    wiggle_model_type="gplocal+lld+none",
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
                     phases=phases,
@@ -115,9 +116,9 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
         if deserialize is not None:
             sg.deserialize_from_tgz(deserialize)
         else:
-            ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=tmpl_steps)
+            ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=False, disable_moves=['atime_xc'], steps=100)
 
-    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=ev_steps, fix_outside_templates=fix_outside)
+    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
 
     do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
 

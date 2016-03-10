@@ -1,10 +1,56 @@
 import numpy as np
 
+import time
+
 import scipy.weave as weave
 from scipy.weave import converters
 
 from sigvisa import Sigvisa
 from sigvisa.infer.correlations.ar_correlation_model import estimate_ar, ar_advantage, iid_advantage
+
+
+
+
+def compute_atime_posteriors(sg, proposals, phase, use_ar=False):
+    """
+    compute the bayesian cross-correlation (logodds of signal under an AR noise model) 
+    for all signals in the historical library, against all signals in the current SG.
+    
+    This is quite expensive so should in general be run only once, and the results cached. 
+    """
+
+    origin_lls = []
+    i = 0
+    for (x, signals) in proposals:
+        sta_lls = dict()
+        for sta in sg.station_waves.keys():
+            for wn in sg.station_waves[sta]:
+                try:
+                    c = signals[(wn.sta, wn.chan, wn.band)]
+                except KeyError:
+                    continue
+                sdata = wn.unexplained_kalman()
+                if use_ar:
+                    lls = ar_advantage(sdata, c, wn.nm)
+                else:
+                    normed_sdata = sdata / np.std(sdata)
+                    lls = iid_advantage(normed_sdata, c)
+
+                tt_array, tt_mean = build_ttr_model_array(sg, x, wn.sta, wn.srate, phase=phase)
+
+                sta_lls[wn.label] = (lls, tt_array, tt_mean)
+
+                sg.logger.info("computed advantage for %s %s" % (x, wn.label))
+                i += 1
+        origin_lls.append((x, sta_lls))
+
+        
+
+        #if i > 10:
+        #    break
+
+    return origin_lls
+
 
 def build_ttr_model_array(sg, x, sta, srate, K=None, phase="P"):
     s = Sigvisa()
@@ -48,53 +94,66 @@ def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_mode
     origin_stime = ll_stime - mean_tt - float(K)/srate
     return origin_ll, origin_stime
 
-def wn_origin_posterior(sg, wn, x, c, out_srate, temper=1):
-    sdata = wn.unexplained_kalman()
-    unobs_lp = 0.0
+
+def update_lls_for_wn(wn, atime_lls, pre_s=3.0, temper=1.0):
+    """
+    Take the atime likelihoods computed by ar_advantage, and zero out
+    atimes corresponding to currently-hypothesized events. This is a hack in
+    substitution for actually rerunning ar_advantage on the new unexplained_kalman signal. 
+    """
+
+    new_lls = atime_lls.copy()
+    for (eid, phase) in wn.arrivals():
+        if phase=="UA": continue
+        v, tg = wn.get_template_params_for_arrival(eid, phase)
+        atime = v["arrival_time"]
+        at_idx = int((atime-wn.st) * wn.srate)
+        
+        post_idx = int(10.0 * wn.srate)
+        post_idx = max(post_idx,  tg.abstract_logenv_length(v, min_logenv=np.log(wn.nm_env.c), srate=wn.srate))
+
+        sidx = at_idx - int(pre_s * wn.srate)
+        eidx = at_idx + post_idx
+        sidx = max(sidx, 0)
+        eidx = min(eidx, len(new_lls))
+        if sidx > wn.npts or eidx < 0:
+            continue
+        new_lls[sidx:eidx] = 0.0
+
+    new_lls /= temper
+
+    return new_lls
+
+def wn_origin_posterior(sg, wn, x, cached_for_wn, out_srate, temper=1):
+
+    atime_lls, tt_array, tt_mean = cached_for_wn
 
     srate = wn.srate
     ll_stime = wn.st
-    tt_array, tt_mean = build_ttr_model_array(sg, x, wn.sta, srate, phase="P")
-    """
-    #except ValueError as e:
-    #    raise e
-        # if the phase is impossible, then we get no information about
-        # origin time and we should just model the signal under the
-        # unobs probability (i.e., as being explained completely by
-        # the baseline iid model). 
-    #    return np.array(()), 0.0, unobs_lp
-    """
+    hacked_atime_lls = update_lls_for_wn(wn, atime_lls, temper=temper)
+    origin_ll, origin_stime = atime_likelihood_to_origin_likelihood(hacked_atime_lls, ll_stime, srate, tt_mean, tt_array, out_srate)
 
-    lls = ar_advantage(sdata, c, wn.nm)
-    #lls = iid_advantage(sdata, c)
-    if temper != 1:
-        lls /= temper
 
-    origin_ll, origin_stime = atime_likelihood_to_origin_likelihood(lls, ll_stime, srate, tt_mean, tt_array, out_srate)
-    return origin_ll, origin_stime, unobs_lp
+    return origin_ll, origin_stime
     
+def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_srate, stas=None, temper=1.0):
 
-def ev_time_posterior_with_weight(sg, x, signals, global_stime=None, N=None, global_srate=1.0, temper=1, stas=None):
-    if global_stime  is None:
-        global_stime = sg.event_start_time
-        N = int((sg.event_end_time - global_stime)*global_srate)
-        if N < 0:
-            raise ValueError("cannot propose new events: event end time %f and start time %f are set inconsistently." % (sg.event_end_time, global_stime))
     global_ll = np.zeros((N,))
+    for wn_label, cached_for_wn in sta_lls.items():
+        wn = sg.all_nodes[wn_label]
 
-    if stas is None:
-        stas = sg.station_waves.keys()
-    for sta in stas:
-        for wn in sg.station_waves[sta]:
-            try:
-                c = signals[(wn.sta, wn.chan, wn.band)]
-            except KeyError:
-                continue
-            origin_ll, origin_stime, unobs_lp = wn_origin_posterior(sg, wn, x, c, global_srate, temper=temper)
+        if stas is not None and wn.sta not in stas: continue
+        
+        t0 = time.time()
+        origin_ll, origin_stime = wn_origin_posterior(sg, wn, x, cached_for_wn, 
+                                                      global_srate, temper=temper)
+        t1 = time.time()
+        global_offset = int((origin_stime - global_stime)*global_srate)
+        align_sum(global_ll, 
+                  origin_ll, 
+                  global_offset)
+        t2 = time.time()
 
-            global_offset = int((origin_stime - global_stime)*global_srate)
-            align_sum(global_ll, origin_ll, global_offset, unobs_lp)
-            
     return global_ll
 
 def integrate_downsample(A, srate1, srate2):
@@ -118,7 +177,7 @@ def integrate_downsample(A, srate1, srate2):
                  verbose=2,compiler='gcc',)
     return B
     
-def align_sum(A, B, offset, default):
+def align_sum(A, B, offset, default=0.0):
     nA = len(A)
     nB = len(B)
 

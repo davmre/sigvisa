@@ -406,7 +406,7 @@ def learn_constant_laplacian(X, y, sta, optimize_marginal_ll=True, optim_params=
 def learn_constant_beta(X, y, sta, **kwargs):
     return baseline_models.ConstBetaModel(X=X, y=y, sta=sta)
 
-def load_modelid(modelid, memoize=True, **kwargs):
+def load_modelid(modelid, memoize=False, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     cursor.execute("select model_fname, model_type from sigvisa_param_model where modelid=%d" % modelid)

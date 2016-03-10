@@ -11,7 +11,8 @@ from django_easyfilters import FilterSet
 
 
 import numpy as np
-
+import os
+import cPickle as pickle
 
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
 from sigvisa.signals.io import Waveform
@@ -149,3 +150,37 @@ def PredictedSignalView(request, runid):
     fig.tight_layout()
     canvas.print_png(response)
     return response
+
+def SignalLibraryView(request):
+    # plot the posterior wiggle
+    # (mean plus samples?)
+    # also show the wiggle coefs
+
+    modelid = int(request.GET.get("modelid", ""))
+    idx = int(request.GET.get("idx", ""))
+
+    zoom = float(request.GET.get("zoom", '1'))
+
+    s = Sigvisa()
+    fname = os.path.join(s.homedir, "db_cache", "history_%d.pkl" % modelid)
+    with open(fname, 'rb') as f:
+        library = pickle.load(f)
+
+    x, entry = library[idx]
+    n_wns = len(entry)
+
+    fig = Figure(figsize=(10*zoom, 5*zoom), dpi=144)
+    fig.patch.set_facecolor('white')
+    for i, k in enumerate(entry.keys()):
+        axes = fig.add_subplot(n_wns,1,i+1)
+        s = entry[k]
+        xs = np.linspace(0, 20, len(s))
+        axes.plot(xs, s)
+        axes.set_title("%s %s" % (x, k))
+
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
+    fig.tight_layout()
+    canvas.print_png(response)
+    return response
+

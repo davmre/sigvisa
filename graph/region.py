@@ -18,7 +18,7 @@ class Region(object):
                                                     min_mb=min_mb,
                                                     bulletin=rate_bulletin)
 
-    def contains_event(self, ev=None, lon=None, lat=None, time=None):
+    def contains_event(self, ev=None, lon=None, lat=None, time=None, ignore_time=False):
         if ev is not None:
             lon, lat, time = ev.lon, ev.lat, ev.time
         if self.left_lon is not None and lon is not None:
@@ -32,7 +32,7 @@ class Region(object):
         if self.bottom_lat is not None and lat is not None:
             if self.bottom_lat > lat or self.top_lat < lat:
                 return False
-        if self.stime is not None and time is not None:
+        if (not ignore_time) and self.stime is not None and time is not None:
             if self.stime > time or self.etime < time:
                 return False
         return True

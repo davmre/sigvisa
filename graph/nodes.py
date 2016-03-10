@@ -305,7 +305,11 @@ class Node(object):
         for joint_model in self.params_modeled_jointly:
             joint_model.generic_upwards_message(v=v, cond=parent_values)
 
-        return 0.0
+        # prevent physically unreasonable tail values of template params
+        if self.hack_param_constraint:
+            return self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None)
+        else:
+            return 0.0
 
     @staticmethod
     def param_truncation_penalty(param, value, coarse_tts=False):
@@ -482,6 +486,18 @@ class Node(object):
     # param models when we pickle a graph object (since these models
     # can be large, and GP models can't be directly pickled anyway).
 
+    def __getattr__(self, name):
+        if name=="model":
+            if self.modelid is None:
+                model = DummyModel()
+            else:
+                print "loading model", self.modelid
+                model = load_modelid(modelid=self.modelid, gpmodel_build_trees=False)
+            self.model = model
+            return self.model
+        raise AttributeError("node class has no attribute %s" % name)
+
+
     def __getstate__(self):
 
         # ground out parent_keys_changed, etc into self._pv_cache.
@@ -491,6 +507,7 @@ class Node(object):
 
 
         d = copy.copy(self.__dict__)
+
         try:
             self.modelid
             del d['model']
@@ -502,11 +519,14 @@ class Node(object):
         return d
 
     def __setstate__(self, state):
+        """
         if "model" not in state:
             if state['modelid'] is None:
                 state['model'] = DummyModel()
             else:
+                
                 state["model"] = load_modelid(modelid=state['modelid'], gpmodel_build_trees=False)
+        """
         self.__dict__.update(state)
 
     def mutable_dimension(self):

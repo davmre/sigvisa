@@ -1173,6 +1173,20 @@ class SigvisaGraph(DirectedGraphModel):
 
         return model, modelid
 
+    def get_param_models(self, wn, phase):
+        tg = self.template_generator(phase=phase)
+
+        models = {}
+        for param in tg.params() + ("amp_transfer", "tt_residual"):
+            try:
+                model_type = self._tm_type(param=param, site=wn.sta)
+                model, modelid = self.get_model(param, wn.sta, phase, model_type, 
+                                                chan=wn.chan, band=wn.band)
+            except:
+                continue
+            models[param] = model
+        return models, tg
+
     def setup_site_param_node_indep(self, param, site, phase, parents, model_type,
                               chan=None, band=None,
                               modelid=None,
@@ -1277,6 +1291,7 @@ class SigvisaGraph(DirectedGraphModel):
 
                 if self.force_event_wn_matching:
                     ev = self.get_event(eid)
+
                     pred_time = ev.time + tt_predict(ev, sta, "P")
                     if pred_time < wave_node.st or pred_time > wave_node.et: continue
 
@@ -1401,6 +1416,8 @@ class SigvisaGraph(DirectedGraphModel):
                 raise Exception("adding new wave at %s,%s,%s from time %.1f-%.1f potentially conflicts with existing wave from %.1f-%.1f" % (wn.sta, wn.chan, wn.band, wave['stime'], wave['etime'], wn.st, wn.et) )
 
         param_models = {}
+        param_modelids = {}
+
         hparam_nodes = set()
         has_jointgp = False
 
@@ -1414,9 +1431,11 @@ class SigvisaGraph(DirectedGraphModel):
         if self.wiggle_model_type=="gp_joint" and basis is not None:
             for phase in self.phases:
                 param_models[phase] = []
+                param_modelids[phase] = []
                 for param in joint_params:
                     jgp, nodes = self.joint_gpmodel(sta=wave['sta'], param=param, chan=wave['chan'], band=wave['band'], phase=phase, srate=wave['srate'])
                     param_models[phase].append(jgp)
+                    param_modelids[phase].append(None)
                     hparam_nodes = hparam_nodes | set(nodes.values())
 
                 # e.g. if we're skipping two levels, start with level 2 since its params are listed first
@@ -1426,11 +1445,13 @@ class SigvisaGraph(DirectedGraphModel):
                     hparam_nodes = hparam_nodes | set(nodes.values())
                     for i in range(level_size):
                         param_models[phase].append(jgp)
+                        param_modelids[phase].append(None)
 
             has_jointgp = True
         elif self.wiggle_model_type != "dummy":
             for phase in self.phases:
                 param_models[phase] = []
+                param_modelids[phase] = []
                 for param in joint_params:
                     try:
                         modelid = self.get_param_model_id(runids=self.runids, sta=wave['sta'],
@@ -1441,9 +1462,11 @@ class SigvisaGraph(DirectedGraphModel):
                     except ModelNotFoundError as e:
                         if self.dummy_fallback:
                             model = Gaussian(0.0, 1.0)
+                            modelid = None
                         else:
                             raise e
                     param_models[phase].append(model)
+                    param_modelids[phase].append(modelid)
 
                 for level in range(self.skip_levels-1, -1, -1):
                     level_size = levels[-(level+1)]
@@ -1459,11 +1482,13 @@ class SigvisaGraph(DirectedGraphModel):
                     model = Gaussian(0.0, 1.0)
                     for i in range(level_size):
                         param_models[phase].append(model)
+                        param_modelids[phase].append(None)
         else:
             try:
                 n_params = len(basis[0])
                 for phase in self.phases:
                     param_models[phase] = [Gaussian(0.0, 1.0),]*n_params
+                    param_modelids[phase] = [None,]*n_params
             except TypeError:
                 pass
 
@@ -1474,7 +1499,7 @@ class SigvisaGraph(DirectedGraphModel):
                                  runids=self.runids)
         self.add_node(nm_node)
 
-        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), hack_coarse_signal=self.hack_coarse_signal, **kwargs)
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, wavelet_param_modelids=param_modelids, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), hack_coarse_signal=self.hack_coarse_signal, **kwargs)
 
         for n in hparam_nodes:
             wave_node.addParent(n)
@@ -1790,8 +1815,7 @@ class SigvisaGraph(DirectedGraphModel):
             with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
                 #spypickle = SpyingPickler(f, 2)
                 #spypickle.dump(self)
-                import pickle as ppickle
-                ppickle.dump(self, f, 2)
+                pickle.dump(self, f, 2)
             print "saved pickled graph"
         if pickle_only:
             return
@@ -1826,6 +1850,13 @@ class SigvisaGraph(DirectedGraphModel):
     def __getstate__(self):
         d = copy.copy(self.__dict__)
         del d["logger"]
+
+        if "correlation_history" in d:
+            del d["correlation_history"]
+
+        if "_cached_atime_posteriors" in d:
+            del d["_cached_atime_posteriors"]
+
         return d
 
     def __setstate__(self, d):

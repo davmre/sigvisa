@@ -185,16 +185,23 @@ class LocalGPEnsemble(ParamModel):
 
         return features
 
-    def sample(self, cond, include_obs=True):
+    def sample(self, cond, include_obs=True, **kwargs):
 
         mean = self.predict(cond)
         variance = self.variance(cond, include_obs=include_obs)
 
         return np.random.randn() * np.sqrt(variance) + mean
 
+    def log_p(self, x, cond, include_obs=True, **kwargs):
+        y = float(x)
+
+        mean = float(self.predict(cond))
+        variance = float(self.variance(cond, include_obs=include_obs))
+
+        return - .5 * ((y-mean)**2 / variance + np.log(2*np.pi*variance) )
         
 
-    def predict(self, cond):
+    def predict(self, cond, **kwargs):
 
         # TODO: cache features and R between predict and variance calls..
 
@@ -325,7 +332,12 @@ class LocalGPEnsemble(ParamModel):
     def __getstate__(self):
         d = self.__dict__.copy()
         del d["cluster_tree"]
-        del d["featurizer"]
+
+        try:
+            del d["featurizer"]
+        except:
+            pass
+
         return d
 
     def __setstate__(self, d):
@@ -333,6 +345,9 @@ class LocalGPEnsemble(ParamModel):
         self.cluster_tree = VectorTree(self.cluster_centers, 1, *self.cluster_metric.tree_params())
         if self.basis is not None:
             self.featurizer, self.featurizer_recovery = recover_featurizer(self.basis, self.featurizer_recovery, transpose=True)
+        else:
+            self.featurizer = None
+            self.featurizer_recovery = None
 
     def save_trained_model(self, fname):
         with open(fname, "wb") as f:

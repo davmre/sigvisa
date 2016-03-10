@@ -22,7 +22,7 @@ from sigvisa.infer.propose_mb import propose_mb
 from sigvisa.infer.local_gibbs_move import proxylp_full, approximate_scalar_gibbs_distribution
 from sigvisa.infer.propose_cheating import cheating_location_proposal
 from sigvisa.infer.correlations.ar_correlation_model import ar_advantage
-from sigvisa.infer.correlations.event_proposal import correlation_location_proposal
+from sigvisa.infer.correlations.event_proposal import correlation_location_proposal, sample_corr_kwargs
 from sigvisa.infer.template_mcmc import get_env_based_amplitude_distribution, get_env_based_amplitude_distribution2, get_env_diff_positive_part, sample_peak_time_from_cdf, merge_distribution, peak_log_p, preprocess_signal_for_sampling
 from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
@@ -588,7 +588,7 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
 
         sidx = pidx
         eidx = len(atime_ll) 
-        atime_prior[sidx:eidx] *= np.exp(atime_ll[:-pidx] - maxll)
+        atime_prior[sidx:eidx] *= np.exp((atime_ll[:-pidx] if pidx > 0 else atime_ll) - maxll)
         atime_prior[:sidx] *= np.exp(-maxll)
         atime_prior[eidx:] *= np.exp(-maxll)
 
@@ -846,6 +846,7 @@ def clean_propose_phase_template(sg, wn, eid, phase,
         tmvals["coda_height"] = amp_dist.sample()
     n_height.set_value(key=k_height, value=tmvals["coda_height"])
     amp_lp = amp_dist.log_p(tmvals["coda_height"])
+    amp_lp = max(amp_lp, -200) # avoid -inf
     log_q += amp_lp
     tmvals["amp_transfer"] = n_amp.get_value(key=k_amp)
     if debug_info is not None:
@@ -1016,7 +1017,7 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None,
     accepted =  mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert, force_outcome=force_outcome)
     return accepted
 
-def ev_death_move_hough(sg, hough_kwargs={},log_to_run_dir=None,  **kwargs):
+def ev_death_move_hough(sg, hough_kwargs={}, log_to_run_dir=None,  **kwargs):
 
     def hlp(sg, fix_result=None, **kwargs):
         kwargs.update(hough_kwargs)
@@ -1052,8 +1053,17 @@ def ev_death_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
     return ev_death_move_hough(sg, hough_kwargs=hough_kwargs, birth_type="dumb", **kwargs)
 
-def ev_death_move_correlation(sg, **kwargs):
-    return ev_death_move_abstract(sg, correlation_location_proposal, proposal_includes_mb=False, use_correlation=True, birth_type="smart", **kwargs)
+def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
+
+    def clp(sg, fix_result=None, **kwargs):
+        kwargs.update(corr_kwargs)
+        return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
+
+    return ev_death_move_abstract(sg, clp, proposal_includes_mb=False, use_correlation=True, birth_type="smart", **kwargs)
+
+def ev_death_move_correlation_random_sta(sg, **kwargs):
+    corr_kwargs = sample_corr_kwargs(sg)
+    return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, **kwargs)
 
 def ev_death_move_cheating(sg, **kwargs):
     return ev_death_move_abstract(sg, cheating_location_proposal, proposal_includes_mb=True, **kwargs)
@@ -1969,25 +1979,22 @@ def ev_birth_move_hough_meta(sg, **kwargs):
                                proposal_type=proposal_type, **kwargs)
     
 
-def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):
+def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs):
 
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         if log_to_run_dir is None:
             return
 
-        (proposals, proposal_weights, proposal_otime_posteriors, xx), eid, debug_info = proposal_extra
+        (atime_lls, proposal_weights, proposal_idx, proposal_otime_posteriors, xx), eid, proposed_ev, debug_info = proposal_extra
         #hough_array, eid, associations = proposal_extra
 
         log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
 
-        # proposed event should be the most recently created
-        try:
-            proposed_ev = sg.get_event(np.max(sg.evnodes.keys()))
-        except:
-            proposed_ev = None
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s\n" % proposed_ev)
+            f.write(" proposal based on match of event idx %d with weight %.4f\n" % (proposal_idx, proposal_weights[proposal_idx]))
+            f.write(" corr kwargs %s\n" % str(corr_kwargs))
             f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
             #for (wn, phase), (assoc, tmvals) in associations.items():
             #    if assoc:
@@ -2007,8 +2014,15 @@ def ev_birth_move_correlation(sg, log_to_run_dir=None, **kwargs):
         #else:
         #    raise Exception("why are we not logging?")
 
-    return ev_birth_move_abstract(sg, location_proposal=correlation_location_proposal, revert_action=revert_action, accept_action=accept_action, proposal_type="smart", proposal_includes_mb=False, use_correlation=True, **kwargs)
+    def clp(sg, fix_result=None, **kwargs):
+        kwargs.update(corr_kwargs)
+        return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
 
+    return ev_birth_move_abstract(sg, location_proposal=clp, revert_action=revert_action, accept_action=accept_action, proposal_type="smart", proposal_includes_mb=False, use_correlation=True, **kwargs)
+
+def ev_birth_move_correlation_random_sta(sg, **kwargs):
+    corr_kwargs = sample_corr_kwargs(sg)
+    return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, **kwargs)
 
 def ev_birth_move_cheating(sg, log_to_run_dir=None, **kwargs):
 
