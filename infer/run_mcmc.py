@@ -285,7 +285,7 @@ def run_open_world_MH(sg, steps=10000,
     if enable_event_openworld:
         
         hough_rate = 0.4 if propose_hough else 0.0
-        correlation_rate = 0.2 if propose_correlation else 0.0
+        correlation_rate = 1.0 if propose_correlation else 0.0
         global_moves = {'event_swap': (swap_events_move_hough, hough_rate),
                         'event_repropose': (repropose_event_move_hough, hough_rate),
                         'event_threeway_swap': (swap_threeway_hough, 0.00),

@@ -31,12 +31,13 @@ def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script,
 
     s_homedir =  os.getenv("SIGVISA_HOME")
 
-    hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
+    #hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
+    hostnames = ["sigvisa2.cloudapp.net",]
 
     remote_sigvisa_home = "/home/sigvisa/python/sigvisa"
-    #for hostname in hostnames:
-    #    for evidfile in clusters_evids:
-    #        put_to_host(hostname, evidfile, remote_sigvisa_home, use_sudo=True)
+    for hostname in hostnames:
+        for evidfile in clusters_evids:
+            put_to_host(hostname, evidfile, remote_sigvisa_home, use_sudo=True)
 
     log_prefix = lambda jobid : "/home/sigvisa/python/sigvisa/logs/mcmc/%s" % jobid
     jm = JobManager(hostnames, ncpus, log_prefix)

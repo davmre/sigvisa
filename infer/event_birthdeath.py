@@ -1059,11 +1059,14 @@ def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
         kwargs.update(corr_kwargs)
         return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
 
-    return ev_death_move_abstract(sg, clp, proposal_includes_mb=False, use_correlation=True, birth_type="smart", **kwargs)
+    return ev_death_move_abstract(sg, clp, proposal_includes_mb=False, 
+                                  use_correlation=True, **kwargs)
 
 def ev_death_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
-    return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, **kwargs)
+    proposal_type = np.random.choice(("mh", "smart", "dumb"))
+    return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, 
+                                     birth_type=proposal_type, **kwargs)
 
 def ev_death_move_cheating(sg, **kwargs):
     return ev_death_move_abstract(sg, cheating_location_proposal, proposal_includes_mb=True, **kwargs)
@@ -1400,6 +1403,11 @@ def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None,
         fr_phase = None
         if fix_result is not None:
             fr_phase = fix_result[phase]
+
+        if (eid, phase) not in wn.arrivals():
+            # try to avoid crashes
+            sg.logger.warning("attempting to propose phase %s at %s but wn does not record the arrival!" % (phase, wn.sta))
+            continue
 
         if proposal_type=="dumb":
             tmvals, tmpl_lp = dumb_propose_phase_template(sg, wn, eid, phase=phase, 
@@ -1985,11 +1993,10 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         if log_to_run_dir is None:
             return
 
-        (atime_lls, proposal_weights, proposal_idx, proposal_otime_posteriors, xx), eid, proposed_ev, debug_info = proposal_extra
+        (proposal_weights, proposal_idx, proposal_otime_posteriors, xx), eid, proposed_ev, debug_info = proposal_extra
         #hough_array, eid, associations = proposal_extra
 
         log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
-
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s\n" % proposed_ev)
@@ -2018,11 +2025,15 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         kwargs.update(corr_kwargs)
         return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
 
-    return ev_birth_move_abstract(sg, location_proposal=clp, revert_action=revert_action, accept_action=accept_action, proposal_type="smart", proposal_includes_mb=False, use_correlation=True, **kwargs)
+    return ev_birth_move_abstract(sg, location_proposal=clp, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=False, use_correlation=True, **kwargs)
 
 def ev_birth_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
-    return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, **kwargs)
+    
+    proposal_type = np.random.choice(("mh", "smart", "dumb"))
+    
+    return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, 
+                                     proposal_type=proposal_type, **kwargs)
 
 def ev_birth_move_cheating(sg, log_to_run_dir=None, **kwargs):
 

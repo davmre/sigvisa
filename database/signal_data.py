@@ -187,14 +187,21 @@ def execute_and_return_id(dbconn, query, idname, **kwargs):
     return lrid
 
 
-def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10, wiggle_family=None):
+def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=np.inf, min_azi=0, max_azi=360, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10, wiggle_family=None):
     """
 
     assumes "from sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit"
 
     """
 
-    chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
+    s = Sigvisa()
+
+    if chan is not None:
+        chan_list = s.equivalent_channels(chan)
+        chan_cond = "and " + sql_multi_str("fit.chan", chan_list)
+    else:
+        chan_cond = ""
+
     band_cond = "and fit.band='%s'" % (band) if band is not None else ""
     site_cond = "and fit.sta='%s'" % (site) if site is not None else ""
     run_cond = "and (" + " or ".join(["fit.runid = %d" % int(runid) for runid in runids]) + ")" if runids is not None else ""
@@ -274,4 +281,5 @@ def load_training_messages(cursor, **kwargs):
                 pickle.dump(fits, f, 2)
         else:
             raise NoDataException("found no wiggle data matching query %s" % sql_query)
+
     return fits

@@ -10,7 +10,7 @@ from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa.models.spatial_regression.local_gp_ensemble import LocalGPEnsemble
 
 
-def get_historical_signals(sg, phase="P"):
+def get_historical_signals(sg, phases=None):
 
     history = []
     try:
@@ -18,26 +18,24 @@ def get_historical_signals(sg, phase="P"):
     except AttributeError:
         stas = sg.station_waves.keys()
 
-    t1 = time.time()
+    if phases is None:
+        phases = ["P", "S", "Lg", "Pg", "pP"]
 
+    t1 = time.time()
     for sta in stas:
         wns = sg.station_waves[sta]
         if len(wns) == 0:
             continue
-
-        # TODO: figure out multiple bands/chans, or multiple time periods
         assert(len(wns) == 1)
         wn = wns[0]
-        wn_history = get_historical_signals_for_wn(sg, wn, phase)
-        history = merge_station_histories(history, wn_history)
+        for phase in phases:
+            # TODO: figure out multiple bands/chans, or multiple time periods
+            wn_history = get_historical_signals_for_wn(sg, wn, phase)
+            history = merge_station_histories(history, wn_history)
 
     t2 = time.time()
-
     history = filter_history_to_region(sg, history)
-
-    sg.logger.info("generated correlation history for phase %s at %s, %d events in time %.1fs" % (phase, stas, len(history), t2-t1))
-        
-
+    sg.logger.info("generated correlation history for phases %s at %s, %d events in time %.1fs" % (phases, stas, len(history), t2-t1))        
     return history
 
 def merge_station_histories(h1, h2):
@@ -98,7 +96,7 @@ def build_signal_library(sg, wn, phase):
 
     library = []
     Xs = wn.wavelet_param_models[phase][0].X
-    wn_key = (wn.sta, wn.chan, wn.band)
+    wn_key = (wn.sta, wn.chan, wn.band, phase)
 
     for x in Xs:
         x = x.reshape(1, -1)

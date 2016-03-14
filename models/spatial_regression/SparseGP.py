@@ -32,7 +32,7 @@ default_other_params = (2.0, InvGamma(beta=1.0, alpha=3.0),
 #              dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 
-default_wavelet_params = (.5, Beta(beta=1.0, alpha=2.0),
+default_wavelet_params = (.5, Beta(beta=5.0, alpha=2.0),
         GPCov([0.5,], [ 30.0, 30.0], dfn_str="lld",
               wfn_priors=None,
               wfn_str="matern32",

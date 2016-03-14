@@ -11,8 +11,8 @@ from collections import defaultdict
 from functools32 import lru_cache
 from sigvisa import Sigvisa
 
-from sigvisa.database.signal_data import get_fitting_runid, ensure_dir_exists, RunNotFoundException
-
+from sigvisa.database.signal_data import get_fitting_runid, ensure_dir_exists, RunNotFoundException, execute_and_return_id
+from sigvisa.database.dataset import sql_multi_str
 from sigvisa.source.event import get_event, Event
 from sigvisa.learn.train_param_common import load_modelid as tpc_load_modelid
 import sigvisa.utils.geog as geog
@@ -33,7 +33,7 @@ from sigvisa.graph.serialization import load_serialized_from_file, save_serializ
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
-from sigvisa.database.signal_data import execute_and_return_id
+
 from sigvisa.models.wiggles.wavelets import construct_full_basis_implicit, wavelet_idx_to_level
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
@@ -68,7 +68,12 @@ def get_param_model_id(runids, sta, phase, model_type, param,
     if len(runids) is None:
         raise ModelNotFoundError("no runid specified, so not loading parameter model.")
 
-    chan_cond = "and chan='%s'" % chan if chan else ""
+    if chan is not None:
+        chan_list = s.equivalent_channels(chan)
+        chan_cond = "and " + sql_multi_str("chan", chan_list)
+    else:
+        chan_cond = ""
+
     band_cond = "and band='%s'" % band if band else ""
     for runid in runids:
         # get a DB modelid for a previously-trained parameter model

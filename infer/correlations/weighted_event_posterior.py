@@ -11,7 +11,7 @@ from sigvisa.infer.correlations.ar_correlation_model import estimate_ar, ar_adva
 
 
 
-def compute_atime_posteriors(sg, proposals, phase, use_ar=False):
+def compute_atime_posteriors(sg, proposals, use_ar=False):
     """
     compute the bayesian cross-correlation (logodds of signal under an AR noise model) 
     for all signals in the historical library, against all signals in the current SG.
@@ -19,37 +19,33 @@ def compute_atime_posteriors(sg, proposals, phase, use_ar=False):
     This is quite expensive so should in general be run only once, and the results cached. 
     """
 
-    origin_lls = []
+    atime_lls = []
     i = 0
     for (x, signals) in proposals:
         sta_lls = dict()
-        for sta in sg.station_waves.keys():
-            for wn in sg.station_waves[sta]:
-                try:
-                    c = signals[(wn.sta, wn.chan, wn.band)]
-                except KeyError:
-                    continue
-                sdata = wn.unexplained_kalman()
-                if use_ar:
-                    lls = ar_advantage(sdata, c, wn.nm)
-                else:
-                    normed_sdata = sdata / np.std(sdata)
-                    lls = iid_advantage(normed_sdata, c)
+        for (sta, chan, band, phase), c in signals.items():
+            wns = sg.station_waves[sta]
+            if len(wns) == 0: 
+                continue
+            elif len(wns) > 1:
+                raise Exception("haven't worked out correlation proposals with multiple wns from same station")
+            wn = wns[0]
+            sdata = wn.unexplained_kalman()
+            if use_ar:
+                lls = ar_advantage(sdata, c, wn.nm)
+            else:
+                normed_sdata = sdata / np.std(sdata)
+                lls = iid_advantage(normed_sdata, c)
 
-                tt_array, tt_mean = build_ttr_model_array(sg, x, wn.sta, wn.srate, phase=phase)
+            tt_array, tt_mean = build_ttr_model_array(sg, x, sta, wn.srate, phase=phase)
 
-                sta_lls[wn.label] = (lls, tt_array, tt_mean)
+            sta_lls[(wn.label, phase)] = (lls, tt_array, tt_mean)
 
-                sg.logger.info("computed advantage for %s %s" % (x, wn.label))
-                i += 1
-        origin_lls.append((x, sta_lls))
+            sg.logger.info("computed advantage for %s %s %s" % (x, wn.label, phase))
+            i += 1
+        atime_lls.append((x, sta_lls))
 
-        
-
-        #if i > 10:
-        #    break
-
-    return origin_lls
+    return atime_lls
 
 
 def build_ttr_model_array(sg, x, sta, srate, K=None, phase="P"):
@@ -136,14 +132,33 @@ def wn_origin_posterior(sg, wn, x, cached_for_wn, out_srate, temper=1):
 
     return origin_ll, origin_stime
     
-def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_srate, stas=None, temper=1.0):
+def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_srate, 
+                                       phases=None, stas=None, temper=1.0):
+    """
+    Given a training event x, and a set of precomputed atime log-likelihoods
+     (sta_lls: dict mapping (wn_label, phase) to the bayesian cross correlation 
+        (arrival time likelihood) for each wn based on the GP predictions for
+        each arriving phase of this training event), 
+    do the following:
+     - add the hack correction which zeros out the atime likelihood for time periods
+       where we already have an event arrival, to avoid reproposing existing events.
+     - convert the atime likelihood into an origin time likelihood, by convolving 
+       with the traveltime model, and downsampling to the global srate
+     - add up the origin time log-likelihoods across the specified set of stations and
+       phases to get a combined log-likelihood on the origin time for an event in this
+       training location. 
+     - normalize the origin-time log-likelihood to get a posterior on origin time, along
+       with the normalizing constant which gives the marginal likelihood of an event at
+       this training location. 
+    """
 
     global_ll = np.zeros((N,))
-    for wn_label, cached_for_wn in sta_lls.items():
+    for (wn_label, phase), cached_for_wn in sta_lls.items():
         wn = sg.all_nodes[wn_label]
 
         if stas is not None and wn.sta not in stas: continue
-        
+        if phases is not None and phase not in phases: continue
+
         t0 = time.time()
         origin_ll, origin_stime = wn_origin_posterior(sg, wn, x, cached_for_wn, 
                                                       global_srate, temper=temper)
@@ -154,7 +169,13 @@ def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_s
                   global_offset)
         t2 = time.time()
 
-    return global_ll
+    C = np.max(global_ll)
+    posterior = np.exp(global_ll-C)
+    Z = np.sum(posterior)
+    posterior /= Z
+    logZ = np.log(Z) + C
+
+    return posterior, logZ
 
 def integrate_downsample(A, srate1, srate2):
     sratio = srate1/srate2

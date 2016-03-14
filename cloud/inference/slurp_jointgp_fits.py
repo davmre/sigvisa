@@ -49,8 +49,8 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    #local_dirs = sync_jobs(options.jobfile, dummy=True)
-    local_dirs = ["/home/dmoore/python/sigvisa/cloud/jgp_fits/nvar_kampos_01124.1.1.1/",]
+    local_dirs = sync_jobs(options.jobfile, dummy=False)
+    #local_dirs = ["/home/dmoore/python/sigvisa/cloud/jgp_fits/nvar_kampos_01124.1.1.1/",]
 
     for local_dir in local_dirs:
         steps = sorted([d for d in os.listdir(local_dir) if d.startswith("step_")])

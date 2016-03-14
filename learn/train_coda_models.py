@@ -53,20 +53,20 @@ def get_training_data(runid, site, chan, band, phases, target,
         param_num = int(splits[-1])
         target = "_".join(splits[:-1])
     try:
-        if param_num is None:
-            ymeans, yvars = zip(*[fit.messages[target] for fit in fits])
-        else:
-            ymeans = []
-            yvars = []
-            for fit in fits:
-                try:
+        ymeans = []
+        yvars = []
+        for fit in fits:
+            try:
+                if param_num is None:
+                    ym, yv = fit.messages[target][0], fit.messages[target][0]
+                else:
                     ym, yv = fit.messages[target][0][param_num], fit.messages[target][1][param_num]
-                except:
-                    #print "no wiggle messages available for fit to evid %d at %s %s" % (fit.ev.evid, fit.sta, fit.phase)
-                    ym, yv = 0.0, 1e20
-                ymeans.append(ym)
-                yvars.append(yv)
-        yvars = np.abs(yvars)
+            except:
+                ym, yv = 0.0, 1e20
+
+            ymeans.append(ym)
+            yvars.append(yv)
+        
 
     except AttributeError:
         # no messages available?
@@ -77,6 +77,7 @@ def get_training_data(runid, site, chan, band, phases, target,
 
     ymeans = np.asarray(ymeans, dtype=np.float64).flatten()
     yvars = np.asarray(yvars, dtype=np.float64).flatten()
+    yvars = np.abs(yvars)
 
     # remove outliers
     bounds = {'tt_residual': (-30, 30),
