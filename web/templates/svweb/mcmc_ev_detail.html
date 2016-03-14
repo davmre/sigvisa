@@ -32,7 +32,7 @@
 <tr>
 <td>{{ wnlabel }}</td> 
 <td valign=top>
-<a href="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};pred_signal=True;stime={{ stime }};etime={{ etime }}"><img src="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};pred_signal=True;stime={{ stime }};etime={{ etime }}" width=400></a>
+<a href="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};stime={{ stime }};etime={{ etime }}{{ extra_wave_args }}"><img src="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};stime={{ stime }};etime={{ etime }}{{ extra_wave_args }}" width=400></a>
 </td>
 <td>{{ tms }}</td>
 </tr>

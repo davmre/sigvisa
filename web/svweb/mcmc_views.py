@@ -140,10 +140,17 @@ def mcmc_lp_posterior(request, dirname):
     canvas.print_png(response)
     return response
 
-def mcmc_ev_detail(request, dirname, eid):
+def mcmc_ev_detail(request, dirname, eid_str):
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    pred_signal = request.GET.get('pred_signal', 'false').startswith("t")
+    if pred_signal:
+        extra_wave_args=";pred_signal=true;pred_signal_var=true"
+    else:
+        extra_wave_args=";pred_env=True"
+
 
     step = int(request.GET.get('step', '-1'))
     if step < 0:
@@ -152,8 +159,16 @@ def mcmc_ev_detail(request, dirname, eid):
 
     sg = graph_for_step(mcmc_run_dir, step)
 
-    eid = int(eid)
-    ev = sg.get_event(eid)
+    if eid_str[:4]=="true":
+        with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as f:
+            true_evs = pickle.load(f)
+        idx = int(eid_str[4:])
+        ev = true_evs[idx]
+        eid = 9999
+        sg.add_event(ev, eid=eid)
+    else:
+        eid = int(eid_str)
+        ev = sg.get_event(eid)
     ev_str = str(ev)
 
     r = []
@@ -177,6 +192,7 @@ def mcmc_ev_detail(request, dirname, eid):
                                'ev_str': ev_str,
                                'step': step,
                                'proposalpath': proposalpath,
+                               'extra_wave_args': extra_wave_args,
                                }, context_instance=RequestContext(request))
 
 
@@ -230,7 +246,7 @@ def mcmc_run_detail(request, dirname):
     site_info = np.array([s.earthmodel.site_info(sta, 0) for sta in site_names])
 
     if true_evs is not None:
-        true_ev_strs = [str(ev) for ev in true_evs]
+        true_ev_strs = [("true%d" % idx,str(ev)) for idx,ev in enumerate(true_evs)]
     else:
         true_ev_strs = []
 
@@ -850,7 +866,7 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
 def mcmc_event_proposals(request, dirname):
 
     zoom = float(request.GET.get('zoom', '1.0'))
-
+    proposal_type = request.GET.get('proposal_type', 'hough')
 
     def extract_proposal(line):
         parts = line.split(",")
@@ -876,11 +892,20 @@ def mcmc_event_proposals(request, dirname):
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
     proposedX = []
-    with open(os.path.join(mcmc_run_dir, "hough_proposals.txt"), 'r') as f:
-        for line in f:
-            if line.startswith("proposed ev: "):
-                proposedX.append(extract_proposal(line))
+    if proposal_type=="hough":
+        with open(os.path.join(mcmc_run_dir, "hough_proposals.txt"), 'r') as f:
+            for line in f:
+                if line.startswith("proposed ev: "):
+                    proposedX.append(extract_proposal(line))
+    elif proposal_type=="correlation":
+        with open(os.path.join(mcmc_run_dir, "correlation_proposals.txt"), 'r') as f:
+            for line in f:
+                if line.startswith("proposed ev: "):
+                    proposedX.append(extract_proposal(line))
+    else:
+        raise Exception("unknown proposal type %s" % proposal_type)
     proposedX = np.asarray(proposedX).reshape((-1, 5))
+    
 
     try:
         with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as evfile:
@@ -892,7 +917,7 @@ def mcmc_event_proposals(request, dirname):
 
 
     sg, max_step = final_mcmc_state(mcmc_run_dir)
-    inferred_evs = [sg.get_event(eid) for eid in sg.evnodes.keys()]
+    inferred_evs = [sg.get_event(eid) for eid in sg.evnodes.keys() if eid not in sg.fixed_events]
     inferredX = np.asarray([(ev.lon, ev.lat, ev.depth, ev.mb, ev.time) for ev in inferred_evs]).reshape((-1, 5))
 
     allX = np.vstack((proposedX, trueX, inferredX))
@@ -903,7 +928,16 @@ def mcmc_event_proposals(request, dirname):
     gs = gridspec.GridSpec(5, 1)
     ax = f.add_subplot(gs[:4, 0])
 
-    hm = EventHeatmap(f=None, calc=False, autobounds = allX, autobounds_quantile=1.0)
+    if sg.inference_region is not None:
+        region = sg.inference_region
+        hm = EventHeatmap(f=None, calc=False, 
+                          left_lon=region.left_lon,
+                          right_lon=region.right_lon,
+                          top_lat=region.top_lat,
+                          bottom_lat=region.bottom_lat)
+    else:
+        hm = EventHeatmap(f=None, calc=False, autobounds = allX, autobounds_quantile=1.0)
+
     hm.add_stations(sg.station_waves.keys())
     hm.init_bmap(axes=ax, nofillcontinents=True, projection="cyl", resolution="c")
 
@@ -1226,7 +1260,6 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     for step in steps:
         wn = sgs[step].all_nodes[wn_label]
 
-
         try:
             wn.tssm
         except AttributeError:
@@ -1239,7 +1272,8 @@ def mcmc_wave_posterior(request, dirname, wn_label):
             subplot_waveform(w, axes, color='green', linewidth=2.5)
             
         if plot_pred_signal:
-            wn._parent_values()
+            pv = wn._parent_values()
+            wn._set_cssm_priors_from_model(parent_values=pv)
             pred_signal = wn.tssm.mean_obs(wn.npts)
             w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
             subplot_waveform(w, axes, color='green', linewidth=2.5)

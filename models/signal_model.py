@@ -1088,8 +1088,10 @@ class ObservedSignalNode(Node):
         return d
 
     def __getattr__(self, name):
-
         if name == "wavelet_param_models" and (("_lazy_wpm" not in self.__dict__) or self._lazy_wpm):
+            import pdb; pdb.set_trace()
+            self.wavelet_param_models = self.wavelet_param_models_tmp
+            del self.wavelet_param_models_tmp
             from sigvisa.learn.train_param_common import load_modelid as load_modelid
             if "wavelet_param_modelids" in self.__dict__:
                 for phase, modelids in self.wavelet_param_modelids.items():
@@ -1101,12 +1103,19 @@ class ObservedSignalNode(Node):
         return getattr(self, name)
 
     def __setstate__(self, d):
+
+
+
         self.__dict__ = d
         #if "uatemplate_wiggle_var" not in d:
         #    self.uatemplate_wiggle_var = 1.0
         #    self.graph.uatemplate_wiggle_var = self.uatemplate_wiggle_var
 
         # reload param models
+
+        if "wavelet_param_models" in d:
+            self.wavelet_param_models_tmp = self.wavelet_param_models
+            del self.wavelet_param_models
         """
         from sigvisa.learn.train_param_common import load_modelid as load_modelid
         if "wavelet_param_modelids" in d:
@@ -1115,6 +1124,7 @@ class ObservedSignalNode(Node):
                     if modelid is not None:
                         self.wavelet_param_models[phase][i] = load_modelid(modelid)
         """ 
+        
 
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)

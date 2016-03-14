@@ -27,8 +27,8 @@
 <td valign=top width=50%>
 <h3>Event posteriors</h3>
 <p>True events:<ol>
-{% for tev in true_ev_strs %}
-<li> {{tev}}</li>
+{% for fake_eid,tev in true_ev_strs %}
+<li> {{ tev }} <a href="{% url 'mcmc_ev_detail' dirname=dirname eid_str=fake_eid %}">signals</a></li>
 {% endfor %}
 </ol></p>
 
@@ -37,7 +37,7 @@
 <table>
 <tr><td><b>eid</b></td><td><b>info</b></td><td><b>azimuth gap</b></td><td><b>match</b></td><td><b>loc error (km)</b></td><td><b>(lon, lat) std</b></td><td><b>vis</b></td><td><b>inspect</b></td></tr>
 {% for ev in evs %}
-<tr><td><a href="{% url 'mcmc_ev_detail' dirname=dirname eid=ev.eid %}">{{ ev.eid }}</a></td><td>{{ ev.evstr }}</td><td>{{ ev.azgap|floatformat }}</td><td>{{ ev.matched }}</td><td>{{ ev.dist|floatformat }}km</td><td>({{ ev.lon_std_km|floatformat }}, {{ ev.lat_std_km|floatformat }})</td><td><a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{ ev.left_lon }};right_lon={{ ev.right_lon }};top_lat={{ ev.top_lat }};bottom_lat={{ ev.bottom_lat }};burnin=0">local</a></td><td><a href="{% url 'mcmc_param_posterior' dirname=dirname node_label=ev.example_node %}">e.g.</a></td></tr>
+<tr><td><a href="{% url 'mcmc_ev_detail' dirname=dirname eid_str=ev.eid %}">{{ ev.eid }}</a></td><td>{{ ev.evstr }}</td><td>{{ ev.azgap|floatformat }}</td><td>{{ ev.matched }}</td><td>{{ ev.dist|floatformat }}km</td><td>({{ ev.lon_std_km|floatformat }}, {{ ev.lat_std_km|floatformat }})</td><td><a href="{% url 'mcmc_event_posterior' dirname=dirname %}?left_lon={{ ev.left_lon }};right_lon={{ ev.right_lon }};top_lat={{ ev.top_lat }};bottom_lat={{ ev.bottom_lat }};burnin=0">local</a></td><td><a href="{% url 'mcmc_param_posterior' dirname=dirname node_label=ev.example_node %}">e.g.</a></td></tr>
 {% endfor %}
 </table>
 {% endif %}
