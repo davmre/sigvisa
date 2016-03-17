@@ -812,20 +812,30 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
     # get all other events within the radius
     nearby_eids = []
     eid_distances = []
+    nearby_eid_wns = []
     for eid in sg.evnodes.keys():
         ev = sg.get_event(eid)
         dist = dist_km((ev.lon, ev.lat), (base_ev.lon, base_ev.lat))
         if dist < radius_km:
+            try:
+                wn = sg.get_arrival_wn(sta, eid, phase, band=None, chan=None)
+            except:
+                continue
+
             nearby_eids.append(eid)
             eid_distances.append(dist)
-
+            nearby_eid_wns.append(wn)
+            
     # for each event, extract signal for the appropriate phase
     eid_signals = []
     eid_alignments = []
-
-    for eid in nearby_eids:
-        wn = sg.get_arrival_wn(sta, eid, phase, band=None, chan=None)
+    eid_ttrs = []
+    for eid, wn in zip(nearby_eids, nearby_eid_wns):
+        ev = sg.get_event(eid)
+        pred_atime = ev.time + tt_predict(ev, sta, phase)
         atime = wn.get_template_params_for_arrival(eid, phase)[0]["arrival_time"]
+        eid_ttrs.append(atime - pred_atime)
+
         sidx = int((atime - wn.st) * wn.srate)
         eidx = sidx + int(signal_len * wn.srate)
         eid_signal = wn.get_value()[sidx:eidx].copy()
@@ -858,6 +868,7 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
         signal = eid_signals[eid_idx]
         (xc_peak, default_xc, alignment) = eid_alignments[eid_idx]
         dist = eid_distances[eid_idx]
+        ttr = eid_ttrs[eid_idx]
 
         xs_aligned = np.linspace(alignment, alignment + signal_len, len(signal))
         ax1.plot(xs_default, signal)
@@ -869,7 +880,7 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
         my_ax2.plot(xs_base, base_signal, linewidth=0.5, color="black")
 
         my_ax1.set_title("eid %d dist %.2fkm" % (eid, dist))
-        my_ax2.set_title("xc peak %.2f at %.2fs vs %.2f at 0" % (xc_peak, alignment, default_xc))
+        my_ax2.set_title("xc peak %.2f at ttr=%.2fs vs %.2f at ttr=%.2fs" % (xc_peak, ttr+alignment, default_xc, ttr))
 
         my_ax1.plot(xs_default, signal, linewidth=1.3, alpha=0.7)
         my_ax2.plot(xs_aligned, signal, linewidth=1.3, alpha=0.7)
