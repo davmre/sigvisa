@@ -261,6 +261,7 @@ def mcmc_run_detail(request, dirname):
     inferredX = [(ev.lon, ev.lat, ev.depth, ev.time, ev.mb) for ev in inferred_evs]
     indices = find_matching(trueX, inferredX, max_delta_deg=5.0, max_delta_time=100.0)
 
+    phases_used = sg.phases
 
     for i, eid in enumerate(eids):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
@@ -328,6 +329,7 @@ def mcmc_run_detail(request, dirname):
 
     return render_to_response("svweb/mcmc_run_detail.html",
                               {'wns': wns,
+                               'phases_used': phases_used,
                                'dirname': dirname,
                                'full_dirname': mcmc_run_dir,
                                'cmd': cmd,
@@ -772,6 +774,107 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
 
 
     f.suptitle("atime alignments at %s, phase %s" % (sta, phase))
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
+def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
+
+    radius_km = float(request.GET.get('radius_km', '15.0'))
+    signal_len = float(request.GET.get('signal_len', '20.0'))
+
+    buffer_s = 8.0
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    base_eid = int(base_eid)
+    sta = str(sta)
+    phase = str(phase)
+
+    sg, max_step = final_mcmc_state(mcmc_run_dir)
+
+    # get the signal for this eid, with some leeway
+    base_ev = sg.get_event(base_eid)
+    base_wn = sg.get_arrival_wn(sta, base_eid, phase, band=None, chan=None)
+    atime = base_wn.get_template_params_for_arrival(base_eid, phase)[0]["arrival_time"]
+    sidx = int(((atime - buffer_s) - base_wn.st) * base_wn.srate)
+    eidx = sidx + int((signal_len + 2*buffer_s) * base_wn.srate)
+    default_idx = int(buffer_s * base_wn.srate)
+    base_signal = base_wn.get_value()[sidx:eidx].copy()
+    base_default_window = base_signal[default_idx :default_idx + int(signal_len * base_wn.srate)]
+    base_signal /= np.linalg.norm(base_default_window)
+
+    # get all other events within the radius
+    nearby_eids = []
+    eid_distances = []
+    for eid in sg.evnodes.keys():
+        ev = sg.get_event(eid)
+        dist = dist_km((ev.lon, ev.lat), (base_ev.lon, base_ev.lat))
+        if dist < radius_km:
+            nearby_eids.append(eid)
+            eid_distances.append(dist)
+
+    # for each event, extract signal for the appropriate phase
+    eid_signals = []
+    eid_alignments = []
+
+    for eid in nearby_eids:
+        wn = sg.get_arrival_wn(sta, eid, phase, band=None, chan=None)
+        atime = wn.get_template_params_for_arrival(eid, phase)[0]["arrival_time"]
+        sidx = int((atime - wn.st) * wn.srate)
+        eidx = sidx + int(signal_len * wn.srate)
+        eid_signal = wn.get_value()[sidx:eidx].copy()
+        eid_signal /= np.linalg.norm(eid_signal)
+        eid_signals.append(eid_signal)
+
+        # also then do a correlation to get the best offset
+        xc = fastxc(eid_signal, base_signal)
+        align_s = np.argmax(xc) / wn.srate - buffer_s
+        eid_alignments.append((np.max(xc), xc[default_idx], align_s))
+
+
+    # plot the signals overlayed at their current offsets
+    # also plot at the preferred offsets
+    f = Figure((14, 2*(len(nearby_eids)+1)))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(len(nearby_eids)+1, 2)
+
+    ax1 = f.add_subplot(gs[0, 0])
+    ax2 = f.add_subplot(gs[0, 1])
+    xs_base = np.linspace(-buffer_s, signal_len + buffer_s, len(base_signal))
+    xs_default = np.linspace(0, signal_len, len(eid_signals[0]))
+    ax1.plot(xs_base, base_signal, linewidth=2, color="black")
+    ax2.plot(xs_base, base_signal, linewidth=2, color="black")
+
+    best_xcs = sorted(np.arange(len(nearby_eids)), key = lambda i : -eid_alignments[i][0])
+
+    for i, eid_idx in enumerate(best_xcs):
+        eid = nearby_eids[eid_idx]
+        signal = eid_signals[eid_idx]
+        (xc_peak, default_xc, alignment) = eid_alignments[eid_idx]
+        dist = eid_distances[eid_idx]
+
+        xs_aligned = np.linspace(alignment, alignment + signal_len, len(signal))
+        ax1.plot(xs_default, signal)
+        ax2.plot(xs_aligned, signal)
+
+        my_ax1 = f.add_subplot(gs[i+1, 0])
+        my_ax2 = f.add_subplot(gs[i+1, 1])
+        my_ax1.plot(xs_base, base_signal, linewidth=0.5, color="black")
+        my_ax2.plot(xs_base, base_signal, linewidth=0.5, color="black")
+
+        my_ax1.set_title("eid %d dist %.2fkm" % (eid, dist))
+        my_ax2.set_title("xc peak %.2f at %.2fs vs %.2f at 0" % (xc_peak, alignment, default_xc))
+
+        my_ax1.plot(xs_default, signal, linewidth=1.3, alpha=0.7)
+        my_ax2.plot(xs_aligned, signal, linewidth=1.3, alpha=0.7)
+        my_ax1.set_xlim([-buffer_s, signal_len+buffer_s])
+        my_ax2.set_xlim([-buffer_s, signal_len+buffer_s])
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')
