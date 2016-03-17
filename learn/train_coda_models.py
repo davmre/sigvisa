@@ -58,15 +58,23 @@ def get_training_data(runid, site, chan, band, phases, target,
         for fit in fits:
             try:
                 if param_num is None:
-                    ym, yv = fit.messages[target][0], fit.messages[target][0]
+                    ym, yv = fit.messages[target][0], fit.messages[target][1]
                 else:
                     ym, yv = fit.messages[target][0][param_num], fit.messages[target][1][param_num]
             except:
                 ym, yv = 0.0, 1e20
 
+            try:
+                # hack to deal with poor burnin by replacing means with modes
+                mode = getattr(fit, target)
+                ym = mode
+            except:
+                pass
+
             ymeans.append(ym)
             yvars.append(yv)
-        
+
+
 
     except AttributeError:
         # no messages available?
@@ -91,6 +99,8 @@ def get_training_data(runid, site, chan, band, phases, target,
         valid = (ymeans <= tbounds[1])*(ymeans >= tbounds[0])
         X = X[valid, :]
         ymeans, yvars, evids = ymeans[valid], yvars[valid], evids[valid]
+
+
 
 
     return X, ymeans, yvars, evids

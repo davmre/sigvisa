@@ -17,6 +17,11 @@ from sigvisa.models.ttime import tt_predict
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, MAX_TRAVEL_TIME
 
 class RunSpec(object):
+
+    def __init__(self, seed=0, sample_init_templates=False):
+        self.seed = seed
+        self.sample_init_templates = sample_init_templates
+
     def build_sg(self, modelspec):
         kwargs = modelspec.sg_params.copy()
         if modelspec.signal_params['raw_signals']:
@@ -35,7 +40,10 @@ class RunSpec(object):
 
 class SyntheticRunSpec(RunSpec):
 
-    def __init__(self, sw, init_noise=False, raw_signals=False):
+    def __init__(self, sw, init_noise=False, raw_signals=False, **kwargs):
+
+        super(SyntheticRunSpec, self).__init__(**kwargs)
+
         self.sw = sw
         self.init_noise = init_noise
         self.raw_signals = raw_signals
@@ -70,7 +78,10 @@ class SyntheticRunSpec(RunSpec):
 class EventRunSpec(RunSpec):
 
     def __init__(self, sites=None, stas=None, evids=None, evs=None,  initialize_events=True,
-                 pre_s=10, post_s=120, force_event_wn_matching=True, disable_conflict_checking=False):
+                 pre_s=10, post_s=120, force_event_wn_matching=True, 
+                 disable_conflict_checking=False, **kwargs):
+
+        super(EventRunSpec, self).__init__(**kwargs)
 
         self.sites = sites
         self.stas = stas
@@ -110,7 +121,7 @@ class EventRunSpec(RunSpec):
         if evs is None:
             evs = self.evs
 
-        def merge_overlaps(sorted_intervals, slack=600.0):
+        def merge_overlaps(sorted_intervals, slack=280.0):
             intervals_new = []
             merged = set()
 
@@ -211,7 +222,10 @@ class EventRunSpec(RunSpec):
 
 
 class TimeRangeRunSpec(RunSpec):
-    def __init__(self, sites, dataset="training", hour=0.0, len_hours=2.0, start_time=None, end_time=None, initialize_events=None):
+    def __init__(self, sites, dataset="training", hour=0.0, len_hours=2.0, 
+                 start_time=None, end_time=None, initialize_events=None, **kwargs):
+
+        super(TimeRangeRunSpec, self).__init__(**kwargs)
 
         self.sites = sites
 
@@ -293,7 +307,7 @@ class TimeRangeRunSpec(RunSpec):
 
 class ModelSpec(object):
 
-    def __init__(self, ms_label=None, vert_only=True, inference_preset=None, seed=0, **kwargs):
+    def __init__(self, ms_label=None, vert_only=True, inference_preset=None,  **kwargs):
         sg_params = {
             'template_shape': "lin_polyexp",
             'template_model_type': "param",
@@ -311,6 +325,7 @@ class ModelSpec(object):
             'hack_param_constraint': True,
             'hack_coarse_tts': None,
             'hack_coarse_signal': None,
+            'hack_ttr_max': 25.0,
             'inference_region': None,
             'runids': (),
         }
@@ -335,7 +350,6 @@ class ModelSpec(object):
         self.sg_params = sg_params
         self.signal_params = signal_params
         self.ms_label = ms_label
-        self.seed = seed
 
         self.inference_rounds = []
         if inference_preset == "closedtmpl":
@@ -376,7 +390,7 @@ class ModelSpec(object):
 def initialize_sg(sg, modelspec, runspec):
     evs = runspec.get_init_events()
     for ev in evs:
-        sg.add_event(ev)
+        sg.add_event(ev, sample_templates=runspec.sample_init_templates)
 
 def initialize_from(sg_new, ms_new, sg_old, ms_old):
     """
@@ -419,7 +433,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
     logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True, max_dumps=max_dumps, run_dir=run_dir)
     logger.dump(sg)
 
-    sg.seed = modelspec.seed
+    sg.seed = runspec.seed
 
     try:
         sw = runspec.sw
@@ -440,7 +454,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
         pass
 
 
-    np.random.seed(modelspec.seed)
+    np.random.seed(runspec.seed)
 
     def lp_change_threshold(logger):
         if model_switch_lp_threshold is None: return False
@@ -499,10 +513,10 @@ def do_coarse_to_fine(modelspecs, runspec,
 
     sg, modelspec = sgs[-1], modelspecs[-1]
     initialize_from(sg, modelspec, sg_old, ms_old)
-    do_inference(sg, modelspec, runspec,
-                 model_switch_lp_threshold=None,
-                 run_dir=rundir,
-                 max_steps = max_steps_final, **kwargs)
+    do_inference(sg, modelspec, 
+                 runspec, model_switch_lp_threshold=None,
+                 run_dir=rundir, max_steps = max_steps_final, 
+                 **kwargs)
 
 
 def synth_location_seq():

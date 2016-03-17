@@ -319,7 +319,7 @@ def learn_localgps(sta, X, y, y_obs_variances, kernel_str, basisfn_str=None,
         featurizer_recovery = None
         extract_dim = None
 
-    cluster_centers = np.loadtxt(cluster_centers_fname)
+    cluster_centers = np.loadtxt(cluster_centers_fname).reshape((-1, 3))
 
     if cov_main is None:
         noise_var, noise_prior, cov_main, cov_fic = build_starting_hparams(kernel_str, target)

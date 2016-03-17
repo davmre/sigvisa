@@ -425,6 +425,7 @@ class ObservedSignalNode(Node):
             prior_means, prior_vars = [], []
             for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
                 if component_type != "wavelet": continue
+                if phase == "UA": continue
                 ssm = self.arrival_ssms[(eid, phase)]
                 #pm, pv = ssm.get_coef_prior()
 
@@ -457,6 +458,8 @@ class ObservedSignalNode(Node):
         coef_idx = 0
         for i, (eid, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
             if component_type!="wavelet":continue
+            if phase == "UA": continue
+
             evdict = self._ev_params[eid]
             n_coefs = len(self.wavelet_param_models[phase])
             for j in range(n_coefs):
@@ -1087,9 +1090,9 @@ class ObservedSignalNode(Node):
 
         return d
 
+
     def __getattr__(self, name):
         if name == "wavelet_param_models" and (("_lazy_wpm" not in self.__dict__) or self._lazy_wpm):
-            import pdb; pdb.set_trace()
             self.wavelet_param_models = self.wavelet_param_models_tmp
             del self.wavelet_param_models_tmp
             from sigvisa.learn.train_param_common import load_modelid as load_modelid
@@ -1102,6 +1105,7 @@ class ObservedSignalNode(Node):
 
         return getattr(self, name)
 
+
     def __setstate__(self, d):
 
 
@@ -1113,9 +1117,9 @@ class ObservedSignalNode(Node):
 
         # reload param models
 
-        if "wavelet_param_models" in d:
-            self.wavelet_param_models_tmp = self.wavelet_param_models
-            del self.wavelet_param_models
+        #if "wavelet_param_models" in d:
+        #    self.wavelet_param_models_tmp = self.wavelet_param_models
+        #    del self.wavelet_param_models
         """
         from sigvisa.learn.train_param_common import load_modelid as load_modelid
         if "wavelet_param_modelids" in d:

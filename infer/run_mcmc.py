@@ -265,6 +265,7 @@ def run_open_world_MH(sg, steps=10000,
                       enable_template_openworld=True,
                       enable_template_moves=True,
                       enable_hparam_moves=True,
+                      special_mb_moves=False,
                       template_move_type="rw", # can be "hamiltonian", "rw" (i.e. random-walk MH), or "both"
                       tmpl_birth_rate=0.5,
                       logger=None,
@@ -321,6 +322,9 @@ def run_open_world_MH(sg, steps=10000,
                             'evmb': ('mb', ('mb',)),
                             'evdepth': ('depth', ('depth',)),
                             'evdepth_big': ('depth', ('depth',))} if enable_event_moves else {}
+    if special_mb_moves:
+        event_moves_gaussian['evmb'] = ('mb', ('mb',))
+
     event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0),
                            'ev_lsqr': (ev_lsqr_move, 1.0)} if enable_event_moves else {}
 
@@ -408,6 +412,7 @@ def run_open_world_MH(sg, steps=10000,
         swap_move_checkin(swapper=swapper, step=step, 
                           checkpoint="newcycle")
 
+
         # moves to adjust existing events
         for (eid, evnodes) in sg.evnodes.items():
 
@@ -426,6 +431,7 @@ def run_open_world_MH(sg, steps=10000,
                          params=params, logger=logger)
 
             # run event moves that should never require signal logps
+            """
             for i in range(n_naive_evmoves):
                 for (move_name, (node_name, params)) in event_moves_gaussian.items():
                     run_move(move_name=move_name + "_naive", fn=ev_move_full, step=step,
@@ -438,6 +444,7 @@ def run_open_world_MH(sg, steps=10000,
                              forward_type="dumb",
                              reverse_type="dumb",
                              params=params, logger=logger)
+            """
 
             for (move_name, (fn, prob)) in event_moves_special.items():
                 run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,

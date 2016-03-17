@@ -23,6 +23,11 @@ class EventLocationPrior(Distribution):
                 return -np.inf
 
         loc_lp = s.sigmodel.event_location_prior_logprob(lon, lat, depth)
+
+        if np.isnan(loc_lp):
+            # we are outside the implicit inference region of the currently trained prior model
+            loc_lp = -np.inf
+
         return loc_lp
 
 def event_from_evnodes(evnodes):

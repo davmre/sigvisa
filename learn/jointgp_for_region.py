@@ -18,36 +18,42 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, resume_from
     #main_ev = isc_evs[0]
     #main_ev = get_event(evid=5335822)
     #isc_evs = [ev for ev in isc_evs if ev is not None and dist_km((main_ev.lon, main_ev.lat), (ev.lon, ev.lat)) < 15]
-
-    jgp_runid = runids_raw[0]
+    
+    try:
+        jgp_runid = runids_raw[0]
+    except:
+        jgp_runid = None
 
     rs = EventRunSpec(evs=evs, stas=stas, pre_s=50.0, 
                       force_event_wn_matching=False,
-                      disable_conflict_checking=True)
+                      disable_conflict_checking=True, 
+                      seed=0, sample_init_templates=True)
 
     ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", 
                     min_mb=1.0,
                     runids=runids, 
                     hack_param_constraint=True,
+                    hack_ttr_max=8.0,
+                    raw_signals=False, max_hz=2.0,  **kwargs)
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
+
+    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", 
+                    min_mb=1.0,
+                    runids=runids, 
+                    jointgp_param_run_init=runids[0],
+                    hack_param_constraint=True,
+                    hack_ttr_max=8.0,
                     raw_signals=False, max_hz=2.0, **kwargs)
-    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=True, steps=150)
+    ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=100)
 
-    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", 
+
+    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", 
                     min_mb=1.0,
                     runids=runids_raw, 
                     hack_param_constraint=True,
+                    hack_ttr_max=8.0,
                     jointgp_param_run_init=jgp_runid, raw_signals=True, max_hz=max_hz, **kwargs)
-    ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=50)
-
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
-                    min_mb=1.0,
-                    wiggle_model_type="dummy", raw_signals=True, max_hz=max_hz, 
-                    runids=runids_raw, 
-                    hack_param_constraint=True,
-                    jointgp_param_run_init=jgp_runid, **kwargs)
-    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, 
-                            enable_template_openworld=False, enable_template_moves=True, 
-                            enable_phase_openworld=False, steps=50)
+    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=50)
 
     ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
                     min_mb=1.0,
@@ -55,8 +61,9 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, resume_from
                     runids=runids_raw, 
                     hack_param_constraint=True,
                     jointgp_param_run_init=jgp_runid,
+                    hack_ttr_max=8.0,
                     **kwargs)
-    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False)
+    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, enable_phase_openworld=False)
 
     if resume_from is None:
         ms = [ms1, ms2, ms3, ms4]

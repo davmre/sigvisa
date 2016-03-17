@@ -52,7 +52,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
                       template_shape=tmshapes, wiggle_family=wiggle_family,
                       runids=(runid,), phases=phases,
                       base_srate=wave['srate'], raw_signals = not env)
-    wave_node = sg.add_wave(wave, nmid=nmid)
+    wave_node = sg.add_wave(wave, nmid=nmid, dummy_noise_prior=True)
     sg.add_event(ev)
 
     for uaparams in uatemplates:

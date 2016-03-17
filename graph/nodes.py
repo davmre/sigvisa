@@ -7,10 +7,11 @@ from sigvisa.models import DummyModel
 
 class Node(object):
 
-    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False, hack_coarse_tts=None):
+    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False, hack_coarse_tts=None, hack_ttr_max=25.0):
 
         self.hack_param_constraint = hack_param_constraint
         self.hack_coarse_tts = hack_coarse_tts
+        self.hack_ttr_max = hack_ttr_max
 
         self.model = model
         self._fixed = fixed
@@ -307,20 +308,20 @@ class Node(object):
 
         # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
-            return self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None)
+            return self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None, ttr_max=self.hack_ttr_max)
         else:
             return 0.0
 
     @staticmethod
-    def param_truncation_penalty(param, value, coarse_tts=False):
+    def param_truncation_penalty(param, value, coarse_tts=False, ttr_max=25.0):
         p = 0.0
         if 'mult_wiggle_std' in param:
             if value > 1:
                 p = -np.exp(100*(value-1))
             if value < 0:
                 p = -np.exp(100*(-value))
-        if 'tt_residual' in param and (not coarse_tts) and np.abs(value) > 25:
-            p = -(10*(np.abs(value)-25))**4
+        if 'tt_residual' in param and (not coarse_tts) and np.abs(value) > ttr_max:
+            p = -(10*(np.abs(value)-ttr_max))**4
         elif 'peak_offset' in param and value > 3.0:
             p = -(10*(value-3))**4
         elif 'coda_decay' in param and value < -6:
@@ -367,7 +368,7 @@ class Node(object):
 
         # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
-            lp += self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None)
+            lp += self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None, ttr_max=self.hack_ttr_max)
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))
@@ -437,7 +438,7 @@ class Node(object):
             while True:
                 nv = self.model.sample(cond=parent_values)
                 if self.hack_param_constraint:
-                    penalty = self.param_truncation_penalty(self.label, nv, coarse_tts=self.hack_coarse_tts is not None)
+                    penalty = self.param_truncation_penalty(self.label, nv, coarse_tts=self.hack_coarse_tts is not None, ttr_max=self.hack_ttr_max)
                     if penalty > -1.0:
                         break
                 else:

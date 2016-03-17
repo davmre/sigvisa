@@ -171,7 +171,7 @@ class LinearBasisModel(ParamModel):
 
         return ll
 
-    def sample(self, cond, include_obs=False):
+    def sample(self, cond, include_obs=True):
         mean = self.predict(cond)
         n = len(mean)
         covar_sqrt = self.covariance(cond, return_sqrt=True, include_obs=include_obs)
@@ -188,3 +188,6 @@ class LinearBasisModel(ParamModel):
             return self.sqrt_covar
         else:
             return np.dot(self.sqrt_covar.T, self.sqrt_covar)
+
+    def __str__(self):
+        return "LinearBasis(param_mean=%s, noise_std=%.2f)" % (self.mean, np.sqrt(self.noise_var))

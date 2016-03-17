@@ -222,7 +222,7 @@ def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=Non
 class SavedFit(object):
     def __init__(self, ev, phase, sta, band,
                  dist, azi, arrival_time,
-                 peak_offset, coda_height,
+                 peak_offset, coda_height, amp_transfer,
                  peak_decay, coda_decay, messages):
         self.ev = ev
         self.phase = phase
@@ -233,6 +233,7 @@ class SavedFit(object):
         self.arrival_time=arrival_time
         self.peak_offset=peak_offset
         self.coda_height=coda_height
+        self.amp_transfer=amp_transfer
         self.peak_decay=peak_decay
         self.coda_decay=coda_decay
         self.messages=messages
@@ -254,7 +255,7 @@ def read_messages(message_fname, runid):
 def load_training_messages(cursor, **kwargs):
     cond = sql_param_condition(**kwargs)
 
-    sql_query = "select distinct fit.evid, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.peak_decay, fp.coda_decay, fit.runid, fp.message_fname from sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
+    sql_query = "select distinct fit.evid, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.amp_transfer, fp.peak_decay, fp.coda_decay, fit.runid, fp.message_fname from sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
 
     s = Sigvisa()
     ensure_dir_exists(os.path.join(s.homedir, "db_cache"))
@@ -268,12 +269,12 @@ def load_training_messages(cursor, **kwargs):
 
         fits = []
         for row in message_data:
-            evid, phase, sta, dist, azi, band, atime, peak_offset, coda_height, peak_decay, coda_decay, runid, message_fname = row
+            evid, phase, sta, dist, azi, band, atime, peak_offset, coda_height, amp_transfer, peak_decay, coda_decay, runid, message_fname = row
 
             messages = read_messages(message_fname, runid)
 
             ev = get_event(evid=evid, cursor=cursor)
-            fit = SavedFit(ev=ev, phase=phase, sta=sta, band=band, dist=dist,azi=azi, arrival_time=atime, peak_offset=peak_offset, coda_height=coda_height, peak_decay=peak_decay, coda_decay=coda_decay, messages=messages)
+            fit = SavedFit(ev=ev, phase=phase, sta=sta, band=band, dist=dist,azi=azi, arrival_time=atime, peak_offset=peak_offset, coda_height=coda_height, amp_transfer=amp_transfer, peak_decay=peak_decay, coda_decay=coda_decay, messages=messages)
             fits.append(fit)
 
         if len(fits) > 0:

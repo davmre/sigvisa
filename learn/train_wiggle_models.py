@@ -40,7 +40,8 @@ def wiggle_params_by_level(wiggle_srate, wiggle_family):
 
     return params_by_level
 
-def load_wiggle_data_for_level(level, level_params, runid, site, chan, band, phase, min_amp):
+def load_wiggle_data_for_level(level, level_params, runid, site, 
+                               chan, band, phase, min_amp, filter_evids=None):
 
     Xs = []
     ys = []
@@ -49,6 +50,16 @@ def load_wiggle_data_for_level(level, level_params, runid, site, chan, band, pha
     for param in level_params:
         try:
             X, y, yvars, evids = load_site_data([site,], target=param, runid=runid, chan=chan, band=band, phases=[phase, ], min_amp=min_amp)
+
+            if filter_evids is not None:
+                good_evids = np.array([(evid in filter_evids) for evid in evids])
+                X = X[good_evids]
+                y = y[good_evids]
+                yvars = yvars[good_evids]
+                evids = evids[good_evids]
+
+
+
         except NoDataException:
             if param == level_params[0]:
                 print "no data for %s %s level %d, skipping..." % (site, phase, level)
@@ -81,8 +92,7 @@ def train_tied_hparam_models(X, y_list, yvars_list, sta,
     featurizer_recovery = None
     extract_dim = None
 
-    cluster_centers = np.loadtxt(cluster_centers_fname)
-
+    cluster_centers = np.array(np.matrix(np.loadtxt(cluster_centers_fname)))
 
     kernel_str="lld"
     noise_var, noise_prior, cov_main, cov_fic = build_starting_hparams(kernel_str, wiggle_family)
@@ -137,6 +147,8 @@ def main():
                       help="train models even if a model of the same type already appears in the DB")
     parser.add_option("--centers", dest="cluster_centers_fname", default=None, type="str",
                       help="file (np.savetxt) with list of cluster centers for local GPs")
+    parser.add_option("--filter_evids", dest="filter_evids_fname", default=None, type="str",
+                      help="file (np.savetxt) with list of evids to restrict training to")
 
     (options, args) = parser.parse_args()
 
@@ -175,6 +187,12 @@ def main():
     params_by_level = wiggle_params_by_level(options.wiggle_srate, wiggle_family)
 
 
+    if options.filter_evids_fname is not None:
+        filter_evids = np.loadtxt(options.filter_evids_fname)
+        filter_evids = set([int(evid) for evid in filter_evids])
+    else:
+        filter_evids = None
+
     for site in sites:
         chan = sitechans[site]
         for phase in phases:
@@ -187,9 +205,9 @@ def main():
                     print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, "level %d" % level, phase, dupe_modelid)
                     continue
 
-
+                
                 X, ys, yvars, evids = load_wiggle_data_for_level(level, level_params, runid, 
-                                                                 site, chan, band, phase, options.min_amp)
+                                                                 site, chan, band, phase, options.min_amp, filter_evids=filter_evids)
                 if X is None:
                     continue
 

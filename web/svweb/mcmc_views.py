@@ -383,7 +383,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
     n = len(eids)
     f = Figure((16, 4*n))
     f.patch.set_facecolor('white')
-    gs = gridspec.GridSpec(n, 3)
+    gs = gridspec.GridSpec(n, 2)
 
     j = 0
     for wn in sg.station_waves[sta]:
@@ -402,12 +402,11 @@ def conditional_signal_posterior(request, dirname, sta, phase):
 
         posterior_means, posterior_vars = zip(*marginals)
         posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
-
-
+        
         for i, (eid, pphase, _, sidx, cnpts, ctype) in enumerate(wn.tssm_components):
             if ctype != "wavelet": continue
             if pphase != phase: continue
-            
+    
             cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
             cond_means, cond_vars = np.asarray(cond_means, dtype=np.float64), np.asarray(cond_vars, dtype=np.float64)
             cssm = wn.arrival_ssms[(eid, phase)]
@@ -429,6 +428,10 @@ def conditional_signal_posterior(request, dirname, sta, phase):
             cstime = stime + sidx/srate - 5.0
             cetime= cstime + cnpts / srate + 5.0
 
+            w_local = w[sidx : sidx + cnpts]
+            ymin  = np.min(w_local) - .5
+            ymax  = np.max(w_local) + .5
+
             ax = f.add_subplot(gs[j, 0])
             ax.plot(timevals, w)
             ax.plot(timevals, pred_mean, lw=2)
@@ -438,7 +441,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
                             pred_mean-2*np.sqrt(pred_var), facecolor="green", alpha=0.2)
 
             ax.set_xlim([cstime, cetime])
-            ax.set_ylim([np.min(w)-.5, np.max(w)+.5])
+            ax.set_ylim([ymin, ymax])
 
             ax.set_title("lp %f conditional" % (lp2))
             ax = f.add_subplot(gs[j, 1])
@@ -450,10 +453,10 @@ def conditional_signal_posterior(request, dirname, sta, phase):
                             base_mean-2*np.sqrt(base_var), facecolor="green", alpha=0.2)
 
             ax.set_xlim([cstime, cetime])
-            ax.set_ylim([np.min(w)-.5, np.max(w)+.5])            
+            ax.set_ylim([ymin, ymax])            
             ax.set_title("lp %f prior" % (lp1))
 
-
+            """
             ax = f.add_subplot(gs[j, 2])
             #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
             #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
@@ -464,8 +467,11 @@ def conditional_signal_posterior(request, dirname, sta, phase):
 
             ax.set_xlim([cstime, cetime])            
             ax.set_title("lp %f filtered" % (lp3))
-            ax.set_ylim([np.min(w)-.5, np.max(w)+.5])
+            ax.set_ylim([ymin, ymax])
+            """
+
             j += 1
+
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')
@@ -825,7 +831,7 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
                 else:
                     assert(keys == sorted(hparam_nodes.keys()))
 
-    f = Figure((16, 8))
+    f = Figure((16, 1.2*len(hkeys)))
     f.patch.set_facecolor('white')
     gs = gridspec.GridSpec(len(hkeys), len(keys))
     
@@ -852,8 +858,9 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
             if true_vals is not None:
                 ax.axvline(true_vals[i], lw=1, color="green")
 
+            hpphase = hkey.split(";")[-2]
             hpclass = hkey.split(";")[-1]
-            ax.set_title("%s %s" % (hpclass, k))
+            ax.set_title("%s %s %s" % (hpphase, hpclass, k))
             ax.annotate('mean %.1f\nstd %.1f' % (np.mean(samples), np.std(samples)), (0.1, 0.1), xycoords='axes fraction', size=10)
 
     canvas = FigureCanvas(f)
@@ -1126,10 +1133,85 @@ def mcmc_arrivals(request, dirname, wn_label, step):
 
     for (eid, phase) in sorted(wn.arrivals()):
         v, tg = wn.get_template_params_for_arrival(eid=eid, phase=phase)
+
+        tmnodes = sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
+
         response += "eid %d, phase %s:\n" % (eid, phase)
         for (key, val) in v.items():
-            response += " %s: %s\n" % (key, val)
+
+            k, node = tmnodes[key]
+            pv = node._parent_values()
+
+            model_txt = ""
+            if node.deterministic():
+                parent_key = node.default_parent_key()
+                parent = node.parents[parent_key]
+                pv = parent._parent_values()
+
+                if parent.modeled_as_joint():
+                    model = parent.joint_conditional_dist()
+                    lp = model.log_p(parent.get_value())
+                else:
+                    model = parent.model
+
+
+                try:
+                    pmean = model.predict(cond=pv)
+                except:
+                    pmean = np.nan
+                try:
+                    pstd = np.sqrt(model.variance(cond=pv))
+                except:
+                    pstd = 0.0
+
+                try:
+                    modelid = parent.modelid
+                except:
+                    modelid = -1
+
+                try:
+                    lp = model.log_p(parent.get_value(), cond=pv)
+                except:
+                    lp = np.nan
+
+                model_txt = "determined by parent with value %.2f, mean %.2f std %.2f, lp %.2f under model %s" % (parent.get_value(), pmean, pstd, lp, modelid)
+            else:
+                try:
+                    lp = node.log_p()
+                except:
+                    lp = np.nan
+
+
+                if node.modeled_as_joint():
+                    model = node.joint_conditional_dist()
+                    lp = model.log_p(node.get_value(), cond=pv)
+                else:
+                    model = node.model
+    
+                try:
+                    pmean = model.predict(cond=pv)
+                except:
+                    pmean = np.nan
+                try:
+                    pstd = np.sqrt(model.variance(cond=pv))
+                except:
+                    pstd = 0.0
+                try:
+                    modelid = model.modelid
+                except:
+                    modelid = -1
+
+                model_txt = "mean %.2f std %.2f, lp %.2f under model %d" % (pmean, pstd, lp, modelid)
+
+            try:
+                response += " %s: %.3f  %s\n" % (key, val, model_txt)
+            except:
+                response += " %s: %s\n  %s" % (key, val, model_txt)
         response += "\n"
+
+
+    response += "\nnoise model params %s mean %.2f step std %.2f stationary std %.2f\n" % (wn.nm.params, wn.nm.c, wn.nm.em.std, np.sqrt(wn.nm.marginal_variance()))
+    
 
     return HttpResponse(response, content_type="text/plain")
 

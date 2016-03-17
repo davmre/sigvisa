@@ -200,6 +200,9 @@ class ConstGaussianModel(ParamModel):
     def variance(self, cond, **kwargs):
         return self.std**2
 
+    def __str__(self):
+        return "ConstGaussian(mean=%.2f, std=%.2f)" % (self.mean, self.std)
+
 
 class ConstLaplacianModel(ParamModel):
 
@@ -272,6 +275,9 @@ class ConstLaplacianModel(ParamModel):
 
     def variance(self, cond, **kwargs):
         return 2 * self.scale**2
+
+    def __str__(self):
+        return "ConstLaplacian(center=%.3f, scale=%.3f)" % (self.center, self.scale)
 
 class ConstBetaModel(ParamModel):
 
@@ -350,3 +356,6 @@ class ConstBetaModel(ParamModel):
 
     def variance(self, cond, **kwargs):
         return self.model.variance()
+
+    def __str__(self):
+        return "ConstBeta(alpha=%.3f, beta=%.3f)" % (self.alpha, self.beta)

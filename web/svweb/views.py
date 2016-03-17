@@ -197,10 +197,10 @@ def fit_detail(request, fitid):
 
 
 def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=None,
-                            ratio=1.6, dpi=144, tmpl_alpha=1, tmpl_width=3, 
+                            zoom=1.0, dpi=144, tmpl_alpha=1, tmpl_width=3, 
                             tmpl_color="green", predictions=None):
 
-    fig = Figure(figsize=(ratio*5, 5), dpi=144)
+    fig = Figure(figsize=(zoom*8, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     axes.set_xlabel("Time (s)", fontsize=8)
@@ -307,6 +307,7 @@ def FitImageView(request, fitid):
     only_phase = request.GET.get("phase", None)
     pred_phases = request.GET.get("pred_phases", "none")
     template_only = request.GET.get("template_only", "False").lower().startswith('t')
+    zoom = float(request.GET.get("zoom", "1.0"))
 
     if saveprefs:
         fit_view_options = view_options.objects.get(id=1)
@@ -315,7 +316,7 @@ def FitImageView(request, fitid):
         fit_view_options.save()
 
     sg = load_sg_from_db_fit(fit.fitid)
-    wave_node = list(sg.leaf_nodes)[0]
+    wave_node = list(sg.station_waves.values()[0])[0]
     obs_wave = wave_node.get_wave()
     wave_node.unfix_value()
     wave_node._parent_values()
@@ -380,7 +381,7 @@ def FitImageView(request, fitid):
     sta = sg.station_waves.keys()[0]
     if pred_phases=="all":
         # pred atimes for all phases that exist
-        phases = ("P", "PKP", "S", "PKPbc", "PcP", "pP", "Lg", "PKPab", "ScP", "PKKPbc", "Pg", "Rg")
+        phases = ("P", "PKP", "S", "PKPbc", "PcP", "pP", "Lg", "PKPab", "ScP", "PKKPbc", "Pg", "Rg", "Sn", "Pn")
     elif pred_phases=="model":
         # pred atimes for the phases this sg knows about
         phases = sg.phases
@@ -399,7 +400,8 @@ def FitImageView(request, fitid):
                                    logscale=logscale, smoothing=smoothing, request=request,
                                    tmpl_alpha = 0.8 if wiggle else 1, 
                                    tmpl_color="red" if noise else "green", 
-                                   predictions=pred_phase_atimes)
+                                   predictions=pred_phase_atimes,
+                                   zoom=zoom)
 
 
 def phases_from_request(request):

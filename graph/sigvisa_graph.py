@@ -158,6 +158,7 @@ class SigvisaGraph(DirectedGraphModel):
                  force_event_wn_matching=False,
                  hack_coarse_tts=None,
                  hack_coarse_signal=None,
+                 hack_ttr_max=25.0,
                  phase_existence_model="ga_logistic",
                  min_mb = 2.5,
                  inference_region=None):
@@ -178,6 +179,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.hack_param_constraint = hack_param_constraint
         self.hack_coarse_tts = hack_coarse_tts
         self.hack_coarse_signal = hack_coarse_signal
+        self.hack_ttr_max = hack_ttr_max
 
         if template_model_type=="param":
             # sensible defaults
@@ -1176,6 +1178,8 @@ class SigvisaGraph(DirectedGraphModel):
         else:
             model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
 
+        if modelid is None and model_type=="constant_laplacian":
+            import pdb; pdb.set_trace()
         return model, modelid
 
     def get_param_models(self, wn, phase):
@@ -1199,10 +1203,17 @@ class SigvisaGraph(DirectedGraphModel):
                               high_bound=None, initial_value=None, **kwargs):
 
 
+        if param == "mult_wiggle_std" and model_type=="gp_joint":
+            model_type = "constant_beta"
+
         # for each station at this site, create a node with the
         # appropriate parameter model.
         nodes = dict()
         for sta in self.site_elements[site]:
+
+            #if phase=="Pn" and param=="amp_transfer":
+            #    #model = Gaussian(8.5, std=3.76)
+            #    modelid=None
             if "joint" not in model_type:
                 model, modelid = self.get_model(param, sta, phase, model_type, 
                                                 chan=chan, band=band, 
@@ -1214,7 +1225,7 @@ class SigvisaGraph(DirectedGraphModel):
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
 
-            node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint, hack_coarse_tts=self.hack_coarse_tts)
+            node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint, hack_coarse_tts=self.hack_coarse_tts, hack_ttr_max=self.hack_ttr_max)
             node.modelid = modelid
 
             if model_type=="gp_joint":
@@ -1398,7 +1409,8 @@ class SigvisaGraph(DirectedGraphModel):
         return fullnodes
 
 
-    def add_wave(self, wave, fixed=True, disable_conflict_checking=False, wave_env=None, 
+    def add_wave(self, wave, fixed=True, disable_conflict_checking=False, 
+                 wave_env=None, dummy_noise_prior=False, init_extra_noise=True,
                  nmid=None, **kwargs):
         """
         Add a wave node to the graph. Assume that all waves are added before all events.
@@ -1501,6 +1513,8 @@ class SigvisaGraph(DirectedGraphModel):
         nm_node = NoiseModelNode(wave, label=nm_label, 
                                  is_env="env" in wave['filter_str'], 
                                  nmid=nmid,
+                                 force_dummy=dummy_noise_prior,
+                                 init_extra_noise=init_extra_noise,
                                  runids=self.runids)
         self.add_node(nm_node)
 

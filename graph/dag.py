@@ -272,7 +272,8 @@ class DirectedGraphModel(DAG):
         start_values = self.get_all(node_list=node_list)
         low_bounds = np.concatenate([node.low_bounds() for node in node_list])
         high_bounds = np.concatenate([node.high_bounds() for node in node_list])
-        bounds = zip(low_bounds, high_bounds)
+        #bounds = zip(low_bounds, high_bounds)
+        bounds = None
 
         jp = lambda v: self.joint_logprob(values=v, relevant_nodes=relevant_nodes, node_list=node_list, proxy_lps=proxy_lps, c=-1)
 

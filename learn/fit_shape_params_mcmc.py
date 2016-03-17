@@ -16,6 +16,7 @@ from sigvisa.database import db
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.run_mcmc import run_open_world_MH, MCMCLogger
 from sigvisa.models.signal_model import update_arrivals
+from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian, LogNormal, InvGamma, Beta, Laplacian, Bernoulli
 from sigvisa.models.noise.noise_util import model_path
 import sigvisa.utils.geog
 import obspy.signal.util
@@ -70,7 +71,8 @@ def get_previous_fitid(runid, evid, sta):
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
                 init_run_name, init_iteration, fit_hz=5, uatemplate_rate=1e-4,
-                smoothing=0, dummy_fallback=False, raw_signals=False, init_templates=False):
+                smoothing=0, dummy_fallback=False, 
+                raw_signals=False, init_templates=False, **kwargs):
 
     """
     Set up the graph with the signal for a given training event.
@@ -93,7 +95,7 @@ def setup_graph(event, sta, chan, band,
                       uatemplate_rate=uatemplate_rate,
                       min_mb=1.0,
                       dummy_fallback=dummy_fallback,
-                      raw_signals=raw_signals)
+                      raw_signals=raw_signals, **kwargs)
 
     filter_str = band
     if not raw_signals:
@@ -112,7 +114,7 @@ def setup_graph(event, sta, chan, band,
     if (not raw_signals) and  (np.sum(wave.data < 0.0001) > 10):
         raise Exception("wave contains regions of zeros")
 
-    sg.add_wave(wave=wave)
+    sg.add_wave(wave=wave, init_extra_noise=True)
     sg.add_event(ev=event)
 
     if init_templates:
@@ -128,45 +130,6 @@ def setup_graph(event, sta, chan, band,
 
     return sg
 
-
-def optimize_template_params(sigvisa_graph,  wn, tmpl_optim_params):
-
-    nm1 = wn.nm_node.prior_nm.copy()
-    #means = wn.signal_component_means()
-    #noise_mean = means['noise']
-    #noise_var = wn.signal_component_means(return_stds_instead=True)['noise']**2
-    #nm2 = sample_posterior_armodel_from_signal(noise_mean, noise_var, wn.prior_nm), None
-
-    if sigvisa_graph.template_shape=="lin_polyexp":
-        nphases = int(len(sigvisa_graph.template_nodes)/6) # HACK
-
-        v1 = np.array([ 0., 2.0, -0.5, -1, -3, 0.6] * nphases)
-        v2 = np.array([ 2., -1, -1.5, -1, -1.5, 0.2] * nphases)
-        v3 = np.array([ -3., 2.3, 0.5, -1, -3, 0.4] * nphases)
-        init_vs = [(v1, nm1), (v2, nm1), (v3, nm1)]
-    else:
-        raise Exception("don't know how to initialize params for template shape %s" % sigvisa_graph.template_shape)
-
-    best_vals = None
-    best_prob = -np.inf
-    best_nm = nm1
-    for v, nm in init_vs:
-        #wn.set_noise_model(nm, nmid)
-        sigvisa_graph.set_all(values=v, node_list=sigvisa_graph.template_nodes)
-        sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
-        v_result = sigvisa_graph.get_all(sigvisa_graph.template_nodes)
-        v_p = sigvisa_graph.current_log_p()
-
-        if v_p > best_prob:
-            best_prob = v_p
-            best_vals = v_result
-            best_nm = nm
-
-
-
-    #nm, nmid = best_nm
-    #wn.set_noise_model(nm, nmid)
-    sigvisa_graph.set_all(values=best_vals, node_list=sigvisa_graph.template_nodes)
 
 def multiply_scalar_gaussian(m1, v1, m2, v2):
     """
@@ -294,7 +257,11 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid,
     if not init_templates:
         # if we didn't already initialize from previously fit templates,
         # start by running an optimization to find reasonable values
-        optimize_template_params(sigvisa_graph, wn, tmpl_optim_params)
+        for n in sigvisa_graph.extended_evnodes[1]:
+            if n.deterministic(): continue
+            if n in sigvisa_graph.evnodes[1].values(): continue
+            n.parent_sample()
+        #optimize_template_params(sigvisa_graph, wn, tmpl_optim_params)
 
 
     # run MCMC to sample from the posterior on template params
@@ -521,6 +488,17 @@ def main():
     uatemplate_rate = options.uatemplate_rate
     enable_uatemplates = uatemplate_rate is not None
 
+    fittingDummyPrior = {
+        "tt_residual": Laplacian(center=0.0, scale=0.5),
+        "amp_transfer": Gaussian(mean=10.0, std=10.0),
+        "peak_offset": TruncatedGaussian(mean=-1.5, std=1.0, b=4.0),
+        "mult_wiggle_std": Beta(4.0, 1.0),
+        "coda_decay": Gaussian(mean=-2.0, std=1.0),
+        "peak_decay": Gaussian(mean=-2.0, std=1.0)
+    }
+
+
+
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
                                 wm_family=options.wiggle_family, wm_type=options.wiggle_model,
@@ -530,7 +508,9 @@ def main():
                                 init_run_name = init_run_name, init_iteration = init_iteration,
                                 smoothing=options.smooth,
                                 init_templates=options.init_templates,
-                                dummy_fallback=options.dummy_fallback, raw_signals=options.raw_signals)
+                                dummy_fallback=options.dummy_fallback, 
+                                dummy_prior=fittingDummyPrior,
+                                raw_signals=options.raw_signals)
 
     runid = get_fitting_runid(cursor, options.run_name, options.run_iteration, create_if_new = True)
     if not options.nocheck:

@@ -317,13 +317,37 @@ def atime_align_gpwiggle_move(self, wn, eid, phase, tmnodes, **kwargs):
 
     cssm = wn.arrival_ssms[(eid, phase)]
     (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps) = wn.wavelet_basis
+    
+    if wn.has_jointgp:
+        cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
+        cond_means, cond_vars = np.asarray(cond_means, dtype=np.float64), np.asarray(cond_vars, dtype=np.float64)
+        cssm.set_coef_prior(cond_means, cond_vars)
+
     pred_wavelet = cssm.mean_obs(n_steps)
+
+    if wn.has_jointgp:
+        wn._set_cssm_priors_from_model(arrivals=[(eid, phase)])
+
     tmvals = wn.get_template_params_for_arrival(eid, phase)
     env = np.exp(tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=n_steps))
     pred_signal = pred_wavelet * env
 
     pbu = wn.unexplained_kalman(exclude_eids=[eid,])
-    atime_ll = ar_advantage(pbu, pred_signal, wn.nm)
+    relevant_stime = current_atime - 20.0
+    relevant_sidx = int(wn.srate * (relevant_stime - wn.st))
+    relevant_eidx = int(wn.srate * (current_atime + 20.0 - wn.st)) + len(pred_signal)
+    if relevant_sidx < 0 or relevant_eidx > len(pbu):
+        return False
+
+    relevant_signal = pbu[relevant_sidx:relevant_eidx]
+
+    atime_ll = ar_advantage(relevant_signal, pred_signal, wn.nm)
+
+    def idx_to_atime(proposed_idx):
+        return relevant_stime + (proposed_idx - relevant_sidx) / float(wn.srate)
+
+    def atime_to_idx(proposed_atime):
+        return int( (proposed_atime - relevant_stime)*wn.srate)
 
     # temper the proposal distribution a bit
     maxll = np.max(ll)
@@ -334,9 +358,7 @@ def atime_align_gpwiggle_move(self, wn, eid, phase, tmnodes, **kwargs):
     
     proposal_dist = np.exp(atime_ll - maxll)
     proposal_dist /= np.sum(proposal_dist)
-
     proposed_idx = np.random.choice(np.arange(len(proposal_dist)), p=proposal_dist)
-
     proposed_atime = idx_to_atime(proposed_idx)
 
     log_qforward = np.log(proposal_dist[proposed_idx])

@@ -10,19 +10,16 @@
 # File containing distance/depth ranges for various regional and teleseismic
 # phase types used by GA subsystem.
 #
-# HACKED CHANGES: P min-dist from 17.0 to 2.0
-#                 commented out Pn (equiv to P from 2.0 to 17.0)
-#                 and replaced with dummy to prevent code from complaining
-#		  similarly collasped Sn to S
+# EDITED to increase regional phases (Pn/Pg/Sn/Sg) as (roughly) suggested by Kevin Mayeda
+#
 #
 # <Phaseid> <min-dist(deg)> <max-dist(deg)> <min-depth(km)> <max-depth(km)>
 #
 LQ		5.0	180.0	0.0	800.0  -999.0
 LR		5.0	180.0	0.0	800.0  -999.0
-Lg		0.0	12.0	0.0	40.0   -999.0
-P		2.0	98.0	0.0	800.0  -999.0
-P		0.0	2.0	40.0	800.0  -999.0
-#P		17.0	98.0	0.0	40.0   -999.0
+Lg		0.0	18.0	0.0	40.0   -999.0
+P		0.0	98.0	40.0	800.0  -999.0
+P		17.0	98.0	0.0	40.0   -999.0
 PKKP		10.0	165.0	0.0	800.0	4.5        (composite of PKKPab and PKKPdf)
 PKiKP		0.0	130.0	0.0	800.0	4.5        (composite of PKKPab and PKKPdf)
 PKKPab		105.0	165.0	0.0	800.0   4.5
@@ -48,12 +45,10 @@ Pb		0.0	3.5	0.0	40.0	5.0        (PmP?)
 PcP		10.0	70.0	0.0	800.0   4.0
 PcS		10.0	62.0	0.0	800.0   4.5
 Pdiff		98.0	114.0	0.0	800.0   4.0
-Pg		0.0	8.0	0.0	40.0   -999.0
-#Pn		2.0	17.0	0.0	40.0   -999.0
-Pn		0.0	0.0	0.0	0.0   -999.0
+Pg		0.0	20.0	0.0	40.0   -999.0
+Pn		2.0	20.0	0.0	40.0   -999.0
 Rg		0.0	3.0	0.0	0.0    -999.0
 S		0.0	30.0	40.0	800.0  -999.0
-S		2.0	30.0	0.0	40.0   -999.0
 SKP		110.0	180.0	0.0	800.0   5.         (should be called PKS)
 SKPab		130.0	141.0	0.0	800.0   5.0
 SKPdf		110.0	180.0	0.0	800.0   5.0	   (same as PKS)
@@ -71,9 +66,8 @@ SSS		50.0	180.0	0.0	800.0   5.0
 Sb		0.0	4.0	0.0	40.0	5.0        (SmS?)
 ScP		10.0	62.0	0.0	800.0	4.0        (same as ScP)
 ScS		10.0	98.0	0.0	800.0   5.0
-Sg		0.0	13.5	0.0	40.0   -999.0      (same as Lg)
-#Sn		2.0	12.0	0.0	40.0   -999.0
-Sn		0.0	0.0	0.0	40.0   -999.0
+Sg		0.0	18.0	0.0	40.0   -999.0      (same as Lg)
+Sn		2.0	18.0	0.0	40.0   -999.0
 pP		10.0	98.0	10.0	800.0   5.0
 pS		10.0	98.0	10.0	800.0	5.0        (you see this once a century)
 sP		10.0	98.0	10.0	800.0   5.0

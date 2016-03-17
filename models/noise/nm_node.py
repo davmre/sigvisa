@@ -52,9 +52,9 @@ def load_noise_model_prior(sta, chan=None, band=None, hz=None, runids=None, env=
     
     return mean_model, var_model, params_model
 
-def waveform_dummy_prior(waveform, is_env=True):
+def waveform_dummy_prior(waveform, is_env=True, n_p=None):
     srate = waveform["srate"]
-    n_p = int(np.ceil(srate/3.0))
+    n_p = int(np.ceil(srate/3.0)) if n_p is None else n_p
 
     prior_params = np.zeros((n_p,))
     prior_params[0] = 0.3
@@ -81,35 +81,44 @@ class NoiseModelNode(Node):
     # it adds in the event source amplitude, deterministically
 
     def __init__(self, waveform, force_dummy=False, is_env=False, 
-                 runids=None, nmid=None, **kwargs):
-        self.is_env = is_env
+                 runids=None, nmid=None, init_extra_noise=True, **kwargs):
 
-        try:
+        self.is_env = is_env
+        
+        nm = None
+        if nmid is not None:
+            nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)
+
+        if runids is None or len(runids)==0:
+            force_dummy = True
+
+        if force_dummy:
+            n_params = None if nm is None else len(nm.params)
+            self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = waveform_dummy_prior(waveform, is_env, n_p = n_params)
+        else:
             self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = \
                load_noise_model_prior(sta=waveform["sta"], chan=waveform["chan"],
                                       band=waveform["band"], hz=waveform["srate"],
                                       runids=runids,
                                       env = is_env)
-        except Exception as e:
-            force_dummy = True
-            print e
-            logging.warning("falling back to dummy noise prior for %s" % str(waveform))
+        #except Exception as e:
+        #    force_dummy = True
+        #    print e
+        #    logging.warning("falling back to dummy noise prior for %s" % str(waveform))
 
-        if force_dummy:
-            self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = waveform_dummy_prior(waveform, is_env)
 
 
         v_pred, v_std = self.prior_var_dist.predict(), np.sqrt(self.prior_var_dist.variance())
-        em = ErrorModel(mean=0.0, std=np.sqrt(v_pred + 2*v_std))
+        init_std = np.sqrt(v_pred + 2*v_std) if init_extra_noise else np.sqrt(v_pred)
+        em = ErrorModel(mean=0.0, std=init_std)
 
         m_pred, m_std = self.prior_mean_dist.predict(), np.sqrt(self.prior_mean_dist.variance())
+        init_mean = m_pred + (2*m_std if is_env else 0.0) if init_extra_noise else m_pred
         self.prior_nm = ARModel(params=self.prior_param_dist.predict(), em=em, 
-                                c=m_pred + (2*m_std if is_env else 0.0), sf=waveform["srate"])
+                                c=init_mean, sf=waveform["srate"])
 
         if nmid is None:
             nm = self.prior_nm.copy()
-        else:
-            nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, nmid)
 
         super(NoiseModelNode, self).__init__(initial_value=nm, **kwargs)
         self.set_value(nm)
