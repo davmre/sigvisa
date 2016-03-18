@@ -73,18 +73,12 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
     initialize_sg(sg1, ms1, rs)
     rundir = do_inference(sg1, ms1, rs,
                           model_switch_lp_threshold=None,
-                          max_steps = 5, 
+                          max_steps = 500, 
                           run_dir=rundir)
     rundir = rundir + ".1.1.1"
 
-
-    #with open("/home/dmoore/python/sigvisa/logs/mcmc/01079/step_000496/pickle.sg") as f:
-    #    sg1 = pickle.load(f)
-
-
     sg4 = rs.build_sg(ms4)
     initialize_from(sg4, ms4, sg1, ms1)
-
 
     for sta in stas:
         for phase in sort_phases(phases):
