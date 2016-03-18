@@ -41,6 +41,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     hack_param_constraint=True,
                     hack_ttr_max=8.0,
                     phases=phases,
+                    skip_levels=0,
                     raw_signals=False, max_hz=2.0,  **kwargs)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
 
@@ -52,6 +53,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     phases=phases,
                     jointgp_param_run_init=jgp_runid,
                     hack_ttr_max=8.0,
+                    skip_levels=0,
                     **kwargs)
     ms4.add_inference_round(enable_event_moves=False, 
                             enable_event_openworld=False, 
