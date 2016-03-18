@@ -12,13 +12,19 @@ import os, sys, traceback
 import cPickle as pickle
 from optparse import OptionParser
 
-def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, resume_from=None, **kwargs):
+from sigvisa.infer.initialize_joint_alignments import align_atimes
 
-    #isc_evs = [load_isc(evid) for evid in evids]
-    #main_ev = isc_evs[0]
-    #main_ev = get_event(evid=5335822)
-    #isc_evs = [ev for ev in isc_evs if ev is not None and dist_km((main_ev.lon, main_ev.lat), (ev.lon, ev.lat)) < 15]
-    
+def sort_phases(phases):
+    canonical_order=["P", "pP", "Pn", "Pg", "S", "Sn", "Lg"]
+    return sorted(phases, key = lambda phase : - canonical_order.index(phase))
+
+def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases, 
+                        max_hz=None, resume_from=None, 
+                        init_buffer_len=8.0,
+                        n_random_inits=200,
+                        init_from_inferred_times=False,
+                        **kwargs):
+
     try:
         jgp_runid = runids_raw[0]
     except:
@@ -34,47 +40,65 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, max_hz=None, resume_from
                     runids=runids, 
                     hack_param_constraint=True,
                     hack_ttr_max=8.0,
+                    phases=phases,
                     raw_signals=False, max_hz=2.0,  **kwargs)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
-
-    ms2 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", 
-                    min_mb=1.0,
-                    runids=runids, 
-                    jointgp_param_run_init=runids[0],
-                    hack_param_constraint=True,
-                    hack_ttr_max=8.0,
-                    raw_signals=False, max_hz=2.0, **kwargs)
-    ms2.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=100)
-
-
-    ms3 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", wiggle_model_type="dummy", 
-                    min_mb=1.0,
-                    runids=runids_raw, 
-                    hack_param_constraint=True,
-                    hack_ttr_max=8.0,
-                    jointgp_param_run_init=jgp_runid, raw_signals=True, max_hz=max_hz, **kwargs)
-    ms3.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=50)
 
     ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
                     min_mb=1.0,
                     wiggle_model_type="gp_joint", raw_signals=True, max_hz=max_hz,
                     runids=runids_raw, 
                     hack_param_constraint=True,
+                    phases=phases,
                     jointgp_param_run_init=jgp_runid,
                     hack_ttr_max=8.0,
                     **kwargs)
+    ms4.add_inference_round(enable_event_moves=False, 
+                            enable_event_openworld=False, 
+                            enable_template_openworld=False, 
+                            enable_template_moves=True, 
+                            special_mb_moves=False, 
+                            enable_phase_openworld=False,
+                            fix_atimes=True, steps=30)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, enable_phase_openworld=False)
 
-    if resume_from is None:
-        ms = [ms1, ms2, ms3, ms4]
-        do_coarse_to_fine(ms, rs, max_steps_intermediate=None, model_switch_lp_threshold=None, max_steps_final=300)
-    else:
-        with open(resume_from, 'rb') as f:
-            sg = pickle.load(f)
-        do_inference(sg, ms4, rs, dump_interval_s=10, 
-                     print_interval_s=10, 
-                     max_steps=300,
-                     model_switch_lp_threshold=None)
+
+    rundir = None
+
+    print sort_phases(phases)
+
+    sg1 = rs.build_sg(ms1)
+    initialize_sg(sg1, ms1, rs)
+    rundir = do_inference(sg1, ms1, rs,
+                          model_switch_lp_threshold=None,
+                          max_steps = 5, 
+                          run_dir=rundir)
+    rundir = rundir + ".1.1.1"
+
+
+    #with open("/home/dmoore/python/sigvisa/logs/mcmc/01079/step_000496/pickle.sg") as f:
+    #    sg1 = pickle.load(f)
+
+
+    sg4 = rs.build_sg(ms4)
+    initialize_from(sg4, ms4, sg1, ms1)
+
+
+    for sta in stas:
+        for phase in sort_phases(phases):
+            try:
+                align_atimes(sg4, sta, phase, buffer_len_s=init_buffer_len, 
+                             patch_len_s=20.0, n_random_inits=n_random_inits,
+                             center_at_current_atime=init_from_inferred_times)
+            except Exception as e:
+                print e
+                continue
+
+    do_inference(sg4, ms4, rs, dump_interval_s=10, 
+                 print_interval_s=10, 
+                 max_steps=300,
+                 run_dir=rundir,
+                 model_switch_lp_threshold=None)
 
 def get_evs(min_lon, max_lon, min_lat, max_lat, min_time, max_time, evtype="isc", precision=None):
     if evtype=="isc" and precision is not None:
@@ -119,6 +143,11 @@ def main():
     parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     parser.add_option("--precision", dest="precision", default=None, type=float)
     parser.add_option("--resume_from", dest="resume_from", default=None, type=str)
+    parser.add_option("--init_buffer_len", dest="init_buffer_len", default=8.0, type=float)
+    parser.add_option("--init_from_inferred_times", dest="init_from_inferred_times", default=False, action="store_true")
+    parser.add_option("--n_random_inits", dest="n_random_inits", default=200, type=int)
+    
+
     (options, args) = parser.parse_args()
 
     if options.phases is not None:
@@ -173,6 +202,9 @@ def main():
                         phases=phases,
                         dummy_prior=dummyPrior,
                         dummy_fallback=True,
+                        init_buffer_len=options.init_buffer_len,
+                        n_random_inits = options.n_random_inits,
+                        init_from_inferred_times=options.init_from_inferred_times,
                         resume_from=options.resume_from)
 
 

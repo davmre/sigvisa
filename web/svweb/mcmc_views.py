@@ -21,6 +21,7 @@ from sigvisa.database.signal_data import *
 from sigvisa.utils.geog import azimuth_gap, dist_km
 from sigvisa.infer.analyze_mcmc import load_trace, trace_stats, match_true_ev
 from sigvisa.infer.template_xc import get_arrival_signal, fastxc
+from sigvisa.infer.correlations.ar_correlation_model import ar_advantage, iid_advantage
 from sigvisa.models.ttime import tt_predict
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
 from sigvisa.plotting.event_heatmap import EventHeatmap
@@ -785,6 +786,7 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
 
     radius_km = float(request.GET.get('radius_km', '15.0'))
     signal_len = float(request.GET.get('signal_len', '20.0'))
+    xc_type = request.GET.get('xc_type', 'xc')
 
     buffer_s = 8.0
 
@@ -802,7 +804,7 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
     base_ev = sg.get_event(base_eid)
     base_wn = sg.get_arrival_wn(sta, base_eid, phase, band=None, chan=None)
     atime = base_wn.get_template_params_for_arrival(base_eid, phase)[0]["arrival_time"]
-    sidx = int(((atime - buffer_s) - base_wn.st) * base_wn.srate)
+    sidx = int(np.round(((atime - buffer_s) - base_wn.st) * base_wn.srate))
     eidx = sidx + int((signal_len + 2*buffer_s) * base_wn.srate)
     default_idx = int(buffer_s * base_wn.srate)
     base_signal = base_wn.get_value()[sidx:eidx].copy()
@@ -832,19 +834,30 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
     eid_ttrs = []
     for eid, wn in zip(nearby_eids, nearby_eid_wns):
         ev = sg.get_event(eid)
-        pred_atime = ev.time + tt_predict(ev, sta, phase)
+        pred_atime = ev.time + tt_predict(ev, sta, phase)        
         atime = wn.get_template_params_for_arrival(eid, phase)[0]["arrival_time"]
         eid_ttrs.append(atime - pred_atime)
 
-        sidx = int((atime - wn.st) * wn.srate)
+        sidx = int(np.round((atime - wn.st) * wn.srate))
         eidx = sidx + int(signal_len * wn.srate)
         eid_signal = wn.get_value()[sidx:eidx].copy()
         eid_signal /= np.linalg.norm(eid_signal)
         eid_signals.append(eid_signal)
 
         # also then do a correlation to get the best offset
-        xc = fastxc(eid_signal, base_signal)
+        if xc_type=="xc":
+            xc = fastxc(eid_signal, base_signal)
+        elif xc_type=="ar":
+            xc = ar_advantage(base_signal, eid_signal, wn.nm)
+            xc /= np.sum(xc)
+        elif xc_type=="iid":
+            xc = iid_advantage(base_signal, eid_signal)
+            xc /= np.sum(xc)
+
         align_s = np.argmax(xc) / wn.srate - buffer_s
+        align_idx = np.argmax(xc) + sidx
+
+        #print "eid", eid, "atime", atime, "xc_atime", atime + align_s
         eid_alignments.append((np.max(xc), xc[default_idx], align_s))
 
 

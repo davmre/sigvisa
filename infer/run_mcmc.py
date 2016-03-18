@@ -279,6 +279,7 @@ def run_open_world_MH(sg, steps=10000,
                       swapper=None,
                       prior_births_only=False,
                       n_naive_evmoves=10,
+                      fix_atimes=False,
                       stop_condition=None):
 
 
@@ -353,6 +354,7 @@ def run_open_world_MH(sg, steps=10000,
     if sg.hack_coarse_signal is not None:
         # don't try to infer the noise level if we've manually fixed it
         del sta_moves["arnoise_std"]
+        
 
     template_moves_special = {'indep_peak': (indep_peak_move, 1.0),
                               'peak_offset': (improve_offset_move_gaussian, 1.0),
@@ -364,6 +366,13 @@ def run_open_world_MH(sg, steps=10000,
                              } if enable_template_moves else {}
     if template_move_type in ("hamiltonian", "both"):
         template_moves_special['hamiltonian_reversing'] = (hamiltonian_template_move, 1.0)
+
+    if fix_atimes:
+        del template_moves_special["indep_peak"]
+        del template_moves_special["arrival_time"]
+        del template_moves_special["arrival_time_big"]
+        del template_moves_special["atime_xc"]
+        del template_moves_special["peak_offset"]
 
     # allow the caller to disable specific moves by name
     for move in disable_moves:
@@ -512,7 +521,7 @@ def run_open_world_MH(sg, steps=10000,
                             if use_proxy_lp:
                                 proxy_lps = wn.window_lps_to_proxy_lps(window_lps)
 
-                            do_template_moves(sg, wn, tmnodes, tg, stds,
+                            do_template_moves(sg, wn, tmnodes, tg, stds, 
                                               n_attempted, n_accepted, move_times, step,
                                               proxy_lps=proxy_lps)
 
