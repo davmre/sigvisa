@@ -1010,7 +1010,7 @@ def mcmc_compare_gps_doublets(request, dirname, sta):
     f.patch.set_facecolor('white')
     gs = gridspec.GridSpec(len(actual_signals), 2)
 
-    phase_colors = {"Pn": "blue", "Pg": "green", "Sn": "red", "Lg": "purple"}
+    phase_colors = {"Pn": "blue", "Pg": "green", "Sn": "red", "Lg": "purple", "P": "brown"}
 
     def do_xc(short_s, long_s, long_nm=None):
         if xc_type=="xc":
