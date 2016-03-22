@@ -22,7 +22,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                         max_hz=None, resume_from=None, 
                         init_buffer_len=8.0,
                         n_random_inits=200,
-                        init_from_inferred_times=False,
+                        init_from_predicted_times=False,
                         **kwargs):
 
     try:
@@ -61,8 +61,8 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                             enable_template_moves=True, 
                             special_mb_moves=False, 
                             enable_phase_openworld=False,
-                            fix_atimes=True, steps=30)
-    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, enable_phase_openworld=False)
+                            fix_atimes=True, steps=100)
+    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, enable_phase_openworld=False, steps=300)
 
 
     rundir = None
@@ -73,7 +73,6 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
     initialize_sg(sg1, ms1, rs)
     rundir = do_inference(sg1, ms1, rs,
                           model_switch_lp_threshold=None,
-                          max_steps = 500, 
                           run_dir=rundir)
     rundir = rundir + ".1.1.1"
 
@@ -86,14 +85,13 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                 try:
                     align_atimes(sg4, sta, phase, buffer_len_s=init_buffer_len, 
                                  patch_len_s=20.0, n_random_inits=n_random_inits,
-                                 center_at_current_atime=init_from_inferred_times)
+                                 center_at_current_atime=not init_from_predicted_times)
                 except Exception as e:
                     print e
                     continue
 
     do_inference(sg4, ms4, rs, dump_interval_s=10, 
                  print_interval_s=10, 
-                 max_steps=300,
                  run_dir=rundir,
                  model_switch_lp_threshold=None)
 
@@ -140,8 +138,8 @@ def main():
     parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     parser.add_option("--precision", dest="precision", default=None, type=float)
     parser.add_option("--resume_from", dest="resume_from", default=None, type=str)
-    parser.add_option("--init_buffer_len", dest="init_buffer_len", default=8.0, type=float)
-    parser.add_option("--init_from_inferred_times", dest="init_from_inferred_times", default=False, action="store_true")
+    parser.add_option("--init_buffer_len", dest="init_buffer_len", default=2.0, type=float)
+    parser.add_option("--init_from_predicted_times", dest="init_from_predicted_times", default=False, action="store_true")
     parser.add_option("--n_random_inits", dest="n_random_inits", default=200, type=int)
     
 
@@ -201,7 +199,7 @@ def main():
                         dummy_fallback=True,
                         init_buffer_len=options.init_buffer_len,
                         n_random_inits = options.n_random_inits,
-                        init_from_inferred_times=options.init_from_inferred_times,
+                        init_from_predicted_times=options.init_from_predicted_times,
                         resume_from=options.resume_from)
 
 
