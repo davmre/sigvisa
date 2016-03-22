@@ -80,15 +80,16 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
     sg4 = rs.build_sg(ms4)
     initialize_from(sg4, ms4, sg1, ms1)
 
-    for sta in stas:
-        for phase in sort_phases(phases):
-            try:
-                align_atimes(sg4, sta, phase, buffer_len_s=init_buffer_len, 
-                             patch_len_s=20.0, n_random_inits=n_random_inits,
-                             center_at_current_atime=init_from_inferred_times)
-            except Exception as e:
-                print e
-                continue
+    if n_random_inits > 0:
+        for sta in stas:
+            for phase in sort_phases(phases):
+                try:
+                    align_atimes(sg4, sta, phase, buffer_len_s=init_buffer_len, 
+                                 patch_len_s=20.0, n_random_inits=n_random_inits,
+                                 center_at_current_atime=init_from_inferred_times)
+                except Exception as e:
+                    print e
+                    continue
 
     do_inference(sg4, ms4, rs, dump_interval_s=10, 
                  print_interval_s=10, 

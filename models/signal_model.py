@@ -215,7 +215,7 @@ class ObservedSignalNode(Node):
         if not skip_pv_call:
             self._parent_values()
 
-        atime = self._arrival_times[(eid, phase)]
+        atime = self.get_template_params_for_arrival(eid, phase)[0]["arrival_time"]
         start = (atime - self.st) * self.srate
         start_idx = int(np.floor(start))
         return start_idx

@@ -328,6 +328,8 @@ def mcmc_run_detail(request, dirname):
     bounds["left"] = left_bound - 0.2
     bounds["right"] = right_bound + 0.2
 
+    jointgps = (sg.wiggle_model_type=="gp_joint")
+
     return render_to_response("svweb/mcmc_run_detail.html",
                               {'wns': wns,
                                'phases_used': phases_used,
@@ -341,6 +343,7 @@ def mcmc_run_detail(request, dirname):
                                'stas': stas,
                                'gp_hparams': gp_hparams,
                                'bounds': bounds,
+                               'jointgps': jointgps,
                                }, context_instance=RequestContext(request))
 
 def rundir_eids(mcmc_run_dir):
@@ -899,6 +902,280 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
         my_ax2.plot(xs_aligned, signal, linewidth=1.3, alpha=0.7)
         my_ax1.set_xlim([-buffer_s, signal_len+buffer_s])
         my_ax2.set_xlim([-buffer_s, signal_len+buffer_s])
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
+def mcmc_compare_gps_doublets(request, dirname, sta):
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sta = str(sta)
+
+    xc_type = request.GET.get('xc_type', 'xc')
+    zoom = float(request.GET.get('zoom', '1.0'))
+    step = int(request.GET.get('step', '-1'))
+
+    if step < 0:
+        sg, step = final_mcmc_state(mcmc_run_dir)
+    else:
+        sg = graph_for_step(mcmc_run_dir, step)
+
+    pred_signals = {}
+    pred_atime_idxs = {}
+    extracted_signals = {}
+    neighbor_events = {}
+    actual_signals = {}
+    actual_signal_offset = {}
+    nms = {}
+    for eid in sg.evnodes.keys():
+        try:
+            wn = sg.get_arrival_wn(sta, eid, "Lg", band=None, chan=None)
+        except:
+            continue
+
+        (start_idxs, end_idxs, identities, basis_prototypes, levels, N) = wn.wavelet_basis
+
+        # find the closest neighbor to this event
+        ev = sg.get_event(eid)
+        nearest_eid = None
+        nearest_dist = np.inf
+        for eid2 in sg.evnodes.keys():
+            if eid == eid2: continue
+            ev2 = sg.get_event(eid2)
+            dist = dist_km((ev.lon, ev.lat), (ev2.lon, ev2.lat))
+            if dist < nearest_dist:
+                nearest_dist = dist
+                nearest_eid = eid2
+        neighbor_events[eid] = (nearest_eid, nearest_dist)
+        neighbor_eid = nearest_eid
+
+        # for each phase, extract the GP predicted signal and the signal from the nearest neighbor
+        pred_signals[eid] = {}
+        extracted_signals[eid] = {}
+        pred_atime_idxs[eid] = {}
+        pred_atimes = {}
+        nms[eid] = wn.nm
+        earliest_start_idx = wn.npts
+        latest_end_idx = 0
+        
+
+        for phase in sg.ev_arriving_phases(eid, sta=sta):
+
+            # extract phase signal for neighbor wn
+            try:
+                neighbor_wn = sg.get_arrival_wn(sta, neighbor_eid, phase, band=wn.band, chan=wn.chan)
+            except Exception as e:
+                print "no neighbor for %s" % phase, e
+                continue
+            neighbor_idx = neighbor_wn.arrival_start_idx(neighbor_eid, phase)
+            neighbor_end_idx = neighbor_idx + N
+            # truncate extracted signal to omit other arriving phases
+            for (eeid, pphase) in neighbor_wn.arrivals():
+                other_idx = neighbor_wn.arrival_start_idx(eeid, pphase)
+                if other_idx > neighbor_idx and other_idx < neighbor_end_idx:
+                    neighbor_end_idx = other_idx
+            extracted_signal = neighbor_wn.get_value()[neighbor_idx:neighbor_end_idx]
+            extracted_signals[eid][phase] = extracted_signal
+
+            # get leave-one-out GP prediction
+            cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
+            cond_means, cond_vars = np.asarray(cond_means, dtype=np.float64), np.asarray(cond_vars, dtype=np.float64)
+            cssm = wn.arrival_ssms[(eid, phase)]
+            cssm.set_coef_prior(cond_means, cond_vars)
+            pred_mean = wn.tssm.mean_obs(wn.npts)
+            start_idx = wn.arrival_start_idx(eid, phase)
+            end_idx = start_idx + (neighbor_end_idx-neighbor_idx)
+            pred_signal = pred_mean[start_idx:end_idx]
+            pred_signals[eid][phase] = pred_signal
+            print "pred", eid, phase
+
+            earliest_start_idx = min(start_idx, earliest_start_idx)
+            latest_end_idx = max(end_idx, latest_end_idx)
+
+            pred_atimes[phase] = ev.time + tt_predict(ev, sta, phase)
+            
+
+        buffer_idx = int(5.0 * wn.srate)
+        actual_signals[eid] = wn.get_value()[earliest_start_idx - buffer_idx: latest_end_idx + buffer_idx]
+        for phase, atime in pred_atimes.items():
+            pred_idx = int((atime - wn.st) * wn.srate)
+            pred_atime_idxs[eid][phase] = pred_idx - (earliest_start_idx - buffer_idx)
+
+    f = Figure((14*zoom, 2*zoom*len(actual_signals)))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(len(actual_signals), 2)
+
+    phase_colors = {"Pn": "blue", "Pg": "green", "Sn": "red", "Lg": "purple"}
+
+    def do_xc(short_s, long_s, long_nm=None):
+        if xc_type=="xc":
+            return fastxc(short_s, long_s)
+        elif xc_type=="ar":
+            return ar_advantage(long_s, short_s, long_nm)
+        elif xc_type=="iid":
+            norm_longs = long_s / np.std(long_s)
+            return iid_advantage(norm_longs, short_s)
+
+
+    total_pred_xc = 0.0
+    total_extracted_xc = 0.0
+
+    for i, (eid, s) in enumerate(actual_signals.items()):
+
+        ax1 = f.add_subplot(gs[i, 0])
+        ax2 = f.add_subplot(gs[i, 1])
+        ax1.plot(s, linewidth=0.5, color="black")
+        ax2.plot(s, linewidth=0.5, color="black")
+        pred_title = "eid %d pred xcs" % eid
+        extracted_title = "eid %d extracted xcs" % eid
+        s1 = s.copy()
+        s2 = s.copy()
+
+        total_ev_pred_xc = 0.0
+        total_ev_extracted_xc = 0.0
+
+        for phase in sorted(extracted_signals[eid].keys()):
+            color = phase_colors[phase]
+
+            pred_signal = pred_signals[eid][phase]
+            print len(pred_signal), len(s)
+
+            pred_idx = pred_atime_idxs[eid][phase]
+            slack_idx = 100 # 10s times srate=10.0
+            sidx_xc = max(pred_idx - slack_idx, 0)
+            xc_s1 = s1[sidx_xc : pred_idx + slack_idx + len(pred_signal)]
+            xc_s2 = s2[sidx_xc : pred_idx + slack_idx + len(pred_signal)]
+
+            xc_pred = do_xc(pred_signal, xc_s1, nms[eid])
+            sidx_pred = np.argmax(xc_pred) + sidx_xc
+            idxs_pred = np.arange(sidx_pred, sidx_pred + len(pred_signal))
+            s1[idxs_pred] = 0
+            ax1.plot(idxs_pred, pred_signal, color=color)
+            pred_title += " %s %.2f" % (phase, np.max(xc_pred))
+            total_ev_pred_xc += np.max(xc_pred)
+
+            extracted_signal = extracted_signals[eid][phase]
+            xc_extracted = do_xc(extracted_signal, xc_s2, nms[eid])
+            sidx_extracted = np.argmax(xc_extracted) + sidx_xc
+            idxs_extracted = np.arange(sidx_extracted, sidx_extracted + len(extracted_signal))
+            s2[idxs_extracted] = 0
+            target_norm=np.linalg.norm(s[idxs_extracted])
+            scaling = target_norm / np.linalg.norm(extracted_signal)
+            ax2.plot(idxs_extracted, extracted_signal * scaling, color=color)
+            extracted_title += " %s %.2f" % (phase, np.max(xc_extracted))
+            total_ev_extracted_xc += np.max(xc_extracted)
+
+        pred_title += " total %.2f" % total_ev_pred_xc
+        extracted_title += " total %.2f" % total_ev_extracted_xc
+        ax1.set_title(pred_title, fontsize=10)
+        ax2.set_title(extracted_title, fontsize=10)
+        total_pred_xc += total_ev_pred_xc
+        total_extracted_xc += total_ev_extracted_xc
+
+    f.suptitle("total pred %.2f extracted %.2f" % (total_pred_xc, total_extracted_xc))
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
+def mcmc_compare_gps_doublets_wavelets(request, dirname, sta, phase):
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    zoom = float(request.GET.get('zoom', '1.0'))
+    step = int(request.GET.get('step', '-1'))
+
+    sta = str(sta)
+    phase = str(phase)
+
+    if step < 0:
+        sg, step = final_mcmc_state(mcmc_run_dir)
+    else:
+        sg = graph_for_step(mcmc_run_dir, step)
+
+    aligned_wavelets = {}
+    pred_wavelets = {}
+    neighbor_wavelets = {}
+    for eid in sg.evnodes.keys():
+        try:
+            wn = sg.get_arrival_wn(sta, eid, "Lg", band=None, chan=None)
+        except:
+            continue
+
+        (start_idxs, end_idxs, identities, basis_prototypes, levels, N) = wn.wavelet_basis
+
+        # find the closest neighbor to this event
+        ev = sg.get_event(eid)
+        nearest_eid = None
+        nearest_dist = np.inf
+        for eid2 in sg.evnodes.keys():
+            if eid == eid2: continue
+            ev2 = sg.get_event(eid2)
+            dist = dist_km((ev.lon, ev.lat), (ev2.lon, ev2.lat))
+            if dist < nearest_dist:
+                nearest_dist = dist
+                nearest_eid = eid2
+
+        neighbor_eid = nearest_eid
+        try:
+            neighbor_wn = sg.get_arrival_wn(sta, neighbor_eid, phase, band=wn.band, chan=wn.chan)
+        except Exception as e:
+            print "no neighbor for %s" % phase, e
+            continue
+
+        def extract_wavelet_posterior(wn, eid, phase):
+                    # extract phase signal for neighbor wn
+            d = wn.get_value().data
+            ell, marginals, step_ells = wn.tssm.all_filtered_cssm_coef_marginals(d)            
+            for i, (eid, pphase, scale, sidx, npts, component_type) in enumerate(wn.tssm_components):
+                if component_type != "wavelet": continue
+                if pphase!=phase: continue
+                wmeans, wvars = marginals[i]
+                break
+            return wmeans, wvars
+
+        aligned_wavelets[eid], _ = extract_wavelet_posterior(wn, neighbor_eid, phase)
+        neighbor_wavelets[eid], _ = extract_wavelet_posterior(neighbor_wn, neighbor_eid, phase)
+
+        cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
+        cond_means, cond_vars = np.asarray(cond_means, dtype=np.float64), np.asarray(cond_vars, dtype=np.float64)
+        pred_wavelets[eid] = cond_means
+        print "predicted", eid
+
+    f = Figure((14*zoom, 2*zoom*len(aligned_wavelets)))
+    f.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(len(aligned_wavelets), 2)
+
+    for i, (eid, w) in enumerate(aligned_wavelets.items()):
+
+        w_norm = w / np.linalg.norm(w)
+
+        ax1 = f.add_subplot(gs[i, 0])
+        ax2 = f.add_subplot(gs[i, 1])
+        ax1.plot(w_norm, linewidth=0.5, color="black")
+        ax2.plot(w_norm, linewidth=0.5, color="black")
+        pred_title = "eid %d pred xcs" % eid
+        extracted_title = "eid %d extracted xcs" % eid
+
+        pred_w_norm = pred_wavelets[eid] / np.linalg.norm(pred_wavelets[eid])
+        neighbor_w_norm = neighbor_wavelets[eid] / np.linalg.norm(neighbor_wavelets[eid])
+        ax1.plot(pred_w_norm, color="blue", alpha=0.5, linewidth=2)
+        ax2.plot(neighbor_w_norm, color="green", alpha=0.5, linewidth=2)
+
+        pred_corr = np.dot(w_norm, pred_w_norm) 
+        neighbor_corr = np.dot(w_norm, neighbor_w_norm) 
+
+        ax1.set_title("eid %d pred corr %.2f" % (eid, pred_corr))
+        ax2.set_title("eid %d neighbor corr %.2f" % (eid, neighbor_corr))
+
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')

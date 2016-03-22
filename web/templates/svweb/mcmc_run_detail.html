@@ -54,9 +54,12 @@
 <a href="{% url 'mcmc_hparam_posterior' dirname=dirname sta=sta target=hparam %}">{{ hparam }}</a>
 {% endfor %}
 {% endif %}
+{% if jointgps %}
 <p>{% for phase in phases_used %}
-{{ phase }} waves: <a href="{% url 'mcmc_phase_stack' dirname=dirname sta=sta phase=phase base_eid=1 %}">stacked (eid 1)</a>, <a href="{% url 'mcmc_alignment_posterior' dirname=dirname sta=sta phase=phase %}">alignments</a>, <a href="{% url 'conditional_wiggle_posterior' dirname=dirname sta=sta phase=phase %}">conditional wiggles</a>, <a href="{% url 'conditional_signal_posterior' dirname=dirname sta=sta phase=phase %}">conditional signals</a><br>
-{% endfor %}</p>
+{{ phase }} waves: <a href="{% url 'mcmc_phase_stack' dirname=dirname sta=sta phase=phase base_eid=1 %}">stacked (eid 1)</a>, <a href="{% url 'mcmc_compare_gps_doublets_wavelets' dirname=dirname sta=sta phase=phase  %}?step=-1;zoom=1.0">wavelets</a>, <a href="{% url 'mcmc_alignment_posterior' dirname=dirname sta=sta phase=phase %}">alignments</a>, <a href="{% url 'conditional_wiggle_posterior' dirname=dirname sta=sta phase=phase %}">conditional wiggles</a>, <a href="{% url 'conditional_signal_posterior' dirname=dirname sta=sta phase=phase %}">conditional signals</a><br>
+{% endfor %}
+<a href="{% url 'mcmc_compare_gps_doublets' dirname=dirname sta=sta  %}?xc_type=xc;zoom=1.0;step=-1">gp predictions vs signals from neighbors</a></p>
+{% endif %}
 <p>Waveform posteriors:</p>
 <ol>
 {% for wn in stawns %}
