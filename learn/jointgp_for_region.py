@@ -61,7 +61,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                             enable_template_moves=True, 
                             special_mb_moves=False, 
                             enable_phase_openworld=False,
-                            fix_atimes=True, steps=100)
+                            fix_atimes=True, steps=50)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, enable_phase_openworld=False, steps=300)
 
 
