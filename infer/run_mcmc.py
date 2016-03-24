@@ -13,7 +13,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.autoregressive_mcmc import arnoise_params_rw_move, arnoise_mean_rw_move, arnoise_std_rw_move
-from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move
+from sigvisa.infer.template_xc import atime_xc_move, constpeak_atime_xc_move, adjpeak_atime_xc_move, atime_align_gpwiggle_move
 from sigvisa.infer.mcmc_basic import gaussian_MH_move, MH_accept, mh_accept_lp
 from sigvisa.infer.event_swap import swap_events_move_hough, repropose_event_move_hough, repropose_event_move_corr, swap_threeway_hough
 from sigvisa.infer.event_birthdeath import ev_birth_move_hough, ev_birth_move_hough_meta, ev_birth_move_hough_dumb, ev_death_move_hough, ev_death_move_hough_meta, ev_death_move_hough_dumb, ev_birth_move_lstsqr, ev_death_move_lstsqr, set_hough_options, ev_birth_move_correlation, ev_death_move_correlation, phase_birth_move, phase_death_move, ev_birth_move_prior, ev_death_move_prior, ev_birth_move_correlation_random_sta, ev_death_move_correlation_random_sta
@@ -333,7 +333,6 @@ def run_open_world_MH(sg, steps=10000,
         sta_moves = template_openworld_custom
     else:
         if enable_template_openworld:
-            
             sta_moves = {'tmpl_birth': (optimizing_birth_move, tmpl_birth_rate),
                          'tmpl_death': (death_move_for_optimizing_birth, tmpl_birth_rate),
                          'tmpl_split': (split_move, 0.0),
@@ -361,6 +360,7 @@ def run_open_world_MH(sg, steps=10000,
                               'arrival_time': (improve_atime_move, 1.0),
                               'atime_xc': (atime_xc_move, 0.1),
                               'arrival_time_big': (improve_atime_move, 1.0),
+                              'template_xc': (atime_align_gpwiggle_move, 0.5),
                               #'constpeak_atime_xc': constpeak_atime_xc_move,
                               #'adjpeak_atime_xc': adjpeak_atime_xc_move,
                              } if enable_template_moves else {}

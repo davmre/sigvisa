@@ -15,7 +15,7 @@ from optparse import OptionParser
 stas = "NEW,PDAR,NVAR,ANMO,TXAR,PFO,YKA,ULM,ILAR".split(",")
 
 stas = "ANMO,ELK,ILAR,KDAK,NEW,NVAR,PDAR,PFO,TXAR,ULM,YBH,YKA".split(",")
-#stas = "ANMO,ELK,NVAR".split(",")
+stas = ["NVAR",]
 
 region_lon = (-126, -100)
 region_lat = (32, 49)
@@ -30,49 +30,26 @@ training_stime =  1167634400
 #region_stime = stimes[target_evid]
 #region_etime = region_stime + 7200
 
-def relevant_events(region):
-    
-    relevant_stime = region.stime - MAX_TRAVEL_TIME
-    relevant_etime = region.etime
 
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-    sql_query = "select evid from leb_origin where (time between %.1f and %.1f) and not ((lat between %.1f and %.1f) and (lon between %.1f and %.1f) and (time between %.1f and %.1f)) " % (relevant_stime, relevant_etime, region.bottom_lat, region.top_lat, region.left_lon, region.right_lon, region.stime, region.etime)
-    print sql_query
-    cursor.execute(sql_query)
-    evids = [evid[0] for evid in cursor.fetchall()]
-    evs = [get_event(evid=evid) for evid in evids]
-    evs = [ev for ev in evs if ev.mb > 0]
-    print "got relevant evs", evs
-    return evs
-
-
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
 
     if target_evid > 0:
-        region_stime = stimes[target_evid]
-        hour = float((region_stime - training_stime) / 3600.0)
-        print "stime", region_stime, "hour", hour
+        rs = EventRunSpec(sites=stas, evids=(target_evid,))
+        ev = get_event(target_evid)
+        stime = ev.time - 150
+        etime = ev.time + 200
     else:
-        region_stime = training_stime + hour
+        rs = TimeRangeRunSpec(sites=stas, start_time=stime, end_time=etime, 
+                              initialize_events="isc")
+        
 
-    region_etime = region_stime + len_hours*3600
-
-    if stime is not None:
-        region_stime = stime
-    if etime is not None:
-        region_etime = etime
-
+    min_mb = 2.0
     runids=(runid,)
 
-    rs = TimeRangeRunSpec(sites=stas, start_time=region_stime, end_time=region_etime)
-
-    region_stime = rs.start_time
-    region_etime = rs.end_time
     region = Region(lons=region_lon, lats=region_lat, 
-                    times=(region_stime, region_etime),
+                    times=(stime, etime),
                     rate_bulletin="isc", 
-                    min_mb=2.0,
+                    min_mb=min_mb,
                     rate_train_start=1167609600,
                     rate_train_end=1199145600)
 
@@ -86,40 +63,18 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     bands=bands,
                     runids=runids,
                     inference_region=region,
+                    min_mb=min_mb,
+                    skip_levels=0,
                     dummy_fallback=True,
                     raw_signals=raw_signals,
                     hack_param_constraint=hack_constraint,
                     vert_only=True)
 
 
-    if resume_from is not None:
-        with open(resume_from, 'rb') as f:
-            sg = pickle.load(f)
-        sg.phases=phases
-        sg.uatemplate_rate = uatemplate_rate
-        sg.runids=(runid,)
-        from sigvisa.graph.sigvisa_graph import dummyPriorModel
-        sg.dummy_prior = dummyPriorModel
-        try:
-            sg.fixed_events
-        except:
-            sg.fixed_events = set(sg.evnodes.keys())
-            sg.fully_fixed_events = set()
 
-    else:
-        sg = rs.build_sg(ms1)
-        revs = relevant_events(region)
-        for ev in revs:
-            evnodes = sg.add_event(ev)
-            eid = evnodes["lon"].eid
-            sg.fix_event(eid, fix_templates=False)
+    sg = rs.build_sg(ms1)
 
-        if deserialize is not None:
-            sg.deserialize_from_tgz(deserialize)
-        else:
-            ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=False, disable_moves=['atime_xc'], steps=100)
-
-    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
+    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
 
     do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
 
@@ -131,7 +86,7 @@ if __name__ == "__main__":
 
     parser.add_option("--raw", dest="raw", default=False, action="store_true",
                       help="use raw signals instead of envelopes")
-    parser.add_option("--hz", dest="hz", default=2.0, type=float,
+    parser.add_option("--hz", dest="hz", default=10.0, type=float,
                       help="downsample signals to this rate")
     parser.add_option("--bands", dest="bands", default="freq_0.8_4.5", type=str,
                       help="comma-separated frequency bands")

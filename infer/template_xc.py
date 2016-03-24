@@ -6,8 +6,11 @@ from sigvisa.models.ttime import tt_predict
 from sigvisa.models.signal_model import ObservedSignalNode
 from sigvisa.infer.mcmc_basic import MH_accept
 from sigvisa.infer.correlations.ar_correlation_model import ar_advantage
+from sigvisa.utils.array import time_to_index, index_to_time
 import scipy.weave as weave
 from scipy.weave import converters
+
+from sigvisa.plotting.plot import basic_plot_to_file
 
 def fastxc(a, b):
     """
@@ -85,8 +88,8 @@ def get_arrival_signal(sg, eid, phase, wn, pre_s, post_s, pred_atime=False, atim
             v, tg = wn.get_template_params_for_arrival(eid, phase)
             atime = v['arrival_time']
 
-    st_idx = int((atime-pre_s - wn.st)*wn.srate)
-    et_idx = int((atime+post_s - wn.st)*wn.srate)
+    st_idx = time_to_index(atime-pre_s, wn.st, wn.srate)
+    et_idx = time_to_index(atime+post_s, wn.st, wn.srate)
 
     st_idx_clipped = max(st_idx, 0)
     et_idx_clipped = min(et_idx, wn.npts)
@@ -94,8 +97,10 @@ def get_arrival_signal(sg, eid, phase, wn, pre_s, post_s, pred_atime=False, atim
     if et_idx_clipped <= st_idx_clipped:
         raise Exception("arrival is not supported at this wave node")
 
+    window_stime = index_to_time(st_idx_clipped, wn.st, wn.srate)
+
     d = wn.get_value().data.copy()
-    return d[st_idx_clipped:et_idx_clipped], atime, (st_idx_clipped-st_idx)
+    return d[st_idx_clipped:et_idx_clipped], (st_idx_clipped-st_idx), window_stime
 
 def atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase,
                                         wn_src, wn_target,
@@ -107,17 +112,19 @@ def atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase,
 
     # load 10s immediately following the *current hypothesized arrival
     # time* for the source event.
-    signal_src, atime_src, idx_src = get_arrival_signal(sg, eid_src, phase, wn_src,
+    signal_src, idx_src, stime_src = get_arrival_signal(sg, eid_src, phase, wn_src,
                                                         pre_s=0.0, post_s=10.0,
                                                         pred_atime=False)
-
+    
     # load a 40s time period around the *predicted* arrival time for
     # the target event. (using the current hypothesis would require
     # us to use a different window for the backwards proposal, since
     # the proposal will change the hypothesis, whereas the predicted
     # time is unchanged).
-    signal_target, atime_target, idx_target = get_arrival_signal(sg, eid_target, phase, wn_target,
-                                                                 pre_s=15.0, post_s=25.0,
+    pre_s = 15.0
+    post_s = 25.0
+    signal_target, idx_target, stime_target = get_arrival_signal(sg, eid_target, phase, wn_target,
+                                                                 pre_s=pre_s, post_s=post_s,
                                                                  pred_atime=True)
 
     # slide the source arrival over the target
@@ -125,7 +132,7 @@ def atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase,
     xcdist = np.exp(temp*xc)
 
     # add a traveltime prior
-    target_window_soffset = -15.0 + idx_target/srate
+    target_window_soffset = -pre_s + idx_target/srate
     target_window_eoffset = target_window_soffset + len(xc)/srate
     x = np.linspace(target_window_soffset, target_window_eoffset, len(xc))
     prior = np.exp(-np.abs(x/3.0))
@@ -139,23 +146,12 @@ def atime_proposal_distribution_from_xc(sg, eid_src, eid_target, phase,
         # start
         st_idx = idx-idx_src
 
-        # target_window_offset + st_idx/srate is the adjustment
-        # to the *source* atime: e.g., if idx=0 then the source
-        # aligns with the *beginning* of the target window.
-        # If the window_soffset is -15, this means the source
-        # aligns 15s before the predicted target.
-
-        # wait what?
-
-        # the source would have to move 15s earlier to match up.
-        # To get new target atime, we *subtract* this adjustment
-        # from the predicted target atime.
-        atime = atime_target + target_window_soffset + st_idx/srate
+        atime = stime_target + st_idx/srate
         return atime
 
     def atime_to_idx(atime):
         # st_idx gives the index into the target window for this atime
-        st_idx = int(np.round(srate*(atime - atime_target - target_window_soffset)))
+        st_idx = time_to_index(atime, stime_target, srate)
 
         # now we correct to get the index we'd expect the source window
         # to align at, given that it might be clipped
@@ -303,15 +299,25 @@ def adjpeak_atime_xc_move(sg, wn, eid, phase, tmnodes, **kwargs):
 
 ######################################################################
 
-def atime_align_gpwiggle_move(self, wn, eid, phase, tmnodes, **kwargs):
+def atime_align_gpwiggle_move(wn, eid, phase, tmnodes, **kwargs):
     # propose a new atime based on the wiggles predicted from a GP wiggle prior
     # (as opposed to other moves in this file which are based on correlations 
     #  between source and target events jointly loaded as part of the same model)
     # NOTE: I wrote this but have never tried running or debugging it, so it 
     #  needs some love to be useful...
 
+    if phase == "UA":
+        return False
+
+    if wn.is_env:
+        return False
+
     k_atime, n_atime = tmnodes['arrival_time']
     current_atime = n_atime.get_value(key=k_atime)
+
+    ev = wn.graph.get_event(eid) #hack
+    pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
+
     relevant_nodes = [wn,]
     relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
 
@@ -328,14 +334,16 @@ def atime_align_gpwiggle_move(self, wn, eid, phase, tmnodes, **kwargs):
     if wn.has_jointgp:
         wn._set_cssm_priors_from_model(arrivals=[(eid, phase)])
 
-    tmvals = wn.get_template_params_for_arrival(eid, phase)
+    tmvals, tg = wn.get_template_params_for_arrival(eid, phase)
     env = np.exp(tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=n_steps))
     pred_signal = pred_wavelet * env
 
-    pbu = wn.unexplained_kalman(exclude_eids=[eid,])
-    relevant_stime = current_atime - 20.0
-    relevant_sidx = int(wn.srate * (relevant_stime - wn.st))
-    relevant_eidx = int(wn.srate * (current_atime + 20.0 - wn.st)) + len(pred_signal)
+    pbu = wn.unexplained_kalman(exclude_arrivals=[(eid,phase)])
+    #pbu = wn.get_value()
+    relevant_sidx = time_to_index(pred_atime - 20.0, wn.st, wn.srate)
+    relevant_stime = index_to_time(relevant_sidx, wn.st, wn.srate)
+    relevant_eidx = time_to_index(pred_atime + 20.0, wn.st, wn.srate) + len(pred_signal)
+    relevant_etime = index_to_time(relevant_eidx, wn.st, wn.srate)
     if relevant_sidx < 0 or relevant_eidx > len(pbu):
         return False
 
@@ -344,17 +352,21 @@ def atime_align_gpwiggle_move(self, wn, eid, phase, tmnodes, **kwargs):
     atime_ll = ar_advantage(relevant_signal, pred_signal, wn.nm)
 
     def idx_to_atime(proposed_idx):
-        return relevant_stime + (proposed_idx - relevant_sidx) / float(wn.srate)
+        return index_to_time(proposed_idx, relevant_stime, wn.srate)
 
     def atime_to_idx(proposed_atime):
-        return int( (proposed_atime - relevant_stime)*wn.srate)
+        return time_to_index(proposed_atime, relevant_stime, wn.srate)
 
     # temper the proposal distribution a bit
-    maxll = np.max(ll)
+    maxll = np.max(atime_ll)
     if maxll > 10:
         atime_ll /= maxll/10.0
         maxll = 10
-    atime_ll += 1
+    atime_ll += 1.0
+
+    t = np.linspace(relevant_stime, relevant_etime, len(atime_ll))
+    prior_lp = -np.abs( (t-pred_atime)/3.0)
+    atime_ll += prior_lp
     
     proposal_dist = np.exp(atime_ll - maxll)
     proposal_dist /= np.sum(proposal_dist)
@@ -364,9 +376,19 @@ def atime_align_gpwiggle_move(self, wn, eid, phase, tmnodes, **kwargs):
     log_qforward = np.log(proposal_dist[proposed_idx])
     backwards_idx = atime_to_idx(current_atime)
 
+    #assert(  atime_to_idx(idx_to_atime(proposed_idx)) == proposed_idx )
+    #assert(  np.abs(idx_to_atime(atime_to_idx(current_atime)) - current_atime) < wn.srate )
+
     log_qbackward = np.log(proposal_dist[backwards_idx])
 
-    return MH_accept(sg, keys=(k_atime,k_offset),
+    wn.graph.logger.debug("proposing xc move for %s from %.1f to %.1f, lqf %.1f lqb %.1f" % (phase, current_atime, proposed_atime, log_qforward, log_qbackward))
+
+    #basic_plot_to_file("xc_%s_orig.png" % phase, relevant_signal[proposed_idx:], pred_signal)
+    #basic_plot_to_file("xc_%s_proposed.png" % phase, relevant_signal[backwards_idx:], pred_signal)
+    #basic_plot_to_file("xc_%s_ll.png" % phase, atime_ll)
+    #basic_plot_to_file("xc_%s_prob.png" % phase, proposal_dist)
+
+    return MH_accept(wn.graph, keys=(k_atime,),
                      oldvalues = (current_atime,),
                      newvalues = (proposed_atime,),
                      log_qforward = log_qforward,

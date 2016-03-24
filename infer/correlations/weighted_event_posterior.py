@@ -7,7 +7,7 @@ from scipy.weave import converters
 
 from sigvisa import Sigvisa
 from sigvisa.infer.correlations.ar_correlation_model import estimate_ar, ar_advantage, iid_advantage
-
+from sigvisa.utils.array import index_to_time, time_to_index
 
 
 
@@ -103,7 +103,7 @@ def update_lls_for_wn(wn, atime_lls, pre_s=3.0, temper=1.0):
         if phase=="UA": continue
         v, tg = wn.get_template_params_for_arrival(eid, phase)
         atime = v["arrival_time"]
-        at_idx = int((atime-wn.st) * wn.srate)
+        at_idx = time_to_index(atime, wn.st, wn.srate)
         
         post_idx = int(10.0 * wn.srate)
         post_idx = max(post_idx,  tg.abstract_logenv_length(v, min_logenv=np.log(wn.nm_env.c), srate=wn.srate))

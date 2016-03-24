@@ -23,6 +23,8 @@ from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
 from sigvisa.utils.counter import Counter
 from sigvisa.utils.BayesianRidgeWithCov import BayesianRidgeWithCov
+from sigvisa.utils.array import index_to_time, time_to_index
+
 from matplotlib.figure import Figure
 
 import scipy.weave as weave
@@ -71,9 +73,9 @@ def get_env_based_amplitude_distribution2(sg, wn, prior_min, prior_max, prior_di
         eid, phase = exclude_arrs[0]
         unexplained = wn.unexplained_env(eid, phase, addl_arrs=exclude_arrs[1:])
 
-    peak_idx = int((peak_time - wn.st) * wn.srate)
+    peak_idx = time_to_index(peak_time, wn.st, wn.srate)
 
-    start_idx_true = int((atime - wn.st) * wn.srate)
+    start_idx_true = time_to_index(atime, wn.st, wn.srate)
     end_idx_true = int(peak_idx + 60*wn.srate)
     start_idx = max(0, start_idx_true)
     end_idx = min(wn.npts, end_idx_true)
@@ -192,9 +194,7 @@ def get_env_based_amplitude_distribution(sg, wn, tmvals=None, peak_time=None, pe
         unexplained = wn.unexplained_env(eid, phase)
 
 
-
-
-    peak_idx = int((peak_time - wn.st) * wn.srate)
+    peak_idx = time_to_index(peak_time, wn.st, wn.srate)
     peak_period_samples = int(peak_period_s * wn.srate)
     peak_data=unexplained[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
 
@@ -269,9 +269,7 @@ def peak_log_p(cdf, stime, srate, peak_time):
 
     # we add one here since we created cdf with an initial
     # 0, so that the subtraction below works properly.
-    # we add the .000001 to fix numerical issues, so that floor()
-    # doesn't round down if we get .99999995103... or similar.
-    idx = int(np.floor((peak_time - stime) * srate +.00001)) + 1
+    idx = time_to_index(peak_time, stime, srate) + 1
 
     """"in principle, we shouldn't be allowed to kill things outside of
     the signal window, but in practice it helps a lot.
@@ -366,7 +364,7 @@ def indep_peak_move(sg, wn, tmnodes,
         eid, phase = arr
         w_start, w_end = wn.template_idx_window(eid, phase)
 
-        proposed_idx_offset = int((proposed_arrival_time - current_atime) * wn.srate)
+        proposed_idx_offset = time_to_index(proposed_arrival_time, current_atime, wn.srate)
         proposed_start = max(0, w_start + proposed_idx_offset)
         proposed_end = min(wn.npts, w_end + proposed_idx_offset)
         w = unify_windows((w_start, w_end), (proposed_start, proposed_end))
@@ -1194,10 +1192,9 @@ def propose_peak_offset(wn, tg, onset_env, signal_idx,
         # given the unexplained signal preceding the peak, compute logprob of a given peak_offset.
         offset_t = np.exp(log_offset_t)
         atime = peak_time-offset_t
-        start = ((atime - wn.st) * wn.srate)
+        start = time_to_index(atime, wn.st, wn.srate)
         offset = start % 1.0
         start_idx = int(start)
-        #peak_idx = int((peak_time - wn.st) * wn.srate)
 
         vals = {'arrival_time': atime, 'peak_offset': log_offset_t, 'coda_height': coda_height, 'coda_decay': 4.0, 'peak_decay': 4.0}
         pred_logenv = tg.abstract_logenv_raw(vals, idx_offset=offset, srate=wn.srate)
@@ -1322,7 +1319,7 @@ def merge_distribution(peak_env, prior, return_debug=False, peak_detect=True,
 
 def merge_peak_distribution(wn, env_diff_pos, peak_time, window_len_s=20.0, **kwargs):
 
-    peak_idx = int((peak_time-wn.st)*wn.srate)
+    peak_idx = time_to_index(peak_time, wn.st, wn.srate)
     window_len_idx = window_len_s*wn.srate
 
     t = np.linspace(-window_len_s/2.0, window_len_s/2.0, int(window_len_idx))
@@ -1345,7 +1342,7 @@ def merge_peak_distribution(wn, env_diff_pos, peak_time, window_len_s=20.0, **kw
 
 def birth_peak_distribution(wn, env_diff_pos, atime, **kwargs):
 
-    atime_idx = int((atime-wn.st)*wn.srate)
+    atime_idx = time_to_index(atime, wn.st, wn.srate)
     peak_window_end_idx = int(atime_idx + MAX_PEAK_OFFSET_S*wn.srate)
 
     atime_idx = max(0, atime_idx)
@@ -1370,7 +1367,7 @@ def merge_proposal_distribution(sg, wn, eid, phase, fix_result=None, use_ar_nois
     current_vals, tg = wn.get_template_params_for_arrival(eid=eid, phase=phase)
     current_peak_time = current_vals['arrival_time'] + np.exp(current_vals['peak_offset'])
     peak_cdf, cdf_start_idx = merge_peak_distribution(wn, env_diff_pos, current_peak_time)
-    cdf_stime = wn.st + (float(cdf_start_idx) /wn.srate)
+    cdf_stime = index_to_time(cdf_start_idx, wn.st, wn.srate)
     peak_time = sample_peak_time_from_cdf(peak_cdf, cdf_stime, wn.srate) \
         if fix_result is None \
         else fix_result['arrival_time'] + np.exp(fix_result['peak_offset'])
@@ -1380,7 +1377,7 @@ def merge_proposal_distribution(sg, wn, eid, phase, fix_result=None, use_ar_nois
     # sample peak_offset (and thus, arrival time)
     (w_start_idx, w_end_idx) = wn.template_idx_window(eid, phase)
     unexplained_env = wn.unexplained_env(eid, phase)
-    peak_idx = (peak_time-wn.st)*wn.srate
+    peak_idx = time_to_index(peak_time, wn.st, wn.srate)
     if peak_idx > len(unexplained_env)-1 or peak_idx < 0:
         lp = -np.inf
         return fix_result, lp
@@ -1432,7 +1429,7 @@ def amp_decay_proposal_laplace_ar(wn, tg, env_window, window_start_idx, peak_off
         vals = {'arrival_time': peak_time-np.exp(peak_offset), 'peak_offset': peak_offset,
                 'coda_height': x[0], 'peak_decay': x[1], 'coda_decay': x[2]}
 
-        start = (vals['arrival_time'] - wn.st) * wn.srate
+        start =  time_to_index(vals['arrival_time'], wn.st, wn.srate)
         tmpl_start_idx = int(np.floor(start))
         offset = float(start - tmpl_start_idx)
         try:
@@ -2020,7 +2017,7 @@ def sta_lta_cdf2(env_diff_pos, short_idx=2, long_idx=30, smooth_idx=7,
 
 def peak_time_proposal_dist(wn, env_diff_pos, atime, return_debug=False):
 
-    atime_idx = int((atime-wn.st)*wn.srate)
+    atime_idx = time_to_index(atime, wn.st, wn.srate)
     peak_window_end_idx = int(atime_idx + MAX_PEAK_OFFSET_S*wn.srate)
 
     atime_idx = max(0, atime_idx)
@@ -2068,7 +2065,7 @@ def splitpoint_lik(y, x1, x2, idx):
 
 def get_fit_window_bayes(wn, peak_time, env_diff_pos, incr_s=3.0, max_s=45.0, min_s=3.0):
 
-    sidx = int((peak_time-wn.st)*wn.srate)
+    sidx = time_to_index(peak_time, wn.st, wn.srate)
     jump_idx = int(incr_s * wn.srate)
     min_idx = int(min_s * wn.srate)
     max_idx = min(len(env_diff_pos) - sidx, int(max_s * wn.srate))
@@ -2157,7 +2154,7 @@ def amp_decay_proposal(*args, **kwargs):
 
 def get_fit_window_dist_bayes(wn, peak_time, env_diff_pos, incr_s=2.0, max_s=60.0, min_s=5.0):
 
-    sidx = int((peak_time-wn.st)*wn.srate)
+    sidx = time_to_index(peak_time, wn.st, wn.srate)
     jump_idx = int(incr_s * wn.srate)
     min_idx = int(min_s * wn.srate)
     max_idx = min(len(env_diff_pos) - sidx, int(max_s * wn.srate))

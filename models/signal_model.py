@@ -27,6 +27,8 @@ from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import get_parent_value, create_key
 from sigvisa.plotting.plot import subplot_waveform
 
+from sigvisa.utils.array import index_to_time, time_to_index, time_to_index_offset
+
 import scipy.weave as weave
 from scipy.weave import converters
 
@@ -165,6 +167,8 @@ class ObservedSignalNode(Node):
         self.cached_logp = None
         self._coef_message_cache = None
         self._unexplained_cache = None
+        self._cached_evdict = {}
+        self._cached_cssm_priors = {}
 
         self._lazy_wpm = False
 
@@ -187,6 +191,7 @@ class ObservedSignalNode(Node):
         self.cached_logp = None
         self._coef_message_cache = None
         self._unexplained_cache = None
+
         super(ObservedSignalNode, self).set_value(value=v, key=self.single_key)
 
     def get_wave(self):
@@ -216,8 +221,7 @@ class ObservedSignalNode(Node):
             self._parent_values()
 
         atime = self.get_template_params_for_arrival(eid, phase)[0]["arrival_time"]
-        start = (atime - self.st) * self.srate
-        start_idx = int(np.floor(start))
+        start_idx = time_to_index(atime, self.st, self.srate)
         return start_idx
 
 
@@ -244,14 +248,12 @@ class ObservedSignalNode(Node):
 
         for (i, (eid, phase)) in enumerate(set(arrivals)):
             v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
-            start = (v['arrival_time'] - self.st) * self.srate
-            start_idx = int(np.floor(start))
+            start_idx, offset = time_to_index_offset(v['arrival_time'], self.st, self.srate) 
             sidxs[i] = start_idx
             if start_idx >= self.npts:
                 logenvs[i] = empty_array
                 continue
 
-            offset = float(start - start_idx)
             logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
             logenvs[i] = logenv
 
@@ -558,13 +560,11 @@ class ObservedSignalNode(Node):
         # the current TSSM to the new envelope.
         for (i, (eid, phase)) in enumerate(arrivals):
             v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase, parent_values=parent_values)
-            start = (v['arrival_time'] - self.st) * self.srate
-            start_idx = int(np.floor(start))
+            start_idx, offset = time_to_index_offset(v['arrival_time'], self.st, self.srate)
             sidxs[i] = start_idx
             if start_idx >= self.npts:
                 continue
 
-            offset = float(start - start_idx)
             env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate, min_logenv=min_logenv))
             if start_idx + len(env) < 0:
                 continue
@@ -697,7 +697,7 @@ class ObservedSignalNode(Node):
         lp = self.tssm.run_filter(d)
         return lp
 
-    def _set_cssm_priors_from_model(self, arrivals=None, parent_values=None):
+    def _set_cssm_priors_from_model(self, arrivals=None, parent_values=None, force_no_cache=False):
         parent_values = parent_values if parent_values else self._parent_values()
         arrivals = arrivals if arrivals is not None else self.arrivals()
 
@@ -709,12 +709,22 @@ class ObservedSignalNode(Node):
             evdict = self._ev_params[eid]
             if cssm is None: continue
 
-            if self.has_jointgp:
-                prior_means, prior_vars = zip(*[jgp.prior() for jgp in self.wavelet_param_models[phase]])
-                prior_means, prior_vars = np.asarray(prior_means, dtype=np.float64), np.asarray(prior_vars, dtype=np.float64)
+            # don't bother recomputing coefs if the evdict hasn't changed since the 
+            # previous call. this helps with template moves (where the event hasn't 
+            # changed) and when multiple events arrive during a single wave node. 
+            if not force_no_cache and (eid, phase) in self._cached_evdict and self._cached_evdict[(eid, phase)] == evdict:
+                prior_means, prior_vars = self._cached_cssm_priors[(eid, phase)]
             else:
-                prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]], dtype=np.float)
-                prior_vars = np.array([gp.variance(cond=evdict, include_obs=True) for gp in self.wavelet_param_models[phase]], dtype=np.float)
+                if self.has_jointgp:
+                    prior_means, prior_vars = zip(*[jgp.prior() for jgp in self.wavelet_param_models[phase]])
+                    prior_means, prior_vars = np.asarray(prior_means, dtype=np.float64), np.asarray(prior_vars, dtype=np.float64)
+                else:
+                    prior_means = np.array([gp.predict(cond=evdict) for gp in self.wavelet_param_models[phase]], dtype=np.float)
+                    prior_vars = np.array([gp.variance(cond=evdict, include_obs=True) for gp in self.wavelet_param_models[phase]], dtype=np.float)
+
+                self._cached_evdict[(eid, phase)] = copy.deepcopy(evdict)
+                self._cached_cssm_priors[(eid, phase)] = prior_means, prior_vars
+
             cssm.set_coef_prior(prior_means, prior_vars)
 
 
@@ -919,9 +929,7 @@ class ObservedSignalNode(Node):
 
                 # get tg from somewhere
                 vals, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
-                start = (vals['arrival_time'] - self.st) * self.srate
-                tmpl_start_idx = int(np.floor(start))
-                offset = float(start - tmpl_start_idx)
+                tmpl_start_idx, offset = time_to_index_offset(vals['arrival_time'], self.st, self.srate)
                 pred_logenv, jacobian = tg.abstract_logenv_raw(vals, idx_offset=offset, srate=self.srate, return_jac_exp=True)
                 pred_env = np.exp(pred_logenv)
 
@@ -976,7 +984,7 @@ class ObservedSignalNode(Node):
         other_arrivals = [a for a in arrivals if a not in arrs]
         return self.get_env() - self.assem_env(arrivals=other_arrivals)
 
-    def unexplained_kalman(self, exclude_eids=[]):
+    def unexplained_kalman(self, exclude_eids=[], exclude_arrivals=[]):
         self._parent_values()
 
         # return the kalman filter's posterior mean estimate of the
@@ -990,7 +998,7 @@ class ObservedSignalNode(Node):
         if self._unexplained_cache is None or len(exclude_eids) > 0:
             d = self.get_value().data
 
-            arrivals_evonly = [(eid, phase) for (eid, phase) in self.arrivals() if phase !="UA" and eid not in exclude_eids]
+            arrivals_evonly = [(eid, phase) for (eid, phase) in self.arrivals() if phase !="UA" and eid not in exclude_eids and (eid, phase) not in exclude_arrivals]
             tssm_evonly = self.transient_ssm(arrivals=arrivals_evonly, save_components=False)
             means = tssm_evonly.component_means(d)
 
@@ -1072,7 +1080,7 @@ class ObservedSignalNode(Node):
                 if modelid is not None:
                     wpm_phase_new[i] = None
             wpm[phase] = wpm_phase_new
-        self._lazy_wpm = True
+        self._lazy_wpm = False
         d["wavelet_param_models"] = wpm
 
         # avoid hitting the recursion depth limit
@@ -1102,8 +1110,9 @@ class ObservedSignalNode(Node):
                         if modelid is not None:
                             self.wavelet_param_models[phase][i] = load_modelid(modelid)
             self._lazy_wpm = False
+            return self.wavelet_param_models
 
-        return getattr(self, name)
+        raise AttributeError("wn has no member %s" % name)
 
 
     def __setstate__(self, d):
@@ -1117,9 +1126,11 @@ class ObservedSignalNode(Node):
 
         # reload param models
 
-        #if "wavelet_param_models" in d:
-        #    self.wavelet_param_models_tmp = self.wavelet_param_models
-        #    del self.wavelet_param_models
+        if "wavelet_param_models" in d:
+            self.wavelet_param_models_tmp = self.wavelet_param_models
+            del self.wavelet_param_models
+            self._lazy_wpm = True
+
         """
         from sigvisa.learn.train_param_common import load_modelid as load_modelid
         if "wavelet_param_modelids" in d:
@@ -1135,6 +1146,9 @@ class ObservedSignalNode(Node):
         self.cached_logp = None
         self._unexplained_cache = None
         self._coef_message_cache = None
+        self._cached_evdict = {}
+        self._cached_cssm_priors = {}
+
         # don't try to regenerate other SSMs here because we might still be in
         # the middle of the unpickling process and can't depend on other program
         # components (e.g. self.graph.template_generator()) being functional.

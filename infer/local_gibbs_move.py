@@ -1,6 +1,7 @@
 import numpy as np
 
 from sigvisa.models.distributions import PiecewiseLinear
+from sigvisa.utils.array import index_to_time, time_to_index
 
 """
 
@@ -33,8 +34,8 @@ def proxylp_localenv(sg, wn, eid, phase, param):
     peak_time = tmvals['arrival_time'] + np.exp(tmvals['peak_offset'])
     unexplained = wn.unexplained_env(eid, phase)
 
-    peak_idx = int((peak_time - wn.st) * wn.srate)
-    start_idx_true = int((atime - wn.st) * wn.srate)
+    peak_idx = time_to_index(peak_time, wn.st, wn.srate) 
+    start_idx_true = time_to_index(atime, wn.st, wn.srate)
     end_idx_true = int(peak_idx + 60*wn.srate)
     start_idx = max(0, start_idx_true)
     end_idx = min(wn.npts, end_idx_true)

@@ -8,6 +8,7 @@ from sigvisa.infer.correlations.ar_correlation_model import ar_advantage, iid_ad
 from sigvisa.infer.template_xc import fastxc
 from collections import defaultdict
 from sigvisa.models.distributions import Laplacian
+from sigvisa.utils.array import index_to_time, time_to_index
 
 def align_atimes(sg, sta, phase, 
                  patch_len_s=12.0, 
@@ -46,7 +47,7 @@ def align_atimes(sg, sta, phase,
 
             pred_atimes[eid] = pred_atime
 
-            sidx = int(((pred_atime - buffer_len_s) - wn.st) * srate)
+            sidx = time_to_index(pred_atime - buffer_len_s, wn.st, srate)
             eidx = sidx + int((patch_len_s + 2*buffer_len_s) * srate)
             windows[eid] = wn.get_value()[sidx:eidx].copy()
 
@@ -55,7 +56,7 @@ def align_atimes(sg, sta, phase,
                 other_atime = wn.get_template_params_for_arrival(other_eid, other_phase)[0]["arrival_time"]
                 #other_ev = sg.get_event(other_eid)
                 #other_pred_atime = other_ev.time + tt_predict(other_ev, sta, other_phase)
-                other_idx = int((other_atime - (pred_atime - buffer_len_s)) * srate)
+                other_idx = time_to_index(other_atime, stime=(pred_atime - buffer_len_s), srate=srate)
                 if other_idx > buffer_len_s*srate and other_idx < len(windows[eid]):
                     print "zeroing", eid, "starting at", other_idx, "from", other_eid, other_phase
                     windows[eid][other_idx:] = 0.0
@@ -234,8 +235,8 @@ def align_atimes(sg, sta, phase,
             pred_atime = pred_atimes[eid]
             align_idx = alignments[eid]
 
-            window_sidx = int(((pred_atime - buffer_len_s) - wn.st) * srate)
-            window_stime = window_sidx / srate + wn.st
+            window_sidx = time_to_index(pred_atime - buffer_len_s, wn.st, wn.srate)
+            window_stime = index_to_time(window_sidx, wn.st, wn.srate)
 
             # don't set atimes to exact idx boundaries
             # because it might trigger floating-point rounding errors in other code.

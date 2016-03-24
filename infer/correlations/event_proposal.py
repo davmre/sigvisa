@@ -9,6 +9,7 @@ from sigvisa.infer.correlations.weighted_event_posterior import hack_ev_time_pos
 from sigvisa.infer.correlations.historical_signal_library import get_historical_signals
 from sigvisa.models.distributions import Gaussian,TruncatedGaussian
 from sigvisa.source.event import Event
+from sigvisa.utils.array import index_to_time, time_to_index
 
 import cPickle as pickle
 
@@ -60,7 +61,7 @@ def sample_time_from_pdf(pdf, stime, srate):
     return stime + (idx + np.random.rand())/float(srate)
 
 def logp_from_time_pdf(pdf, stime, x, srate):
-    idx = int((x-stime) * srate)
+    idx = time_to_index(x, stime, srate)
     if idx < 0 or idx > len(pdf):
         return -np.inf
     else:
@@ -74,7 +75,7 @@ def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_
         np.random.seed(proposal_dist_seed)
 
     n = len(proposal_weights)
-    proposal_width_deg = 0.1
+    proposal_width_deg = 0.03
     proposal_height_km = 5.0
     if fix_result is None:
 
@@ -150,7 +151,7 @@ def compute_proposal_distribution(sg, stas, phases,
     # under the hypothesis that an event exists at the same
     # origin location and the hypothesized origin time.
 
-    N = int((origin_etime - origin_stime)*global_srate)
+    N = time_to_index(origin_etime, origin_stime, global_srate)
     proposal_origin_time_posteriors = []
     proposal_weights = []
     for (x, sta_lls) in atime_lls:

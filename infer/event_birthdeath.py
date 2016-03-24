@@ -24,6 +24,7 @@ from sigvisa.infer.propose_cheating import cheating_location_proposal
 from sigvisa.infer.correlations.ar_correlation_model import ar_advantage
 from sigvisa.infer.correlations.event_proposal import correlation_location_proposal, sample_corr_kwargs
 from sigvisa.infer.template_mcmc import get_env_based_amplitude_distribution, get_env_based_amplitude_distribution2, get_env_diff_positive_part, sample_peak_time_from_cdf, merge_distribution, peak_log_p, preprocess_signal_for_sampling
+from sigvisa.infer.template_xc import fastxc
 from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
@@ -31,6 +32,8 @@ from sigvisa.models.templates.coda_height import amp_transfer
 from sigvisa.models.distributions import Gaussian, Laplacian, PiecewiseLinear
 from sigvisa.utils.counter import Counter
 from sigvisa.utils.fileutils import mkdir_p
+from sigvisa.utils.array import index_to_time, time_to_index
+
 from sigvisa.source.event import get_event
 import sigvisa.source.brune_source as brune
 
@@ -390,10 +393,13 @@ def correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained):
     (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps) = wn.wavelet_basis
     tg = sg.template_generator(phase)
 
-    wn._set_cssm_priors_from_model(arrivals=[(eid, phase)])
-    cssm = wn.arrival_ssms[(eid, phase)]
+    try:
+        cssm = wn.arrival_ssms[(eid, phase)]
+        wn._set_cssm_priors_from_model(arrivals=[(eid, phase)])
+        pred_wavelet = cssm.mean_obs(n_steps)
+    except:
+        pred_wavelet = np.zeros(n_steps)
 
-    pred_wavelet = cssm.mean_obs(n_steps)
 
     fake_height=False
     if "coda_height" not in tmvals:
@@ -405,7 +411,8 @@ def correlation_atime_ll(sg, wn, tmvals, eid, phase, prebirth_unexplained):
     env = np.exp(tg.abstract_logenv_raw(tmvals, srate=wn.srate, fixedlen=n_steps))
     pred_signal = pred_wavelet * env
     sg.debug_dists[wn.label]["pred_signal"] = pred_signal
-    ll = ar_advantage(prebirth_unexplained, pred_signal, wn.nm)
+    #ll = ar_advantage(prebirth_unexplained, pred_signal, wn.nm)
+    ll = fastxc(pred_signal, prebirth_unexplained) * 10
 
     if fake_height:
         del tmvals["coda_height"]
@@ -421,7 +428,7 @@ def get_env_based_amplitude_distribution3(sg, wn, eid, phase, prior_min, prior_m
 
     atime = tmvals['arrival_time']
     ev_offset_idx = int(5*wn.srate)
-    start_idx_true = int((atime - wn.st) * wn.srate) - ev_offset_idx
+    start_idx_true = time_to_index(atime, wn.st, wn.srate) - ev_offset_idx
     end_idx_true = int(start_idx_true + 60*wn.srate)
     start_idx = max(0, start_idx_true)
     end_idx = min(wn.npts, end_idx_true)
@@ -532,11 +539,14 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
     # acknowldege the possibility that the event is not currently
     # in the correct location
     #tt_spread = np.random.choice((2.0, 10.0, 30.0, 80.0))
-    tt_spread = 6.0
+    tt_spread = 3.0
 
     t = np.linspace(wn.st - discrete_ptime, wn.et-discrete_ptime, wn.npts)
     atime_prior = np.exp(-np.abs(t - pred_atime)/tt_spread)
-    hard_cutoff = np.abs(t-pred_atime) < 35
+    if use_correlation:
+        hard_cutoff = np.abs(t-pred_atime) < 6
+    else:
+        hard_cutoff = np.abs(t-pred_atime) < 25
     atime_prior *= hard_cutoff
     arrivals = wn.arrivals()
 
@@ -611,9 +621,6 @@ def smart_peak_time_proposal(sg, wn, tmvals, eid, phase, pred_atime,
             atime_lp = atime_dist.log_p(proposed_atime)
         else:
             proposed_atime, atime_lp = sample_peak_time_from_cdf(atime_cdf, wn.st-discrete_ptime, wn.srate, return_lp=True)
-            #idx = int(np.floor((proposed_atime - (wn.st-discrete_ptime)) * wn.srate +.00001)) + 1
-            #print "atime idx", idx, "lp",  np.log(atime_cdf[idx] - atime_cdf[idx-1]), "actual lp", atime_lp
-
 
         proposed_tt_residual = proposed_atime - pred_atime
 
@@ -1064,7 +1071,7 @@ def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
 
 def ev_death_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
-    proposal_type = np.random.choice(("mh", "smart", "dumb"))
+    proposal_type = np.random.choice(("smart", "dumb"))
     return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      birth_type=proposal_type, **kwargs)
 
@@ -1435,7 +1442,7 @@ def ev_sta_template_birth_helper(sg, wn, eid, site_phases, fix_result=None,
                                  use_correlation=False,
                                  prebirth_unexplained=None,
                                  associate_using_mb=True,
-                                 proposal_type="mh"):
+                                 proposal_type="smart"):
 
     if len(site_phases) == 0:
         nop = lambda : None
@@ -2030,7 +2037,7 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
 def ev_birth_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
     
-    proposal_type = np.random.choice(("mh", "smart", "dumb"))
+    proposal_type = np.random.choice(("smart", "dumb"))
     
     return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      proposal_type=proposal_type, **kwargs)

@@ -28,7 +28,7 @@ from sigvisa.infer.correlations.weighted_event_posterior import build_ttr_model_
 import cPickle as pickle
 
 
-def build_sg(sta, phases=None):
+def build_sg(sta, phases=None, runid=17):
     # create an sg with appropriate models
     region_lon = (-126, -100)
     region_lat = (32, 49)
@@ -38,9 +38,8 @@ def build_sg(sta, phases=None):
     min_mb = 4.0
     uatemplate_rate=1e-4
     hz = 10.0
-    runid=14
     if phases is None:
-        phases = "P,Pg,S,Lg".split(",")
+        phases = "Pn,Pg,Sn,Lg,P".split(",")
 
     region = Region(lons=region_lon, lats=region_lat,
                     times=(region_stime, region_etime),

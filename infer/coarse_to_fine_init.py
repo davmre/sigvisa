@@ -313,7 +313,7 @@ class ModelSpec(object):
             'template_model_type': "param",
             'wiggle_family': "iid",
             'wiggle_model_type': "dummy",
-            'skip_levels': 1,
+            'skip_levels': 0,
             'dummy_fallback': False,
             'dummy_prior': None,
             'phases': ["P",],

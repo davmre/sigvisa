@@ -77,24 +77,27 @@ def mh_accept_lp(sg, lp, oldvalues, newvalues):
 def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
               log_qforward=0.0, log_qbackward=0.0, proxy_lps=None):
 
+    check = False
 
 
     lp_old = sg.joint_logprob_keys(relevant_nodes, proxy_lps=proxy_lps) # assume oldvalues are still set
 
-    #lp_old_true = sg.current_log_p()
+    if check:
+        lp_old_true = sg.current_log_p()
 
     lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list,
                                    relevant_nodes=relevant_nodes, proxy_lps=proxy_lps)
 
 
-    #if np.isfinite(lp_new):
-    #    lp_new_true = sg.current_log_p()
-    #else:
-    #    lp_new_true = lp_new
+    if check:
+        if np.isfinite(lp_new):
+            lp_new_true = sg.current_log_p()
+        else:
+            lp_new_true = lp_new
 
-    #if np.isfinite(lp_new):
-    #    assert(np.abs( (lp_new - lp_old) - (lp_new_true - lp_old_true) ) < 1e-1 )
-    #    print "assertion passed", keys
+        if np.isfinite(lp_new):
+            assert(np.abs( (lp_new - lp_old) - (lp_new_true - lp_old_true) ) < 1e-1 )
+            print "assertion passed", keys
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):

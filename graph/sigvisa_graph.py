@@ -142,7 +142,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
-                 wiggle_model_type="dummy", wiggle_family="dummy", skip_levels=2,
+                 wiggle_model_type="dummy", wiggle_family="dummy", skip_levels=0,
                  dummy_fallback=False,
                  run_name=None, iteration=None, runids = None,
                  phases="auto", base_srate=40.0,
@@ -1308,7 +1308,8 @@ class SigvisaGraph(DirectedGraphModel):
                 if self.force_event_wn_matching:
                     ev = self.get_event(eid)
 
-                    pred_time = ev.time + tt_predict(ev, sta, "P")
+
+                    pred_time = ev.time + tt_predict(ev, sta, phase)
                     if pred_time < wave_node.st or pred_time > wave_node.et: continue
 
                 child_wave_nodes.add(wave_node)

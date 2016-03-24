@@ -6,7 +6,7 @@ from sigvisa.infer.coarse_to_fine_init import ModelSpec, EventRunSpec, TimeRange
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, MAX_TRAVEL_TIME
 from sigvisa.graph.region import Region
 from sigvisa.treegp.gp import GPCov
-
+from sigvisa.infer.event_birthdeath import ev_template_birth_helper
 import os, sys, traceback
 import cPickle as pickle
 from optparse import OptionParser
@@ -30,32 +30,23 @@ training_stime =  1167634400
 #region_stime = stimes[target_evid]
 #region_etime = region_stime + 7200
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
+def main(hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
 
     if target_evid > 0:
-        region_stime = stimes[target_evid]
-        hour = float((region_stime - training_stime) / 3600.0)
-        print "stime", region_stime, "hour", hour
+        rs = EventRunSpec(sites=stas, evids=(target_evid,))
+        ev = get_event(target_evid)
+        stime = ev.time - 150
+        etime = ev.time + 200
     else:
-        region_stime = training_stime + hour
-
-    region_etime = region_stime + len_hours*3600
-
-    if stime is not None:
-        region_stime = stime
-    if etime is not None:
-        region_etime = etime
+        rs = TimeRangeRunSpec(sites=stas, start_time=stime, end_time=etime, 
+                              initialize_events="isc")
+        
 
     min_mb = 2.0
     runids=(runid,)
 
-    rs = TimeRangeRunSpec(sites=stas, start_time=region_stime, end_time=region_etime, 
-                          initialize_events="isc")
-
-    region_stime = rs.start_time
-    region_etime = rs.end_time
     region = Region(lons=region_lon, lats=region_lat, 
-                    times=(region_stime, region_etime),
+                    times=(stime, etime),
                     rate_bulletin="isc", 
                     min_mb=min_mb,
                     rate_train_start=1167609600,
@@ -72,6 +63,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     runids=runids,
                     inference_region=region,
                     min_mb=min_mb,
+                    skip_levels=0,
                     dummy_fallback=True,
                     raw_signals=raw_signals,
                     hack_param_constraint=hack_constraint,
@@ -80,8 +72,21 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
 
 
     sg = rs.build_sg(ms1)
-    initialize_sg(sg, ms1, rs)
-    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
+
+    if target_evid is not None:
+        ev = get_event(target_evid)
+        sg.add_event(ev, phases=None)
+        lqf, replicate_tmpls, birth_records = \
+            ev_template_birth_helper(sg, 1,
+                                     associate_using_mb=True,
+                                     use_correlation=True,
+                                     proposal_type="smart")
+        sg._topo_sort()
+    else:
+        initialize_sg(sg, ms1, rs)
+
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, disable_moves=['atime_xc'], fix_outside_templates=fix_outside, propose_correlation=False, propose_hough=False, steps=40)
+    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
 
     do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
 
@@ -93,7 +98,7 @@ if __name__ == "__main__":
 
     parser.add_option("--raw", dest="raw", default=False, action="store_true",
                       help="use raw signals instead of envelopes")
-    parser.add_option("--hz", dest="hz", default=2.0, type=float,
+    parser.add_option("--hz", dest="hz", default=10.0, type=float,
                       help="downsample signals to this rate")
     parser.add_option("--bands", dest="bands", default="freq_0.8_4.5", type=str,
                       help="comma-separated frequency bands")

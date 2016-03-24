@@ -19,7 +19,7 @@ def get_historical_signals(sg, phases=None):
         stas = sg.station_waves.keys()
 
     if phases is None:
-        phases = ["P", "S", "Lg", "Pg", "pP"]
+        phases = ["Pn", "Sn", "Lg", "Pg", "P"]
 
     t1 = time.time()
     for sta in stas:
