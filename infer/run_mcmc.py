@@ -358,7 +358,7 @@ def run_open_world_MH(sg, steps=10000,
     template_moves_special = {'indep_peak': (indep_peak_move, 1.0),
                               'peak_offset': (improve_offset_move_gaussian, 1.0),
                               'arrival_time': (improve_atime_move, 1.0),
-                              'atime_xc': (atime_xc_move, 0.1),
+                              'atime_xc': (atime_xc_move, 0.2),
                               'arrival_time_big': (improve_atime_move, 1.0),
                               'template_xc': (atime_align_gpwiggle_move, 0.5),
                               #'constpeak_atime_xc': constpeak_atime_xc_move,
@@ -372,6 +372,7 @@ def run_open_world_MH(sg, steps=10000,
         del template_moves_special["arrival_time"]
         del template_moves_special["arrival_time_big"]
         del template_moves_special["atime_xc"]
+        del template_moves_special["template_xc"]
         del template_moves_special["peak_offset"]
 
     # allow the caller to disable specific moves by name
