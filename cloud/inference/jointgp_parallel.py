@@ -22,6 +22,17 @@ def dump_jobs(jobs, jobfile):
     with open(jobfile, "wb") as f:
         pickle.dump(jobs, f)
 
+def sort_by_filesize(fnames, descending=True):
+    
+    def filesize(fname):
+        with open(fname, "r") as f:
+            size = len(f.read())
+        return size
+        
+    sorted_fnames = sorted(fnames, key = lambda fname : filesize(fname), reverse=descending)
+    return sorted_fnames
+
+
 def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script, 
                                old_jobfile=None, 
                                jobfile=None, nnodes=2, ncpus=4):
@@ -50,9 +61,12 @@ def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script,
     else:
         oldjobs = None
 
+    # run the larger clusters first, so that the smaller ones fill in around the edges
+    sorted_clusters_evids = sort_by_filesize(clusters_evids, descending=True)
+
     try:
         for sta in stas:
-            for evidfile in clusters_evids:
+            for evidfile in sorted_clusters_evids:
                 fname = os.path.basename(evidfile)
                 cmd = "%s --sta=%s --evidfile=%s " % (infer_script, sta, fname)
                 print cmd
