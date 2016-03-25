@@ -65,8 +65,8 @@ def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script,
     sorted_clusters_evids = sort_by_filesize(clusters_evids, descending=True)
 
     try:
-        for sta in stas:
-            for evidfile in sorted_clusters_evids:
+        for evidfile in sorted_clusters_evids:
+            for sta in stas:
                 fname = os.path.basename(evidfile)
                 cmd = "%s --sta=%s --evidfile=%s " % (infer_script, sta, fname)
                 print cmd
