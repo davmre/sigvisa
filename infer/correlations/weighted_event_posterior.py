@@ -85,9 +85,17 @@ def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_mode
     rr = integrate_downsample(r, srate, out_srate)
 
     origin_ll = np.log(rr) + llmax
+    
+    # hack around underflow in the log->exp->log conversion
+    origin_ll = np.where(np.isinf(origin_ll), np.min(ll), origin_ll )
 
     K = (len(ttr_model)-1)/2
     origin_stime = ll_stime - mean_tt - float(K)/srate
+
+    if np.isinf(np.min(origin_ll)):
+        import pdb; pdb.set_trace()
+
+
     return origin_ll, origin_stime
 
 
@@ -126,8 +134,14 @@ def wn_origin_posterior(sg, wn, x, cached_for_wn, out_srate, temper=1):
 
     srate = wn.srate
     ll_stime = wn.st
+
+
     hacked_atime_lls = update_lls_for_wn(wn, atime_lls, temper=temper)
+
     origin_ll, origin_stime = atime_likelihood_to_origin_likelihood(hacked_atime_lls, ll_stime, srate, tt_mean, tt_array, out_srate)
+
+    if np.isinf(np.min(origin_ll)):
+        import pdb; pdb.set_trace()
 
 
     return origin_ll, origin_stime
@@ -162,11 +176,19 @@ def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_s
         t0 = time.time()
         origin_ll, origin_stime = wn_origin_posterior(sg, wn, x, cached_for_wn, 
                                                       global_srate, temper=temper)
+        if np.isinf(np.max(origin_ll)):
+            import pdb; pdb.set_trace()
+
         t1 = time.time()
         global_offset = int((origin_stime - global_stime)*global_srate)
         align_sum(global_ll, 
                   origin_ll, 
                   global_offset)
+
+        if np.isinf(np.max(global_ll)):
+            import pdb; pdb.set_trace()
+
+
         t2 = time.time()
 
     C = np.max(global_ll)
@@ -174,6 +196,7 @@ def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_s
     Z = np.sum(posterior)
     posterior /= Z
     logZ = np.log(Z) + C
+
 
     return posterior, logZ
 

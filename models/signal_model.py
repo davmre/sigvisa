@@ -1044,7 +1044,7 @@ class ObservedSignalNode(Node):
         proxy_lps = {self.label: (lpw, deriv_lp_w)}
         return proxy_lps
 
-    def plot(self, ax=None, **kwargs):
+    def plot(self, ax=None, plot_atimes=True, **kwargs):
         from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes
         if ax is None:
             f = plt.figure(figsize=(15,5))
@@ -1052,9 +1052,11 @@ class ObservedSignalNode(Node):
         plot_dict = {"plot_wave": True}
         plot_dict.update(kwargs)
         shape_colors = plot_with_fit_shapes(fname=None, wn=self, axes=ax, **plot_dict)
-        atimes = dict([("%d_%s" % (eid, phase), self.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in self.arrivals()])
-        colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in self.arrivals()])
-        plot_pred_atimes(dict(atimes), self.get_wave(), axes=ax, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
+
+        if plot_atimes:
+            atimes = dict([("%d_%s" % (eid, phase), self.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in self.arrivals()])
+            colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in self.arrivals()])
+            plot_pred_atimes(dict(atimes), self.get_wave(), axes=ax, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
         return ax
 
     def __getstate__(self):

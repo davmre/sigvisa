@@ -26,7 +26,7 @@ from sigvisa.models.ttime import tt_predict
 from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes, subplot_waveform
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.heatmap import event_bounds, find_center
-
+from sigvisa.utils.array import time_to_index, index_to_time
 from sigvisa.signals.io import Waveform
 from sigvisa import *
 
@@ -183,7 +183,7 @@ def mcmc_ev_detail(request, dirname, eid_str):
             max_atime = np.max(atimes)
             r.append((wn.label, min_atime-10, max_atime + 60, repr(tms)))
 
-    proposalpath = "ev_%05d/hough.png" % eid
+    proposalpath = "ev_%05d/proposal.png" % eid
 
     return render_to_response("svweb/mcmc_ev_detail.html",
                               {'r': r,
@@ -807,9 +807,10 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
     base_ev = sg.get_event(base_eid)
     base_wn = sg.get_arrival_wn(sta, base_eid, phase, band=None, chan=None)
     atime = base_wn.get_template_params_for_arrival(base_eid, phase)[0]["arrival_time"]
-    sidx = int(np.round(((atime - buffer_s) - base_wn.st) * base_wn.srate))
+    sidx = time_to_index(atime-buffer_s, base_wn.st, base_wn.srate)
+    base_stime = index_to_time(sidx, base_wn.st, base_wn.srate)
     eidx = sidx + int((signal_len + 2*buffer_s) * base_wn.srate)
-    default_idx = int(buffer_s * base_wn.srate)
+    default_idx = time_to_index(atime, base_stime, base_wn.srate)
     base_signal = base_wn.get_value()[sidx:eidx].copy()
     base_default_window = base_signal[default_idx :default_idx + int(signal_len * base_wn.srate)]
     base_signal /= np.linalg.norm(base_default_window)
@@ -841,7 +842,7 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
         atime = wn.get_template_params_for_arrival(eid, phase)[0]["arrival_time"]
         eid_ttrs.append(atime - pred_atime)
 
-        sidx = int(np.round((atime - wn.st) * wn.srate))
+        sidx = time_to_index(atime, wn.st, wn.srate)
         eidx = sidx + int(signal_len * wn.srate)
         eid_signal = wn.get_value()[sidx:eidx].copy()
         eid_signal /= np.linalg.norm(eid_signal)

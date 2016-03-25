@@ -11,6 +11,12 @@ from sigvisa.models.distributions import Gaussian,TruncatedGaussian
 from sigvisa.source.event import Event
 from sigvisa.utils.array import index_to_time, time_to_index
 
+from sigvisa import Sigvisa
+from sigvisa.plotting.event_heatmap import EventHeatmap
+from sigvisa.plotting.plot import savefig
+from matplotlib.figure import Figure
+from matplotlib.cm import get_cmap
+
 import cPickle as pickle
 
 
@@ -127,7 +133,7 @@ def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_
             return np.array(all_proposals)
 
         proposed_ev = Event(lon=plon, lat=plat, depth=pdepth, time=ptime, mb=4.0)
-        return proposed_ev, log_qforward, (proposal_weights, kernel, proposal_otime_posteriors, xx)
+        return proposed_ev, log_qforward, (proposal_weights, kernel, proposal_otime_posteriors, training_xs)
     else:
         return log_qforward
 
@@ -163,6 +169,7 @@ def compute_proposal_distribution(sg, stas, phases,
                                                                global_srate = global_srate,
                                                                temper=temper)
         proposal_origin_time_posteriors.append(posterior)
+
         proposal_weights.append(weight)
 
     training_xs = [x for (x, sta_lls) in atime_lls]        
@@ -184,7 +191,7 @@ def sample_corr_kwargs(sg):
     stas_idx = np.random.choice(np.arange(len(sta_choices)), p=sta_probs)
     stas = sta_choices[stas_idx]
 
-    phase_choices = ("Lg", ("P", "Lg"), ("P", "Lg", "S", "Pg"))
+    phase_choices = ("Lg", ("Pg", "Lg"), ("Pn", "Lg", "Sn", "Pg"))
     phases_idx = np.random.choice(np.arange(len(phase_choices)))
     phases = phase_choices[phases_idx]
 
@@ -211,6 +218,42 @@ def sample_corr_kwargs(sg):
 
     return corr_kwargs
 
+
+def plot_proposal_weights(training_xs, proposal_weights, stas, true_x=None, ax=None, fname=None):
+
+    training_xs = np.squeeze(np.array(training_xs))
+
+    weights = np.array(proposal_weights)
+    #scaled_weights = (weights - np.min(weights)) / weights.ptp()
+    scaled_weights = weights
+
+    s = Sigvisa()
+    hm = EventHeatmap(f=None, calc=False, autobounds=training_xs, autobounds_quantile=1.0)
+
+
+    if ax is None:
+        fig = Figure(figsize=(15, 15))
+        ax = fig.add_subplot(111)
+
+    sta_locations = [s.earthmodel.site_info(n, 0)[0:2] for n in stas]
+    hm.init_bmap(axes=ax)
+    hm.plot_locations(sta_locations, labels=stas,
+                        marker="^", ms=20, mec="none", mew=0,
+                        alpha=1.0, mfc="blue")
+    
+    
+    colors = get_cmap("Reds")(scaled_weights)
+    if true_x is not None:
+        hm.plot_locations(true_x, marker="*", ms=20, mfc="green", alpha=0.5)
+    
+    hm.bmap.scatter(training_xs[:, 0], training_xs[:, 1], marker="o", s=100 * scaled_weights, alpha=0.5, c=colors)
+    ax.axis("off")
+
+    if fname is not None:
+        savefig(fname, fig, dpi=300, bbox_inches='tight')
+
+
+    return fig, ax
 
 def correlation_location_proposal(sg, fix_result=None, 
                                   proposal_dist_seed=None, 

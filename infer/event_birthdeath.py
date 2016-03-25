@@ -13,7 +13,7 @@ from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import extract_sta_node, create_key, get_parent_value, parse_key
-from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel, ModelNotFoundError
+from sigvisa.graph.sigvisa_graph import get_param_model_id, dummyPriorModel, ModelNotFoundError, SigvisaGraph
 from sigvisa.graph.dag import ParentConditionalNotDefined
 from sigvisa.ssms_c import TransientCombinedSSM
 from sigvisa.infer.propose_hough import hough_location_proposal, visualize_hough_array
@@ -22,7 +22,7 @@ from sigvisa.infer.propose_mb import propose_mb
 from sigvisa.infer.local_gibbs_move import proxylp_full, approximate_scalar_gibbs_distribution
 from sigvisa.infer.propose_cheating import cheating_location_proposal
 from sigvisa.infer.correlations.ar_correlation_model import ar_advantage
-from sigvisa.infer.correlations.event_proposal import correlation_location_proposal, sample_corr_kwargs
+from sigvisa.infer.correlations.event_proposal import correlation_location_proposal, sample_corr_kwargs, plot_proposal_weights
 from sigvisa.infer.template_mcmc import get_env_based_amplitude_distribution, get_env_based_amplitude_distribution2, get_env_diff_positive_part, sample_peak_time_from_cdf, merge_distribution, peak_log_p, preprocess_signal_for_sampling
 from sigvisa.infer.template_xc import fastxc
 from sigvisa.infer.mcmc_basic import mh_accept_util
@@ -30,6 +30,8 @@ from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ttime import tt_residual, tt_predict
 from sigvisa.models.templates.coda_height import amp_transfer
 from sigvisa.models.distributions import Gaussian, Laplacian, PiecewiseLinear
+from sigvisa.models.signal_model import unify_windows
+from sigvisa.signals.common import Waveform
 from sigvisa.utils.counter import Counter
 from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.utils.array import index_to_time, time_to_index
@@ -1071,7 +1073,7 @@ def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
 
 def ev_death_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
-    proposal_type = np.random.choice(("smart", "dumb"))
+    proposal_type = np.random.choice(("smart", "dumb", 'mh'))
     return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      birth_type=proposal_type, **kwargs)
 
@@ -1294,6 +1296,82 @@ def propose_associations(sg, wn, eid, site_phases, fix_result=None,
 
     return log_qforward, replicate_fns, assoc_tmids, birth_record
 
+def create_dummy_mh_world(sg, wn, eid):
+    # create a dummy sigvisa_graph and wave node containing (only) the signal 
+    # relevant to a particular event. this is an optimization to avoid expensive
+    # signal-probability calculations over (say) an entire hour of signal, when
+    # in fact the event we're interested in only explains a small amount of that 
+    # signal. 
+
+
+    dummy_sg = SigvisaGraph(template_model_type=sg.template_model_type, 
+                            template_shape=sg.template_shape,
+                            #wiggle_model_type=sg.wiggle_model_type, 
+                            wiggle_model_type="dummy", 
+                            wiggle_family=sg.wiggle_family, 
+                            skip_levels=sg.skip_levels,
+                            dummy_fallback=sg.dummy_fallback,
+                            runids = sg.runids,
+                            phases=sg.phases, 
+                            base_srate=sg.base_srate,
+                            smoothing=sg.smoothing,
+                            arrays_joint=sg.arrays_joint, 
+                            gpmodel_build_trees=sg.gpmodel_build_trees,
+                            hack_param_constraint=sg.hack_param_constraint,
+                            uatemplate_rate=sg.uatemplate_rate,
+                            fixed_arrival_npts=sg.fixed_arrival_npts,
+                            dummy_prior=sg.dummy_prior,
+                            raw_signals=sg.raw_signals, 
+                            jointgp_hparam_prior=sg.jointgp_hparam_prior,
+                            jointgp_param_run_init=sg.jointgp_param_run_init,
+                            force_event_wn_matching=False,
+                            hack_coarse_tts=sg.hack_coarse_tts,
+                            hack_coarse_signal=sg.hack_coarse_signal,
+                            hack_ttr_max=sg.hack_ttr_max,
+                            phase_existence_model=sg.phase_existence_model,
+                            min_mb = sg.min_mb,
+                            inference_region=sg.inference_region)
+    
+    # find a window of time containing all the arriving phases of this event
+    phases = sg.ev_arriving_phases(eid, sta=wn.sta)
+    sidx, eidx = None, None
+    for phase in phases:
+        phase_sidx, phase_eidx = wn.template_idx_window(eid=eid, phase=phase, 
+                                                        pre_arrival_slack_s=10.0)
+        phase_eidx = min(phase_eidx, phase_eidx, int(phase_sidx + 60.0*wn.srate))
+
+        if sidx is None:
+            sidx, eidx = phase_sidx, phase_eidx
+        else:
+            sidx, eidx = unify_windows((phase_sidx, phase_eidx), (sidx, eidx))
+    
+    # extract the signal data for this time period
+    truncated_data = wn.get_value()[sidx:eidx].copy()
+    dummy_stime = index_to_time(sidx, wn.st, wn.srate)
+    dummy_etime = index_to_time(eidx, wn.st, wn.srate)
+    dummy_wave = Waveform(truncated_data, srate=wn.srate, stime=dummy_stime, sta=wn.sta, filter_str=wn.filter_str, chan=wn.chan, band=wn.band)
+    dummy_wn = dummy_sg.add_wave(dummy_wave)
+    dummy_wn.nm = wn.nm
+    dummy_wn.nm_env = wn.nm_env
+    dummy_wn.wavelet_param_models=wn.wavelet_param_models
+
+    #print "dummy stime %.1f etime %.1f len %.1f" % (dummy_stime, dummy_etime, dummy_etime-dummy_stime)
+
+    # add the event and set all its phases to match their current values in the original sg
+    ev = sg.get_event(eid)
+    site = Sigvisa().get_array_site(wn.sta)
+    evnodes = dummy_sg.add_event(ev, phases={site: phases}, eid=eid)
+    all_dummy_tmnodes = []
+    for phase in phases:
+        tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+        dummy_tmnodes = dummy_sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
+        for param, val in tmvals.items():
+            k,n = dummy_tmnodes[param]
+            n.set_value(val, key=k)
+        all_dummy_tmnodes.append((phase, dummy_tmnodes))
+
+    return dummy_sg, dummy_wn, all_dummy_tmnodes
+
 def propose_new_phases_mh(sg, wn, eid, 
                           new_phases, 
                           use_correlation=False,
@@ -1322,11 +1400,15 @@ def propose_new_phases_mh(sg, wn, eid,
                                                        fix_result=None, 
                                                        debug_info=None)      
 
+    from sigvisa.infer.run_mcmc import single_template_MH
 
     # run a few iterations of MH on the proposed templates
-    tmnodes = [(phase, sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)) for phase in new_phases]
-    from sigvisa.infer.run_mcmc import single_template_MH
-    single_template_MH(sg, wn, tmnodes, steps=30)
+    #tmnodes = [(phase, sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)) for phase in new_phases]
+    #single_template_MH(sg, wn, tmnodes, steps=30)
+
+    dummy_sg, dummy_wn, dummy_tmnodes = create_dummy_mh_world(sg, wn, eid)
+    new_dummy_tmnodes = [(phase, tmnodes) for (phase, tmnodes) in dummy_tmnodes if phase in new_phases]
+    single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=5)
 
     # then propose template values from a local approximation to the posterior
     for phase in new_phases:
@@ -1336,11 +1418,12 @@ def propose_new_phases_mh(sg, wn, eid,
         if fix_result is not None:
             fr_phase = fix_result[phase]
 
-        lqf, tmvals = propose_tmvals_from_gibbs_scan(sg, wn, eid, phase, 
+        lqf, tmvals = propose_tmvals_from_gibbs_scan(dummy_sg, dummy_wn, eid, phase, 
                                                      fix_result=fr_phase,
                                                      debug_info=debug_phase)
         def rf(eid=eid, wn=wn, tmvals=tmvals, phase=phase):
             sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, tmvals)
+        rf()
         replicate_fns.append(rf)
         log_qforward += lqf
             
@@ -1949,12 +2032,12 @@ def ev_death_move_prior(sg, log_to_run_dir=None, **kwargs):
                                   birth_type="dumb", **kwargs)
 
 def ev_birth_move_hough_dumb(sg, **kwargs):
-    hough_kwargs = {"one_event_semantics": False, "phases": ("P", "Pg", "S", "Lg")}
+    hough_kwargs = {"one_event_semantics": False, "phases": ("Pn", "Pg", "Sn", "Lg")}
     return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, 
                                proposal_type="dumb", **kwargs)
 
 def sample_hough_kwargs(sg):
-    phase_choices = ( ("P",), ("P", "S"), ("P", "Lg"), ("P", "S", "Lg", "Pg"), )
+    phase_choices = ( ("P",), ("Pn", "Sn"), ("Pn", "Lg"), ("Pn", "Sn", "Lg", "Pg"), )
     mbbins_choices = ( (12, 2, 2), (1, 1, 12))
     multipliers = (1.0, 1.5)
     offsets = (False, True)
@@ -2000,7 +2083,8 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         if log_to_run_dir is None:
             return
 
-        (proposal_weights, proposal_idx, proposal_otime_posteriors, xx), eid, proposed_ev, debug_info = proposal_extra
+        (proposal_weights, proposal_idx, proposal_otime_posteriors, training_xs), eid, proposed_ev, debug_info = proposal_extra
+        xx = training_xs[proposal_idx]
         #hough_array, eid, associations = proposal_extra
 
         log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
@@ -2023,10 +2107,20 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
     def accept_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         #hough_array, eid, associations = proposal_extra
         log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward)
-        #if log_to_run_dir is not None:
-        #    log_event_birth(sg, None, log_to_run_dir, eid)
-        #else:
-        #    raise Exception("why are we not logging?")
+
+        (proposal_weights, proposal_idx, proposal_otime_posteriors, training_xs), eid, proposed_ev, debug_info = proposal_extra
+        if log_to_run_dir is not None:
+            if "stas" in corr_kwargs: 
+                stas = corr_kwargs["stas"]
+            else:
+                stas = ()
+
+            log_dir = os.path.join(log_to_run_dir, "ev_%05d" % eid)
+            mkdir_p(log_dir)
+            plot_fname = os.path.join(log_dir, "proposal.png")
+            plot_proposal_weights(training_xs, proposal_weights, stas, fname=plot_fname)
+        else:
+            raise Exception("why are we not logging?")
 
     def clp(sg, fix_result=None, **kwargs):
         kwargs.update(corr_kwargs)
@@ -2037,7 +2131,7 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
 def ev_birth_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
     
-    proposal_type = np.random.choice(("smart", "dumb"))
+    proposal_type = np.random.choice(("mh", "smart", "dumb"))
     
     return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      proposal_type=proposal_type, **kwargs)
@@ -2103,7 +2197,7 @@ def log_event_birth(sg, hough_array, run_dir, eid):
     sites = sg.site_elements.keys()
     if hough_array is not None:
         sg.logger.info("visualizing hough array...")
-        visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'), region=sg.inference_region)
+        visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'proposal.png'), region=sg.inference_region)
 
 
 def prettyprint_debug(birth_debug):

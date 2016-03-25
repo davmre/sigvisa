@@ -22,6 +22,7 @@ def align_atimes(sg, sta, phase,
 
     def extract_windows():
         windows = {}
+        sidxs = {}
         noise_models = {}
         pred_atimes = {}
         srate = None
@@ -50,6 +51,7 @@ def align_atimes(sg, sta, phase,
             sidx = time_to_index(pred_atime - buffer_len_s, wn.st, srate)
             eidx = sidx + int((patch_len_s + 2*buffer_len_s) * srate)
             windows[eid] = wn.get_value()[sidx:eidx].copy()
+            sidxs[eid] = sidx
 
             for (other_eid, other_phase) in wn.arrivals():
                 if other_eid == eid and other_phase==phase: continue
@@ -62,7 +64,7 @@ def align_atimes(sg, sta, phase,
                     windows[eid][other_idx:] = 0.0
 
             noise_models[eid] = wn.nm
-        return windows, noise_models, pred_atimes, srate 
+        return windows, noise_models, pred_atimes, sidxs, srate 
 
     def get_nearby_eids(sg, windows):
         # then for each ev with signal, get the indices of all other evs within the distance threshold
@@ -83,7 +85,7 @@ def align_atimes(sg, sta, phase,
     #    - the ar/iid advantage for the average of patches from nearby events
     # with respect to the indices that determine atimes/patches for each event. 
     
-    windows, noise_models, pred_atimes, srate  = extract_windows()
+    windows, noise_models, pred_atimes, sidxs, srate  = extract_windows()
     if len(windows) < 2:
         return
 
@@ -235,14 +237,9 @@ def align_atimes(sg, sta, phase,
             pred_atime = pred_atimes[eid]
             align_idx = alignments[eid]
 
-            window_sidx = time_to_index(pred_atime - buffer_len_s, wn.st, wn.srate)
-            window_stime = index_to_time(window_sidx, wn.st, wn.srate)
-
-            # don't set atimes to exact idx boundaries
-            # because it might trigger floating-point rounding errors in other code.
-            jitter = 0.1/srate
-
-            aligned_atime = align_idx / srate + window_stime + jitter
+            window_sidx = sidxs[eid]
+            arrival_idx = window_sidx + align_idx
+            aligned_atime = index_to_time(arrival_idx, wn.st, wn.srate)
 
             tmnodes = sg.get_template_nodes(eid, sta, phase, wn.band, wn.chan)
             k_atime, n_atime = tmnodes["arrival_time"]
