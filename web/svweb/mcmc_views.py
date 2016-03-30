@@ -105,6 +105,11 @@ def final_mcmc_state(ev_dir):
     sg = graph_for_step(ev_dir, max_step)
     return sg, max_step
 
+def graph_from_file(run_dir, fname):
+    with open(os.path.join(run_dir, fname), 'rb') as f:
+        sg = pickle.load(f)
+    return sg
+
 def mcmc_lp_posterior(request, dirname):
     s = Sigvisa()
 
@@ -154,11 +159,14 @@ def mcmc_ev_detail(request, dirname, eid_str):
 
 
     step = int(request.GET.get('step', '-1'))
-    if step < 0:
-        max_step = np.max([int(d[5:]) for d in os.listdir(mcmc_run_dir) if d.startswith('step')])
-        step = max_step
-
-    sg = graph_for_step(mcmc_run_dir, step)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+    else:
+        if step < 0:
+            max_step = np.max([int(d[5:]) for d in os.listdir(mcmc_run_dir) if d.startswith('step')])
+            step = max_step
+        sg = graph_for_step(mcmc_run_dir, step)
 
     if eid_str[:4]=="true":
         with open(os.path.join(mcmc_run_dir, 'events.pkl'), 'rb') as f:
@@ -184,7 +192,7 @@ def mcmc_ev_detail(request, dirname, eid_str):
             r.append((wn.label, min_atime-10, max_atime + 60, repr(tms)))
 
     proposalpath = "ev_%05d/proposal.png" % eid
-
+    sgfilestr = "sgfile=%s" % sgfile if sgfile else ""
     return render_to_response("svweb/mcmc_ev_detail.html",
                               {'r': r,
                                'dirname': dirname,
@@ -192,6 +200,7 @@ def mcmc_ev_detail(request, dirname, eid_str):
                                'eid': eid,
                                'ev_str': ev_str,
                                'step': step,
+                               'sgfilestr': sgfilestr,
                                'proposalpath': proposalpath,
                                'extra_wave_args': extra_wave_args,
                                }, context_instance=RequestContext(request))
@@ -223,7 +232,12 @@ def mcmc_run_detail(request, dirname):
 
     true_evs = sorted(true_evs, key = lambda ev : ev.time)
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
 
     stas = sg.station_waves.keys()
@@ -329,7 +343,7 @@ def mcmc_run_detail(request, dirname):
     bounds["right"] = right_bound + 0.2
 
     jointgps = (sg.wiggle_model_type=="gp_joint")
-
+    sgfilestr = "sgfile=%s" %sgfile if sgfile else ""
     return render_to_response("svweb/mcmc_run_detail.html",
                               {'wns': wns,
                                'phases_used': phases_used,
@@ -344,6 +358,7 @@ def mcmc_run_detail(request, dirname):
                                'gp_hparams': gp_hparams,
                                'bounds': bounds,
                                'jointgps': jointgps,
+                               'sgfilestr': sgfilestr
                                }, context_instance=RequestContext(request))
 
 def rundir_eids(mcmc_run_dir):
@@ -362,7 +377,12 @@ def conditional_signal_posterior(request, dirname, sta, phase):
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
     from sigvisa.models.wiggles.wavelets import implicit_to_explicit
 
@@ -491,7 +511,12 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
     from sigvisa.models.wiggles.wavelets import implicit_to_explicit
 
@@ -604,7 +629,12 @@ def mcmc_alignment_posterior(request, dirname, sta, phase):
     plotxc = request.GET.get('plotxc', 'f').startswith('t')
     plot_true_alignment = request.GET.get('plot_true_alignment', 'f').startswith('t')
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
     eid_request = request.GET.get('eids', 'None')
     if eid_request == "None":
@@ -801,7 +831,12 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
     sta = str(sta)
     phase = str(phase)
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
     # get the signal for this eid, with some leeway
     base_ev = sg.get_event(base_eid)
@@ -921,7 +956,10 @@ def mcmc_compare_gps_doublets(request, dirname, sta):
     zoom = float(request.GET.get('zoom', '1.0'))
     step = int(request.GET.get('step', '-1'))
 
-    if step < 0:
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+    elif step < 0:
         sg, step = final_mcmc_state(mcmc_run_dir)
     else:
         sg = graph_for_step(mcmc_run_dir, step)
@@ -1097,7 +1135,10 @@ def mcmc_compare_gps_doublets_wavelets(request, dirname, sta, phase):
     sta = str(sta)
     phase = str(phase)
 
-    if step < 0:
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+    elif step < 0:
         sg, step = final_mcmc_state(mcmc_run_dir)
     else:
         sg = graph_for_step(mcmc_run_dir, step)
@@ -1211,8 +1252,13 @@ def mcmc_hparam_posterior(request, dirname, sta, target):
 
     burnin = int(request.GET.get('burnin', '-1'))
 
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
     true_vals = None
     # load hparam samples from file
     #import pdb; pdb.set_trace()
@@ -1327,8 +1373,13 @@ def mcmc_event_proposals(request, dirname):
         true_evs = []
     trueX = np.asarray([(ev.lon, ev.lat, ev.depth, ev.mb, ev.time) for ev in true_evs]).reshape((-1, 5))
 
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
     inferred_evs = [sg.get_event(eid) for eid in sg.evnodes.keys() if eid not in sg.fixed_events]
     inferredX = np.asarray([(ev.lon, ev.lat, ev.depth, ev.mb, ev.time) for ev in inferred_evs]).reshape((-1, 5))
 
@@ -1401,7 +1452,12 @@ def mcmc_event_posterior(request, dirname):
     if top_lat==90 and bottom_lat==-90 and left_lon==-180 and right_lon==180:
         proj="robin"
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
 
     sites = sg.site_elements.keys()
 
@@ -1530,7 +1586,11 @@ def mcmc_arrivals(request, dirname, wn_label, step):
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    sg = graph_for_step(mcmc_run_dir, int(step))
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+    else:
+        sg = graph_for_step(mcmc_run_dir, int(step))
 
     wn = sg.all_nodes[wn_label]
 
@@ -1632,7 +1692,13 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    sg, max_step = final_mcmc_state(mcmc_run_dir)
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        max_step = 0
+    else:
+        sg, max_step = final_mcmc_state(mcmc_run_dir)
+
     wn = sg.all_nodes[wn_label]
 
     arrival_info = wn.signal_component_means()
@@ -1668,7 +1734,11 @@ def mcmc_wave_gpvis(request, dirname, wn_label):
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    sg = graph_for_step(mcmc_run_dir, int(step))
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+    else:
+        sg = graph_for_step(mcmc_run_dir, int(step))
 
     wn = sg.all_nodes[wn_label]
 
@@ -1706,6 +1776,8 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     plot_pred_signal = request.GET.get("pred_signal", 'false').lower().startswith('t')
     pred_signal_var = request.GET.get("pred_signal_var", 'false').lower().startswith('t')
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
+    plot_posterior = request.GET.get("plot_posterior", 'true').lower().startswith('t')
+
     plot_dets = request.GET.get("plot_dets", 'leb')
     plot_template_arrivals = request.GET.get("plot_templates", 'true').lower().startswith('t')
     model_lw = float(request.GET.get("model_lw", '2'))
@@ -1719,7 +1791,11 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    if step=="all":
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        sgs = {0: sg}
+    elif step=="all":
         sgs = graphs_by_step(mcmc_run_dir)
     else:
         sgs = {int(step): graph_for_step(mcmc_run_dir, int(step))}
@@ -1763,14 +1839,17 @@ def mcmc_wave_posterior(request, dirname, wn_label):
             wn._set_cssm_priors_from_model(parent_values=pv)
             pred_signal = wn.tssm.mean_obs(wn.npts)
             w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
-            subplot_waveform(w, axes, color='green', linewidth=2.5)
+            subplot_waveform(w, axes, color='green', linewidth=2.5, alpha=0.8)
             if pred_signal_var:
                 signal_var = wn.tssm.obs_var(wn.npts)
-                w1 = Waveform(pred_signal+2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
-                subplot_waveform(w1, axes, color='red', linewidth=1.0)
-                w2 = Waveform(pred_signal-2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
-                subplot_waveform(w2, axes, color='red', linewidth=1.0)
-        else:
+
+                bottom = pred_signal-2*np.sqrt(signal_var)
+                top = pred_signal+2*np.sqrt(signal_var)
+                w1 = Waveform(bottom, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+                subplot_waveform(w1, axes, color='green', linewidth=1.0, fill_y2=top, alpha=0.1)
+                #w2 = Waveform(pred_signal-2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
+                #subplot_waveform(w2, axes, color='red', linewidth=1.0)
+        elif plot_posterior:
             shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha, model_lw=model_lw, zorder=5)
 
         if plot_predictions:
@@ -1864,6 +1943,9 @@ def mcmcrun_browsedir(request, dirname, path):
                                    'path': path, 'dirname': dirname
                                }, context_instance=RequestContext(request))
 
+    elif current_path.endswith(".pkl") or current_path.endswith(".sg"):
+        url = reverse('mcmcrun_detail', kwargs={"dirname": dirname})
+        return HttpResponseRedirect(url + "?sgfile=%s" % path)
     else:
         mimetype=mimetypes.guess_type(path)[0]
         return HttpResponse(open(current_path).read(), content_type=mimetype)
