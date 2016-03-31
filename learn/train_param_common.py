@@ -16,6 +16,7 @@ import cPickle as pickle
 
 from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
 from sigvisa.models.spatial_regression.local_gp_ensemble import LocalGPEnsemble, optimize_localgp_hyperparams
+from sigvisa.models.distributions import LogNormal
 from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
@@ -127,8 +128,12 @@ def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=Non
         model = learn_constant_beta(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
+        
+        generic_noise_prior = LogNormal(1.5, 0.5)
+
         model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta,
                                  optimize_marginal_ll=optimize,
+                                 noise_prior = generic_noise_prior,
                                  basisfn_str=basisfn_str, **kwargs)
     else:
         raise Exception("invalid model type %s" % (model_type))
@@ -182,27 +187,34 @@ def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal
 
     basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
 
-    def nllgrad(var):
-        std = np.sqrt(var)
+    def nllgrad(log_std):
+        std = np.exp(log_std)
+        var = std**2
         try:
             lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, noise_std=std, compute_ll=True, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, **kwargs)
         except scipy.linalg.LinAlgError:
             print " warning: lin alg error for std %f" % std
             return (np.inf, np.array((-1.0,)))
         ll = lbm.ll
-        ll_deriv = lbm.ll_deriv
+        ll_deriv = lbm.ll_deriv * std # df/d_exp(logstd) * d_exp(logstd)/d_logstd
+        
         if noise_prior is not None:
             ll += noise_prior.log_p(var)
-            ll_deriv += noise_prior.deriv_log_p(var)
+            prior_deriv_var = noise_prior.deriv_log_p(var)
+            prior_deriv_std = prior_deriv_var * 2 * std # df/dvar * dvar/dstd
+            prior_deriv_logstd = prior_deriv_std * std
+            ll_deriv += prior_deriv_logstd
+
         return (-ll, -ll_deriv)
 
 
     if optimize_marginal_ll:
-        x0 = 10
+        x0 = np.log(10)
         result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
-                                         tol=.0001, method='L-BFGS-B', bounds=((1e-3, None),))
-        var = result['x']
-        std = np.sqrt(var)
+                                         tol=.0001)
+        logstd = result['x']
+        std = np.exp(logstd)
+
         print "got opt std", std
     else:
         std = 1.0
