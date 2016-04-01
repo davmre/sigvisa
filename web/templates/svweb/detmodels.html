@@ -1,0 +1,46 @@
+{% load url from future %}
+{% load pagination_tags %}
+{% autopaginate model_list 20 %}
+
+<html>
+<head>
+<title>models - sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+{% include "svweb/header.html"  %}
+<h1>models</h1>
+
+
+{{ model_filter }}<br>
+
+{% if model_list %}
+
+    <table id="models" border=1 cellpadding=3 width=90%>
+      <tr>
+	<td><strong>modelid</strong></td>
+	<td><strong>runid</strong></td>
+        <td><strong>sta</strong></td>
+        <td><strong>phase</strong></td>
+	<td><strong>phase_context</strong></td>
+	<td><strong>visualizations</strong></td>
+      </tr>
+        {% for model in model_list %}
+            <tr>
+                <td>{{ model.modelid }}</td>
+		<td>{{ model.fitting_runid }}</td>
+		<td>{{ model.sta }}</td>
+		<td>{{ model.phase }}</td>
+		<td>{{ model.phase_context }}</td>
+                <td><a href="{% url 'detmodel_plot' modelid=model.modelid %}">visualize</a></td>
+		</td>
+            </tr>
+        {% endfor %}
+    </table>
+{% paginate %}
+{% else %}
+    <p>No models found!!! :(</p>
+{% endif %}
+{% include "svweb/footer.html"  %}
+</body>
+</html>
