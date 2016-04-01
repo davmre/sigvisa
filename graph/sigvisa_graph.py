@@ -149,7 +149,7 @@ class SigvisaGraph(DirectedGraphModel):
                  smoothing=None,
                  arrays_joint=False, gpmodel_build_trees=False,
                  hack_param_constraint=True,
-                 uatemplate_rate=1e-3,
+                 uatemplate_rate=None,
                  fixed_arrival_npts=None,
                  dummy_prior=None,
                  raw_signals=False, 
@@ -253,7 +253,6 @@ class SigvisaGraph(DirectedGraphModel):
         self.next_eid = 1
 
         self.next_uatemplateid = 1
-        self.uatemplate_rate = uatemplate_rate
         self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
 
@@ -303,6 +302,11 @@ class SigvisaGraph(DirectedGraphModel):
         self.fully_fixed_events = set()
         if inference_region is not None:
             self.event_rate = inference_region.event_rate
+
+        if uatemplate_rate is None:
+            self.uatemplate_rate = self.event_rate * 3
+        else:
+            self.uatemplate_rate = uatemplate_rate
 
         self.ev_site_phases = dict() # keys: eid, values: defaultdict(set) keyed by site
         self.phase_existence_model = phase_existence_model
@@ -407,8 +411,13 @@ class SigvisaGraph(DirectedGraphModel):
         #return list(phases)
 
     def template_generator(self, phase):
-        if phase not in self.tg and type(self.template_shape) == str:
-            self.tg[phase] = load_template_generator(self.template_shape)
+        if phase not in self.tg:
+            if type(self.template_shape) == str:
+                template_shape = self.template_shape
+            else:
+                template_shape = self.template_shape[phase]
+
+            self.tg[phase] = load_template_generator(template_shape)
         return self.tg[phase]
 
     def wavelet_basis(self, srate):

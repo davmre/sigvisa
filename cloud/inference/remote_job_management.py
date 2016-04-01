@@ -39,7 +39,7 @@ def nohup_return_pid(cmd, host, log_prefix, sudo=False, **kwargs):
     return pid
 
 def running_processes(host):
-    r = run_as_host("ps ax -o pid", host)
+    r = run_as_host("ps ax -o pid", host, timeout=5)
     pids = [int(l) for l in r.split("\n") if not l=="PID"]
     return pids
 
@@ -133,7 +133,12 @@ class JobManager(object):
 
         jobs_to_delete = []
         for host, jobs in self.jobs_by_host.items():
-            pids = running_processes(host)
+            try:
+                pids = running_processes(host)
+            except Exception as e:
+                print "exception checking status of %s: %s" % (host, str(e))
+                continue
+
             for pid, (jobid, job_cpus) in jobs.items():
                 if pid not in pids:
                     jobs_to_delete.append(jobid)

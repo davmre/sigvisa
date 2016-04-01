@@ -46,7 +46,7 @@ class PassThroughOptionParser(OptionParser):
             except (BadOptionError,AmbiguousOptionError), e:
                 largs.append(e.opt_str)
 
-def run_fit_and_rename_output(args):
+def run_fit_and_rename_output(args, basename="fitting"):
     """
 
     Runs the provided fitting command, and blocks until it
@@ -61,7 +61,7 @@ def run_fit_and_rename_output(args):
 
     print "about to run", cmd
 
-    base_output = os.path.join(os.getenv("SIGVISA_HOME"), "logs", "fitting")
+    base_output = os.path.join(os.getenv("SIGVISA_HOME"), "logs", basename)
     tmp_output_dir = os.path.join(base_output, "temp")
     tmp_output_file = os.path.join(tmp_output_dir, "run%d_%s.log" % (runid, paramhash))
     ensure_dir_exists(tmp_output_dir)

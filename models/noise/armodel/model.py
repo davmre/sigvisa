@@ -183,7 +183,7 @@ class ARModel(NoiseModel):
     # em: error model
     # sf: sampling frequency in Hz.
     def __init__(self, params, em, c=0, sf=40):
-        self.params = params
+        self.params = np.asarray(params)
         self.p = len(params)
         self.em = em
         self.c = c

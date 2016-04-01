@@ -62,6 +62,8 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
     if etime is not None:
         region_etime = etime
 
+    min_mb = 2.0
+
     runids=(runid,)
 
     rs = TimeRangeRunSpec(sites=stas, start_time=region_stime, end_time=region_etime)
@@ -71,7 +73,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
     region = Region(lons=region_lon, lats=region_lat, 
                     times=(region_stime, region_etime),
                     rate_bulletin="isc", 
-                    min_mb=2.5,
+                    min_mb=min_mb,
                     rate_train_start=1167609600,
                     rate_train_end=1199145600)
 
@@ -83,6 +85,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
                     phases=phases,
                     bands=bands,
                     runids=runids,
+                    min_mb=min_mb,
                     inference_region=region,
                     dummy_fallback=True,
                     raw_signals=raw_signals,
@@ -94,8 +97,11 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
         with open(resume_from, 'rb') as f:
             sg = pickle.load(f)
         sg.phases=phases
-        sg.uatemplate_rate = uatemplate_rate
+        sg.uatemplate_rate = 3 * sg.event_rate
         sg.runids=(runid,)
+
+        sg.hough_proposer = {}
+
         from sigvisa.graph.sigvisa_graph import dummyPriorModel
         sg.dummy_prior = dummyPriorModel
         try:
@@ -106,11 +112,14 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
 
     else:
         sg = rs.build_sg(ms1)
-        revs = relevant_events(region)
-        for ev in revs:
-            evnodes = sg.add_event(ev)
-            eid = evnodes["lon"].eid
-            sg.fix_event(eid, fix_templates=False)
+        #revs = relevant_events(region)
+        #for ev in revs:
+        #    evnodes = sg.add_event(ev)
+        #    eid = evnodes["lon"].eid
+        #    sg.fix_event(eid, fix_templates=False)
+
+        sg.uatemplate_rate = 3 * sg.event_rate
+
 
         if deserialize is not None:
             sg.deserialize_from_tgz(deserialize)
@@ -119,7 +128,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
 
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=ev_steps, fix_outside_templates=fix_outside)
 
-    do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
+    do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None, dump_proposals=True)
 
 
 if __name__ == "__main__":
@@ -161,10 +170,14 @@ if __name__ == "__main__":
                       help="serialized (tgz) sg state to initialize inference")
     parser.add_option("--runid", dest="runid", default=1, type=int,
                       help="runid for models to load")
+    parser.add_option("--label", dest="label", default=None, type=str,
+                      help="arbitrary label not used for anything")
 
     (options, args) = parser.parse_args()
 
     bands = options.bands.split(",")
     phases = options.phases.split(",")
+
+
 
     main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid, stime=options.stime, etime=options.etime, hack_constraint=not options.no_hack_constraint)

@@ -280,20 +280,28 @@ def mcmc_run_detail(request, dirname):
 
     for i, eid in enumerate(eids):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
-        trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
 
-        llon, rlon, blat, tlat = event_bounds(trace)
-        X.append([llon, tlat])
-        X.append([llon, blat])
-        X.append([rlon, tlat])
-        X.append([rlon, blat])
 
-        results, txt = trace_stats(trace, true_evs)
         ev = sg.get_event(eid)
+
+        try:
+            trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
+            llon, rlon, blat, tlat = event_bounds(trace)
+            results, txt = trace_stats(trace, true_evs)
+        except IOError:
+            llon, rlon = ev.lon - 1, ev.lon + 1
+            blat, tlat = ev.lat - 1, ev.lat + 1
+            results = {}
+
         try:
             enode = sg.extended_evnodes[eid][4].label
         except:
             enode = None
+
+        X.append([llon, tlat])
+        X.append([llon, blat])
+        X.append([rlon, tlat])
+        X.append([rlon, blat])
 
         matches = [idx for (idx, j) in indices if j==i]
         matched = ""

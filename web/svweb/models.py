@@ -297,6 +297,16 @@ class SigvisaWiggle(models.Model):
     class Meta:
         db_table = u'sigvisa_wiggle'
 
+class SigvisaHoughDetectionModel(models.Model):
+    modelid = models.IntegerField(primary_key=True)
+    fitting_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='fitting_runid')
+    sta = models.CharField(max_length=10)
+    phase = models.CharField(max_length=20)
+    phase_context = models.CharField(max_length=40)
+    model_fname = models.CharField(max_length=256)
+    class Meta:
+        db_table = u'sigvisa_hough_detection_model'
+    
 class SigvisaParamModel(models.Model):
     modelid = models.IntegerField(primary_key=True)
     fitting_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='fitting_runid')
@@ -324,8 +334,6 @@ class SigvisaParamModel(models.Model):
 
     class Meta:
         db_table = u'sigvisa_param_model'
-
-
 
 class SigvisaGridsearchRun(models.Model):
     gsid = models.IntegerField(primary_key=True)

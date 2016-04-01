@@ -15,6 +15,7 @@ from sigvisa import Sigvisa
 from sigvisa.source.event import get_event, Event
 from sigvisa.models.ttime import tt_predict
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, MAX_TRAVEL_TIME
+from sigvisa.utils.fileutils import mkdir_p
 
 class RunSpec(object):
 
@@ -421,6 +422,7 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
                  model_switch_lp_threshold=500, dump_interval_s=10, 
                  max_dumps=5,
                  print_interval_s=10, 
+                 dump_proposals=False,
                  swapper=None, run_dir=None):
 
     # save 'true' events if they are known
@@ -432,6 +434,10 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
 
     logger = MCMCLogger( write_template_vals=True, dump_interval_s=dump_interval_s, print_interval_s=print_interval_s, write_gp_hparams=True, max_dumps=max_dumps, run_dir=run_dir)
     logger.dump(sg)
+
+    if dump_proposals:
+        sg.dump_proposal_debug_dir = os.path.join(logger.run_dir, "proposals")
+        mkdir_p(sg.dump_proposal_debug_dir)
 
     sg.seed = runspec.seed
 

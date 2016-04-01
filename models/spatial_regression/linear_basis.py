@@ -85,6 +85,8 @@ class LinearBasisModel(ParamModel):
             self.ll =  -.5 * (data_term + n * np.log(2*np.pi) + marginal_covar_logdet)
             self.ll_deriv = noise_std * (np.dot(tmp.T, tmp) - np.trace(marginal_precision))
 
+
+
     def save_trained_model(self, fname):
         with open(fname, 'wb') as f:
             base_str = super(LinearBasisModel, self).__repr_base_params__()

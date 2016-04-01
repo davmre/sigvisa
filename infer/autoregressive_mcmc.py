@@ -2,6 +2,7 @@ import numpy as np
 
 from sigvisa.models.distributions import Gaussian, InvGamma, MultiGaussian, TruncatedGaussian
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
+from sigvisa.models.noise.armodel.learner import ARLearner
 from sigvisa.infer.mcmc_basic import mh_accept_util
 
 import scipy.weave as weave
@@ -150,7 +151,7 @@ def posterior_armodel_from_signal(signal_mean, signal_var, nm_node):
 
 def arnoise_mean_rw_move(sg, wn, std=None):
     if std is None:
-        std = np.sqrt(wn.nm_node.prior_mean_dist.variance())/4.0
+        std = np.sqrt(wn.nm_node.prior_mean_dist.variance())
 
     nm1 = wn.nm_node.get_value()
     oldvals = (nm1)
@@ -169,6 +170,8 @@ def arnoise_mean_rw_move(sg, wn, std=None):
         log_qforward = 0.0
         log_qbackward = 0.0
 
+
+
     nm2 = nm1.copy()
     nm2.c = proposed
     wn.nm_node.set_value(nm2)
@@ -176,6 +179,8 @@ def arnoise_mean_rw_move(sg, wn, std=None):
 
     def revert():
         wn.nm_node.set_value(nm1)
+
+    #print "proposed from mean", nm1.c, "to", proposed, "acceptance", (lp_new + log_qbackward - lp_old - log_qforward)
 
 
     v = mh_accept_util(lp_old, lp_new, log_qforward=log_qforward, log_qbackward=log_qbackward, revert_move=revert)
@@ -197,11 +202,14 @@ def arnoise_std_rw_move(sg, wn, std=None):
     lp_old = sg.joint_logprob_keys(relevant_nodes)
 
 
-    proposal_dist = TruncatedGaussian(nm1.em.std, std=std, a=0.0)
+    proposal_width = nm1.em.std / 10.0
+    
+    proposal_dist = TruncatedGaussian(nm1.em.std, std=proposal_width, a=0.0)
     proposed = proposal_dist.sample()
     log_qforward = proposal_dist.log_p(proposed)
 
-    reverse_dist = TruncatedGaussian(proposed, std=std, a=0.0)
+    reverse_proposal_width = proposed / 10.0
+    reverse_dist = TruncatedGaussian(proposed, std=reverse_proposal_width, a=0.0)
     log_qbackward = reverse_dist.log_p(nm1.em.std)
 
     nm2 = nm1.copy()
@@ -215,10 +223,35 @@ def arnoise_std_rw_move(sg, wn, std=None):
 
     return mh_accept_util(lp_old, lp_new, log_qforward=log_qforward, log_qbackward=log_qbackward, revert_move=revert)
 
+def arnoise_joint_move(sg, wn):
 
-def arnoise_params_rw_move(sg, wn, std=0.01):
+    # TODO try writing a move to propose armodel from yule-walker on unexplained
+
+    p = len(wn.nm.params)
+
+    unexplained = wn.unexplained_kalman()
+    lnr = ARLearner(unexplained)
+    params, std = lnr.yulewalker(p)
+
+    std_dist = TruncatedGaussian(std, 1.0, a=0.0)
+    proposed_std = std_dist.sample()
+    #proposed_
+    #params_dist = 
+
+    em = ErrorModel(0, std)
+    arm = ARModel(params, em)
+    
+    wn.nm_node.set_value(arm)
+    reverse_unexplained = wn.unexplained_kalman()
+    # TODO...
+    
+
+
+    
+def arnoise_params_rw_move(sg, wn, std=None):
     if std is None:
-        std = np.array(wn.nm_node.prior_nm.params) / 5.0
+        std = np.abs(np.array(wn.nm_node.prior_nm.params)) / 5.0 + 0.01
+
     n_p = len(wn.nm_node.prior_nm.params)
 
     nm1 = wn.nm_node.get_value()

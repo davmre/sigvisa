@@ -543,6 +543,9 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
   D(write_stuff("d_prior", 0, cache.pred_d);)
   D(write_stuff("xk_prior", 0, cache.xk);)
 
+    if (N == 0) {
+      return ell;
+    }
 
   double step_ell = kalman_observe_sqrt(ssm, cache, 0, z(0));
   if (isinf(step_ell)) {
@@ -592,6 +595,11 @@ void step_obs_likelihoods(StateSpaceModel &ssm, const vector<double> &z,
   cache.init_priors(ssm);
   unsigned int N = z.size();
   double ell = 0;
+  
+  if (N == 0) {
+    return;
+  }
+
   ells(0) = kalman_observe_sqrt(ssm, cache, 0, z(0));
   preds(0) = cache.pred_z;
   alphas(0) = cache.alpha;
@@ -713,6 +721,11 @@ double all_filtered_cssm_coef_marginals(TransientCombinedSSM &ssm,
 
   unsigned int N = z.size();
   double ell = 0;
+
+  if (N == 0) {
+    return ell;
+  }
+
   step_ells[0] = kalman_observe_sqrt(ssm, cache, 0, z(0));
   ell += step_ells[0];
   compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
@@ -742,6 +755,11 @@ double tssm_component_means(TransientCombinedSSM &ssm,
 
   unsigned int N = z.size();
   double ell = 0;
+
+  if (N == 0) {
+    return ell;
+  }
+
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
   ssm.extract_component_means(&(cache.xk(0)), 0, means);
   for (unsigned k=1; k < N; ++k) {
@@ -768,6 +786,11 @@ double tssm_component_vars(TransientCombinedSSM &ssm,
 
   unsigned int N = z.size();
   double ell = 0;
+
+  if (N == 0) {
+    return ell;
+  }
+
   ell += kalman_observe_sqrt(ssm, cache, 0, z(0));
   compute_explicit_cov_atlas(cache, cache.obs_U, cache.obs_d, -1);
   ssm.extract_component_vars(cache.P, cache.tmp_U2, 0, vars);

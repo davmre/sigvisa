@@ -126,6 +126,8 @@ def setup_graph(event, sta, chan, band,
 
     phases = sg.ev_arriving_phases(1, wave["sta"])
     assert( "P"  in phases or "Pg"  in phases or "Pn"  in phases or "pP"  in phases)
+
+
         
 
     return sg
@@ -235,14 +237,14 @@ def compute_wavelet_messages(sg, wn, target_eid=None):
         for j, (prm, prv, psm, psv) in enumerate(zip(prior_means, prior_vars, posterior_means, posterior_vars)):
 
             if psv < 1e-10:
-                print "large posterior!"
+                raise Exception( "large posterior!")
                 import pdb; pdb.set_trace()
 
             message_means[j], message_vars[j] = multiply_scalar_gaussian(psm, psv, prm, -prv)
 
             if message_vars[j] < 0:
-                print "negative message!"
-                import pdb; pdb.set_trace()
+                raise Exception( "negative message!")
+                #import pdb; pdb.set_trace()
 
         gp_posteriors[(eid, phase)] = posterior_means, posterior_vars
         gp_messages[(eid, phase)] = message_means, message_vars

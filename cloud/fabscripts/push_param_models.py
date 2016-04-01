@@ -10,8 +10,8 @@ import os
 import logging ; logging.basicConfig(level=logging.DEBUG)
 
 
-env.hosts = open('fabric_hosts', 'r').readlines()
-#env.hosts = ['sigvisa%d.cloudapp.net' % i for i in range(1, 15)]
+#env.hosts = open('fabric_hosts', 'r').readlines()
+env.hosts = ['sigvisa%d.cloudapp.net' % i for i in range(1, 61)]
 
 #env.use_ssh_config = True
 env.user = 'vagrant'

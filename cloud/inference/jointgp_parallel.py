@@ -42,13 +42,14 @@ def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script,
 
     s_homedir =  os.getenv("SIGVISA_HOME")
 
-    #hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
-    hostnames = ["sigvisa2.cloudapp.net",]
+    hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
+    #hostnames = ["sigvisa2.cloudapp.net",]
 
     remote_sigvisa_home = "/home/sigvisa/python/sigvisa"
-    for hostname in hostnames:
-        for evidfile in clusters_evids:
-            put_to_host(hostname, evidfile, remote_sigvisa_home, use_sudo=True)
+    if old_jobfile is None:
+        for hostname in hostnames:
+            for evidfile in clusters_evids:
+                put_to_host(hostname, evidfile, remote_sigvisa_home, use_sudo=True)
 
     log_prefix = lambda jobid : "/home/sigvisa/python/sigvisa/logs/mcmc/%s" % jobid
     jm = JobManager(hostnames, ncpus, log_prefix)
@@ -58,6 +59,7 @@ def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script,
     if old_jobfile is not None:
         with open(old_jobfile, "rb") as f:
             oldjobs = pickle.load(f)
+        jobs.extend(oldjobs)
     else:
         oldjobs = None
 

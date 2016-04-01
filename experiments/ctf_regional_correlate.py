@@ -34,7 +34,8 @@ training_stime =  1167634400
 def main(hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
 
     if target_evid > 0:
-        rs = EventRunSpec(sites=stas, evids=(target_evid,), seed=4)
+        rs = EventRunSpec(sites=stas, evids=(target_evid,), seed=5, 
+                          force_event_wn_matching=False)
         ev = get_event(target_evid)
         stime = ev.time - 150
         etime = ev.time + 200
@@ -74,6 +75,7 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=10
 
     sg = rs.build_sg(ms1)
 
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=30, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
 
     do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)

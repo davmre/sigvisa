@@ -6,15 +6,17 @@ import itertools
 import pickle
 import time
 import hashlib
+from functools32 import lru_cache
 
 from sigvisa.models.ttime import tt_predict
 from sigvisa.models.distributions import Laplacian, Exponential
+from sigvisa.models.logistic_regression import LogisticRegressionModel
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, ModelNotFoundError
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.source.event import Event, get_event
-from sigvisa.utils.geog import wrap_lonlat
+from sigvisa.utils.geog import wrap_lonlat, dist_km
 import sigvisa.source.brune_source as brune
 
 from matplotlib.figure import Figure
@@ -814,8 +816,35 @@ def iterative_mixture_hough(sg, hc):
     visualize_hough_array(mixture_array, uatemplates_by_sta.keys(), fname=fname+".png", ax=None, timeslice=None)
     print fname
 
+@lru_cache(maxsize=64)
+def load_detprob_model(sta, phase, phase_context, runid, enable_dummy=True):
+
+    #HACK
+    runid = 19
+
+    s = Sigvisa()
+    phase_context_str = ','.join(sorted(phase_context))
+    sql_query = "select model_fname from sigvisa_hough_detection_model where sta='%s' and phase='%s' and phase_context='%s' and fitting_runid=%d" % (sta, phase, phase_context_str, runid)
+    r = s.sql(sql_query)
+
+    if len(r) == 0:
+        if enable_dummy:
+            weights = np.zeros((6,),)
+            intercept = -2
+            model = LogisticRegressionModel(weights, intercept, sta=sta, phase=phase)
+        else:
+            raise Exception("no detmodel for query %s" % sql_query)
+    else:
+        assert(len(r) == 1)
+        model_fname = r[0][0]
+    
+        with open(os.path.join(s.homedir, model_fname), 'rb') as f:
+            model = pickle.load(f)
+
+    return model
+
 class HoughConfig(object):
-    def __init__(self, stime, len_s, phases = ("P",), bin_width_deg=2.0, min_mb=2.5, max_mb=8.5, mbbins=1, depthbin_bounds=[0, 10, 50, 150, 400, 700], uatemplate_rate=1e-3, left_lon=-180, right_lon=180, bottom_lat=-90, top_lat=90, min_depth=0, max_depth=700, time_tick_s=10.0):
+    def __init__(self, stime, len_s, phases = ("P",), bin_width_deg=2.0, min_mb=2.5, max_mb=8.5, mbbins=1, depthbin_bounds=[0, 10, 50, 150, 400, 700], uatemplate_rate=1e-3, left_lon=-180, right_lon=180, bottom_lat=-90, top_lat=90, min_depth=0, max_depth=700, time_tick_s=10.0, global_event_rate=1e-4):
 
         assert(len_s > 0)
 
@@ -848,6 +877,7 @@ class HoughConfig(object):
         s = Sigvisa()
         self.phaseids = [s.phaseids[phase] for phase in phases]
 
+        self.global_event_rate = global_event_rate
         self.uatemplate_rate=uatemplate_rate
         self.ttime_cache = {}
         self.amp_transfer_cache = {}
@@ -862,10 +892,10 @@ class HoughConfig(object):
                    min_mb,
                    max_mb,
                    mbbins,
-                   depthbin_bounds
+                   depthbin_bounds,
+                   global_event_rate
                    ])
 
-            # TODO: don't keep the entire prior in memory with all timebins, when it's actually uniform over timebins. this would save a factor of hundreds in memory and disk space...
             hashkey = hashlib.md5(key).hexdigest()[:12]
             cachefile = os.path.join(s.homedir, "db_cache", "ev_prior_grid_%s.npz" % hashkey)
             try:
@@ -883,7 +913,7 @@ class HoughConfig(object):
 
     def _compute_ev_prior(self):
 
-        global_event_rate=0.00126599049
+        global_event_rate=self.global_event_rate #0.00126599049
 
         #ev_prior = self.create_array(fill_val=bin_prior)
         ev_prior = np.empty((self.lonbins, self.latbins, self.n_depthbins, self.mbbins), dtype=np.float)
@@ -1016,46 +1046,47 @@ class HoughConfig(object):
 
     def precompute_detprob_grid(self, sg, sta, chan, band):
 
-        # probability that we find a uatemplate for a given phase,
-        # conditioned on the fact that the rest of the model (based on
-        # amp_transfer) thinks there ought to be one there.
-        # setting this to zero is equivalent to just ignoring that phase.
-        # TODO: tune these in some more formal way. 
-        phase_det_prior = {"P": 0.85, "S": 0.1, "Lg": 0.1, "ScP": 0.1, "PcP": 0.1, "pP": 0.1, "Pg": 0.1}
+        s = Sigvisa()
+        slon, slat = s.earthmodel.site_info(sta, 0)[:2]
 
-        key = (sta, chan, band)
+        key = (sta, chan, band, self.phases)
         if key not in self.detprob_cache:
 
             ttimes_centered, ttimes_corners = self.precompute_ttime_grid(sta)
-            tt_mask = np.asarray(np.isfinite(ttimes_centered), dtype=np.float)
+            tt_mask = np.asarray(np.isfinite(ttimes_centered), dtype=np.int)
 
-            at_grid, at_std_grid = self.precompute_amp_transfer_grid(sg, sta, chan, band)
-            wn = sg.get_wave_node_by_atime(sta, band, chan, self.stime, allow_out_of_bounds=True)
+            #at_grid, at_std_grid = self.precompute_amp_transfer_grid(sg, sta, chan, band)
+            #wn = sg.get_wave_node_by_atime(sta, band, chan, self.stime, allow_out_of_bounds=True)
 
             # assume we detect iff the energy is one stddev above the noise mean
-            noise_base = np.log(wn.nm_env.c + np.sqrt(wn.nm_env.marginal_variance()))
+            #noise_base = np.log(wn.nm_env.c + np.sqrt(wn.nm_env.marginal_variance()))
 
-            detprobs = np.zeros((self.lonbins, self.latbins, self.n_depthbins, self.mbbins, len(self.phases)), dtype=float)
+            eps = 1e-8
 
-            rv = scipy.stats.norm()
-            source_logamps = self.source_logamps(band)
-            for mbbin in range(self.mbbins):
-                for phase_idx in range(len(self.phases)):
-                    source1 = source_logamps[mbbin][phase_idx]
-                    source2 = source_logamps[mbbin+1][phase_idx]
-                    source_mean  = source1 + (source2-source1)/2.0
-                    source_std = (source2-source1)/3.0
-                    
-                    amp_stds  = np.sqrt(at_std_grid[:,:,:, phase_idx]**2 + source_std**2) 
-                    pred_amps = at_grid[:, :, :, phase_idx] + source_mean 
-                    z = (noise_base-pred_amps) / (amp_stds)
-                    p = rv.sf(z)
+            detprobs = np.empty((self.lonbins, self.latbins, self.n_depthbins, self.mbbins, len(self.phases)), dtype=float)
+            detprobs.fill(eps)
 
-                    # say there's some probability that we just miss
-                    # detections for whatever reason.
-                    p *= phase_det_prior[self.phases[phase_idx]]
-                    detprobs[:, :, :, mbbin, phase_idx] = p * tt_mask[:,:,:,phase_idx]
+            mb_bounds = np.linspace(self.min_mb, self.max_mb, self.mbbins+1)
+            mbs = (mb_bounds[:-1] + mb_bounds[1:])/2.0
+            for phase_idx in range(len(self.phases)):
+                model = load_detprob_model(sta, self.phases[phase_idx], self.phases, sg.runids[0])
 
+                for i in range(self.lonbins):
+                    lon = self.left_lon + (i+.5) * self.bin_width_deg
+                    for j in range(self.latbins):
+                        lat = self.bottom_lat + (j+.5) * self.bin_width_deg
+                        dist = dist_km((lon, lat), (slon, slat))
+                        for k in range(self.n_depthbins):
+                            # skip phases that are not defined for this lon, lat, depth
+                            if not tt_mask[i,j,k,phase_idx]: continue
+
+                            depth = self.depthbin_bounds[k] + .5* self.depthbin_widths[k]
+                            for mbbin, mb in enumerate(mbs):
+                                x = (mb, np.exp(mb), depth, np.sqrt(depth), dist, np.log(dist))
+                                predprob = model.predict_prob(x)
+                                predprob = min(1-eps, max(eps, predprob))
+                                detprobs[i, j, k, mbbin, phase_idx] = predprob
+                                
             self.detprob_cache[key] = detprobs
         return self.detprob_cache[key]
 
@@ -1369,7 +1400,9 @@ class CTFProposer(object):
                          mbbins=mbbins[0],
                          top_lat=top_lat, bottom_lat=bottom_lat,
                          left_lon=left_lon, right_lon=right_lon,
-                         uatemplate_rate=sg.uatemplate_rate, **kwargs)
+                         uatemplate_rate=sg.uatemplate_rate, 
+                         global_event_rate=sg.event_rate,
+                         **kwargs)
         self.global_hc = hc
 
     def propose_event(self, sg, uatemplates_by_sta=None, 
@@ -1392,15 +1425,21 @@ class CTFProposer(object):
         prob = categorical_prob(global_dist, v)
         (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_mb, max_mb), _ = hc.index_to_coords(v)
 
+        if np.isnan(prob):
+            import pdb; pdb.set_trace()
+
         for i, fine_width in enumerate(self.bin_widths[1:]):
             depth_bounds = [min_depth, min_depth + (max_depth-min_depth)/2.0, max_depth]
 
             mb_bins = self.mbbins[i+1]
-            hc = HoughConfig(self.stime, self.etime-self.stime, bin_width_deg=fine_width, phases=self.phases,
+            hc = HoughConfig(self.stime, self.etime-self.stime, bin_width_deg=fine_width, 
+                             phases=self.phases,
                              depthbin_bounds=depth_bounds, top_lat=top_lat, bottom_lat=bottom_lat,
                              left_lon=left_lon, right_lon=right_lon, min_depth=min_depth,
                              max_depth=max_depth, time_tick_s = 10.0,
                              min_mb=min_mb, max_mb=max_mb,
+                             global_event_rate=hc.global_event_rate,
+                             uatemplate_rate=hc.uatemplate_rate,
                              mbbins=mb_bins)
             array,debug, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
             dist = normalize_global(array, nll, one_event_semantics=one_event_semantics, hc=hc)
@@ -1409,6 +1448,9 @@ class CTFProposer(object):
             else:
                 v = categorical_sample_array(dist)
             prob *= categorical_prob(dist, v)
+            if np.isnan(prob):
+                import pdb; pdb.set_trace()
+
             (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_mb, max_mb), _ = hc.index_to_coords(v)
 
         if fix_result:
@@ -1418,7 +1460,12 @@ class CTFProposer(object):
             return evlp
         else:
             ev, evlp = event_from_bin(hc, v)
-            return ev, np.log(prob) + evlp, global_dist
+
+            log_qforward = np.log(prob) + evlp
+            if np.isnan(log_qforward):
+                import pdb; pdb.set_trace()
+            
+            return ev, log_qforward, global_dist
 
 def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
                             offset=None, one_event_semantics=True, mbbins=None,
@@ -1438,11 +1485,13 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
         phases = ("P", "S", "Lg") #sg.phases
 
     if mbbins is None:
-        mbbins = [12, 2, 2]
+        mbbins = (12, 2, 2)
 
+    phases = tuple(sorted(phases))
 
+    settings = (offset, phases, stime, etime, bin_width_multiplier, mbbins)
     try:
-        ctf = s.hough_proposer[offset]
+        ctf = s.hough_proposer[settings]
     except KeyError:
         bin_widths = [10,5,2]        
         if sg.inference_region is not None:
@@ -1455,7 +1504,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
                           mbbins=mbbins, offset=offset, 
                           min_mb=sg.min_mb, 
                           stime=stime, etime=etime)
-        s.hough_proposer[offset] = ctf
+        s.hough_proposer[settings] = ctf
 
     r = ctf.propose_event(sg, fix_result=fix_result,
                            one_event_semantics=one_event_semantics)

@@ -52,6 +52,9 @@ def main():
     local_dirs = sync_jobs(options.jobfile, dummy=False)
     #local_dirs = ["/home/dmoore/python/sigvisa/cloud/jgp_fits/nvar_kampos_01124.1.1.1/",]
 
+    print "not extracting"
+    return
+
     for local_dir in local_dirs:
         steps = sorted([d for d in os.listdir(local_dir) if d.startswith("step_")])
         if len(steps) == 0:

@@ -45,7 +45,8 @@ def load_noise_model_prior(sta, chan=None, band=None, hz=None, runids=None, env=
     c.execute(params_query)
     fparams, tparams = c.fetchone()
     c.close()
-    
+
+
     mean_model = load_model(fmean, tmean)
     var_model = load_model(fvar, tvar)
     params_model = load_model(fparams, tparams)

@@ -2,6 +2,7 @@ from django.conf.urls import patterns, url
 from svweb.views import *
 from svweb.wiggle_views import *
 from svweb.model_views import *
+from svweb.detmodel_views import *
 from svweb.mcmc_views import *
 from svweb.event_views import *
 from svweb.site_views import *
@@ -39,6 +40,8 @@ urlpatterns = patterns('',
                        url(r'^fits/(?P<fitid>\d+)/template_residual.png$', template_residual_view, name="template_residual"),
                        url(r'^phases/(?P<fpid>\d+)/wiggle.png$', FitWiggleView, name='fit_wiggle_view'),
                        url(r'^phases/(?P<fpid>\d+)/$', wiggle_detail_view, name='fit_phase_wiggles'),
+                       url(r'^detmodels/$', detmodel_list_view, name='detmodel_list'),
+                       url(r'^detmodels/(?P<modelid>\d+)/plot.png$', plot_det_model_probs, name='detmodel_plot'),
                        url(r'^models/$', model_list_view, name='model_list'),
                        url(r'^models/cached_signal_library.png$', SignalLibraryView, name="signal_library"),
                        url(r'^models/(?P<modelid>\d+)/density.png$', model_density, name='model_density'),
