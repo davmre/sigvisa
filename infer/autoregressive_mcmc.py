@@ -151,7 +151,7 @@ def posterior_armodel_from_signal(signal_mean, signal_var, nm_node):
 
 def arnoise_mean_rw_move(sg, wn, std=None):
     if std is None:
-        std = np.sqrt(wn.nm_node.prior_mean_dist.variance())
+        std = np.sqrt(wn.nm_node.prior_mean_dist.variance()) / 2.0
 
     nm1 = wn.nm_node.get_value()
     oldvals = (nm1)
