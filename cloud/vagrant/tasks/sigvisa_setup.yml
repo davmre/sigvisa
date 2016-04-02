@@ -21,6 +21,12 @@
   file: path=/home/sigvisa/.ssh/
         recurse=yes
         owner=sigvisa
+#- name: sigvisa owns the phase list
+#  file: path=/home/sigvisa/python/sigvisa/parameters/GA_dist_depth_ranges
+#        owner=sigvisa
+#- name: force rechecking the phase list
+#  file: path=/home/sigvisa/python/sigvisa/parameters/GA_dist_depth_ranges
+#        state=absent
 - name: checkout git repo
   git: repo=git@github.com:davmre/sigvisa.git
        dest=/home/sigvisa/python/sigvisa
@@ -54,6 +60,12 @@
     src=/home/sigvisa/python/sigvisa/parameters.tgz
     dest=/home/sigvisa/python/sigvisa
     creates=/home/sigvisa/parameters
+- name: copy phase list (HACK)
+  copy:
+    src=/home/dmoore/python/sigvisa/parameters/GA_dist_depth_ranges
+    dest=/home/sigvisa/python/sigvisa/parameters/GA_dist_depth_ranges
+    owner=sigvisa
+    mode=0664
 - name: create local data cache dir
   file: path=/home/sigvisa/local_data state=directory
   become_user: sigvisa
