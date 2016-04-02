@@ -2184,7 +2184,7 @@ def sample_hough_kwargs(sg):
     mbbins_choices = ( (12, 2, 2), (1, 1, 12))
     multipliers = (1.0, 1.5)
     offsets = (False, True)
-    one_event_semantics = (False, True)
+    one_event_semantics = (False, True, True, True)
 
     # avoid stupid "must be one dimensional" error
     mbbin_idx = np.random.choice(np.arange(len(mbbins_choices))) 

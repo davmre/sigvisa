@@ -1395,12 +1395,26 @@ class CTFProposer(object):
             top_lat += global_bin_width/2.0
             bottom_lat += global_bin_width/2.0
 
+
+        # we DON'T want to use the sg uatemplate rate because our
+        # model is a bit different.  in the Hough
+        # non-one-event-semantics setup, we consider the probability
+        # of an event in *each bin* independently of the other
+        # bins. so if uatemplates are really unlikely, will give high
+        # probability to events in even really bad bins, as long as
+        # they sort-of explain a few uatemplates. whereas the real
+        # sigvisa model would a) be much stricter about things like
+        # traveltimes, and b) would immediately move any event in 
+        # a bad bin towards a better area - so it really would put
+        # close-to-zero probability on an event in that bin.
+        uatemplate_rate = 1e-3
+
         hc = HoughConfig(stime, etime-stime, bin_width_deg=global_bin_width,
                          phases=phases, depthbin_bounds=depthbin_bounds, time_tick_s = 20.0,
                          mbbins=mbbins[0],
                          top_lat=top_lat, bottom_lat=bottom_lat,
                          left_lon=left_lon, right_lon=right_lon,
-                         uatemplate_rate=sg.uatemplate_rate, 
+                         uatemplate_rate=uatemplate_rate, 
                          global_event_rate=sg.event_rate,
                          **kwargs)
         self.global_hc = hc
@@ -1425,9 +1439,6 @@ class CTFProposer(object):
         prob = categorical_prob(global_dist, v)
         (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_mb, max_mb), _ = hc.index_to_coords(v)
 
-        if np.isnan(prob):
-            import pdb; pdb.set_trace()
-
         for i, fine_width in enumerate(self.bin_widths[1:]):
             depth_bounds = [min_depth, min_depth + (max_depth-min_depth)/2.0, max_depth]
 
@@ -1448,8 +1459,6 @@ class CTFProposer(object):
             else:
                 v = categorical_sample_array(dist)
             prob *= categorical_prob(dist, v)
-            if np.isnan(prob):
-                import pdb; pdb.set_trace()
 
             (left_lon, right_lon), (bottom_lat, top_lat), (min_depth, max_depth), (min_mb, max_mb), _ = hc.index_to_coords(v)
 
