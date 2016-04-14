@@ -273,6 +273,7 @@ public:
 						 int incr_end_idx, 
 						 double step_ell_tol) {
     int errcode = 0;
+    int steps_processed = 0;
     double * elldata = ells.array().data();
     double ell_delta = filter_incremental(*(this->ssm), 
 					  z, 
@@ -281,9 +282,10 @@ public:
 					  incr_start_idx,
 					  incr_end_idx,
 					  step_ell_tol,
+					  &steps_processed,
 					  &errcode);
 
-    return boost::python::make_tuple(ell_delta, errcode);
+    return boost::python::make_tuple(ell_delta, errcode, steps_processed);
   };
 
 

@@ -248,6 +248,7 @@ double filter_incremental(StateSpaceModel &ssm,
 			  int incr_start_idx,
 			  int incr_end_idx,
 			  double step_ell_tol,
+			  int * steps_processed,
 			  int * errcode);
 
 void mean_obs(StateSpaceModel &ssm, vector<double> & result);

@@ -617,6 +617,7 @@ double filter_incremental(StateSpaceModel &ssm,
 			  int incr_start_idx,
 			  int incr_end_idx,
 			  double step_ell_tol,
+			  int * steps_processed,
 			  int * errcode) {
   
 
@@ -677,7 +678,7 @@ double filter_incremental(StateSpaceModel &ssm,
 
   //printf("first obs %d discrepancy %.2f\n", incr_start_idx, step_ell_discrepancy);
 
-
+  *steps_processed = N - filter_start_idx;
   for (unsigned k=incr_start_idx+1; k < N; ++k) {
     int err = kalman_predict_sqrt(ssm, cache, k, false);
 
@@ -700,6 +701,7 @@ double filter_incremental(StateSpaceModel &ssm,
     // quit filtering if we're past the end idx and the likelihoods seem to 
     // have reverted to their previous values
     if ((k > incr_end_idx) && (fabs(step_ell_discrepancy) < step_ell_tol)) {
+      *steps_processed = k - filter_start_idx;
 	break;
     }
   }

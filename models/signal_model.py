@@ -848,7 +848,7 @@ class ObservedSignalNode(Node):
         if self.cached_logp is not None:
             return self.cached_logp
 
-        if self._cached_ells_staleness > 20:
+        if self._cached_ells_staleness > 40:
             force_full_refresh = True
 
 
@@ -872,6 +872,8 @@ class ObservedSignalNode(Node):
         t1 = time.time()
         self._cached_incr_state = new_state
 
+        bookkeeping_time = t1-t0
+
         # determine the window of signal that might have changed since the last recomputation
         if old_state is None:
             incr_start_idx, incr_end_idx = 0, self.npts
@@ -884,9 +886,10 @@ class ObservedSignalNode(Node):
             incr_start_idx = max(incr_start_idx, 0) if incr_start_idx is not None else None
             incr_end_idx = min(incr_end_idx, self.npts)
             t2 = time.time()
+            bookkeeping_time += t2-t1
             self._cached_ells_staleness += 1
 
-        # compute the change in lp over the updated window
+           # compute the change in lp over the updated window
         if incr_start_idx is None or incr_end_idx is None:
             lp_delta = 0
             errcode = 0
@@ -894,18 +897,20 @@ class ObservedSignalNode(Node):
             d = self.get_value().data
             filter_start_idx = max(incr_start_idx - warmup_steps, 0)
             t0 = time.time()
-            lp_delta, errcode = tssm.run_filter_incremental(d, ells, filter_start_idx, 
-                                                            incr_start_idx, incr_end_idx,
-                                                            1e-8)
+            lp_delta, errcode, steps_processed = tssm.run_filter_incremental(d, ells, filter_start_idx, 
+                                                                             incr_start_idx, incr_end_idx,
+                                                                             1e-6)
+            t1 = time.time()
+            incr_logp_time = t1-t0
+            if enable_debug:
+                print "incremental logp in", incr_logp_time, "bookkeeping", bookkeeping_time, "total", incr_logp_time + bookkeeping_time, "indices", filter_start_idx, incr_start_idx, incr_end_idx, "processed", steps_processed, "of", self.npts
 
-        
         # DEBUG: compare to full lp
         if enable_debug:
             d = self.get_value().data
             t1 = time.time()
             lp2 = tssm.run_filter(d)
             t2 = time.time()
-            print "incremental logp in", t1-t0
             print "full logp in", t2-t1
             print "discrepancy", lp2 - (old_lp + lp_delta)
 
@@ -922,9 +927,10 @@ class ObservedSignalNode(Node):
             lp = old_lp + lp_delta
             
         if enable_debug:
-            assert (np.abs(lp2 - lp) < 1e-4)
-            sum_ells = np.sum(ells)
-            assert (np.abs(sum_ells - lp) < 1e-4)
+            if np.isfinite(lp):
+                assert (np.abs(lp2 - lp) < 1e-2)
+                sum_ells = np.sum(ells)
+                assert (np.abs(sum_ells - lp) < 1e-2)
 
         # HACK
         if np.isinf(lp):
@@ -936,7 +942,7 @@ class ObservedSignalNode(Node):
         return lp
 
 
-    def log_p_old(self, parent_values=None, arrivals=None,  **kwargs):
+    def log_p_nonincremental(self, parent_values=None, arrivals=None,  **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
 
         if self.has_jointgp:

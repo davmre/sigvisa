@@ -1525,15 +1525,20 @@ def propose_new_phases_mh(sg, wn, eid,
 
     from sigvisa.infer.run_mcmc import single_template_MH
 
-    # run a few iterations of MH on the proposed templates
-    #tmnodes = [(phase, sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)) for phase in new_phases]
-    #single_template_MH(sg, wn, tmnodes, steps=30)
-
     if mh_steps is None:
         # hack to make sure we don't use too much inference time when GP models are in play
-        mh_steps = 5 if use_correlation else 25
+        #mh_steps = 5 if use_correlation else 25
+
+        # new hack: using iid wavelets we don't have to worry as much about the GPs...
+        mh_steps = 25
+
+    # run a few iterations of MH on the proposed templates
+    #tmnodes = [(phase, sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)) for phase in new_phases]
+    #single_template_MH(sg, wn, tmnodes, steps=mh_steps)
 
     dummy_sg, dummy_wn, dummy_tmnodes = create_dummy_mh_world(sg, wn, eid)
+    dummy_wn.log_p = dummy_wn.log_p_nonincremental # don't bother with incremental logp calculations
+    dummy_wn.hack_wavelets_as_iid = True
     new_dummy_tmnodes = [(phase, tmnodes) for (phase, tmnodes) in dummy_tmnodes if phase in new_phases]
     single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=mh_steps)
 
@@ -1545,9 +1550,13 @@ def propose_new_phases_mh(sg, wn, eid,
         if fix_result is not None:
             fr_phase = fix_result[phase]
 
-        lqf, tmvals = propose_tmvals_from_gibbs_scan(dummy_sg, dummy_wn, eid, phase, 
+        #lqf, tmvals = propose_tmvals_from_gibbs_scan(dummy_sg, dummy_wn, eid, phase, 
+        #                                             fix_result=fr_phase,
+        #                                             debug_info=debug_phase)
+        lqf, tmvals = propose_tmvals_from_gibbs_scan(sg, wn, eid, phase, 
                                                      fix_result=fr_phase,
                                                      debug_info=debug_phase)
+
         def rf(eid=eid, wn=wn, tmvals=tmvals, phase=phase):
             sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, tmvals)
         rf()
