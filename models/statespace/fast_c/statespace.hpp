@@ -43,12 +43,18 @@ public:
   virtual int prior_mean(double * result) = 0;
   virtual int prior_vars(double * result) = 0;
   virtual bool stationary(int k) = 0;
+  virtual unsigned int state_size_at_timestep(unsigned int k) {
+    return this->max_dimension;
+  };
 
   virtual ~StateSpaceModel() { return; };
 
   unsigned int max_dimension;
   bool is_cssm;
 };
+
+
+
 
 class FilterState {
 public:
@@ -78,6 +84,7 @@ public:
 
   FilterState (int max_dimension, double eps_stationary);
   void init_priors(StateSpaceModel &ssm);
+  void init_incremental_state(StateSpaceModel &ssm, int k);
 
 };
 
@@ -189,6 +196,7 @@ TransientCombinedSSM(std::vector<StateSpaceModel *> & ssms, const vector<int> & 
   double observation_noise(int k);
   int prior_mean(double * result);
   int prior_vars(double * result);
+  unsigned int state_size_at_timestep(unsigned int k);
   bool stationary(int k);
 
   void init_coef_priors(std::vector<vector<double> > & cmeans,
@@ -227,10 +235,21 @@ private:
 
 };
 
+const int ERR_INCR_NUMERIC = -1;
+const int ERR_INCR_INIT = -2;
 
 double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk);
 int kalman_predict_sqrt(StateSpaceModel &ssm, FilterState &cache, int k);
 double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z);
+double filter_incremental(StateSpaceModel &ssm, 
+			  const vector<double> &z,
+			  double * ells,
+			  int filter_start_idx,
+			  int incr_start_idx,
+			  int incr_end_idx,
+			  double step_ell_tol,
+			  int * errcode);
+
 void mean_obs(StateSpaceModel &ssm, vector<double> & result);
 void obs_var(StateSpaceModel &ssm, vector<double> & result);
 void prior_sample(StateSpaceModel &ssm, vector<double> & result, unsigned long seed);

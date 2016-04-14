@@ -71,6 +71,11 @@ def unify_windows(w1, w2):
     start_idx1, end_idx1 = w1
     start_idx2, end_idx2 = w2
 
+    if start_idx2 is None:
+        return w1
+    if start_idx1 is None:
+        return w2
+
     start_idx = min(start_idx1, start_idx2)
     end_idx = max(end_idx1, end_idx2)
     return (start_idx, end_idx)
@@ -93,7 +98,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, wavelet_param_modelids=None, has_jointgp=False, mw_env=None, hack_coarse_signal=None, **kwargs):
+    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, wavelet_param_modelids=None, has_jointgp=False, mw_env=None, hack_coarse_signal=None, hack_wavelets_as_iid=False, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -122,6 +127,9 @@ class ObservedSignalNode(Node):
             else:
                 self.mw_env = mw_env
             self._cached_env = nan_under_mask(self.mw_env.data)
+
+        self.hack_wavelets_as_iid = hack_wavelets_as_iid
+
 
         self.hack_coarse_signal = hack_coarse_signal
         nm_parents = [k for k in self.parents.keys() if "nm_" in k]
@@ -165,6 +173,10 @@ class ObservedSignalNode(Node):
                 self.params_modeled_jointly = self.params_modeled_jointly | set(self.wavelet_param_models[phase])
 
         self.cached_logp = None
+        self._cached_incr_lp = None
+        self._cached_incr_state = None
+        self._cached_ells_staleness = 0
+        self._cached_stepwise_ells = np.empty((self.npts,))
         self._coef_message_cache = None
         self._unexplained_cache = None
         self._cached_evdict = {}
@@ -189,6 +201,8 @@ class ObservedSignalNode(Node):
             d[m] = np.nan
         v = ma.masked_array(d, m)
         self.cached_logp = None
+        self._cached_incr_lp = None
+        self._cached_incr_state = None
         self._coef_message_cache = None
         self._unexplained_cache = None
 
@@ -583,15 +597,30 @@ class ObservedSignalNode(Node):
                 # in the raw signal case, wiggle std is unidentifiable with coda_height. 
                 wiggle_std = 1.0
 
-            if wssm is not None:
-                components.append((wssm, start_idx, npts, env*wiggle_std))
-                tssm_components.append((eid, phase, env*wiggle_std, start_idx, npts, "wavelet"))
 
-            if len(env) > npts:
-                n_tail = len(env)-npts
-                mn_scale = env[npts:] * wiggle_std
-                components.append((self.iid_arssm, start_idx+npts, len(env)-npts, mn_scale))
-                tssm_components.append((eid, phase, mn_scale, start_idx+npts, len(env)-npts, "multnoise"))
+            if (wssm is not None) and self.hack_wavelets_as_iid:
+                assert (not self.is_env)
+
+                wavelet_mean = wssm.mean_obs(npts)
+                pred_mean = wavelet_mean[:npts] * env[:npts]
+                components.append((None, start_idx, npts, pred_mean))
+                tssm_components.append((eid, phase, pred_mean, start_idx, npts, "pred_mean"))         
+
+                wavelet_std = np.sqrt(wssm.obs_var(npts))
+                marginal_stds = env
+                marginal_stds[:npts] *= wavelet_std
+                components.append((self.iid_arssm, start_idx, len(env), marginal_stds))
+                tssm_components.append((eid, phase, marginal_stds, start_idx, len(env), "multnoise"))
+            else:
+                if wssm is not None:
+                    components.append((wssm, start_idx, npts, env*wiggle_std))
+                    tssm_components.append((eid, phase, env*wiggle_std, start_idx, npts, "wavelet"))
+
+                if len(env) > npts:
+                    n_tail = len(env)-npts
+                    mn_scale = env[npts:] * wiggle_std
+                    components.append((self.iid_arssm, start_idx+npts, len(env)-npts, mn_scale))
+                    tssm_components.append((eid, phase, mn_scale, start_idx+npts, len(env)-npts, "multnoise"))
 
             if self.is_env:
                 components.append((None, start_idx, len(env), env))
@@ -727,8 +756,184 @@ class ObservedSignalNode(Node):
 
             cssm.set_coef_prior(prior_means, prior_vars)
 
+        if self.hack_wavelets_as_iid:
+            # in the case we are not directly using the CSSMs, because
+            # we precalculate their means and variances, we need to
+            # redo that calculation every time the CSSMs change
+            self.tssm = self.transient_ssm(parent_values=parent_values)
 
-    def log_p(self, parent_values=None, arrivals=None,  **kwargs):
+
+    def log_p_incremental_state(self, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        arrivals = copy.copy(self.arrivals())
+
+        state = {}
+        state["nm"] = self.nm
+        state["arrivals"] = arrivals
+        for (eid, phase, _, sidx, npts, _) in self.tssm_components:
+            if eid is None:
+                continue
+
+            if (eid, phase) in state:
+                tmpl_params, old_window = state[(eid, phase)]
+                new_window = unify_windows(old_window, (sidx, sidx+npts))
+            else:
+                tmpl_params, _ = self.get_template_params_for_arrival(eid, phase, 
+                                                                      parent_values=parent_values)
+                new_window = (sidx, sidx+npts)
+            
+            state[(eid, phase)] = copy.deepcopy(tmpl_params), new_window
+                
+        eids = set([eid for (eid, phase) in arrivals if eid > 0])
+        state["eids"] = eids
+        for eid in eids:
+            state[eid] = copy.deepcopy(self._ev_params[eid])
+
+        return state
+
+    def log_p_incremental_diff_timesteps(self, state1, state2):
+        update_window = None, None
+
+        if state1["nm"] != state2["nm"]:
+            # TODO make sure we don't ever change params/c/std without creating a new nm object
+            w = 0, self.npts
+            return w
+
+        arrs1 = state1["arrivals"]
+        arrs2 = state2["arrivals"]
+        old_arrs = arrs1 - arrs2
+        new_arrs = arrs2 - arrs1
+        common_arrs = arrs1 & arrs2
+        for arr in old_arrs:
+            _, window = state1[arr]
+            update_window = unify_windows(window, update_window)
+        for arr in new_arrs:
+            _, window = state2[arr]
+            update_window = unify_windows(window, update_window)
+        for arr in common_arrs:
+            p1, w1 = state1[arr]
+            p2, w2 = state2[arr]
+            if w1 != w2 or p1 != p2:
+                w = unify_windows(w1, w2)
+                update_window = unify_windows(w, update_window)
+
+        # any new or missing events will be accounted for by their new/missing arrivals. so it only remains to check for events whose wavelet coefs might have updated. 
+        if self.wavelet_basis is not None:
+            eids1 = state1["eids"]
+            eids2 = state2["eids"]
+            common_eids = eids1 & eids2
+            for eid in common_eids:
+                d1 = state1[eid]
+                d2 = state2[eid]
+
+                if d1 != d2:
+                    # if the event source has changed, 
+                    # loop over all event arrivals
+                    for (eeid, phase) in common_arrs:
+                        if eeid != eid: continue
+                        p2, w = state2[(eeid, phase)]
+                        update_window = unify_windows(w, update_window)
+
+        return update_window
+
+    def log_p(self, parent_values=None, force_full_refresh=False, 
+              warmup_steps=100, enable_debug=False, **kwargs):
+
+        parent_values = parent_values if parent_values else self._parent_values()
+
+        if self.has_jointgp:
+            raise ParentConditionalNotDefined()
+
+        if self.cached_logp is not None:
+            return self.cached_logp
+
+        if self._cached_ells_staleness > 20:
+            force_full_refresh = True
+
+
+
+        arrivals = self.arrivals()
+        self.tssm = self.transient_ssm(arrivals=arrivals, save_components=True)
+        self._set_cssm_priors_from_model(arrivals=arrivals, parent_values=parent_values)
+        tssm = self.tssm
+
+        if force_full_refresh:
+            old_state = None
+        else:
+            old_state = self._cached_incr_state
+
+        old_lp = self._cached_incr_lp
+        ells = self._cached_stepwise_ells
+
+        # compute and cache a snapshot of the current signal explanation
+        t0 = time.time()
+        new_state = self.log_p_incremental_state(parent_values=parent_values)
+        t1 = time.time()
+        self._cached_incr_state = new_state
+
+        # determine the window of signal that might have changed since the last recomputation
+        if old_state is None:
+            incr_start_idx, incr_end_idx = 0, self.npts
+            old_lp = 0.0
+            ells.fill(0.0)
+            self._cached_ells_staleness = 0
+        else:
+            t1 = time.time()
+            incr_start_idx, incr_end_idx = self.log_p_incremental_diff_timesteps(old_state, new_state)
+            t2 = time.time()
+            self._cached_ells_staleness += 1
+
+        # compute the change in lp over the updated window
+        if incr_start_idx is None:
+            lp_delta = 0
+            errcode = 0
+        else:
+            d = self.get_value().data
+            filter_start_idx = max(incr_start_idx - warmup_steps, 0)
+            t0 = time.time()
+            lp_delta, errcode = tssm.run_filter_incremental(d, ells, filter_start_idx, 
+                                                            incr_start_idx, incr_end_idx,
+                                                            1e-8)
+
+        
+        # DEBUG: compare to full lp
+        if enable_debug:
+            d = self.get_value().data
+            t1 = time.time()
+            lp2 = tssm.run_filter(d)
+            t2 = time.time()
+            print "incremental logp in", t1-t0
+            print "full logp in", t2-t1
+            print "discrepancy", lp2 - (old_lp + lp_delta)
+
+        if errcode == -1:
+            # numeric error, invalidate the cached ells
+            self._cached_incr_state = None
+            lp = -np.inf
+        elif errcode == -2:
+            # incremental filtering failed to sync.
+            print "failed sync", filter_start_idx, incr_start_idx, incr_end_idx
+            assert(not force_full_refresh)
+            return self.log_p(force_full_refresh = True)
+        else:
+            lp = old_lp + lp_delta
+            
+        if enable_debug:
+            assert (np.abs(lp2 - lp) < 1e-4)
+            sum_ells = np.sum(ells)
+            assert (np.abs(sum_ells - lp) < 1e-4)
+
+        # HACK
+        if np.isinf(lp):
+            lp = -1e60
+
+        self.cached_logp = lp
+        self._cached_incr_lp = lp
+
+        return lp
+
+
+    def log_p_old(self, parent_values=None, arrivals=None,  **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
 
         if self.has_jointgp:
@@ -1044,7 +1249,7 @@ class ObservedSignalNode(Node):
         proxy_lps = {self.label: (lpw, deriv_lp_w)}
         return proxy_lps
 
-    def plot(self, ax=None, plot_atimes=True, **kwargs):
+    def plot(self, ax=None, plot_atimes=True, xlim=None, **kwargs):
         from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes
         if ax is None:
             f = plt.figure(figsize=(15,5))
@@ -1053,8 +1258,15 @@ class ObservedSignalNode(Node):
         plot_dict.update(kwargs)
         shape_colors = plot_with_fit_shapes(fname=None, wn=self, axes=ax, **plot_dict)
 
+        if xlim is not None:
+            ax.set_xlim(xlim)
+
         if plot_atimes:
             atimes = dict([("%d_%s" % (eid, phase), self.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in self.arrivals()])
+            if xlim is not None:
+                xmin, xmax = xlim
+                atimes = dict([(k, atime) for (k, atime) in atimes.items() if xmin < atime < xmax ])
+
             colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in self.arrivals()])
             plot_pred_atimes(dict(atimes), self.get_wave(), axes=ax, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
         return ax
@@ -1118,9 +1330,6 @@ class ObservedSignalNode(Node):
 
 
     def __setstate__(self, d):
-
-
-
         self.__dict__ = d
         #if "uatemplate_wiggle_var" not in d:
         #    self.uatemplate_wiggle_var = 1.0
@@ -1146,6 +1355,9 @@ class ObservedSignalNode(Node):
         self.noise_arssm = ARSSM(np.array(self.nm.params, dtype=np.float), self.nm.em.std**2, 0.0, self.nm.c)
         self.iid_arssm = ARSSM(np.array((0,),  dtype=np.float), 1.0, 0.0, 0.0)
         self.cached_logp = None
+        self._cached_incr_state = None
+        self._cached_incr_lp = None
+        self._cached_stepwise_ells = np.empty((self.npts,))
         self._unexplained_cache = None
         self._coef_message_cache = None
         self._cached_evdict = {}

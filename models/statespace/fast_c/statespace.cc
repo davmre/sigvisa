@@ -272,6 +272,29 @@ void FilterState::init_priors(StateSpaceModel &ssm) {
   return;
 }
 
+void FilterState::init_incremental_state(StateSpaceModel &ssm, int k) {
+  /*
+    Initialize the state to a high-variance prior on the state variables
+    active at some (nonzero) step k. This allows us to start filtering
+    somewhere other than the beginning of the sequence.
+   */
+
+  this->pred_d.clear();
+  this->xk.clear();
+  this->state_size = ssm.state_size_at_timestep(k);
+
+  for (unsigned i=0; i < ssm.max_dimension; ++i) {
+    this->pred_d(i) = 1e8;
+  }
+
+  this->pred_U.clear();
+  for (unsigned i=0; i < ssm.max_dimension; ++i) {
+    this->pred_U(i,i) = 1;
+  }
+
+  return;
+}
+
 
 double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk) {
 
@@ -587,6 +610,98 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
 }
 
 
+double filter_incremental(StateSpaceModel &ssm, 
+			  const vector<double> &z,
+			  double * ells,
+			  int filter_start_idx,
+			  int incr_start_idx,
+			  int incr_end_idx,
+			  double step_ell_tol,
+			  int * errcode) {
+  
+  // TODO handle the case where we want to compute the entire signal worth of step ells. 
+  // (on init, or with a noise model change, etc). 
+
+  FilterState cache(ssm.max_dimension, 1e-10);
+  if (filter_start_idx == 0) {
+    cache.init_priors(ssm);
+  } else {
+    cache.init_incremental_state(ssm, filter_start_idx);
+  }
+  unsigned int N = z.size();
+  double total_discrepancy = 0;
+  double step_ell_discrepancy;
+  double step_ell;
+
+  // do some initial filtering steps to "warm up" the hidden state
+  for (unsigned k=filter_start_idx; k < incr_start_idx; ++k) {
+    step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
+    if (isinf(step_ell)) {
+      *errcode = ERR_INCR_NUMERIC;
+      return -INFINITY;
+    }
+
+    int err = kalman_predict_sqrt(ssm, cache, k+1, false);
+    if (err != 0) {
+      *errcode = ERR_INCR_NUMERIC;
+      return -INFINITY;
+    }
+
+    
+    step_ell_discrepancy= step_ell - ells[k];
+
+    if (k == incr_start_idx-1) {
+      // check that our likelihood calculations are now in sync with the
+      // previous calculation.
+      if ( fabs(step_ell_discrepancy) > step_ell_tol ) {
+	 printf("warmup %d discrepancy %.10f\n", k, step_ell_discrepancy);
+         *errcode = ERR_INCR_INIT;
+         return -INFINITY;
+      }
+    }  
+  }
+
+  // now start the "normal" filtering process with an observation step
+  step_ell = kalman_observe_sqrt(ssm, cache, incr_start_idx, z(incr_start_idx));
+  if (isinf(step_ell)) {
+    *errcode = ERR_INCR_NUMERIC;
+    return step_ell;
+  }
+  step_ell_discrepancy = step_ell - ells[incr_start_idx];
+  ells[incr_start_idx] = step_ell;
+  total_discrepancy += step_ell_discrepancy;
+
+  //printf("first obs %d discrepancy %.2f\n", incr_start_idx, step_ell_discrepancy);
+
+
+  for (unsigned k=incr_start_idx+1; k < N; ++k) {
+    int err = kalman_predict_sqrt(ssm, cache, k, false);
+
+    if (err != 0) {
+      *errcode = ERR_INCR_NUMERIC;
+      return -INFINITY;
+    }
+
+    step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
+    if (isinf(step_ell)) {
+      *errcode = ERR_INCR_NUMERIC;
+      return -INFINITY;
+    }
+    step_ell_discrepancy = step_ell - ells[k];
+    ells[k] = step_ell;
+    total_discrepancy += step_ell_discrepancy;
+    //printf("step %d discrepancy %.2f\n", k, step_ell_discrepancy);
+
+
+    // quit filtering if we're past the end idx and the likelihoods seem to 
+    // have reverted to their previous values
+    if ((k > incr_end_idx) && (fabs(step_ell_discrepancy) < step_ell_tol)) {
+	break;
+    }
+  }
+  return total_discrepancy;
+}
+
 void step_obs_likelihoods(StateSpaceModel &ssm, const vector<double> &z,
 			  vector<double> & ells,
 			  vector<double> & preds,
@@ -594,7 +709,6 @@ void step_obs_likelihoods(StateSpaceModel &ssm, const vector<double> &z,
   FilterState cache(ssm.max_dimension, 1e-10);
   cache.init_priors(ssm);
   unsigned int N = z.size();
-  double ell = 0;
   
   if (N == 0) {
     return;

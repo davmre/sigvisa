@@ -266,6 +266,27 @@ public:
     return filter_likelihood(*(this->ssm), z);
   };
 
+  boost::python::tuple py_run_filter_incremental(pyublas::numpy_vector<double> z, 
+						 pyublas::numpy_vector<double> ells, 
+						 int filter_start_idx, 
+						 int incr_start_idx, 
+						 int incr_end_idx, 
+						 double step_ell_tol) {
+    int errcode = 0;
+    double * elldata = ells.array().data();
+    double ell_delta = filter_incremental(*(this->ssm), 
+					  z, 
+					  elldata, 
+					  filter_start_idx, 
+					  incr_start_idx,
+					  incr_end_idx,
+					  step_ell_tol,
+					  &errcode);
+
+    return boost::python::make_tuple(ell_delta, errcode);
+  };
+
+
   boost::python::tuple py_step_obs_likelihoods(pyublas::numpy_vector<double> z) {
     vector<double> ells(z.size());
     vector<double> preds(z.size());
@@ -426,6 +447,7 @@ BOOST_PYTHON_MODULE(ssms_c) {
   bp::class_<PyTSSM>("TransientCombinedSSM", bp::init<boost::python::list const &,
 		     double >())
     .def("run_filter", &PyTSSM::run_filter)
+    .def("run_filter_incremental", &PyTSSM::py_run_filter_incremental)
     .def("step_obs_likelihoods", &PyTSSM::py_step_obs_likelihoods)
     .def("mean_obs", &PyTSSM::py_mean_obs)
     .def("prior_sample", &PyTSSM::py_prior_sample)

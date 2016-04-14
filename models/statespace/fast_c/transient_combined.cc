@@ -192,6 +192,30 @@ int TransientCombinedSSM::active_set_idx(int k) {
   return i;
 }
 
+
+unsigned int TransientCombinedSSM::state_size_at_timestep(unsigned int k) {
+
+  unsigned int total_state_size = 0;
+
+  int asidx = this->active_set_idx(k);
+  if (asidx < 0) {
+    return 0;
+  }
+
+  matrix_row < matrix<int> > ssm_indices = row(this->active_sets, asidx);
+  for (matrix_row < matrix<int> >::const_iterator it = ssm_indices.begin();
+       it < ssm_indices.end() && *it >= 0; ++it) {
+
+    int i_ssm = *it;
+    StateSpaceModel * ssm = this->ssms[i_ssm];
+    if (!ssm) continue;
+
+    unsigned int state_size = ssm->max_dimension;
+    total_state_size += state_size;
+  }
+  return total_state_size;
+}
+
 int TransientCombinedSSM::apply_transition_matrix(const double * x, int k, double * result) {
 
   // first, loop over ssms active at the *previous*
