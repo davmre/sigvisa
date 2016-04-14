@@ -17,6 +17,7 @@ from sigvisa.treegp.gp import GP, GPCov
 from sigvisa.treegp.features import featurizer_from_string, recover_featurizer
 from sigvisa.treegp.cover_tree import VectorTree
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
+from sigvisa.utils.fileutils import mkdir_p
 
 class LocalGPEnsemble(ParamModel):
 
@@ -199,7 +200,20 @@ class LocalGPEnsemble(ParamModel):
         variance = float(self.variance(cond, include_obs=include_obs))
 
         return - .5 * ((y-mean)**2 / variance + np.log(2*np.pi*variance) )
+
+    def force_load_localgps(self):
+        for i in range(len(self.local_gps)):
+            self.local_gps[i] = self.get_local_gp(i)
         
+    def get_local_gp(self, idx):
+        if self.local_gps[idx] is None:
+            fname = os.path.join(self.lazyload_localgp_dir, "local%03d.gp" % idx)
+            lgp = GP(fname=fname)
+            #with open(fname, 'rb') as f:
+            #    lgp = pickle.load(f)
+            self.local_gps[idx] = lgp
+
+        return self.local_gps[idx]                
 
     def predict(self, cond, **kwargs):
 
@@ -207,7 +221,7 @@ class LocalGPEnsemble(ParamModel):
 
         X1 = self.standardize_input_array(cond).astype(np.float)
         cluster_idx = self._x_to_cluster(X1)
-        lgp = self.local_gps[cluster_idx]
+        lgp = self.get_local_gp(cluster_idx)
         gp_pred = float(lgp.predict(X1))
 
         if self.n_features > 0:
@@ -228,7 +242,7 @@ class LocalGPEnsemble(ParamModel):
         assert(X1.shape[0] == 1)
 
         cluster_idx = self._x_to_cluster(X1)
-        lgp = self.local_gps[cluster_idx]
+        lgp = self.get_local_gp(cluster_idx)
 
         gp_variance = float(lgp.variance(X1, **kwargs))
         
@@ -249,6 +263,8 @@ class LocalGPEnsemble(ParamModel):
 
     def log_likelihood(self):
 
+        
+        self.force_load_localgps()
         if self.n_features == 0:
             ll = np.sum([gp.log_likelihood() for gp in self.local_gps])
             return ll
@@ -301,6 +317,7 @@ class LocalGPEnsemble(ParamModel):
         
         npts = 0
         nparams = 0
+        self.force_load_localgps()
         for k, lgp in enumerate(self.local_gps):
             lgp.distance_cache_XX = lgp.predict_tree.kernel_matrix(lgp.X, lgp.X, True)
             n_main_params = len(lgp.cov_main.flatten())
@@ -324,6 +341,7 @@ class LocalGPEnsemble(ParamModel):
 
     def get_flat_params(self):
         params = []
+        self.force_load_localgps()
         for lgp in self.local_gps:
             params.append(lgp.noise_var)
             params += list(lgp.cov_main.flatten())
@@ -332,6 +350,13 @@ class LocalGPEnsemble(ParamModel):
     def __getstate__(self):
         d = self.__dict__.copy()
         del d["cluster_tree"]
+
+        n = len(self.local_gps)
+        d['local_gps'] = [None,] * n
+
+        
+        del d["Kinv"]
+        del d["L"]
 
         try:
             del d["featurizer"]
@@ -350,10 +375,19 @@ class LocalGPEnsemble(ParamModel):
             self.featurizer_recovery = None
 
     def save_trained_model(self, fname):
-        with open(fname, "wb") as f:
-            pickle.dump(self, f)
+        mkdir_p(fname)
+        for i, lgp in enumerate(self.local_gps):
+            local_fname = os.path.join(fname, "local%03d.gp" % i)
+            lgp.save_trained_model(local_fname, tight=True)
 
+        with open(os.path.join(fname, "main.pkl"), "wb") as f:
+             pickle.dump(self, f)
 
+def load_lgp_ensemble(fname):
+    with open(os.path.join(fname, "main.pkl"), "rb") as f:
+        lgp = pickle.load(f)
+    lgp.lazyload_localgp_dir = fname
+    return lgp
 
 def optimize_localgp_hyperparams(noise_prior=None,
                                  cov_main=None, 

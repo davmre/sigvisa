@@ -15,7 +15,7 @@ import hashlib
 import cPickle as pickle
 
 from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
-from sigvisa.models.spatial_regression.local_gp_ensemble import LocalGPEnsemble, optimize_localgp_hyperparams
+from sigvisa.models.spatial_regression.local_gp_ensemble import LocalGPEnsemble, optimize_localgp_hyperparams, load_lgp_ensemble
 from sigvisa.models.distributions import LogNormal
 from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
@@ -440,8 +440,9 @@ def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
         fname = os.path.join(Sigvisa().homedir, fname)
     
     if model_type.startswith("gplocal"):
-        with open(fname, "rb") as f:
-            model = pickle.load(f)
+        model = load_lgp_ensemble(fname)
+        #with open(fname, "rb") as f:
+        #    model = pickle.load(f)
     elif model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):
