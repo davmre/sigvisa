@@ -110,13 +110,73 @@ def graph_from_file(run_dir, fname):
         sg = pickle.load(f)
     return sg
 
-def mcmc_lp_posterior(request, dirname):
+def mcmc_move_times(request, dirname):
     s = Sigvisa()
 
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    lps = np.loadtxt(os.path.join(mcmc_run_dir, "lp.txt"))
+    average_time = request.GET.get('average', 'false').lower().startswith("t")
+    logscale = request.GET.get('logscale', 'false').lower().startswith("t")
+    
+    r = re.compile("move_(.+)_times.txt")
+    move_times = {}
+    for fname in os.listdir(mcmc_run_dir):
+        m = r.match(fname)
+        if m is None:
+            continue
+
+        move_name = str(m.groups()[0])
+        try:
+            times = np.loadtxt(os.path.join(mcmc_run_dir, fname))[:, 1]
+        except:
+            continue
+
+        if average_time:
+            move_times[move_name] = np.mean(times)
+        else:
+            move_times[move_name] = np.sum(times)
+
+    sorted_names = sorted(move_times.keys(), key = lambda k : move_times[k])
+    sorted_times = [move_times[k] for k in sorted_names]
+    n = len(sorted_names)
+
+    print sorted_names
+
+    pos = np.arange(n)+.5    # the bar centers on the y axis
+
+    f = Figure()
+    f.patch.set_facecolor('white')
+    ax = f.add_subplot(111)
+
+    ax.barh(pos,sorted_times, align='center')
+    ax.set_yticks(pos)
+    ax.set_yticklabels(sorted_names)
+    ax.set_xlabel('total time (s)')
+    if logscale:
+        ax.set_xscale("log")
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+
+
+def mcmc_lp_posterior(request, dirname):
+    return mcmc_lp_posterior_helper(request, dirname, fname="lp.txt")
+
+def mcmc_obs_lp_posterior(request, dirname):
+    return mcmc_lp_posterior_helper(request, dirname, fname="obs_lp.txt")
+
+
+def mcmc_lp_posterior_helper(request, dirname, fname):
+    s = Sigvisa()
+
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    lps = np.loadtxt(os.path.join(mcmc_run_dir, fname))
     times = np.loadtxt(os.path.join(mcmc_run_dir, "times.txt"))
 
     n = min(len(lps), len(times))
@@ -132,7 +192,6 @@ def mcmc_lp_posterior(request, dirname):
     ax.set_xlabel("elapsed time")
     ax.set_ylabel("log density")
 
-
     n = len(lps)
     recent_lps = lps[n/2:]
     lpmin, lpmax = np.min(recent_lps), np.max(recent_lps)
@@ -145,6 +204,7 @@ def mcmc_lp_posterior(request, dirname):
     f.tight_layout()
     canvas.print_png(response)
     return response
+
 
 def mcmc_ev_detail(request, dirname, eid_str):
     s = Sigvisa()
@@ -288,7 +348,7 @@ def mcmc_run_detail(request, dirname):
             trace, _, _ = load_trace(ev_trace_file, burnin=burnin)
             llon, rlon, blat, tlat = event_bounds(trace)
             results, txt = trace_stats(trace, true_evs)
-        except IOError:
+        except:
             llon, rlon = ev.lon - 1, ev.lon + 1
             blat, tlat = ev.lat - 1, ev.lat + 1
             results = {}
