@@ -175,6 +175,8 @@ class SigvisaGraph(DirectedGraphModel):
         s = Sigvisa()
         self.logger = s.logger
 
+        self.dump_proposal_debug_dir = None
+
         self.gpmodel_build_trees = gpmodel_build_trees
         self.hack_param_constraint = hack_param_constraint
         self.hack_coarse_tts = hack_coarse_tts
@@ -772,7 +774,12 @@ class SigvisaGraph(DirectedGraphModel):
         if np.isnan(lp):
             raise Exception('current_log_p is nan')
 
+        return lp
 
+
+    def signal_log_p(self, **kwargs):
+        all_wns = [wn for sta, wns in self.station_waves.items() for wn in wns]
+        lp = self.joint_logprob_keys(all_wns)            
         return lp
 
     def check_phases(self):
@@ -1090,7 +1097,7 @@ class SigvisaGraph(DirectedGraphModel):
             lb = tg.low_bounds()[param]
             hb = tg.high_bounds()[param]
 
-            tnodes[param] = Node(label=label, model=model, children=(wave_node,), low_bound=lb, high_bound=hb)
+            tnodes[param] = Node(label=label, model=model, children=(wave_node,), low_bound=lb, high_bound=hb, hack_param_constraint=self.hack_param_constraint)
             self.add_node(tnodes[param], template=True)
 
 

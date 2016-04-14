@@ -299,7 +299,7 @@ def adjpeak_atime_xc_move(sg, wn, eid, phase, tmnodes, **kwargs):
 
 ######################################################################
 
-def atime_align_gpwiggle_move(wn, eid, phase, tmnodes, **kwargs):
+def atime_align_gpwiggle_move(wn, eid, phase, tmnodes, max_ttr=25.0, **kwargs):
     # propose a new atime based on the wiggles predicted from a GP wiggle prior
     # (as opposed to other moves in this file which are based on correlations 
     #  between source and target events jointly loaded as part of the same model)
@@ -312,17 +312,24 @@ def atime_align_gpwiggle_move(wn, eid, phase, tmnodes, **kwargs):
     if wn.is_env:
         return False
 
+    try:
+        (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps) = wn.wavelet_basis
+    except:
+        return False
+
     k_atime, n_atime = tmnodes['arrival_time']
     current_atime = n_atime.get_value(key=k_atime)
 
     ev = wn.graph.get_event(eid) #hack
     pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
 
+    if np.abs(pred_atime -  current_atime) > max_ttr:
+        return False
+
     relevant_nodes = [wn,]
     relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
 
     cssm = wn.arrival_ssms[(eid, phase)]
-    (start_idxs, end_idxs, identities, basis_prototypes, level_sizes, n_steps) = wn.wavelet_basis
     
     if wn.has_jointgp:
         cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
@@ -340,9 +347,9 @@ def atime_align_gpwiggle_move(wn, eid, phase, tmnodes, **kwargs):
 
     pbu = wn.unexplained_kalman(exclude_arrivals=[(eid,phase)])
     #pbu = wn.get_value()
-    relevant_sidx = time_to_index(pred_atime - 20.0, wn.st, wn.srate)
+    relevant_sidx = time_to_index(pred_atime - max_ttr, wn.st, wn.srate)
     relevant_stime = index_to_time(relevant_sidx, wn.st, wn.srate)
-    relevant_eidx = time_to_index(pred_atime + 20.0, wn.st, wn.srate) + len(pred_signal)
+    relevant_eidx = time_to_index(pred_atime + max_ttr, wn.st, wn.srate) + len(pred_signal)
     relevant_etime = index_to_time(relevant_eidx, wn.st, wn.srate)
     if relevant_sidx < 0 or relevant_eidx > len(pbu):
         return False
@@ -379,7 +386,10 @@ def atime_align_gpwiggle_move(wn, eid, phase, tmnodes, **kwargs):
     #assert(  atime_to_idx(idx_to_atime(proposed_idx)) == proposed_idx )
     #assert(  np.abs(idx_to_atime(atime_to_idx(current_atime)) - current_atime) < wn.srate )
 
-    log_qbackward = np.log(proposal_dist[backwards_idx])
+    try:
+        log_qbackward = np.log(proposal_dist[backwards_idx])
+    except:
+        log_qbackward = -np.inf
 
     wn.graph.logger.debug("proposing xc move for %s from %.1f to %.1f, lqf %.1f lqb %.1f" % (phase, current_atime, proposed_atime, log_qforward, log_qbackward))
 

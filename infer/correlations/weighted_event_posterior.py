@@ -80,8 +80,8 @@ def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_mode
 
     llmax = np.max(ll)
     ll_exp = np.exp(ll-llmax)
-    r = np.convolve(ll_exp, ttr_model, "full")
 
+    r = np.convolve(ll_exp, ttr_model, "full")
     rr = integrate_downsample(r, srate, out_srate)
 
     origin_ll = np.log(rr) + llmax

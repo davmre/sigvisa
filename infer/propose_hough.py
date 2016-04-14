@@ -817,10 +817,7 @@ def iterative_mixture_hough(sg, hc):
     print fname
 
 @lru_cache(maxsize=64)
-def load_detprob_model(sta, phase, phase_context, runid, enable_dummy=True):
-
-    #HACK
-    runid = 19
+def load_detprob_model(sta, phase, phase_context, runid, enable_dummy=False):
 
     s = Sigvisa()
     phase_context_str = ','.join(sorted(phase_context))
@@ -1491,7 +1488,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     #    one_event_semantics = np.random.choice([True, False])
 
     if phases is None:
-        phases = ("P", "S", "Lg") #sg.phases
+        phases = ("Pg", "Lg") #sg.phases
 
     if mbbins is None:
         mbbins = (12, 2, 2)

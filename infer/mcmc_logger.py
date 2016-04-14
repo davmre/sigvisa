@@ -67,6 +67,12 @@ class MCMCLogger(object):
         self.lps.append(lp)
         self.log_handles['lp'].write('%f\n' % lp)
 
+        if 'obs_lp' not in self.log_handles:
+            self.log_handles['obs_lp'] = open(os.path.join(self.run_dir, 'obs_lp.txt'), 'a')
+        obs_lp = sg.signal_log_p()
+        self.lps.append(obs_lp)
+        self.log_handles['obs_lp'].write('%f\n' % obs_lp)
+
 
         if 'times' not in self.log_handles:
             self.log_handles['times'] = open(os.path.join(self.run_dir, 'times.txt'), 'a')

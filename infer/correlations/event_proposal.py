@@ -132,7 +132,7 @@ def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_
         if n_proposals > 1:
             return np.array(all_proposals)
 
-        proposed_ev = Event(lon=plon, lat=plat, depth=pdepth, time=ptime, mb=4.0)
+        proposed_ev = Event(lon=plon, lat=plat, depth=pdepth, time=ptime, mb=3.0)
         return proposed_ev, log_qforward, (proposal_weights, kernel, proposal_otime_posteriors, training_xs)
     else:
         return log_qforward

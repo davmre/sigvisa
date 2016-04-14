@@ -49,11 +49,11 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    local_dirs = sync_jobs(options.jobfile, dummy=False)
+    #local_dirs = sync_jobs(options.jobfile, dummy=False)
     #local_dirs = ["/home/dmoore/python/sigvisa/cloud/jgp_fits/nvar_kampos_01124.1.1.1/",]
 
-    print "not extracting"
-    return
+    basedir = "/home/dmoore/python/sigvisa/cloud/jgp_fits/"
+    local_dirs = [os.path.join(basedir, dd) for dd in os.listdir(basedir)]
 
     for local_dir in local_dirs:
         steps = sorted([d for d in os.listdir(local_dir) if d.startswith("step_")])

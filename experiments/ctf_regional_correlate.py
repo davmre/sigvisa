@@ -31,7 +31,7 @@ training_stime =  1167634400
 #region_etime = region_stime + 7200
 
 
-def main(hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
+def main(stas=None, hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True):
 
     if target_evid > 0:
         rs = EventRunSpec(sites=stas, evids=(target_evid,), seed=5, 
@@ -72,13 +72,26 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=10
                     vert_only=True)
 
 
+    if resume_from is None:
+        sg = rs.build_sg(ms1)
+        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=30, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
+    else:
+        with open(resume_from, 'rb') as f:
+            sg = pickle.load(f)
+        sg.phases=phases
+        sg.uatemplate_rate = 3 * sg.event_rate
+        sg.runids=(runid,)
+        sg.current_log_p()
 
-    sg = rs.build_sg(ms1)
 
-    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=30, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
+    for wns in sg.station_waves.values():
+        for wn in wns:
+            print "setting iid hack at", wn.sta
+            wn.hack_wavelets_as_iid = True
+
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
 
-    do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
+    do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None, dump_proposals=True)
 
 
 if __name__ == "__main__":
@@ -94,6 +107,8 @@ if __name__ == "__main__":
                       help="comma-separated frequency bands")
     parser.add_option("--phases", dest="phases", default="P,Pg,pP,PcP,S,ScP,Lg,Rg,PKP,PKPab,PKPbc,PKKPbc", type=str,
                       help="comma-separated phases")
+    parser.add_option("--stas", dest="stas", default=None, type=str,
+                      help="comma-separated stas")
     parser.add_option("--fix_outside_templates", dest="fix_outside_templates", default=False, action="store_true",
                       help="don't do inference over templates of events outside the region")
     parser.add_option("--no_hack_constraint", dest="no_hack_constraint", default=False, action="store_true",
@@ -126,4 +141,11 @@ if __name__ == "__main__":
     bands = options.bands.split(",")
     phases = options.phases.split(",")
 
-    main(hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid, stime=options.stime, etime=options.etime, hack_constraint=not options.no_hack_constraint)
+    stas = options.stas
+    if stas is None:
+        stas = "ANMO,ELK,ILAR,KDAK,NEW,NVAR,PDAR,PFO,TXAR,ULM,YBH,YKA".split(",")
+    else:
+        stas = stas.split(",")
+        
+
+    main(stas=stas, hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid, stime=options.stime, etime=options.etime, hack_constraint=not options.no_hack_constraint)

@@ -88,7 +88,7 @@ def build_signal_library(sg, wn, phase):
     def predict_template_params(x):
         v = {}
         for p, model in models.items():
-            v[p] = model.predict(x)
+            v[p] = model.predict(cond=x)
 
         v["coda_height"] = 1.0
 
@@ -100,12 +100,21 @@ def build_signal_library(sg, wn, phase):
 
     for x in Xs:
         x = x.reshape(1, -1)
+
+        try:
+            v = predict_template_params(x)
+        except:
+            continue
+
         prior_means = np.array([gp.predict(cond=x) for gp in wn.wavelet_param_models[phase]], dtype=np.float)
+
+        if np.linalg.norm(prior_means) < 1e-4:
+            continue
+
         prior_vars = np.array([gp.variance(cond=x, include_obs=True) for gp in wn.wavelet_param_models[phase]], dtype=np.float)
         cssm.set_coef_prior(prior_means, prior_vars)
         s = cssm.mean_obs(N)
 
-        v = predict_template_params(x)
 
         logenv = tg.abstract_logenv_raw(v, srate=wn.srate, fixedlen=N)
         s *= np.exp(logenv)

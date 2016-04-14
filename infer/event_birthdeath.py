@@ -150,6 +150,13 @@ def ev_phase_template_logprob(sg, wn, eid, phase, template_dict,
 
     if 'tt_residual' not in template_dict and 'arrival_time' in template_dict:
         template_dict['tt_residual'] = tt_residual(ev, wn.sta, template_dict['arrival_time'], phase=phase)
+        if atime_only:
+            # hack to avoid association problems from bad models. in
+            # the atime only case we don't care about the true model
+            # probability anyway since we're going to repropose the
+            # template.
+            model = Laplacian(0, 5.0)
+            return model.log_p(template_dict['tt_residual'])
 
     if 'amp_transfer' not in template_dict and "coda_height" in template_dict:
         template_dict['amp_transfer'] = amp_transfer(ev, wn.band, phase, template_dict['coda_height'])
@@ -1094,6 +1101,23 @@ def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
         kwargs.update(corr_kwargs)
         return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
 
+
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        if log_to_run_dir is None:
+            return
+
+        (proposal_weights, proposal_idx, proposal_otime_posteriors, training_xs), eid, proposed_ev, debug_info = proposal_extra
+        log_file = os.path.join(log_to_run_dir, "corr_deaths.txt")
+
+        with open(log_file, 'a') as f:
+            f.write("proposing to kill eid %d: %s\n" % (eid, proposed_ev))
+            f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            #for (wn, phase), (assoc, tmvals) in associations.items():
+            #    if assoc:
+            #        f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
+            #f.write("\n")
+
+
     return ev_death_move_abstract(sg, clp, proposal_includes_mb=False, 
                                   use_correlation=True, 
                                   repropose_uatemplates=True, **kwargs)
@@ -1136,7 +1160,7 @@ def ev_sta_template_death_helper(sg, wn, eid,
         # newly created uatemplate, so that the uatemplate might not perfectly 
         # match the event template. this is to allow for birth moves that
         # co-opt existing uatemplates but repropose their parameters.
-        param_stds = {"arrival_time": 2.0, "coda_height": 1.0, 
+        param_stds = {"arrival_time": 4.0, "coda_height": 1.0, 
                       "coda_decay": 1.0, "peak_decay": 1.0, "peak_offset": 1.0
         }
 
@@ -1161,6 +1185,7 @@ def ev_sta_template_death_helper(sg, wn, eid,
                         sg.all_nodes[label].set_value(proposed_val, key=k)
             f()
             replicate_fns.append(f)
+
         return lqf, replicate_fns
         
 
@@ -1407,8 +1432,12 @@ def create_dummy_mh_world(sg, wn, eid):
     
     # find a window of time containing all the arriving phases of this event
     phases = sg.ev_arriving_phases(eid, sta=wn.sta)
+    arrivals = wn.arrivals()
     sidx, eidx = None, None
     for phase in phases:
+
+        if (eid, phase) not in arrivals: continue
+
         phase_sidx, phase_eidx = wn.template_idx_window(eid=eid, phase=phase, 
                                                         pre_arrival_slack_s=10.0)
         phase_eidx = min(phase_eidx, phase_eidx, int(phase_sidx + 60.0*wn.srate))
@@ -1417,6 +1446,9 @@ def create_dummy_mh_world(sg, wn, eid):
             sidx, eidx = phase_sidx, phase_eidx
         else:
             sidx, eidx = unify_windows((phase_sidx, phase_eidx), (sidx, eidx))
+
+    if sidx is None:
+        return sg, wn, []
     
     # extract the signal data for this time period
     truncated_data = wn.get_value()[sidx:eidx].copy()
@@ -1466,6 +1498,7 @@ def propose_new_phases_mh(sg, wn, eid,
                           new_phases, 
                           use_correlation=False,
                           prebirth_unexplained=None,
+                          mh_steps=None,
                           fix_result=None,
                           debug_info=None):
 
@@ -1496,9 +1529,13 @@ def propose_new_phases_mh(sg, wn, eid,
     #tmnodes = [(phase, sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)) for phase in new_phases]
     #single_template_MH(sg, wn, tmnodes, steps=30)
 
+    if mh_steps is None:
+        # hack to make sure we don't use too much inference time when GP models are in play
+        mh_steps = 5 if use_correlation else 25
+
     dummy_sg, dummy_wn, dummy_tmnodes = create_dummy_mh_world(sg, wn, eid)
     new_dummy_tmnodes = [(phase, tmnodes) for (phase, tmnodes) in dummy_tmnodes if phase in new_phases]
-    single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=25)
+    single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=mh_steps)
 
     # then propose template values from a local approximation to the posterior
     for phase in new_phases:
@@ -2238,9 +2275,9 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
 
         with open(log_file, 'a') as f:
-            f.write("proposed ev: %s\n" % proposed_ev)
+            f.write("proposed ev: %s eid %d\n" % (proposed_ev, eid))
             f.write(" proposal based on match of event idx %d with weight %.4f\n" % (proposal_idx, proposal_weights[proposal_idx]))
-            f.write(" corr kwargs %s\n" % str(corr_kwargs))
+            f.write(" corr kwargs %s other args %s\n" % (str(corr_kwargs), str(kwargs)))
             f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
             #for (wn, phase), (assoc, tmvals) in associations.items():
             #    if assoc:
@@ -2284,7 +2321,7 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
 def ev_birth_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
     
-    proposal_type = np.random.choice(("mh", "smart", "dumb"))
+    proposal_type = np.random.choice(("mh", "mh", "mh", "smart", "dumb"))
     
     return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      proposal_type=proposal_type, **kwargs)

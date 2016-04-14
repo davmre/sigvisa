@@ -110,6 +110,10 @@ def main(hour=0.0, len_hours=2.0, runid=37, hz=2.0, tmpl_steps=500, ev_steps=100
             sg.fixed_events = set(sg.evnodes.keys())
             sg.fully_fixed_events = set()
 
+        for tmid, nodes in sg.uatemplates.items():
+            for k, n in nodes.items():
+                n.hack_param_constraint = True
+
     else:
         sg = rs.build_sg(ms1)
         #revs = relevant_events(region)

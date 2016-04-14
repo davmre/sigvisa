@@ -18,7 +18,7 @@ from sigvisa.infer.propose_hough import hough_location_proposal
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.correlations.event_proposal import correlation_location_proposal, sample_corr_kwargs
 
-from sigvisa.infer.event_birthdeath import ev_birth_executor,ev_death_executor
+from sigvisa.infer.event_birthdeath import ev_birth_executor,ev_death_executor, sample_hough_kwargs
 
 from sigvisa.infer.template_mcmc import *
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes, plot_pred_atimes
@@ -62,7 +62,14 @@ def sample_events_to_swap(sg, n_events=2, fix_result=None):
             return -np.inf
 
 def repropose_event_move_hough(sg, **kwargs):
-    return swap_events_move(sg, n_events=1, location_proposal=hough_location_proposal, **kwargs)
+
+    hough_kwargs = sample_hough_kwargs(sg)
+
+    def hlp(sg, **kwargs):
+        kwargs.update(hough_kwargs)
+        return hough_location_proposal(sg, **kwargs)
+
+    return swap_events_move(sg, n_events=1, location_proposal=hlp, **kwargs)
 
 def repropose_event_move_lstsqr(sg, **kwargs):
     return swap_events_move(sg, n_events=1, location_proposal=overpropose_new_locations, **kwargs)

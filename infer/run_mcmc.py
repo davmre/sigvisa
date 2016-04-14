@@ -37,7 +37,6 @@ global_stds = {'coda_height': 0.7,
                'evtime': 2.0,
                'evmb': 0.2,
                'evdepth': 8.0,
-               'evdepth_big': 30.0,
                'signal_var': 0.4,
                'noise_var': 0.4,
                'noise_var_small': 0.05,
@@ -321,8 +320,7 @@ def run_open_world_MH(sg, steps=10000,
                             'evloc_big': ('loc', ('lon', 'lat')),
                             'evtime': ('time', ('time',)),
                             'evmb': ('mb', ('mb',)),
-                            'evdepth': ('depth', ('depth',)),
-                            'evdepth_big': ('depth', ('depth',))} if enable_event_moves else {}
+                            'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
     if special_mb_moves:
         event_moves_gaussian['evmb'] = ('mb', ('mb',))
 
