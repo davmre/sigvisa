@@ -765,11 +765,10 @@ class ObservedSignalNode(Node):
 
     def log_p_incremental_state(self, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
-        arrivals = copy.copy(self.arrivals())
-
         state = {}
         state["nm"] = self.nm
-        state["arrivals"] = arrivals
+        
+        visible_arrivals = set()
         for (eid, phase, _, sidx, npts, _) in self.tssm_components:
             if eid is None:
                 continue
@@ -781,10 +780,12 @@ class ObservedSignalNode(Node):
                 tmpl_params, _ = self.get_template_params_for_arrival(eid, phase, 
                                                                       parent_values=parent_values)
                 new_window = (sidx, sidx+npts)
-            
+
+            visible_arrivals.add((eid, phase))
             state[(eid, phase)] = copy.deepcopy(tmpl_params), new_window
-                
-        eids = set([eid for (eid, phase) in arrivals if eid > 0])
+        state["arrivals"] = visible_arrivals
+
+        eids = set([eid for (eid, phase) in visible_arrivals if eid > 0])
         state["eids"] = eids
         for eid in eids:
             state[eid] = copy.deepcopy(self._ev_params[eid])
@@ -880,11 +881,13 @@ class ObservedSignalNode(Node):
         else:
             t1 = time.time()
             incr_start_idx, incr_end_idx = self.log_p_incremental_diff_timesteps(old_state, new_state)
+            incr_start_idx = max(incr_start_idx, 0) if incr_start_idx is not None else None
+            incr_end_idx = min(incr_end_idx, self.npts)
             t2 = time.time()
             self._cached_ells_staleness += 1
 
         # compute the change in lp over the updated window
-        if incr_start_idx is None:
+        if incr_start_idx is None or incr_end_idx is None:
             lp_delta = 0
             errcode = 0
         else:
@@ -1358,6 +1361,7 @@ class ObservedSignalNode(Node):
         self._cached_incr_state = None
         self._cached_incr_lp = None
         self._cached_stepwise_ells = np.empty((self.npts,))
+        self._cached_ells_staleness = np.inf
         self._unexplained_cache = None
         self._coef_message_cache = None
         self._cached_evdict = {}

@@ -619,8 +619,12 @@ double filter_incremental(StateSpaceModel &ssm,
 			  double step_ell_tol,
 			  int * errcode) {
   
-  // TODO handle the case where we want to compute the entire signal worth of step ells. 
-  // (on init, or with a noise model change, etc). 
+
+  unsigned int N = z.size();
+  if ((filter_start_idx < 0) || (incr_start_idx < filter_start_idx) || (incr_start_idx >= N)) {
+    printf("fatal: filter_incremental received bad indices (%d, %d, %d) for signal of size %d\n", 
+	   filter_start_idx, incr_start_idx, incr_end_idx, N);
+  }
 
   FilterState cache(ssm.max_dimension, 1e-10);
   if (filter_start_idx == 0) {
@@ -628,7 +632,7 @@ double filter_incremental(StateSpaceModel &ssm,
   } else {
     cache.init_incremental_state(ssm, filter_start_idx);
   }
-  unsigned int N = z.size();
+
   double total_discrepancy = 0;
   double step_ell_discrepancy;
   double step_ell;
