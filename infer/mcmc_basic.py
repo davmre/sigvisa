@@ -77,10 +77,36 @@ def mh_accept_lp(sg, lp, oldvalues, newvalues):
 def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
               log_qforward=0.0, log_qbackward=0.0, proxy_lps=None):
 
+
+    def get_wn_inference_caches(relevant_nodes):
+        cached = []
+        for n in relevant_nodes:
+            if not isinstance(n, ObservedSignalNode): continue
+            cached.append((n, n.cached_logp, n._cached_incr_state, n._cached_stepwise_ells.copy()))
+        return cached
+
+    def restore_wn_inference_caches(cached):
+        for (wn, cached_logp, cached_incr_state, cached_ells) in cached:
+            
+            #lp = wn.log_p()
+            #assert(np.abs(lp - cached_logp) < 1e-8)
+
+            # run parent_values now so that it doesn't 
+            # clobber cached_logp when it runs in the 
+            # future.
+            wn._parent_values(force_skip_tssm=True)
+            
+            wn.cached_logp = cached_logp
+            wn._cached_incr_lp = cached_logp
+            wn._cached_incr_state = cached_incr_state
+            wn._cached_stepwise_ells = cached_ells
+            wn.tssm = None
+
+
     check = False
 
-
     lp_old = sg.joint_logprob_keys(relevant_nodes, proxy_lps=proxy_lps) # assume oldvalues are still set
+    cached = get_wn_inference_caches(relevant_nodes)
 
     if check:
         lp_old_true = sg.current_log_p()
@@ -112,6 +138,10 @@ def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes,
                 # back up to the joint param nodes.
                 # TODO: cache messages to avoid recomputation
                 n.upwards_message_normalizer()
+
+
+        restore_wn_inference_caches(cached)
+
 
         return False
 

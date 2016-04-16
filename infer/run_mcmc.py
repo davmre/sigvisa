@@ -177,12 +177,11 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
             sg = None
     """
 
-    #if move_name=="atime_xc" and n_attempted[move_name] == 6:
-    #    import pdb; pdb.set_trace()
-
     t0  = time.time()
     accepted = fn(**kwargs)
     t1 = time.time()
+
+
 
     """
     if sg is not None:
@@ -196,6 +195,7 @@ def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_t
         n_accepted[move_name] += accepted
     if move_times is not None:
         move_times[move_name].append((step, t1-t0))
+
 
 ###########################################################################
 

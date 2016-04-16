@@ -313,6 +313,8 @@ class ObservedSignalNode(Node):
         return env
 
 
+
+
     """
 
     keep the following members in sync:
@@ -321,7 +323,7 @@ class ObservedSignalNode(Node):
     - self._latent_arrivals: map from (eid, phase) to nodes representing the latent signal
 
     """
-    def _parent_values(self):
+    def _parent_values(self, force_skip_tssm=False):
         parent_keys_removed = self.parent_keys_removed
         parent_keys_changed = self.parent_keys_changed
         parent_nodes_added = self.parent_nodes_added
@@ -415,7 +417,8 @@ class ObservedSignalNode(Node):
 
         # if any arrival times or templates might have changed, recompute the tssm
         if len(new_arrivals) > 0 or len(removed_arrivals) > 0 or len(parent_keys_changed) > 0:
-            self.tssm = self.transient_ssm(arrivals=self._arrivals, parent_values=pv)
+            if not force_skip_tssm:
+                self.tssm = self.transient_ssm(arrivals=self._arrivals, parent_values=pv)
             self.cached_logp = None
             self._unexplained_cache = None
             self._coef_message_cache = None
@@ -540,6 +543,12 @@ class ObservedSignalNode(Node):
         return cssm
 
     def transient_ssm(self, arrivals=None, parent_values=None, save_components=True):
+        # TODO: keep a permanent tssm_components list that is
+        # incrementally updated by _parent_values, and we only
+        # recompute the tssm if there is a structural change (added
+        # arrival(s) or different atime). for envelope-shape changes
+        # we can just set the new envelope within the tssm...
+
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
@@ -726,7 +735,8 @@ class ObservedSignalNode(Node):
         lp = self.tssm.run_filter(d)
         return lp
 
-    def _set_cssm_priors_from_model(self, arrivals=None, parent_values=None, force_no_cache=False):
+    def _set_cssm_priors_from_model(self, arrivals=None, parent_values=None, 
+                                    force_no_cache=False, force_skip_tssm=False):
         parent_values = parent_values if parent_values else self._parent_values()
         arrivals = arrivals if arrivals is not None else self.arrivals()
 
@@ -756,7 +766,7 @@ class ObservedSignalNode(Node):
 
             cssm.set_coef_prior(prior_means, prior_vars)
 
-        if self.hack_wavelets_as_iid:
+        if self.hack_wavelets_as_iid and not force_skip_tssm:
             # in the case we are not directly using the CSSMs, because
             # we precalculate their means and variances, we need to
             # redo that calculation every time the CSSMs change
@@ -840,7 +850,7 @@ class ObservedSignalNode(Node):
     def log_p(self, parent_values=None, force_full_refresh=False, 
               warmup_steps=100, enable_debug=False, **kwargs):
 
-        parent_values = parent_values if parent_values else self._parent_values()
+        parent_values = parent_values if parent_values else self._parent_values(force_skip_tssm=True)
 
         if self.has_jointgp:
             raise ParentConditionalNotDefined()
@@ -852,10 +862,9 @@ class ObservedSignalNode(Node):
             force_full_refresh = True
 
 
-
         arrivals = self.arrivals()
+        self._set_cssm_priors_from_model(arrivals=arrivals, parent_values=parent_values, force_skip_tssm=True)
         self.tssm = self.transient_ssm(arrivals=arrivals, save_components=True)
-        self._set_cssm_priors_from_model(arrivals=arrivals, parent_values=parent_values)
         tssm = self.tssm
 
         if force_full_refresh:
