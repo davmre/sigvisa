@@ -11,7 +11,7 @@ from sigvisa.utils.array import index_to_time, time_to_index
 
 
 
-def compute_atime_posteriors(sg, proposals, use_ar=False):
+def compute_atime_posteriors(sg, proposals, global_srate=1.0, use_ar=False):
     """
     compute the bayesian cross-correlation (logodds of signal under an AR noise model) 
     for all signals in the historical library, against all signals in the current SG.
@@ -39,7 +39,9 @@ def compute_atime_posteriors(sg, proposals, use_ar=False):
 
             tt_array, tt_mean = build_ttr_model_array(sg, x, sta, wn.srate, phase=phase)
 
-            sta_lls[(wn.label, phase)] = (lls, tt_array, tt_mean)
+            
+            origin_ll, origin_stime = atime_likelihood_to_origin_likelihood(lls, wn.st, wn.srate, tt_mean, tt_array, global_srate)
+            sta_lls[(wn.label, phase)] = origin_ll, origin_stime
 
             sg.logger.info("computed advantage for %s %s %s" % (x, wn.label, phase))
             i += 1
@@ -87,7 +89,7 @@ def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_mode
     origin_ll = np.log(rr) + llmax
     
     # hack around underflow in the log->exp->log conversion
-    origin_ll = np.where(np.isinf(origin_ll), np.min(ll), origin_ll )
+    origin_ll = np.where(origin_ll < 0, 0.0, origin_ll )
 
     K = (len(ttr_model)-1)/2
     origin_stime = ll_stime - mean_tt - float(K)/srate
@@ -99,54 +101,46 @@ def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_mode
     return origin_ll, origin_stime
 
 
-def update_lls_for_wn(wn, atime_lls, pre_s=3.0, temper=1.0):
+
+def wn_origin_posterior(sg, wn, cached_for_wn, 
+                        temper = 1, pre_s=3.0,
+                        global_srate=1.0):
+
     """
-    Take the atime likelihoods computed by ar_advantage, and zero out
-    atimes corresponding to currently-hypothesized events. This is a hack in
-    substitution for actually rerunning ar_advantage on the new unexplained_kalman signal. 
+    update the cached origin-time posterior to reflect currently 
+    hypothesized events, by zeroing out the origin times that would
+    generate the templates observed from those events.
     """
 
-    new_lls = atime_lls.copy()
+    origin_ll, origin_stime = cached_for_wn
+    new_lls = origin_ll.copy()
+
+    timeshift = wn.st - origin_stime
+
     for (eid, phase) in wn.arrivals():
         if phase=="UA": continue
         v, tg = wn.get_template_params_for_arrival(eid, phase)
         atime = v["arrival_time"]
-        at_idx = time_to_index(atime, wn.st, wn.srate)
+        otime = atime - timeshift
+        ot_idx = time_to_index(otime, origin_stime, global_srate)
         
-        post_idx = int(10.0 * wn.srate)
-        post_idx = max(post_idx,  tg.abstract_logenv_length(v, min_logenv=np.log(wn.nm_env.c), srate=wn.srate))
+        tmpl_len_wnidx = int(10.0 * wn.srate)
+        tmpl_len_wnidx = max(tmpl_len_wnidx,  tg.abstract_logenv_length(v, min_logenv=np.log(wn.nm_env.c), srate=wn.srate))
+        tmpl_len_gidx = int(tmpl_len_wnidx * (global_srate / wn.srate))
 
-        sidx = at_idx - int(pre_s * wn.srate)
-        eidx = at_idx + post_idx
+        sidx = ot_idx - int(pre_s * global_srate)
+        eidx = ot_idx + tmpl_len_gidx
         sidx = max(sidx, 0)
         eidx = min(eidx, len(new_lls))
-        if sidx > wn.npts or eidx < 0:
+        if sidx > len(new_lls) or eidx < 0:
             continue
         new_lls[sidx:eidx] = 0.0
 
     new_lls /= temper
-
-    return new_lls
-
-def wn_origin_posterior(sg, wn, x, cached_for_wn, out_srate, temper=1):
-
-    atime_lls, tt_array, tt_mean = cached_for_wn
-
-    srate = wn.srate
-    ll_stime = wn.st
-
-
-    hacked_atime_lls = update_lls_for_wn(wn, atime_lls, temper=temper)
-
-    origin_ll, origin_stime = atime_likelihood_to_origin_likelihood(hacked_atime_lls, ll_stime, srate, tt_mean, tt_array, out_srate)
-
-    if np.isinf(np.min(origin_ll)):
-        import pdb; pdb.set_trace()
-
-
-    return origin_ll, origin_stime
+    return new_lls, origin_stime
     
-def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_srate, 
+    
+def hack_ev_time_posterior_with_weight(sg, sta_lls, global_stime, N, global_srate, 
                                        phases=None, stas=None, temper=1.0):
     """
     Given a training event x, and a set of precomputed atime log-likelihoods
@@ -174,8 +168,9 @@ def hack_ev_time_posterior_with_weight(sg, x, sta_lls, global_stime, N, global_s
         if phases is not None and phase not in phases: continue
 
         t0 = time.time()
-        origin_ll, origin_stime = wn_origin_posterior(sg, wn, x, cached_for_wn, 
-                                                      global_srate, temper=temper)
+        origin_ll, origin_stime = wn_origin_posterior(sg, wn=wn, cached_for_wn=cached_for_wn, 
+                                                      global_srate=global_srate, 
+                                                      temper=temper)
         if np.isinf(np.max(origin_ll)):
             import pdb; pdb.set_trace()
 

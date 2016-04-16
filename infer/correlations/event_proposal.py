@@ -161,12 +161,13 @@ def compute_proposal_distribution(sg, stas, phases,
     proposal_origin_time_posteriors = []
     proposal_weights = []
     for (x, sta_lls) in atime_lls:
-        posterior, weight = hack_ev_time_posterior_with_weight(sg, x, sta_lls, 
-                                                               stas=stas,
-                                                               phases=phases,
+        posterior, weight = hack_ev_time_posterior_with_weight(sg=sg, 
+                                                               sta_lls=sta_lls, 
                                                                N=N,
                                                                global_stime = origin_stime,
                                                                global_srate = global_srate,
+                                                               stas=stas,
+                                                               phases=phases,
                                                                temper=temper)
         proposal_origin_time_posteriors.append(posterior)
 
@@ -205,16 +206,10 @@ def sample_corr_kwargs(sg):
         etime = sg.inference_region.etime
 
         restricted_length = 1200.0
-        restricted_windows = int(np.ceil((etime - stime) /restricted_length))
-        restricted_length = (etime-stime) / restricted_windows
-        restricted_stime = np.linspace(stime, etime, restricted_windows)
-        restricted_etime = restricted_stime + restricted_length
-        intervals = zip(restricted_stime, restricted_etime)
+        uniform_stime_len = (etime-restricted_length)-stime
         if np.random.rand() < 0.3:
-            idx = np.random.choice(np.arange(len(intervals)))
-            interval = intervals[idx]
-            corr_kwargs["origin_stime"] = interval[0]
-            corr_kwargs["origin_etime"] = interval[1]
+            corr_kwargs["origin_stime"] = np.random.rand() * uniform_stime_len + stime
+            corr_kwargs["origin_etime"] = corr_kwargs["origin_stime"] + restricted_length
 
     return corr_kwargs
 
