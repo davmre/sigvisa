@@ -396,7 +396,8 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
             wave = scipy.signal.decimate(wave, decimation)
         
         # copy the data we loaded into the global array
-        t_start = max(0, int((wave_stime - global_stime) * hz))
+        t_start = max(0, int((load_start_time - global_stime) * hz))
+        #t_start = max(0, int((wave_stime - global_stime) * hz))
         t_end = t_start + len(wave)
         global_data[t_start:t_end] = wave
 
