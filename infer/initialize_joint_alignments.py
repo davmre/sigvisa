@@ -275,7 +275,7 @@ def detect_outlier_fits(sg):
 
                 fits[eid][phase] = vs
 
-        fingerprints = []
+
         eids = []
         
         phase_sets = set()
@@ -286,6 +286,7 @@ def detect_outlier_fits(sg):
         results = {}
         for phases in phase_sets:
             X = []
+            fingerprints = []
             eids = []
             for eid in fits.keys():
                 phase_set = tuple(sorted(fits[eid].keys()))
@@ -307,11 +308,13 @@ def detect_outlier_fits(sg):
     outlier_eids = []
     for phase_set, (fingerprints, eids) in r.items():
 
-        clf = EllipticEnvelope(contamination=.20)
-        clf.fit(fingerprints)
-        y_pred = clf.decision_function(fingerprints).ravel()
-        outliers = eids[y_pred < 0]
-        outlier_eids += list(outliers)
+        if len(fingerprints) > 2:
+
+            clf = EllipticEnvelope(contamination=.20)
+            clf.fit(fingerprints)
+            y_pred = clf.decision_function(fingerprints).ravel()
+            outliers = eids[y_pred < 0]
+            outlier_eids += list(outliers)
 
     return outlier_eids
 

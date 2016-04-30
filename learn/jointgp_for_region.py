@@ -13,6 +13,8 @@ import cPickle as pickle
 from optparse import OptionParser
 
 from sigvisa.infer.initialize_joint_alignments import align_atimes, detect_outlier_fits, prune_empty_wns
+from sigvisa.learn.jointgp_iterative_init import jointgp_iterative_align_init
+
 
 def sort_phases(phases):
     canonical_order=["P", "pP", "Pn", "Pg", "S", "Sn", "Lg"]
@@ -49,7 +51,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     skip_levels=0,
                     uatemplate_rate=1e-6,
                     raw_signals=False, max_hz=2.0,  **kwargs)
-    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, special_mb_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, special_mb_moves=False, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
 
     ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
                     min_mb=1.0,
@@ -94,10 +96,12 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
 
     if prune_outlier_fits:
         outlier_eids = detect_outlier_fits(sg1)
+        import pdb; pdb.set_trace()
         print "removing outliers", outlier_eids
         for eid in outlier_eids:
             sg4.remove_event(eid)
         prune_empty_wns(sg4)
+        
 
     if n_random_inits > 0:
         for sta in stas:

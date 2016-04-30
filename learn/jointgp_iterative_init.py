@@ -223,12 +223,16 @@ def construct_sg_for_eids(sg1, eids, eid_atimes, model_type="gp_joint", model_di
     new_sg._topo_sort()
     new_sg.current_log_p()
 
-    new_sg.seed = sg1.seed
+    try:
+        new_sg.seed = sg1.seed
+    except:
+        new_sg.seed = 0
+
     return new_sg
 
 def optimize_prototypes(sg1, prototype_eids, eid_atimes):
 
-    new_sg = construct_sg_from_eids(sg1, prototype_eids, eid_atimes)
+    new_sg = construct_sg_for_eids(sg1, prototype_eids, eid_atimes)
 
     logger = MCMCLogger( write_template_vals=True, dump_interval_s=10.0, print_interval_s=10.0, write_gp_hparams=True, max_dumps=2, run_dir=None)
     run_open_world_MH(new_sg, steps=1000,
