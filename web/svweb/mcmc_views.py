@@ -299,7 +299,6 @@ def mcmc_run_detail(request, dirname):
     else:
         sg, max_step = final_mcmc_state(mcmc_run_dir)
 
-
     stas = sg.station_waves.keys()
     gp_hparams = []
     try:
@@ -454,6 +453,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
 
     from sigvisa.models.wiggles.wavelets import implicit_to_explicit
 
+    sg.current_log_p()
 
     (starray, etarray, idarray, M, levels, N)= sg.station_waves.values()[0][0].wavelet_basis
     prototypes = [np.asarray(m).flatten() for m in M]
@@ -489,7 +489,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
         base_var = tssm.obs_var(npts)
 
         w = wn.get_value()
-        lp1, marginals, step_ells = wn.tssm.all_filtered_cssm_coef_marginals(w)
+        lp1, marginals, step_ells = tssm.all_filtered_cssm_coef_marginals(w)
         srate = wn.srate
         stime = wn.st
         timevals = np.arange(stime, stime + npts / srate, 1.0 / srate)[0:npts]
@@ -628,7 +628,7 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
     for eid in eids:
         try:
             holdout_evidence[eid] = np.sum([jgp.holdout_evidence(eid) for jgp, wnodes in wiggle_gpmodels.values()])
-        except KeyError:
+        except KeyError as e:
             continue
 
     n = len(eids)
@@ -666,11 +666,13 @@ def conditional_wiggle_posterior(request, dirname, sta, phase):
             ax = f.add_subplot(gs[j, 0])
             plot_wavelet_dist(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
             plot_wavelet_dist(ax, wn.srate, basis, cond_means, cond_vars, c="green")
-            ax.set_title("%s - %d - evidence %f" % (sta, eid, holdout_evidence[eid]))
+            if eid in holdout_evidence:
+                ax.set_title("%s - %d - evidence %f" % (sta, eid, holdout_evidence[eid]))
             ax = f.add_subplot(gs[j, 1])
             plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
             plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
-            ax.set_title("%s - %d - evidence %f" % (sta, eid, holdout_evidence[eid]))
+            if eid in holdout_evidence:
+                ax.set_title("%s - %d - evidence %f" % (sta, eid, holdout_evidence[eid]))
             j += 1
 
     canvas = FigureCanvas(f)
@@ -889,7 +891,7 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
     signal_len = float(request.GET.get('signal_len', '20.0'))
     xc_type = request.GET.get('xc_type', 'xc')
 
-    buffer_s = 8.0
+    buffer_s = 3.5
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
@@ -1000,7 +1002,7 @@ def mcmc_phase_stack(request, dirname, sta, phase, base_eid):
         my_ax2.plot(xs_base, base_signal, linewidth=0.5, color="black")
 
         my_ax1.set_title("eid %d dist %.2fkm" % (eid, dist))
-        my_ax2.set_title("xc peak %.2f at ttr=%.2fs vs %.2f at ttr=%.2fs" % (xc_peak, ttr+alignment, default_xc, ttr))
+        my_ax2.set_title("xc peak %.2f at ttr=%.2fs vs %.2f at ttr=%.2fs" % (xc_peak, ttr-alignment, default_xc, ttr))
 
         my_ax1.plot(xs_default, signal, linewidth=1.3, alpha=0.7)
         my_ax2.plot(xs_aligned, signal, linewidth=1.3, alpha=0.7)
@@ -1153,7 +1155,7 @@ def mcmc_compare_gps_doublets(request, dirname, sta):
             print len(pred_signal), len(s)
 
             pred_idx = pred_atime_idxs[eid][phase]
-            slack_idx = 100 # 10s times srate=10.0
+            slack_idx = 40 # 4s times srate=10.0
             sidx_xc = max(pred_idx - slack_idx, 0)
             xc_s1 = s1[sidx_xc : pred_idx + slack_idx + len(pred_signal)]
             xc_s2 = s2[sidx_xc : pred_idx + slack_idx + len(pred_signal)]
@@ -1211,6 +1213,8 @@ def mcmc_compare_gps_doublets_wavelets(request, dirname, sta, phase):
     else:
         sg = graph_for_step(mcmc_run_dir, step)
 
+    sg.current_log_p()
+
     aligned_wavelets = {}
     pred_wavelets = {}
     neighbor_wavelets = {}
@@ -1241,22 +1245,12 @@ def mcmc_compare_gps_doublets_wavelets(request, dirname, sta, phase):
             print "no neighbor for %s" % phase, e
             continue
 
-        def extract_wavelet_posterior(wn, eid, phase):
-                    # extract phase signal for neighbor wn
-            d = wn.get_value().data
-            ell, marginals, step_ells = wn.tssm.all_filtered_cssm_coef_marginals(d)            
-            for i, (eid, pphase, scale, sidx, npts, component_type) in enumerate(wn.tssm_components):
-                if component_type != "wavelet": continue
-                if pphase!=phase: continue
-                wmeans, wvars = marginals[i]
-                break
-            return wmeans, wvars
-
-        aligned_wavelets[eid], _ = extract_wavelet_posterior(wn, neighbor_eid, phase)
-        neighbor_wavelets[eid], _ = extract_wavelet_posterior(neighbor_wn, neighbor_eid, phase)
+        aligned_wavelets[eid], _ = wn.extract_wavelet_posterior(eid, phase)
+        neighbor_wavelets[eid], _ = neighbor_wn.extract_wavelet_posterior(neighbor_eid, phase)
 
         cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
         cond_means, cond_vars = np.asarray(cond_means, dtype=np.float64), np.asarray(cond_vars, dtype=np.float64)
+
         pred_wavelets[eid] = cond_means
         print "predicted", eid
 
@@ -1871,6 +1865,8 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     last_step = np.max(sgs.keys())
     last_sg = sgs[last_step]
 
+
+
     ev_alpha = 0.8 / len(sgs)
     ua_alpha = 0.4/len(sgs)
 
@@ -2057,3 +2053,107 @@ def mcmc_ev_trace_pairwise_plot(request, dirname, eid, param1, param2):
     f.tight_layout()
     canvas.print_png(response)
     return response
+
+def mcmc_plot_atime_posterior_for_training_ev(request, dirname, idx):
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+    
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+    else:
+        sg, _ = final_mcmc_state(mcmc_run_dir)
+
+    stas = request.GET.get('stas', 'all')
+    if stas == "all":
+        stas = sg.station_waves.keys()
+    else:
+        stas = [str(s) for s in stas.split(",")]
+
+    from sigvisa.infer.correlations.historical_signal_library import get_historical_signals
+    from sigvisa.infer.correlations.weighted_event_posterior import compute_atime_posteriors, align_sum
+
+    proposals = get_historical_signals(sg, stas=stas)
+    print "got proposals for", stas
+    idx = int(idx)
+    ((x, sta_lls),) = compute_atime_posteriors(sg, proposals, 
+                                               use_ar=False,
+                                               event_idx = idx)
+
+    signals = proposals[idx][1]
+
+    nterms = len(sta_lls)
+    nsignals = len(signals)
+    nplots = nterms + nsignals
+    f = Figure(figsize=(15, 4*nplots))
+    f.patch.set_facecolor('white')
+
+    f.suptitle("event %s" % str(x))
+
+    global_stime = sg.inference_region.stime
+    global_srate = 1.0
+    N = int((sg.inference_region.etime - sg.inference_region.stime) * global_srate)
+    global_ll = np.zeros((N,))
+
+    ax = None
+    for i, ((wnlabel, phase), (origin_ll, origin_stime)) in enumerate(sta_lls.items()):
+
+        ax = f.add_subplot(nplots+1, 1, i+1, sharex=ax)
+    
+        x = np.linspace(origin_stime, origin_stime + len(origin_ll), len(origin_ll))
+        ax.plot(x, origin_ll)
+
+        ax.set_title("%s %s" % (wnlabel, phase))
+
+        global_offset = int((origin_stime - global_stime)*global_srate)
+        align_sum(global_ll, 
+                  origin_ll, 
+                  global_offset)
+
+
+    C = np.max(global_ll)
+    posterior = np.exp(global_ll-C)
+    Z = np.sum(posterior)
+    posterior /= Z
+    logZ = np.log(Z) + C
+    
+    maxtime = index_to_time(np.argmax(posterior), global_stime, global_srate)
+
+    ax = f.add_subplot(nplots+1, 1, nterms+1, sharex=ax)
+    x = np.linspace(global_stime, global_stime + N, N)
+    ax.plot(x, posterior)
+    ax.set_title("global posterior, weight %.2f argmax %.1f" % (logZ, maxtime))
+
+
+    for i, (k, signal) in enumerate(signals.items()):
+        ax = f.add_subplot(nplots+1, 1, nterms+i+2)
+        
+
+
+        (sta, chan, band, phase) = k
+        wn = sg.station_waves[sta][0]
+        d = wn.get_value().data
+        align = np.argmax(iid_advantage(d, signal))
+        excerpt = d[align:align+len(signal)]
+        align_t = index_to_time(align, wn.st, wn.srate)
+        tt = np.linspace(align_t, align_t+20.0, len(excerpt))
+        ax.plot(tt, excerpt / np.max(excerpt))
+
+
+        ax.plot(tt, signal/np.max(signal))
+
+        ax.set_title("predicted signal %s algined %.1f" % (str(k), align_t))
+
+    
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    #f.tight_layout()
+    canvas.print_png(response)
+    return response
+
+
+    
+
+    

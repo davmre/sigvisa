@@ -1,0 +1,188 @@
+{% load url from future %}
+<html>
+<head>
+
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.css" />
+<script src="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.js"></script>
+<script src="https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-markercluster/v0.4.0/leaflet.markercluster.js"></script>
+
+<script>
+function hideLoading() {
+document.getElementById('loading').style.visibility = 'hidden';
+}
+
+</script>
+
+<style type="text/css">
+
+#mapid { height: 400px; }
+
+#loading {
+   position: absolute;
+   top: 10px;
+   left: 0px;
+   color: red;
+   width: 100%;
+   visibility: hidden;
+}
+
+pre.ui-coordinates {
+  position:absolute;
+  top:20px;
+  right:10px;
+  padding:5px 10px;
+  background:rgba(0,0,0,0.5);
+  color:#fff;
+  font-size:11px;
+  line-height:18px;
+  border-radius:3px;
+  }
+
+#wavediv {
+position: relative;
+width: 100%;
+height: 200;
+overflow:scroll;
+overflow-y:hidden;
+}
+
+#wave {
+max-height: 95%;
+}
+</style>
+
+<title>gp predicted signals</title>
+
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+
+<div id="mapid"></div>
+<pre id='coordinates' class='ui-coordinates'></pre>
+
+<center>
+  <div id="wavediv">
+    <img id="wave" src="" onload="hideLoading()" border=1>
+    <h1 id="loading">Loading...</h1>
+  </div>
+  <br/>
+  <input type="textbox" id="txt_phases" value="{{ phases }}"  size="12" />
+  <input type="textbox" id="lon" value="{{ lon }}"  size="8" />
+  <input type="textbox" id="lat" value="{{ lat }}"  size="8" />
+  <input type="textbox" id="depth" value="{{ depth }}"  size="5" />
+  <input type="textbox" id="zoom" value="{{ zoom }}"  size="5" />
+  <input type="button" value="update" onclick="updateWaveImage()" />
+
+  <input id="zoomed" type="checkbox" onclick="updateZoom()"/>
+  <label for="zoomed">wave detail</label>
+  <a href="{% url 'local_hparams' sta=sta runid=runid %}">view hparams</a>
+
+</center>
+
+<script>
+
+// set up the map
+map = new L.Map('mapid');
+
+// create the tile layer with correct attribution
+var osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+var osmAttrib='Map data © <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
+var osm = new L.TileLayer(osmUrl, {minZoom: 1, maxZoom: 18, attribution: osmAttrib});
+map.setView([41.15, -114.88], 11);
+map.addLayer(osm);
+
+// create the predicted event marker
+var marker = L.marker(new L.LatLng(41.15, -114.88), {
+    draggable: true
+});
+marker.addTo(map);
+
+function ondragend() {
+    
+    var m = marker.getLatLng();
+    var coordinates = document.getElementById('coordinates');
+    coordinates.innerHTML = 'Latitude: ' + m.lat + '<br />Longitude: ' + m.lng;
+
+    document.getElementById('lon').value = m.lng;
+    document.getElementById('lat').value = m.lat;
+}
+
+function snapToEvent(evMarker, depth) {
+    document.getElementById('depth').value = depth;
+    marker.setLatLng(evMarker.getLatLng());
+    ondragend();
+    updateWaveImage();
+}
+
+// add markers for all training events
+var evmarkers = new L.markerClusterGroup({disableClusteringAtZoom: 4});
+{% autoescape off %}
+    {{ markerCode }}
+{% endautoescape %}
+map.addLayer(evmarkers);
+
+
+
+// every time the marker is dragged, update the coordinates container
+marker.on('dragend', ondragend);
+
+
+
+function clickMoveMarker(e) {
+    marker.setLatLng(e.latlng);
+    ondragend();
+}
+// move the marker by clicking on the map
+map.on('click', clickMoveMarker);
+
+// Set the initial marker coordinate on load.
+ondragend();
+
+
+function updateWaveImage() {
+var phases = document.getElementById("txt_phases").value;
+var zoom = document.getElementById("zoom").value;
+var lon = document.getElementById("lon").value;
+var lat = document.getElementById("lat").value;
+var depth = document.getElementById("depth").value;
+
+var wave_img = document.getElementById("wave");
+new_src = "{% url 'pred_signal' runid=runid %}?sta={{ sta }};phases=" + phases + ";zoom=" + zoom + ";lon=" + lon + ";lat=" + lat + ";depth=" + depth
+
+// only show the loading message if the image has actually changed
+if ('/' + wave_img.src.split("/").slice(3).join("/") != new_src) {
+showLoading();
+}
+wave_img.src = new_src
+}
+
+
+
+function showLoading() {
+document.getElementById('loading').style.visibility = 'visible';
+}
+
+function updateZoom() {
+wave = document.getElementById('wave')
+if (document.getElementById('zoomed').checked) {
+wave.style.maxWidth = "";
+} else {
+wave.style.maxWidth = "100%";
+}
+}
+
+
+updateZoom();
+updateWaveImage();
+
+
+
+</script>
+
+
+{% include "svweb/footer.html"  %}
+
+</body>
+</html>

@@ -1,0 +1,38 @@
+{% load url from future %}
+{% load math_filters %}
+
+<html>
+<head>
+<title>cluster {{ cluster }} at {{ sta }} -- sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+
+
+<table>
+<tr><td>event</td>
+{% for phase in all_phases %}
+<td><b>{{ phase }}</b></td>
+{% endfor %}
+</tr>
+
+
+{% for evid, evstr, fitid, phases in fitids %}
+<tr><td>Event <a href="{% url 'fit_run_detail' fitid=fitid %}">{{ evid }}</a>:<br>{{ evstr }}</td>
+{% for phase, fpid, ttr in phases %}
+<td>
+{% if fpid > 0 %}
+Phase {{ phase }} residual {{ ttr|stringformat:'.2f' }}.
+<br><img src="{% url 'fit_wiggle_view' fpid=fpid %}" width=300 height=150>
+</td>
+{% endif %}
+{% endfor %}
+</tr>
+{% endfor %}
+
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>
