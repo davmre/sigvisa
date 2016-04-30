@@ -97,8 +97,10 @@ if __name__=="__main__":
      parser.add_option("--burnin", dest="burnin", default=20, type="int", help="")
      parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run name")
      parser.add_option("-i", "--run_iter", dest="run_iter", default=1, type="int", help="run iteration")
+     parser.add_option("--delete_existing", dest="delete_existing", default=False, action="store_true")
      
      (options, args) = parser.parse_args()
 
      extract_jointgp_fits(sg_fname=options.sg_fname, run_name=options.run_name, 
-                          run_iter=options.run_iter, burnin=options.burnin)
+                          run_iter=options.run_iter, burnin=options.burnin, 
+                          delete_existing=options.delete_existing)

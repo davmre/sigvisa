@@ -778,7 +778,6 @@ class ARModel(NoiseModel):
         return np.all(np.abs(roots) < 1)
 
 
-
 # error model obeys normal distribution
 class ErrorModel:
     def __init__(self, mean, std):

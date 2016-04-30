@@ -10,13 +10,14 @@ from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa.models.spatial_regression.local_gp_ensemble import LocalGPEnsemble
 
 
-def get_historical_signals(sg, phases=None):
+def get_historical_signals(sg, phases=None, stas=None):
 
     history = []
-    try:
-        stas = sg.correlation_proposal_stas
-    except AttributeError:
-        stas = sg.station_waves.keys()
+    if stas is None:
+        try:
+            stas = sg.correlation_proposal_stas
+        except AttributeError:
+            stas = sg.station_waves.keys()
 
     if phases is None:
         phases = ["Pn", "Sn", "Lg", "Pg", "P"]

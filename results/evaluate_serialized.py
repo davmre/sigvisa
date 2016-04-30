@@ -51,7 +51,6 @@ def main():
 
     (options, args) = parser.parse_args()
     
-    assert(options.serialized is not None)
     assert(options.stime is not None)
     assert(options.etime is not None)
 
@@ -73,11 +72,15 @@ def main():
     print "sel3"
     sel3_bulletin = get_bulletin(options.stime, options.etime, origin_type="sel3")
     f, p, r, err = f1_and_error(isc_bulletin, sel3_bulletin, max_delta_deg=options.max_delta_deg, max_delta_time=50.0)
+    print_bulletin(sel3_bulletin)
     print "f1", f
     print "precision", p
     print "recall", r
     print "err", err
     print
+
+    if options.serialized is None:
+        return
 
     evdicts, uadicts_by_sta = load_serialized_from_file(options.serialized)
     inferred_bulletin = np.array([(d["lon"], d["lat"], d["depth"], d["time"], d["mb"]) for d in evdicts])

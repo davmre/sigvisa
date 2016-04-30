@@ -12,7 +12,7 @@ import os, sys, traceback
 import cPickle as pickle
 from optparse import OptionParser
 
-from sigvisa.infer.initialize_joint_alignments import align_atimes
+from sigvisa.infer.initialize_joint_alignments import align_atimes, detect_outlier_fits, prune_empty_wns
 
 def sort_phases(phases):
     canonical_order=["P", "pP", "Pn", "Pg", "S", "Sn", "Lg"]
@@ -20,9 +20,13 @@ def sort_phases(phases):
 
 def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases, 
                         max_hz=None, resume_from=None, 
-                        init_buffer_len=8.0,
+                        init_buffer_len=2.0,
                         n_random_inits=200,
                         init_from_predicted_times=False,
+                        prune_outlier_fits=False,
+                        iterative_align_init=False,
+                        coarse_file=None,
+                        fine_file=None,
                         **kwargs):
 
     try:
@@ -31,19 +35,21 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
         jgp_runid = None
 
     rs = EventRunSpec(evs=evs, stas=stas, pre_s=50.0, 
-                      force_event_wn_matching=False,
+                      force_event_wn_matching=True,
                       disable_conflict_checking=True, 
                       seed=0, sample_init_templates=True)
 
-    ms1 = ModelSpec(template_model_type="param", wiggle_family="iid", 
+    ms1 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", 
                     min_mb=1.0,
                     runids=runids, 
                     hack_param_constraint=True,
                     hack_ttr_max=8.0,
+                    jointgp_param_run_init=jgp_runid,
                     phases=phases,
                     skip_levels=0,
+                    uatemplate_rate=1e-6,
                     raw_signals=False, max_hz=2.0,  **kwargs)
-    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, special_mb_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
 
     ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
                     min_mb=1.0,
@@ -53,6 +59,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     phases=phases,
                     jointgp_param_run_init=jgp_runid,
                     hack_ttr_max=8.0,
+                    uatemplate_rate=1e-8,
                     skip_levels=0,
                     **kwargs)
     ms4.add_inference_round(enable_event_moves=False, 
@@ -61,27 +68,41 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                             enable_template_moves=True, 
                             special_mb_moves=False, 
                             enable_phase_openworld=False,
-                            fix_atimes=True, steps=50)
+                            fix_atimes=True, steps=10)
     ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, enable_phase_openworld=False, steps=300)
 
 
     rundir = None
 
-    print sort_phases(phases)
+    if coarse_file is not None:
+        with open(coarse_file, 'rb') as f:
+            sg1 = pickle.load(f)
+    elif fine_file is None:
+        sg1 = rs.build_sg(ms1)
+        initialize_sg(sg1, ms1, rs)
+        rundir = do_inference(sg1, ms1, rs,
+                              model_switch_lp_threshold=None,
+                              run_dir=rundir)
+        rundir = rundir + ".1.1.1"
 
-    sg1 = rs.build_sg(ms1)
-    initialize_sg(sg1, ms1, rs)
-    rundir = do_inference(sg1, ms1, rs,
-                          model_switch_lp_threshold=None,
-                          run_dir=rundir)
-    rundir = rundir + ".1.1.1"
+    if fine_file is not None:
+        with open(fine_file, 'rb') as f:
+            sg4 = pickle.load(f)
+    else:
+        sg4 = rs.build_sg(ms4)
+        initialize_from(sg4, ms4, sg1, ms1)
 
-    sg4 = rs.build_sg(ms4)
-    initialize_from(sg4, ms4, sg1, ms1)
+    if prune_outlier_fits:
+        outlier_eids = detect_outlier_fits(sg1)
+        print "removing outliers", outlier_eids
+        for eid in outlier_eids:
+            sg4.remove_event(eid)
+        prune_empty_wns(sg4)
 
     if n_random_inits > 0:
         for sta in stas:
             for phase in sort_phases(phases):
+
                 try:
                     align_atimes(sg4, sta, phase, buffer_len_s=init_buffer_len, 
                                  patch_len_s=20.0, n_random_inits=n_random_inits,
@@ -89,7 +110,11 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                 except Exception as e:
                     print e
                     continue
-
+    
+    if iterative_align_init:
+        sg4 = jointgp_iterative_align_init(sg4)
+    
+    sg4.current_log_p()
     do_inference(sg4, ms4, rs, dump_interval_s=10, 
                  print_interval_s=10, 
                  run_dir=rundir,
@@ -117,7 +142,19 @@ def get_evs(min_lon, max_lon, min_lat, max_lat, min_time, max_time, evtype="isc"
         evs.append(ev)
 
         
-    return evs
+    # filter for near-duplicates that screw up fitting
+    filtered_evs = []
+    for ev1 in evs:
+
+        duplicated = False
+        query = "select evid from %s_origin where lon between %f and %f and lat between %f and %f and time between %f and %f" % (ev.lon-1, ev.lon+1, ev.lat-1, ev.lat+1, ev.time-60, ev.time+60)
+        r = s.sql(query)
+        if len(r) == 1:
+            filtered_evs.append(ev1)
+        else:
+            print "skipping event", ev, "based on duplicates", r
+
+    return filtered_evs
 
 def main():
     parser = OptionParser()
@@ -137,7 +174,10 @@ def main():
     parser.add_option("--subsample_evs", dest="subsample_evs", default=None, type=int)    
     parser.add_option("--evtype", dest="evtype", default="isc", type=str)
     parser.add_option("--precision", dest="precision", default=None, type=float)
-    parser.add_option("--resume_from", dest="resume_from", default=None, type=str)
+    parser.add_option("--coarse_file", dest="coarse_file", default=None, type=str)
+    parser.add_option("--fine_file", dest="fine_file", default=None, type=str)
+    parser.add_option("--prune_outlier_fits", dest="prune_outlier_fits", default=False, action="store_true")
+    parser.add_option("--iterative_align_init", dest="iterative_align_init", default=False, action="store_true")
     parser.add_option("--init_buffer_len", dest="init_buffer_len", default=2.0, type=float)
     parser.add_option("--init_from_predicted_times", dest="init_from_predicted_times", default=False, action="store_true")
     parser.add_option("--n_random_inits", dest="n_random_inits", default=200, type=int)
@@ -200,7 +240,10 @@ def main():
                         init_buffer_len=options.init_buffer_len,
                         n_random_inits = options.n_random_inits,
                         init_from_predicted_times=options.init_from_predicted_times,
-                        resume_from=options.resume_from)
+                        prune_outlier_fits=options.prune_outlier_fits,
+                        iterative_align_init=options.iterative_align_init,
+                        coarse_file=options.coarse_file,
+                        fine_file=options.fine_file)
 
 
 if __name__ == "__main__":

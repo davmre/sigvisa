@@ -431,6 +431,15 @@ def load_modelid(modelid, memoize=False, **kwargs):
     model.modelid = modelid
     return model
 
+def load_modelid_evids(modelid):
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+    cursor.execute("select training_set_fname from sigvisa_param_model where modelid=%d" % modelid)
+    fname, = cursor.fetchone()
+    cursor.close()
+    evids = np.loadtxt(os.path.join(s.homedir, fname), dtype=int)
+    return evids
+
 @lru_cache(maxsize=128)
 def load_model(*args, **kwargs):
     return load_model_notmemoized(*args, **kwargs)

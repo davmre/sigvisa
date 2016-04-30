@@ -659,7 +659,7 @@ double filter_incremental(StateSpaceModel &ssm,
       // check that our likelihood calculations are now in sync with the
       // previous calculation.
       if ( fabs(step_ell_discrepancy) > step_ell_tol ) {
-	 printf("warmup %d discrepancy %.10f\n", k, step_ell_discrepancy);
+	// printf("warmup %d discrepancy %.10f\n", k, step_ell_discrepancy);
          *errcode = ERR_INCR_INIT;
          return -INFINITY;
       }
@@ -679,6 +679,7 @@ double filter_incremental(StateSpaceModel &ssm,
   //printf("first obs %d discrepancy %.2f\n", incr_start_idx, step_ell_discrepancy);
 
   *steps_processed = N - filter_start_idx;
+  int match_counter = 0;
   for (unsigned k=incr_start_idx+1; k < N; ++k) {
     int err = kalman_predict_sqrt(ssm, cache, k, false);
 
@@ -702,7 +703,10 @@ double filter_incremental(StateSpaceModel &ssm,
     // have reverted to their previous values
     if ((k > incr_end_idx) && (fabs(step_ell_discrepancy) < step_ell_tol)) {
       *steps_processed = k - filter_start_idx;
+      match_counter += 1;
+      if (match_counter >= 5) {
 	break;
+      }
     }
   }
   return total_discrepancy;

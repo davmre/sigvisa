@@ -237,14 +237,18 @@ def compute_wavelet_messages(sg, wn, target_eid=None):
         for j, (prm, prv, psm, psv) in enumerate(zip(prior_means, prior_vars, posterior_means, posterior_vars)):
 
             if psv < 1e-10:
-                raise Exception( "large posterior!")
-                import pdb; pdb.set_trace()
+                #raise Exception( "large posterior!")
+                psv = 1e-10
 
-            message_means[j], message_vars[j] = multiply_scalar_gaussian(psm, psv, prm, -prv)
+            if np.abs(psv-prv) < 1e-10:
+                message_means[j] = 0.0
+                message_vars[j] = 1e10
+            else:
+                message_means[j], message_vars[j] = multiply_scalar_gaussian(psm, psv, prm, -prv)
 
             if message_vars[j] < 0:
                 raise Exception( "negative message!")
-                #import pdb; pdb.set_trace()
+
 
         gp_posteriors[(eid, phase)] = posterior_means, posterior_vars
         gp_messages[(eid, phase)] = message_means, message_vars

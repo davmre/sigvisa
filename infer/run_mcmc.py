@@ -92,6 +92,9 @@ def do_gp_hparam_moves(sg, stds, n_attempted=None, n_accepted=None,
 
         return mh_accept_lp(sg, lp, v1, v2)
 
+
+    dump_jgp_times(sg)
+
     for sta in sg._joint_gpmodels.keys():
         for hnodes in sg._jointgp_hparam_nodes.values():
             for (hparam, n) in hnodes.items():
@@ -108,6 +111,26 @@ def do_gp_hparam_moves(sg, stds, n_attempted=None, n_accepted=None,
                 except KeyError:
                     continue
 
+def dump_jgp_times(sg):
+    s = ""
+    for sta, jgpdict in sg._joint_gpmodels.items():
+        for (param, band, chan, phase), (jgp, nodes) in jgpdict.items():
+            avg_full = jgp._full_times / (jgp._full_evals +1)
+            avg_update = jgp._update_times / (jgp._update_evals+1)
+            avg_correction = jgp._correction_times / (jgp._correction_evals+1)
+            avg_cache = jgp._cache_times / (jgp._cache_evals+1)
+            s += "%s %s " % (param, phase)
+            s += "full %d avg %.6f " % (jgp._full_evals, avg_full)
+            s += "update %d avg %.6f " % (jgp._update_evals, avg_update)
+            s += "correction %d avg %.6f " % (jgp._correction_evals, avg_correction)
+            s += "cache %d avg %.6f \n" % (jgp._cache_evals, avg_cache)
+            #print "update", jgp._update_evals, "avg", avg_update,
+            #print "correction", jgp._correction_evals, "avg", avg_correction,
+            #print "cache", jgp._cache_evals, "avg", avg_cache
+
+    with open("jgp_times", "w") as f:
+        f.write(s)
+
 def do_template_moves(sg, wn, tmnodes, tg, stds,
                       n_attempted=None, n_accepted=None,
                       move_times=None, step=None, 
@@ -119,7 +142,7 @@ def do_template_moves(sg, wn, tmnodes, tg, stds,
         k, n = tmnodes[param]
 
         # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
-        relevant_nodes = [wn,]
+        relevant_nodes = list(n.children)
         if n.deterministic():
             parent = n.parents[n.default_parent_key()]
             relevant_nodes.append(parent)
@@ -250,6 +273,9 @@ def single_template_MH(sg, wn, tmnodes, steps=1000, rw=True, hamiltonian=False, 
         #if step % 50 == 0:
         #    print "step %d: lp %f, %s" % (step, sg.current_log_p(), v)
 
+        
+
+        
     return sorted_params, np.array(vals)
 
 def swap_move_checkin(swapper, step, checkpoint):
@@ -336,16 +362,16 @@ def run_open_world_MH(sg, steps=10000,
                          'tmpl_split': (split_move, 0.0),
                          'tmpl_merge': (merge_move, 0.0),
                          'swap_association': (swap_association_move, 1.0),
-                         'arnoise_mean': (arnoise_mean_rw_move, 0.2),
-                         'arnoise_std': (arnoise_std_rw_move, 0.2),
-                         'arnoise_params': (arnoise_params_rw_move, 0.2)
+                         'arnoise_mean': (arnoise_mean_rw_move, 1.0),
+                         'arnoise_std': (arnoise_std_rw_move, 1.0),
+                         'arnoise_params': (arnoise_params_rw_move, 1.0)
             }
 
         else:
             sta_moves = {'swap_association': (swap_association_move, 1.0),
-                         'arnoise_mean': (arnoise_mean_rw_move, 0.2),
-                         'arnoise_std': (arnoise_std_rw_move, 0.2),
-                         'arnoise_params': (arnoise_params_rw_move, 0.2)
+                         'arnoise_mean': (arnoise_mean_rw_move, 1.0),
+                         'arnoise_std': (arnoise_std_rw_move, 1.0),
+                         'arnoise_params': (arnoise_params_rw_move, 1.0)
             }
 
     if sg.hack_coarse_signal is not None:
@@ -473,9 +499,17 @@ def run_open_world_MH(sg, steps=10000,
                              move_prob=prob, sg=sg, site=site, eid=eid)
                 
 
+
         for (site, elements) in sg.site_elements.items():
             for sta in elements:
                 for wn in sg.station_waves[sta]:
+
+                    try:
+                        dump_jgp_times(sg)
+                    except Exception as e:
+                        print e
+                        pass
+
 
                     # moves to birth/death/split/merge new unassociated templates
                     for (move_name, (fn, move_prob)) in sta_moves.items():
@@ -523,6 +557,9 @@ def run_open_world_MH(sg, steps=10000,
                             do_template_moves(sg, wn, tmnodes, tg, stds, 
                                               n_attempted, n_accepted, move_times, step,
                                               proxy_lps=proxy_lps)
+
+
+
 
         for (move, (fn, prob)) in global_moves.items():
 

@@ -24,6 +24,8 @@ class RunSpec(object):
         self.sample_init_templates = sample_init_templates
 
     def build_sg(self, modelspec):
+        np.random.seed(self.seed)
+
         kwargs = modelspec.sg_params.copy()
         if modelspec.signal_params['raw_signals']:
             kwargs["raw_signals"] = True
@@ -151,7 +153,7 @@ class EventRunSpec(RunSpec):
             for ev in evs:
                 min_t = None
                 max_t = None
-                for phase in ["P", "S", "Lg", "PcP", "ScP", "pP", "Pg"]:
+                for phase in ["P", "S", "Pn", "Sn", "Lg", "PcP", "ScP", "pP", "Pg"]:
                     try:
                         t = tt_predict(ev, sta, phase) + ev.time 
                     except:
@@ -203,7 +205,10 @@ class EventRunSpec(RunSpec):
             evs = []
         return evs
 
-    def build_sg(self, modelspec):
+    def build_sg(self, modelspec, extra_waves=[]):
+
+        np.random.seed(self.seed)
+
         kwargs = modelspec.sg_params.copy()
         kwargs['force_event_wn_matching'] = self.force_event_wn_matching
         if modelspec.signal_params['raw_signals']:
@@ -211,12 +216,18 @@ class EventRunSpec(RunSpec):
 
         sg = SigvisaGraph(**kwargs)
         waves = self.get_waves(modelspec)
-        for (wave, wave_env) in waves:
-            sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking, wave_env=wave_env)
+        for (wave, wave_env) in waves + extra_waves:
+            sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking, 
+                        wave_env=wave_env)
 
         evs = self._get_events()
         evtimes = [ev.time for ev in evs]
-        sg.event_end_time = max(sg.event_end_time,  np.max(evtimes) +100.0)
+
+        try:
+            sg.event_end_time = max(sg.event_end_time,  np.max(evtimes) +100.0)
+        except:
+            sg.event_end_time = np.max(evtimes) +100.0
+
         sg.event_start_time = min(sg.event_start_time,  np.min(evtimes) - 100.0)
 
         return sg
@@ -389,6 +400,9 @@ class ModelSpec(object):
 
 
 def initialize_sg(sg, modelspec, runspec):
+
+    np.random.seed(runspec.seed)
+
     evs = runspec.get_init_events()
     for ev in evs:
         sg.add_event(ev, sample_templates=runspec.sample_init_templates)
@@ -405,6 +419,15 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
         ev = sg_old.get_event(eid)
         sg_new.add_event(ev, eid=eid)
 
+    for tmid in sg_old.uatemplates.keys():
+        n_atime = sg_old.uatemplates[tmid]["arrival_time"]
+        old_wn = list(n_atime.children)[0]
+        atime = n_atime.get_value()
+        new_wn = sg_new.all_nodes[old_wn.label]
+        sg_new.create_unassociated_template(new_wn, atime, tmid=tmid)
+    sg_new.next_uatemplateid = sg_old.next_uatemplateid
+    sg_new.next_eid = sg_old.next_eid
+
     # copy param values
     for k in sg_old.all_nodes.keys():
         #if "nm_" in key:
@@ -417,6 +440,7 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
             n1.set_value(n2.get_value())
         except:
             continue
+
 
 def do_inference(sg, modelspec, runspec, max_steps=None, 
                  model_switch_lp_threshold=500, dump_interval_s=10, 

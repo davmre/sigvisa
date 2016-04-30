@@ -372,7 +372,9 @@ def phasejump_reduced_logp(sg, eid, phasejump_record):
     #  - if we're not using GPs, this is cheap (though maybe not necessary)
     #  - if we're using GPs, this is necessary, since any parent-conditional 
     #    distribution can be changed by a change in ev location. 
-    lp += np.sum([n.log_p() for n in sg.extended_evnodes[eid] if not n.deterministic()])
+
+    rn = [n for n in sg.extended_evnodes[eid] if not n.deterministic()]
+    lp += sg.joint_logprob_keys(rn)
 
 
     # always compute phase existence model at all stations because I'm lazy and this should be cheap

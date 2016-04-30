@@ -354,9 +354,15 @@ class LocalGPEnsemble(ParamModel):
         n = len(self.local_gps)
         d['local_gps'] = [None,] * n
 
-        
-        del d["Kinv"]
-        del d["L"]
+        try:
+            del d["Kinv"]
+        except:
+            pass
+
+        try:
+            del d["L"]
+        except:
+            pass
 
         try:
             del d["featurizer"]

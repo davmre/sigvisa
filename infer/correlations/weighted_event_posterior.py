@@ -11,7 +11,10 @@ from sigvisa.utils.array import index_to_time, time_to_index
 
 
 
-def compute_atime_posteriors(sg, proposals, global_srate=1.0, use_ar=False):
+def compute_atime_posteriors(sg, proposals, 
+                             global_srate=1.0, 
+                             use_ar=False,
+                             event_idx=None):
     """
     compute the bayesian cross-correlation (logodds of signal under an AR noise model) 
     for all signals in the historical library, against all signals in the current SG.
@@ -21,16 +24,24 @@ def compute_atime_posteriors(sg, proposals, global_srate=1.0, use_ar=False):
 
     atime_lls = []
     i = 0
-    for (x, signals) in proposals:
+    for idx, (x, signals) in enumerate(proposals):
+
+        if event_idx is not None and event_idx != idx: 
+            continue
+
         sta_lls = dict()
         for (sta, chan, band, phase), c in signals.items():
+            print sta
             wns = sg.station_waves[sta]
             if len(wns) == 0: 
                 continue
             elif len(wns) > 1:
                 raise Exception("haven't worked out correlation proposals with multiple wns from same station")
             wn = wns[0]
+
             sdata = wn.unexplained_kalman()
+            #sdata = wn.get_value().data.copy()
+            #sdata[np.isnan(sdata)] = 0.0
             if use_ar:
                 lls = ar_advantage(sdata, c, wn.nm)
             else:
@@ -41,11 +52,13 @@ def compute_atime_posteriors(sg, proposals, global_srate=1.0, use_ar=False):
 
             
             origin_ll, origin_stime = atime_likelihood_to_origin_likelihood(lls, wn.st, wn.srate, tt_mean, tt_array, global_srate)
+
             sta_lls[(wn.label, phase)] = origin_ll, origin_stime
 
             sg.logger.info("computed advantage for %s %s %s" % (x, wn.label, phase))
             i += 1
         atime_lls.append((x, sta_lls))
+
 
     return atime_lls
 

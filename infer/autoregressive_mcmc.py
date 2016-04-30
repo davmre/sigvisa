@@ -261,6 +261,8 @@ def arnoise_params_rw_move(sg, wn, std=None):
 
     nm2 = nm1.copy()
     nm2.params += np.random.randn(n_p) * std
+    if not nm2.stationary():
+        return False
 
     wn.nm_node.set_value(nm2)
     lp_new =  sg.joint_logprob_keys(relevant_nodes)

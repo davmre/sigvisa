@@ -1095,7 +1095,7 @@ def ev_death_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
     return ev_death_move_hough(sg, hough_kwargs=hough_kwargs, birth_type="dumb", **kwargs)
 
-def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
+def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs):
 
     def clp(sg, fix_result=None, **kwargs):
         kwargs.update(corr_kwargs)
@@ -1106,7 +1106,7 @@ def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
         if log_to_run_dir is None:
             return
 
-        (proposal_weights, proposal_idx, proposal_otime_posteriors, training_xs), eid, proposed_ev, debug_info = proposal_extra
+        _, eid, proposed_ev, debug_info = proposal_extra
         log_file = os.path.join(log_to_run_dir, "corr_deaths.txt")
 
         with open(log_file, 'a') as f:
@@ -1120,6 +1120,8 @@ def ev_death_move_correlation(sg, corr_kwargs={}, **kwargs):
 
     return ev_death_move_abstract(sg, clp, proposal_includes_mb=False, 
                                   use_correlation=True, 
+                                  accept_action=log_action, 
+                                  revert_action=log_action,
                                   repropose_uatemplates=True, **kwargs)
 
 def ev_death_move_correlation_random_sta(sg, **kwargs):
@@ -1530,17 +1532,38 @@ def propose_new_phases_mh(sg, wn, eid,
         #mh_steps = 5 if use_correlation else 25
 
         # new hack: using iid wavelets we don't have to worry as much about the GPs...
-        mh_steps = 25
+        mh_steps = 50
 
     # run a few iterations of MH on the proposed templates
     #tmnodes = [(phase, sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)) for phase in new_phases]
     #single_template_MH(sg, wn, tmnodes, steps=mh_steps)
 
     dummy_sg, dummy_wn, dummy_tmnodes = create_dummy_mh_world(sg, wn, eid)
+
+    dump_debug = False
+    if sg.dump_proposal_debug_dir is not None:
+        basedir = os.path.join(sg.dump_proposal_debug_dir, 'proposal_%05d' % eid)
+        proposal_dir = os.path.join(basedir, wn.label)
+        mkdir_p(proposal_dir)
+        dump_debug = not os.path.exists(os.path.join(proposal_dir, "pre_mh.sg"))
+        if dump_debug:
+            dummy_sg.debug_dump(proposal_dir, pickle_only=True, pickle_name="pre_mh.sg")
+
     dummy_wn.log_p = dummy_wn.log_p_nonincremental # don't bother with incremental logp calculations
     dummy_wn.hack_wavelets_as_iid = True
     new_dummy_tmnodes = [(phase, tmnodes) for (phase, tmnodes) in dummy_tmnodes if phase in new_phases]
-    single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=mh_steps)
+
+    sorted_params, param_vals = single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=mh_steps)
+
+    if dump_debug:
+        header = ''
+        for (phase, tmn) in dummy_tmnodes:
+            for p in sorted_params:
+                header += "%s_%s " % (phase, p)
+
+        np.savetxt(os.path.join(proposal_dir, "tmvals.txt"), param_vals, fmt="%.3f", header=header)
+        del dummy_wn.log_p
+        dummy_sg.debug_dump(proposal_dir, pickle_only=True, pickle_name="post_mh.sg")
 
     # then propose template values from a local approximation to the posterior
     for phase in new_phases:
@@ -1550,12 +1573,12 @@ def propose_new_phases_mh(sg, wn, eid,
         if fix_result is not None:
             fr_phase = fix_result[phase]
 
-        #lqf, tmvals = propose_tmvals_from_gibbs_scan(dummy_sg, dummy_wn, eid, phase, 
-        #                                             fix_result=fr_phase,
-        #                                             debug_info=debug_phase)
-        lqf, tmvals = propose_tmvals_from_gibbs_scan(sg, wn, eid, phase, 
+        lqf, tmvals = propose_tmvals_from_gibbs_scan(dummy_sg, dummy_wn, eid, phase, 
                                                      fix_result=fr_phase,
                                                      debug_info=debug_phase)
+        #lqf, tmvals = propose_tmvals_from_gibbs_scan(sg, wn, eid, phase, 
+        #                                             fix_result=fr_phase,
+        #                                             debug_info=debug_phase)
 
         def rf(eid=eid, wn=wn, tmvals=tmvals, phase=phase):
             sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, tmvals)
@@ -2085,7 +2108,9 @@ def ev_birth_executor(sg, location_proposal,
     lp_new = sg.current_log_p()
 
     if sg.dump_proposal_debug_dir is not None:
-        sg.debug_dump(dump_path = os.path.join(sg.dump_proposal_debug_dir, 'proposal_%05d' % eid), pickle_only=True)
+        dump_path = os.path.join(sg.dump_proposal_debug_dir, 'proposal_%05d' % eid)
+        if not os.path.exists(os.path.join(dump_path, "pickle.sg")):
+            sg.debug_dump(dump_path = dump_path, pickle_only=True)
 
     
     lqb, replicate_untmpls, death_records = ev_template_death_helper(sg, eid, fix_result=birth_records, repropose_uatemplates=repropose_uatemplates)
@@ -2282,6 +2307,7 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         #hough_array, eid, associations = proposal_extra
 
         log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
+        ev_log_file = os.path.join(log_to_run_dir, "birth_proposal_%d.txt" % eid)
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s eid %d\n" % (proposed_ev, eid))
@@ -2292,6 +2318,9 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
             #    if assoc:
             #        f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
             f.write("\n")
+
+        with open(ev_log_file, 'w') as f:
+            f.write(prettyprint_debug(debug_info))
 
 
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):

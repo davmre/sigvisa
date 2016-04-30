@@ -254,11 +254,13 @@ def preprocess_signal_for_sampling(wave_env):
 
     if s <= 0:
         Sigvisa().logger.warning("tried to sample from envelope with no positive part, using uniform distribution instead")
+        import pdb; pdb.set_trace()
         d = np.ones(wave_env.shape)
         d = np.sum(d)
 
     normalized_env = d/s
     cdf = np.concatenate([np.array((0,)), np.cumsum(normalized_env)])
+
     return cdf
 
 def peak_log_p(cdf, stime, srate, peak_time):
@@ -305,6 +307,11 @@ def get_env_diff_positive_part(wn, arrival_set, remove_noise=False):
         }
         """
     weave.inline(code,['npts', 'env_diff_pos', 'env', 'pred_env', 'noise_mean'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+
+    d = np.sum(env_diff_pos**2)
+    if np.isinf(d):
+        import pdb; pdb.set_trace()
+    
     return env_diff_pos
 
 def get_current_conditional_cdf(wn, arrival_set):
@@ -339,7 +346,7 @@ def indep_peak_move(sg, wn, tmnodes,
 
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
-    relevant_nodes = [wn,]
+    relevant_nodes = list(arrival_node.children)
     relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
 
     arr = extract_arrival_from_key(arrival_key, wn.r)
@@ -414,7 +421,7 @@ def improve_offset_move(sg, wn, tmnodes, proposed_offset, move_lp=0, reverse_lp=
 
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
-    relevant_nodes = [wn,]
+    relevant_nodes = list(arrival_node.children)
     relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
     relevant_nodes += [offset_node.parents[offset_node.default_parent_key()],] if offset_node.deterministic() else [offset_node,]
 
@@ -443,7 +450,7 @@ def improve_atime_move(sg, wn, tmnodes, std=1.0, window_lps=None, **kwargs):
     eid, phase, sta, chan, band, param = parse_key(k_atime)
 
     # propose a new arrival time
-    relevant_nodes = [wn,]
+    relevant_nodes = list(n_atime.children)
     relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
 
     old_atime = n_atime.get_value(k_atime)

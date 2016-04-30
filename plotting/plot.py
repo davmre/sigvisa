@@ -197,8 +197,9 @@ def plot_with_fit_shapes(fname, wn, title="",
             if eid not in shape_colors:
                 shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5)
             m = cmeans[(eid, phase)]
-            unass_tmpls.append((m["combined"], m["stime"], shape_colors[eid]))
-            print "plotting uatemplate", eid, "as color", shape_colors[eid]
+            if "combined" in m:
+                unass_tmpls.append((m["combined"], m["stime"], shape_colors[eid]))
+                print "plotting uatemplate", eid, "as color", shape_colors[eid]
         elif arrival[0] != highlight_eid:
             if eid not in shape_colors:
                 shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5+.5)

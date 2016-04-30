@@ -7,6 +7,8 @@ from sigvisa.models.distributions import Gaussian, TruncatedGaussian, Laplacian
 import scipy.stats
 from collections import defaultdict
 
+import time
+
 """
 Model a specific parameter at a specific station, jointly over many events.
 (it'd also maybe be nice to allow jointness over stations?)
@@ -73,7 +75,8 @@ def multiply_scalar_gaussian(m1, v1, m2, v2):
 
     return m, v, normalizer
 
-
+class NumericalError(Exception):
+    pass
 
 class JointGP(object):
 
@@ -84,12 +87,31 @@ class JointGP(object):
 
         self.hparam_nodes = hparam_nodes
         self._gpinit_params = gpinit_from_model(param_model)
+        self._param_model = param_model
 
         self.messages = dict()
         self.evs = dict()
         self._input_cache=False
         self._cached_gp = dict()
+        self._old_messages = dict()
+        self._changed_events = set()
         self.Z = 0
+
+        self._cached_likelihood = None
+        self._cached_cov = None
+        self.parent_keys_changed = set()
+        self.children = set()
+
+
+        self._full_evals = 0
+        self._full_times = 0.0
+        self._update_evals = 0
+        self._update_times = 0.0
+        self._correction_evals = 0
+        self._correction_times = 0.0
+        self._cache_evals = 0
+        self._cache_times = 0.0
+
 
     def generic_upwards_message(self, v, cond):
         eid, evdict = self._ev_from_pv(cond)
@@ -98,13 +120,20 @@ class JointGP(object):
         self._clear_cache()
 
     def message_from_arrival(self, eid, evdict, prior_mean, prior_var, posterior_mean, posterior_var, coef=None):
-        self.evs[eid] = evdict
+
+        if eid not in self.evs or self.evs[eid] != evdict:
+            self.evs[eid] = evdict
+            self._changed_events.add(eid)
+
         m, v, Z = multiply_scalar_gaussian(posterior_mean, posterior_var, prior_mean, -prior_var)
         if eid in self.messages:
             mm, vv, ZZ = self.messages[eid]
             if np.abs(ZZ-Z) < 1e-8:
                 pass #print "unclear", (mm, m), (vv, v), (ZZ, Z)
             else:
+                if eid not in self._old_messages:
+                    self._old_messages[eid] = (mm, vv, ZZ)
+
                 self._clear_cache()
         else:
             self._clear_cache()
@@ -156,7 +185,212 @@ class JointGP(object):
         #print holdout_eid, "posterior", posterior
         return posterior
 
+    def sample_init(self, cond):
+        eid, evdict = self._ev_from_pv(cond)
+        if self._param_model is not None:
+
+            return self._param_model.sample(cond=evdict)
+        else:
+            m, v = self.posterior(eid, evdict=evdict)
+            return Gaussian(m, np.sqrt(v)).sample()
+
+
+    def _likelihood_cache_reset(self, cached_gp):
+        self._cached_likelihood = cached_gp.log_likelihood() + self.Z
+        self._cached_Kinv = cached_gp.Kinv
+        self._cached_y = cached_gp.y
+        self._cached_alpha = cached_gp.alpha_r
+        self._cached_logdet = cached_gp.logdet
+        self._cached_Z = self.Z
+        self._old_messages = dict()
+        self._changed_events = set()
+
+    def _likelihood_rankone_update(self, eid):
+        m, v, Z = self.messages[eid]
+        m_old, v_old, Z_old = self._old_messages[eid]
+        del self._old_messages[eid]
+
+        # we will be updating the i'th row/column of Kinv
+        i = np.searchsorted(self._eids, eid)
+
+        # let e be the i'th basis vector, and dv the change
+        # to the y observation variance of the i'th event.
+        # then the matrix inversion lemma gives the update
+        # (K + e dv e')^-1 = Kinv - Kinv e (1/dv + e'Kinv e)^-1 e' Kinv
+        # where we let 
+        #  k = (Kinv e) be the i'th column
+        #  s = (1/dv + e'Kinv e)^-1 = (1/dv + k_i)^-1
+        # giving the update
+        # Kinv  - s * kk'
+
+        k = np.asarray(self._cached_Kinv[i,:]).flatten()
+        dv = v - v_old
+        
+        s = dv / (1.0 + dv*k[i])
+        self._cached_Kinv -= np.outer(k, s*k)
+
+        # now update the cached determinant. by matrix
+        # determinant lemma this is
+        # det(K + e dv e') = (1 + k_i * dv) * det(K)
+
+        det_correction = (1 + dv * k[i] )
+        if det_correction <= 0:
+            raise NumericalError()
+
+        logdet_correction = np.log(det_correction)
+        self._cached_logdet += logdet_correction
+
+        # update the observed y's
+        self._cached_y[i] = m
+        
+        # now update the cached likelihood
+        alpha = np.asarray(np.dot(self._cached_Kinv, self._cached_y)).flatten()
+        self._cached_alpha = alpha
+        n_log2pi = len(alpha) * 1.8378770664093453
+        gaussian_log_likelihood = -.5 * (np.dot(self._cached_y, alpha) + self._cached_logdet + n_log2pi)
+        self._cached_Z += (Z - Z_old)
+        self._cached_likelihood = gaussian_log_likelihood + self._cached_Z
+
+    def _likelihood_rankone_stateless(self, eid):
+
+        # TODO not sure this is correct once we've had multiple updates
+        m, v, Z = self.messages[eid]
+        m_old, v_old, Z_old = self._old_messages[eid]
+
+
+
+        i = np.searchsorted(self._eids, eid)
+
+        k = np.asarray(self._cached_Kinv[i,:]).flatten()
+        dv = v - v_old
+        dy = m - m_old
+        s = dv / (1.0 + dv*k[i])
+
+        # using the notation from above (rankone update)
+        # and additionally letting dy be the change in
+        # the i'th element of y (and abusing notation, 
+        # also a vector with that change in the ith index),
+        #
+        # we have gaussian_log_likelihood = 
+        # -.5 * (y + dy)' (K + e' dv e)^-1 (y + dy) - .5 log |K + e' dv e| - n_log2pi
+        # where the logdet term is computed as above, and as above, we can expand the
+        # inner precision matrix as
+        # Kinv  - s * kk'
+        # now let C = -skk' denote the correction matrix, so we need to compute
+        # (y + dy)' Kinv (y + dy) + (y + dy)' C (y + dy)
+        # = y' Kinv y + 2dy' Kinv y + dy' Kinv dy + y'Cy + 2dy' C y + dy' C dy
+        # where each term is a scalar, and y Kinv y is (implicitly) known, so we
+        # need to compute the other terms as an update.
+
+        dy_Kinv_y = dy * self._cached_alpha[i]
+        dy_Kinv_dy = dy * dy * self._cached_Kinv[i,i]
+
+        ky = np.dot(k, self._cached_y)
+        y_C_y = -s * ky * ky
+
+        dy_C_y = -s*ky * k[i] * dy
+        dy_C_dy = -s*k[i]*k[i]*dy*dy
+        
+        # tmp debug
+        #C = -np.outer(k, s*k)
+        #old_gaussian = np.dot(self._cached_y, self._cached_alpha)
+
+        gaussian_correction = 2*dy_Kinv_y + dy_Kinv_dy + y_C_y + 2*dy_C_y + dy_C_dy
+
+        # now update the cached determinant. by matrix
+        # determinant lemma this is
+        # det(K + e dv e') = (1 + k_i * dv) * det(K)
+
+        det_correction = (1 + dv * k[i] )
+        if det_correction <= 0:
+            raise NumericalError()
+
+        logdet_correction = np.log(det_correction)
+        Z_correction = (Z - Z_old)
+
+        ll_correction = Z_correction - .5 * (logdet_correction + gaussian_correction)
+        return self._cached_likelihood + ll_correction
+
+        #old_cache = self._cached_likelihood
+
+        #self._likelihood_rankone_update(eid)
+        #new_cache = self._cached_likelihood
+        #new_gaussian = np.dot(self._cached_y, self._cached_alpha)
+
+        #assert( np.abs((old_cache + ll_correction) - new_cache) < 1e-2)
+        #return new_cache
+        
+
     def log_likelihood(self):
+
+        def full_likelihood_update():
+            gp = self.train_gp()
+            if gp is None:
+                # no messages are available yet to train from
+                return 0.0
+            else:
+                self._likelihood_cache_reset(gp)
+                return self._cached_likelihood
+
+        # flag if hparams or event locations change
+        hparams_changed = len(self.parent_keys_changed) > 0
+        events_changed = len(self._changed_events) > 0
+        parametric_component = len(self._gpinit_params) > 0
+        initializing = self._cached_likelihood is None
+        do_full_update = hparams_changed or events_changed or parametric_component or initializing
+
+        t0 = time.time()
+        if do_full_update:
+            method = 0
+            ll = full_likelihood_update()
+        elif len(self._old_messages) > 1:
+            method = 1
+            #print "updating from", len(self._old_messages), "old messages", 
+            #t0 = time.time()
+            for eid in self._old_messages.keys():
+                # update the cached likelihood and Kinv state
+                # in quadratic time
+                try:
+                    self._likelihood_rankone_update(eid)
+                    ll = self._cached_likelihood
+
+                except NumericalError:
+                    ll = full_likelihood_update()
+                    break
+
+        elif len(self._old_messages) == 1:
+            method = 2
+            # linear time correction that doesn't incorporate
+            # the new message into the cached state (so we
+            # don't clear the new_messages set either)
+            eid = self._old_messages.keys()[0]
+            try:
+                ll = self._likelihood_rankone_stateless(eid)
+            except NumericalError:
+                ll = full_likelihood_update()
+        else:
+            method = 3
+            ll = self._cached_likelihood
+
+        t1 = time.time()
+
+        if method==0:
+            self._full_evals += 1
+            self._full_times += t1-t0
+        elif method==1:
+            self._update_evals += 1
+            self._update_times += t1-t0
+        elif method==2:
+            self._correction_evals += 1
+            self._correction_times += t1-t0
+        elif method==3:
+            self._cache_evals += 1
+            self._cache_times += t1-t0
+
+
+        return ll
+
+    def log_likelihood_naive(self):
         """Explanation of likelihood calculations:
 
         Suppose we have two signals s1, s2, each described by a
@@ -261,6 +495,7 @@ class JointGP(object):
             gp = SparseGP(X=X, y=y, y_obs_variances=yvar, cov_main=cov, ymean=empirical_ymean, compute_ll=compute_ll, sparse_invert=False, noise_var=noise_var, sort_events=False, sta=self.sta, **self._gpinit_params)
 
             self._cached_gp[k] = gp
+
         return self._cached_gp[k]
 
     def holdout_evidence(self, eid):
@@ -373,26 +608,31 @@ class JointGP(object):
 
     def _get_cov(self):
 
-        noise_var = self.hparam_nodes["noise_var"].get_value()
+        if self._cached_cov is None or len(self.parent_keys_changed) > 0:
+            self.parent_keys_changed = set()
 
-        # the marginal variance of wavelet params on raw signals is 
-        # redundant with coda height and thus not identifiable. 
-        try:
-            signal_var = self.hparam_nodes["signal_var"].get_value()
-        except:
-            assert(0 <= noise_var <= 1)
-            signal_var = 1 - noise_var
+            noise_var = self.hparam_nodes["noise_var"].get_value()
 
-        depth_lscale = self.hparam_nodes["depth_lscale"].get_value()
-        horiz_lscale = self.hparam_nodes["horiz_lscale"].get_value()
-        #wfn_str = parent_values[param_prefix + "wfn_str"]
-        wfn_str = "matern32"
+            # the marginal variance of wavelet params on raw signals is 
+            # redundant with coda height and thus not identifiable. 
+            try:
+                signal_var = self.hparam_nodes["signal_var"].get_value()
+            except:
+                assert(0 <= noise_var <= 1)
+                signal_var = 1 - noise_var
 
-        cov = GPCov(wfn_str=wfn_str, wfn_params=np.array((signal_var,)),
-                    dfn_str="lld", dfn_params=np.array((horiz_lscale, depth_lscale)))
-        return noise_var, cov
+            depth_lscale = self.hparam_nodes["depth_lscale"].get_value()
+            horiz_lscale = self.hparam_nodes["horiz_lscale"].get_value()
+            #wfn_str = parent_values[param_prefix + "wfn_str"]
+            wfn_str = "matern32"
+
+            cov = GPCov(wfn_str=wfn_str, wfn_params=np.array((signal_var,)),
+                        dfn_str="lld", dfn_params=np.array((horiz_lscale, depth_lscale)))
 
 
+            self._cached_cov = noise_var, cov
+
+        return self._cached_cov
 
 
     def __getstate__(self):
@@ -404,9 +644,16 @@ class JointGP(object):
         # by the setstate() method of SigvisaGraph
         del d['hparam_nodes']
 
+        try:
+            del d["_param_model"]
+        except:
+            pass
+        
         return d
 
+
 class JointIndepGaussian(JointGP):
+
     def __init__(self, param, sta, ymean, hparam_nodes, param_model=None):
         self.param = param
         self.sta = sta

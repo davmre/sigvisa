@@ -143,6 +143,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="dummy", skip_levels=0,
+                 model_dict=None,
                  dummy_fallback=False,
                  run_name=None, iteration=None, runids = None,
                  phases="auto", base_srate=40.0,
@@ -192,6 +193,7 @@ class SigvisaGraph(DirectedGraphModel):
         else:
             self.template_model_type = template_model_type
         self.template_shape = template_shape
+        self.model_dict = model_dict
         self.tg = dict()
         if type(self.template_shape) == dict:
             for (phase, ts) in self.template_shape.items():
@@ -350,7 +352,6 @@ class SigvisaGraph(DirectedGraphModel):
                 except KeyError:
                     continue
                 n = Node(label="gp;%s;%s;%s;%s;%s;%s" % (sta, chan, band, phase, param, hparam), model=prior, initial_value=prior.predict())
-                n.child_jgps = []
                 nodes[hparam]=n
                 self.add_node(n)
             self._jointgp_hparam_nodes[hparam_key] = nodes
@@ -373,7 +374,8 @@ class SigvisaGraph(DirectedGraphModel):
             #if model is None and param.startswith("db"):
             #    model = ConstGaussianModel(mean=0.0, std=10.0)
 
-            jgp = JointGP(param, sta, 0.0, hparam_nodes=nodes, param_model=model)
+            ymean = 0.0
+            jgp = JointGP(param, sta, ymean=ymean, hparam_nodes=nodes, param_model=model)
             for node in nodes.values():
                 node.child_jgps.append(jgp)
 
@@ -1174,7 +1176,7 @@ class SigvisaGraph(DirectedGraphModel):
         if runids is None:
             runids = self.runids
 
-        if not model_type.startswith("dummy") and modelid is None and model_type != "gp_joint":
+        if not model_type.startswith("dummy") and modelid is None and model_type != "gp_joint" and model_type != "dict":
             try:
                 modelid = self.get_param_model_id(runids=runids, sta=sta,
                                                   phase=phase, model_type=model_type,
@@ -1191,6 +1193,17 @@ class SigvisaGraph(DirectedGraphModel):
             model = self.dummy_prior[param]
         elif model_type == "gp_joint":
             model = None
+        elif model_type == "dict":
+            try:
+                model = self.model_dict[(param, band, chan, phase)]
+            except KeyError as e:
+                if self.dummy_fallback:
+                    model = self.dummy_prior[param]
+                    self.logger.debug("warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (sta, chan, band, phase, param))
+                    model_type = "dummyPrior"
+                else:
+                    raise
+
         else:
             model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
 
@@ -1487,18 +1500,30 @@ class SigvisaGraph(DirectedGraphModel):
                 param_models[phase] = []
                 param_modelids[phase] = []
                 for param in joint_params:
-                    try:
-                        modelid = self.get_param_model_id(runids=self.runids, sta=wave['sta'],
-                                                          phase=phase, model_type=self.wiggle_model_type,
-                                                          param=param, template_shape=self.template_shape,
-                                                          chan=wave['chan'], band=wave['band'])
-                        model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
-                    except ModelNotFoundError as e:
-                        if self.dummy_fallback:
-                            model = Gaussian(0.0, 1.0)
-                            modelid = None
-                        else:
-                            raise e
+                    if self.wiggle_model_type == "dict":
+                        modelid = None
+                        try:
+                            model = self.model_dict[(param, wave["band"], wave["chan"], phase)]
+                        except KeyError as e:
+                            if self.dummy_fallback:
+                                model = Gaussian(0.0, 1.0)
+                                modelid = None
+                            else:
+                                raise e
+                    else:
+                        try:
+                            modelid = self.get_param_model_id(runids=self.runids, sta=wave['sta'],
+                                                              phase=phase, model_type=self.wiggle_model_type,
+                                                              param=param, template_shape=self.template_shape,
+                                                              chan=wave['chan'], band=wave['band'])
+                            model = self.load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
+                        except ModelNotFoundError as e:
+                            if self.dummy_fallback:
+                                model = Gaussian(0.0, 1.0)
+                                modelid = None
+                            else:
+                                raise e
+
                     param_models[phase].append(model)
                     param_modelids[phase].append(modelid)
 
@@ -1834,7 +1859,9 @@ class SigvisaGraph(DirectedGraphModel):
         cs += "event_rate: %s\n" % self.event_rate
         return cs
 
-    def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True, pickle_only=False):
+    def debug_dump(self, dump_dirname=None, dump_path=None, 
+                   pickle_graph=True, pickle_only=False, 
+                   pickle_name="pickle.sg"):
 
 
         #sys.setrecursionlimit(5000)
@@ -1843,12 +1870,15 @@ class SigvisaGraph(DirectedGraphModel):
             assert(dump_dirname is not None)
             dump_path = os.path.join('logs', 'dumps', dump_dirname)
 
-        clear_directory(dump_path)
+        if pickle_only:
+            mkdir_p(dump_path)
+        else:
+            clear_directory(dump_path)
         print "saving debug dump to %s..." % dump_path
 
 
         if pickle_graph:
-            with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
+            with open(os.path.join(dump_path, pickle_name), 'wb') as f:
                 #spypickle = SpyingPickler(f, 2)
                 #spypickle.dump(self)
                 pickle.dump(self, f, 2)

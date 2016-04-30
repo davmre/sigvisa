@@ -20,7 +20,13 @@ from sigvisa.models.distributions import InvGamma, LogNormal, Beta
 default_other_params = (2.0, InvGamma(beta=1.0, alpha=3.0),
         GPCov([3.4,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
               wfn_priors=[InvGamma(beta=3.0, alpha=4.0),],
-              dfn_priors =[LogNormal(mu=3, sigma=3.0), LogNormal(mu=3, sigma=3.0)]))
+              dfn_priors =[LogNormal(mu=4, sigma=1.0), LogNormal(mu=4, sigma=1.0)]))
+
+
+default_ttr_params = (0.1, LogNormal(mu=-2, sigma=0.5),
+        GPCov([9.0,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
+              wfn_priors=[LogNormal(mu=2, sigma=1.0),],
+              dfn_priors =[LogNormal(mu=4, sigma=1.0), LogNormal(mu=4, sigma=1.0)]))
 
 
 # wavelets should have almost no obs noise because that's already implicit in the kalman
@@ -43,7 +49,7 @@ start_params_lld = {"coda_decay": default_other_params,
                     "peak_decay": default_other_params,
                     "amp_transfer": default_other_params,
                     "peak_offset": default_other_params,
-                    "tt_residual": default_other_params,
+                    "tt_residual": default_ttr_params,
                     "db4_2.0_3_30": default_wavelet_params,
                     "db4_2.0_3_20.0": default_wavelet_params,
                     }

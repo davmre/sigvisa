@@ -156,6 +156,7 @@ class Sigvisa(threading.local):
                     phases.append(p)
             except ValueError:
                 continue
+
         return phases
 
     def equivalent_channels(self, chan):

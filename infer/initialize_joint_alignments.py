@@ -10,6 +10,8 @@ from collections import defaultdict
 from sigvisa.models.distributions import Laplacian
 from sigvisa.utils.array import index_to_time, time_to_index
 
+from sklearn.covariance import EllipticEnvelope
+
 def align_atimes(sg, sta, phase, 
                  patch_len_s=12.0, 
                  buffer_len_s=8.0, 
@@ -18,6 +20,7 @@ def align_atimes(sg, sta, phase,
                  n_coord_ascent_iters=5,
                  plot=False,
                  center_at_current_atime=False,
+                 favor_earlier = 0.5,
                  temper_signal=5.0):
 
     def extract_windows():
@@ -48,7 +51,7 @@ def align_atimes(sg, sta, phase,
 
             pred_atimes[eid] = pred_atime
 
-            sidx = time_to_index(pred_atime - buffer_len_s, wn.st, srate)
+            sidx = time_to_index(pred_atime - (1 + favor_earlier)*buffer_len_s, wn.st, srate)
             eidx = sidx + int((patch_len_s + 2*buffer_len_s) * srate)
             windows[eid] = wn.get_value()[sidx:eidx].copy()
             sidxs[eid] = sidx
@@ -56,9 +59,10 @@ def align_atimes(sg, sta, phase,
             for (other_eid, other_phase) in wn.arrivals():
                 if other_eid == eid and other_phase==phase: continue
                 other_atime = wn.get_template_params_for_arrival(other_eid, other_phase)[0]["arrival_time"]
+
                 #other_ev = sg.get_event(other_eid)
                 #other_pred_atime = other_ev.time + tt_predict(other_ev, sta, other_phase)
-                other_idx = time_to_index(other_atime, stime=(pred_atime - buffer_len_s), srate=srate)
+                other_idx = time_to_index(other_atime, stime=(pred_atime - (1+ favor_earlier)*buffer_len_s), srate=srate)
                 if other_idx > buffer_len_s*srate and other_idx < len(windows[eid]):
                     print "zeroing", eid, "starting at", other_idx, "from", other_eid, other_phase
                     windows[eid][other_idx:] = 0.0
@@ -95,7 +99,7 @@ def align_atimes(sg, sta, phase,
     patch_len = int(patch_len_s * srate)
     
     ttr_model = Laplacian(0, 3.0)
-    ttrs = np.linspace(-buffer_len_s, buffer_len_s, max_align)
+    ttrs = np.linspace(- (1+ favor_earlier)*buffer_len_s, (1-favor_earlier)*buffer_len_s, max_align)
     ttr_prior = np.array([ttr_model.log_p(s) for s in ttrs])
     
     def random_init_alignments(seed):
@@ -251,7 +255,92 @@ def align_atimes(sg, sta, phase,
     if plot:
         plot_alignments(best_alignments)
     
-    
+def detect_outlier_fits(sg):
+    params = ["tt_residual", "peak_offset", "amp_transfer", "peak_decay", "coda_decay"]
+
+    def get_fingerprints(sg):
+        fits = {}
+        assert(len(sg.station_waves) == 1)
+        wns = sg.station_waves.values()[0]
+
+        for wn in wns:
+            for (eid, phase) in wn.arrivals():
+                if phase=="UA": continue
+                tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
+                #tmvals, _ = wn.get_template_params_for_arrival(eid, phase)
+                vs = [tmvals[p] for p in params]        
+
+                if eid not in fits:
+                    fits[eid] = {}
+
+                fits[eid][phase] = vs
+
+        fingerprints = []
+        eids = []
+        
+        phase_sets = set()
+        for eid in fits.keys():
+            phase_set = tuple(sorted(fits[eid].keys()))
+            phase_sets.add(phase_set)
+
+        results = {}
+        for phases in phase_sets:
+            X = []
+            eids = []
+            for eid in fits.keys():
+                phase_set = tuple(sorted(fits[eid].keys()))
+                if phases != phase_set: continue
+
+                fingerprints.append(np.concatenate([fits[eid][phase] for phase in phases]))
+                eids.append(eid)
+                #ev = sg.get_event(eid)
+                #X.append((ev.lon, ev.lat, ev.depth))
+
+            fingerprints = np.array(fingerprints)
+            eids = np.array(eids)
+            X = np.array(X)
+            results[phases] = (fingerprints, eids)
+
+        return results
+
+    r = get_fingerprints(sg)
+    outlier_eids = []
+    for phase_set, (fingerprints, eids) in r.items():
+
+        clf = EllipticEnvelope(contamination=.20)
+        clf.fit(fingerprints)
+        y_pred = clf.decision_function(fingerprints).ravel()
+        outliers = eids[y_pred < 0]
+        outlier_eids += list(outliers)
+
+    return outlier_eids
+
     
 
     
+def prune_empty_wns(sg):
+    # remove all wave nodes that have no event arrivals
+
+    empty_wns = []
+    for sta, wns in sg.station_waves.items():
+        for wn in wns:
+
+            nonempty = False
+            tmids = []
+            for (eid, phase) in wn.arrivals():
+                if phase != "UA":
+                    nonempty = True
+                    break
+                tmids.append(-eid)
+            if nonempty:
+                continue
+
+            for tmid in tmids:
+                sg.destroy_unassociated_template(tmid=tmid)
+            empty_wns.append(wn)
+
+    for wn in empty_wns:
+        sg.station_waves[wn.sta].remove(wn)
+        sg.remove_node(wn)
+        print "deleted empty wn", wn
+    sg._topo_sort()

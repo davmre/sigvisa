@@ -396,7 +396,8 @@ class ObservedSignalNode(Node):
         # recompute priors for new arrivals, or
         # arrivals whose event location has changed.
         for (eid, phase) in new_arrivals:
-            self.arrival_ssms[(eid, phase)] = self.arrival_ssm(eid, phase)
+            if eid > 0:
+                self.arrival_ssms[(eid, phase)] = self.arrival_ssm(eid, phase)
         for (eid, phase) in removed_arrivals:
             try:
                 del self.arrival_ssms[(eid, phase)]
@@ -435,7 +436,8 @@ class ObservedSignalNode(Node):
             return
 
         try:
-            self.tssm
+            if self.tssm is None:
+                self.tssm = self.transient_ssm(parent_values=parent_values)
         except AttributeError:
             self.tssm = self.transient_ssm(parent_values=parent_values)
 
@@ -522,6 +524,9 @@ class ObservedSignalNode(Node):
 
     def arrival_ssm(self, eid, phase):
 
+        # don't model uatemplates with wavelet bases
+        assert(eid > 0 and phase != "UA") 
+
         if self.wavelet_basis is None:
             return None
 
@@ -592,10 +597,12 @@ class ObservedSignalNode(Node):
             if start_idx + len(env) < 0:
                 continue
 
-            wssm = self.arrival_ssms[(eid, phase)]
-
-
-            npts = min(len(env), n_steps)
+            try:
+                wssm = self.arrival_ssms[(eid, phase)]
+                npts_repeatable = min(len(env), n_steps)
+            except KeyError:
+                wssm = None
+                npts_repeatable = 0
 
             if self.is_env:
                 try:
@@ -606,30 +613,29 @@ class ObservedSignalNode(Node):
                 # in the raw signal case, wiggle std is unidentifiable with coda_height. 
                 wiggle_std = 1.0
 
-
             if (wssm is not None) and self.hack_wavelets_as_iid:
                 assert (not self.is_env)
 
-                wavelet_mean = wssm.mean_obs(npts)
-                pred_mean = wavelet_mean[:npts] * env[:npts]
-                components.append((None, start_idx, npts, pred_mean))
-                tssm_components.append((eid, phase, pred_mean, start_idx, npts, "pred_mean"))         
+                wavelet_mean = wssm.mean_obs(npts_repeatable)
+                pred_mean = wavelet_mean[:npts_repeatable] * env[:npts_repeatable]
+                components.append((None, start_idx, npts_repeatable, pred_mean))
+                tssm_components.append((eid, phase, pred_mean, start_idx, npts_repeatable, "pred_mean"))         
 
-                wavelet_std = np.sqrt(wssm.obs_var(npts))
+                wavelet_std = np.sqrt(wssm.obs_var(npts_repeatable))
                 marginal_stds = env
-                marginal_stds[:npts] *= wavelet_std
+                marginal_stds[:npts_repeatable] *= wavelet_std
                 components.append((self.iid_arssm, start_idx, len(env), marginal_stds))
                 tssm_components.append((eid, phase, marginal_stds, start_idx, len(env), "multnoise"))
             else:
                 if wssm is not None:
-                    components.append((wssm, start_idx, npts, env*wiggle_std))
-                    tssm_components.append((eid, phase, env*wiggle_std, start_idx, npts, "wavelet"))
+                    components.append((wssm, start_idx, npts_repeatable, env*wiggle_std))
+                    tssm_components.append((eid, phase, env*wiggle_std, start_idx, npts_repeatable, "wavelet"))
 
-                if len(env) > npts:
-                    n_tail = len(env)-npts
-                    mn_scale = env[npts:] * wiggle_std
-                    components.append((self.iid_arssm, start_idx+npts, len(env)-npts, mn_scale))
-                    tssm_components.append((eid, phase, mn_scale, start_idx+npts, len(env)-npts, "multnoise"))
+                if len(env) > npts_repeatable:
+                    n_tail = len(env)-npts_repeatable
+                    mn_scale = env[npts_repeatable:] * wiggle_std
+                    components.append((self.iid_arssm, start_idx+npts_repeatable, len(env)-npts_repeatable, mn_scale))
+                    tssm_components.append((eid, phase, mn_scale, start_idx+npts_repeatable, len(env)-npts_repeatable, "multnoise"))
 
             if self.is_env:
                 components.append((None, start_idx, len(env), env))
@@ -850,10 +856,10 @@ class ObservedSignalNode(Node):
     def log_p(self, parent_values=None, force_full_refresh=False, 
               warmup_steps=100, enable_debug=False, **kwargs):
 
-        parent_values = parent_values if parent_values else self._parent_values(force_skip_tssm=True)
-
         if self.has_jointgp:
             raise ParentConditionalNotDefined()
+
+        parent_values = parent_values if parent_values else self._parent_values(force_skip_tssm=True)
 
         if self.cached_logp is not None:
             return self.cached_logp
@@ -929,7 +935,7 @@ class ObservedSignalNode(Node):
             lp = -np.inf
         elif errcode == -2:
             # incremental filtering failed to sync.
-            print "failed sync", filter_start_idx, incr_start_idx, incr_end_idx
+            #print "failed sync", filter_start_idx, incr_start_idx, incr_end_idx
             assert(not force_full_refresh)
             return self.log_p(force_full_refresh = True)
         else:
@@ -1010,6 +1016,67 @@ class ObservedSignalNode(Node):
         self.cached_logp = cache
         return deriv
 
+
+    def extract_wavelet_posterior(self, eid, phase):
+        d = self.get_value().data
+        ell, marginals, step_ells = self.tssm.all_filtered_cssm_coef_marginals(d)            
+        for i, (eeid, pphase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
+            if component_type != "wavelet": continue
+            if pphase!=phase: continue
+            if eeid!=eid: continue
+            wmeans, wvars = marginals[i]
+            break
+        return wmeans, wvars
+
+
+    def get_event_signal(self, eid, pre_s=0.0, post_s=0.0):
+
+        start_idx = self.npts
+        end_idx = 0
+        for i, (eid2, phase, scale, sidx, npts, component_type) in enumerate(self.tssm_components):
+            if eid2 != eid: continue
+            start_idx = min(start_idx, sidx)
+            end_idx = max(end_idx, sidx + npts)
+
+        stime = index_to_time(start_idx, self.st, self.srate) - pre_s
+        etime = index_to_time(end_idx, self.st, self.srate) + post_s
+        stime = max(stime, self.st)
+        etime = min(etime, self.et)
+        length = etime - stime
+
+        return self.get_signal_window(stime=stime, length=length), stime, etime
+
+
+    def get_arrival_signal(self, eid, phase, length, pre_s=0.0):
+        tmvals, _ = self.get_template_params_for_arrival(eid, phase)
+        atime = tmvals["arrival_time"]
+        return self.get_signal_window(atime-pre_s, length=length)
+
+    def get_signal_window(self, stime, etime=None, length=None):
+        if etime is None:
+            etime = stime + length
+
+        sidx = time_to_index(stime, self.st, self.srate)
+        eidx = time_to_index(etime, self.st, self.srate)
+        npts = eidx - sidx
+
+        result = np.empty((npts,))
+        result.fill(np.nan)
+
+        sidx_actual = min(max(sidx, 0), self.npts)
+        eidx_actual = min(max(eidx, 0), self.npts)
+
+        window = self.get_value()[sidx_actual:eidx_actual]
+        window_len = len(window)
+        sidx_offset = sidx_actual - sidx
+        if sidx_offset >= 0:
+            result[sidx_offset:sidx_offset+window_len] = window
+        else:
+            # sidx is after the end of the wn, so no signal to extract
+            pass
+
+        return result
+
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):
          return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values, **kwargs)
 
@@ -1041,10 +1108,13 @@ class ObservedSignalNode(Node):
             arrival_info[(eid, phase)]["stime"] = sidx/self.srate + self.st
 
             start_idx = max(sidx, 0)
-            end_idx = min(sidx+npts, self.npts)
+            end_idx = max(start_idx, min(sidx+npts, self.npts))
 
             src = arrival_info[(eid, phase)][component_type]
-            signal_mean[start_idx:end_idx] += src[start_idx-sidx:end_idx-sidx]
+            try:
+                signal_mean[start_idx:end_idx] += src[start_idx-sidx:end_idx-sidx]
+            except:
+                import pdb; pdb.set_trace()
 
         for k in arrival_info.keys():
 

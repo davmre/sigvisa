@@ -70,6 +70,7 @@ class Node(object):
             self._high_bounds[self.single_key] = high_bound
 
         self.children = set()
+        self.child_jgps = []
         self.parents = dict()
         self.parent_keys_changed = set()
         self.parent_nodes_added = set()
@@ -200,6 +201,9 @@ class Node(object):
 
             for child in self.children:
                 child.parent_keys_changed.add((key, self))
+            for child in self.child_jgps:
+                child.parent_keys_changed.add((key, self))
+
             if force_deterministic_consistency:
                 for child in self.get_deterministic_children():
                     child.parent_predict()
@@ -445,8 +449,13 @@ class Node(object):
                     break
 
         else:
-            from sigvisa.graph.dag import ParentConditionalNotDefined
-            raise ParentConditionalNotDefined()
+            if self.modeled_as_joint():
+                joint_model = list(self.params_modeled_jointly)[0]
+                nv = joint_model.sample_init(cond=self._parent_values())
+            else:
+
+                from sigvisa.graph.dag import ParentConditionalNotDefined
+                raise ParentConditionalNotDefined()
         
         if set_new_value:
             self._set_values_from_model(nv)
@@ -512,7 +521,7 @@ class Node(object):
         try:
             self.modelid
             del d['model']
-        except AttributeError:
+        except:
             pass
 
         d['parents'] = dict()
