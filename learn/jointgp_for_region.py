@@ -96,7 +96,6 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
 
     if prune_outlier_fits:
         outlier_eids = detect_outlier_fits(sg1)
-        import pdb; pdb.set_trace()
         print "removing outliers", outlier_eids
         for eid in outlier_eids:
             sg4.remove_event(eid)
