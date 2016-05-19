@@ -1,5 +1,7 @@
 import numpy as np
 import time
+import hashlib
+import os
 
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import load_event_station_chan
@@ -10,6 +12,7 @@ from sigvisa.infer.correlations.historical_signal_library import get_historical_
 from sigvisa.models.distributions import Gaussian,TruncatedGaussian
 from sigvisa.source.event import Event
 from sigvisa.utils.array import index_to_time, time_to_index
+from sigvisa.utils.fileutils import mkdir_p
 
 from sigvisa import Sigvisa
 from sigvisa.plotting.event_heatmap import EventHeatmap
@@ -21,11 +24,56 @@ import cPickle as pickle
 
 
 def get_atime_posteriors(sg, ar_advantage=False):
+
+    def build_sg_hash(sg, ar_advantage):
+        # generate a hashcode representing the signals we've loaded as well as the GP wavelet models
+        try:
+            key = repr(sorted(sg.template_model_type.items()))
+        except:
+            key = repr(sg.template_model_type) 
+        key += repr(sg.wiggle_model_type)
+        for sta, wns in sorted(sg.station_waves.items()):
+            for wn in wns:
+                key += wn.label
+                if ar_advantage:
+                    key += repr(wn.nm.params) + repr(wn.nm.c) + repr(wn.em.std)
+
+                for phase, models in sorted(wn.wavelet_param_models.items()):
+                    try:
+                        modelid = models[0].modelid
+                    except:
+                        print "could not get modelid for", models[0]
+                        modelid = -1
+                    key += "--%s-%d--" % (phase, modelid)
+
+        sghash = hashlib.md5(key).hexdigest()
+        print "sg hash %s from key %s" % (sghash, key)
+        return sghash
+
+    def load_or_build(sg, ar_advantage):
+        sghash = build_sg_hash(sg, ar_advantage)
+        s = Sigvisa()
+        fname = os.path.join(s.homedir, "db_cache", "atime_posteriors_%s.pkl" % sghash)
+        try:
+            with open(fname, 'rb') as f:
+                r = pickle.load(f)
+        except IOError:
+            proposals = get_historical_signals(sg)
+            r = compute_atime_posteriors(sg, proposals, use_ar=ar_advantage)
+
+            mkdir_p(os.path.join(s.homedir, "db_cache"))
+            with open(fname, 'wb') as f:
+                pickle.dump(r, f)
+
+        return r
+
+
     try:
         sg._cached_atime_posteriors
     except:
-        proposals = get_historical_signals(sg)
-        sg._cached_atime_posteriors = compute_atime_posteriors(sg, proposals, use_ar=ar_advantage)
+        sg._cached_atime_posteriors = load_or_build(sg, ar_advantage)
+
+
     return sg._cached_atime_posteriors
 
 
@@ -82,7 +130,7 @@ def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_
 
     n = len(proposal_weights)
     proposal_width_deg = 0.03
-    proposal_height_km = 5.0
+    proposal_height_km = 2.0
     if fix_result is None:
 
         all_proposals = []
@@ -133,6 +181,8 @@ def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_
             return np.array(all_proposals)
 
         proposed_ev = Event(lon=plon, lat=plat, depth=pdepth, time=ptime, mb=3.0)
+        #if -115 < plon < -113:
+        #    import pdb; pdb.set_trace()
         return proposed_ev, log_qforward, (proposal_weights, kernel, proposal_otime_posteriors, training_xs)
     else:
         return log_qforward
@@ -284,8 +334,8 @@ def correlation_location_proposal(sg, fix_result=None,
             return None, -np.inf, None
     
     #proposal_weights = reweight_uniform_top(proposal_weights, n=10)
-    proposal_weights = reweight_temper_exp(proposal_weights, temper=0.1)
-    proposal_weights = reweight_uniform_all(proposal_weights, uniform_prob=0.05)
+    proposal_weights = reweight_temper_exp(proposal_weights, temper=0.5)
+    proposal_weights = reweight_uniform_all(proposal_weights, uniform_prob=0.03)
 
     
     return propose_from_otime_posteriors(training_xs, proposal_weights, 

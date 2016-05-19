@@ -98,7 +98,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, wavelet_param_modelids=None, has_jointgp=False, mw_env=None, hack_coarse_signal=None, hack_wavelets_as_iid=False, **kwargs):
+    def __init__(self, model_waveform, graph, observed=True, wavelet_basis=None, wavelet_param_models=None, wavelet_param_modelids=None, has_jointgp=False, mw_env=None, hack_coarse_signal=None, hack_wavelets_as_iid=False, max_template_len_s=300.0, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
@@ -129,7 +129,7 @@ class ObservedSignalNode(Node):
             self._cached_env = nan_under_mask(self.mw_env.data)
 
         self.hack_wavelets_as_iid = hack_wavelets_as_iid
-
+        self.max_template_len_s = max_template_len_s
 
         self.hack_coarse_signal = hack_coarse_signal
         nm_parents = [k for k in self.parents.keys() if "nm_" in k]
@@ -175,7 +175,7 @@ class ObservedSignalNode(Node):
         self.cached_logp = None
         self._cached_incr_lp = None
         self._cached_incr_state = None
-        self._cached_ells_staleness = 0
+        self._cached_ells_staleness = np.inf
         self._cached_stepwise_ells = np.empty((self.npts,))
         self._coef_message_cache = None
         self._unexplained_cache = None
@@ -239,7 +239,7 @@ class ObservedSignalNode(Node):
         return start_idx
 
 
-    def assem_env(self, arrivals=None, window_start_idx=0, npts=None):
+    def assem_env(self, arrivals=None, window_start_idx=0, npts=None, srate=None):
         """
 
         WARNING: returns a pointer to self.pred_env, which will be
@@ -254,27 +254,43 @@ class ObservedSignalNode(Node):
         if arrivals is None:
             arrivals = self.arrivals()
 
+
+        npts = self.npts-window_start_idx if not npts else int(npts)
+        if srate is None:
+            srate = self.srate
+        else:
+            npts = time_to_index(self.et, self.st, srate)
+
+        
+
         arrivals = list(arrivals)
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
+
+        min_logenv = max(-7.0, np.log(self.nm_env.c)-3)
+
         logenvs = [None] * n
         empty_array = np.reshape(np.array((), dtype=float), (0,))
 
         for (i, (eid, phase)) in enumerate(set(arrivals)):
             v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
-            start_idx, offset = time_to_index_offset(v['arrival_time'], self.st, self.srate) 
+            start_idx, offset = time_to_index_offset(v['arrival_time'], self.st, srate) 
             sidxs[i] = start_idx
             if start_idx >= self.npts:
                 logenvs[i] = empty_array
                 continue
 
-            logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
+            logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=srate, min_logenv=min_logenv, max_decay_s=self.max_template_len_s)
             logenvs[i] = logenv
 
 
-        npts = self.npts-window_start_idx if not npts else int(npts)
         n = len(arrivals)
-        env = self.pred_env
+        
+        if npts == self.npts:
+            env = self.pred_env
+        else:
+            env = np.empty((npts,))
+
         code = """
       for(int i=window_start_idx; i < window_start_idx+npts; ++i) env(i) = 0;
     for (int i = 0; i < n; ++i) {
@@ -593,7 +609,7 @@ class ObservedSignalNode(Node):
             if start_idx >= self.npts:
                 continue
 
-            env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate, min_logenv=min_logenv))
+            env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate, min_logenv=min_logenv, max_decay_s=self.max_template_len_s))
             if start_idx + len(env) < 0:
                 continue
 
@@ -853,8 +869,51 @@ class ObservedSignalNode(Node):
 
         return update_window
 
+    def log_p_delta(self, eid, phase, parent_values=None, warmup_steps=100):
+        # return the change in signal logp that would result from deleting a single
+        # existing arrival. (without actually doing it - this is a pure function,
+        # modulo bringing various caches up to date on existing state)
+
+        parent_values = parent_values if parent_values else self._parent_values(force_skip_tssm=True)
+        
+        # make sure all the cache structures are up to date
+        lp1 = self.log_p(parent_values=parent_values)
+        
+
+        arrivals = self.arrivals()
+        assert((eid, phase) in arrivals)
+        censored_arrivals = [(eid2, phase2) for (eid2, phase2) in arrivals if not (eid2==eid and phase2==phase)]
+
+        incr_start_idx = self.npts
+        incr_end_idx = 0
+        for (eid2, phase2, _, sidx, npts, _) in self.tssm_components:
+            if eid2==eid and phase2==phase:
+                incr_start_idx = min(sidx, incr_start_idx)
+                incr_end_idx = max(sidx+npts, incr_end_idx)
+
+        incr_start_idx = max(incr_start_idx, 0) 
+        incr_end_idx = min(incr_end_idx, self.npts)
+        filter_start_idx = max(incr_start_idx - warmup_steps, 0)
+        
+        tssm = self.transient_ssm(arrivals=censored_arrivals, save_components=False)
+        
+        d = self.get_value().data
+        ells = self._cached_stepwise_ells # treated as read-only, cache is not updated
+        lp_delta, errcode, steps_processed = tssm.run_filter_incremental(d, ells, filter_start_idx, 
+                                                                         incr_start_idx, incr_end_idx,
+                                                                         0, 1e-6)
+        if errcode != 0:
+            lp2 = self.log_p_nonincremental(parent_values=parent_values, arrivals=censored_arrivals)
+            lp_delta = lp2-lp1
+        
+        return lp_delta
+
+
     def log_p(self, parent_values=None, force_full_refresh=False, 
               warmup_steps=100, enable_debug=False, **kwargs):
+
+        if "arrivals" in kwargs:
+            raise Exception("incremental logp does not support explicit arrival sets!")
 
         if self.has_jointgp:
             raise ParentConditionalNotDefined()
@@ -914,7 +973,7 @@ class ObservedSignalNode(Node):
             t0 = time.time()
             lp_delta, errcode, steps_processed = tssm.run_filter_incremental(d, ells, filter_start_idx, 
                                                                              incr_start_idx, incr_end_idx,
-                                                                             1e-6)
+                                                                             1, 1e-6)
             t1 = time.time()
             incr_logp_time = t1-t0
             if enable_debug:
@@ -1223,7 +1282,7 @@ class ObservedSignalNode(Node):
                 # get tg from somewhere
                 vals, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
                 tmpl_start_idx, offset = time_to_index_offset(vals['arrival_time'], self.st, self.srate)
-                pred_logenv, jacobian = tg.abstract_logenv_raw(vals, idx_offset=offset, srate=self.srate, return_jac_exp=True)
+                pred_logenv, jacobian = tg.abstract_logenv_raw(vals, idx_offset=offset, srate=self.srate, return_jac_exp=True, max_decay_s=self.max_template_len_s)
                 pred_env = np.exp(pred_logenv)
 
                 window_len = end_idx-start_idx
@@ -1310,7 +1369,7 @@ class ObservedSignalNode(Node):
         start_idx = int((v['arrival_time']  - self.st) * self.srate)
         window_start_idx = max(0, int(start_idx - pre_arrival_slack_s*self.srate))
 
-        logenv_len = tg.abstract_logenv_length(v, srate=self.srate)
+        logenv_len = tg.abstract_logenv_length(v, srate=self.srate, max_decay_s=self.max_template_len_s)
         window_end_idx = min(self.npts, int(start_idx + logenv_len + post_fade_slack_s*self.srate))
 
         return (window_start_idx, window_end_idx)
@@ -1429,6 +1488,12 @@ class ObservedSignalNode(Node):
             self.wavelet_param_models_tmp = self.wavelet_param_models
             del self.wavelet_param_models
             self._lazy_wpm = True
+
+
+        try:
+            self.max_template_len_s
+        except:
+            self.max_template_len_s = 1200.0
 
         """
         from sigvisa.learn.train_param_common import load_modelid as load_modelid

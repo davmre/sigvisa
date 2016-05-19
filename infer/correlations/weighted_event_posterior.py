@@ -14,6 +14,7 @@ from sigvisa.utils.array import index_to_time, time_to_index
 def compute_atime_posteriors(sg, proposals, 
                              global_srate=1.0, 
                              use_ar=False,
+                             raw_data=False,
                              event_idx=None):
     """
     compute the bayesian cross-correlation (logodds of signal under an AR noise model) 
@@ -31,7 +32,6 @@ def compute_atime_posteriors(sg, proposals,
 
         sta_lls = dict()
         for (sta, chan, band, phase), c in signals.items():
-            print sta
             wns = sg.station_waves[sta]
             if len(wns) == 0: 
                 continue
@@ -39,21 +39,24 @@ def compute_atime_posteriors(sg, proposals,
                 raise Exception("haven't worked out correlation proposals with multiple wns from same station")
             wn = wns[0]
 
-            sdata = wn.unexplained_kalman()
-            #sdata = wn.get_value().data.copy()
-            #sdata[np.isnan(sdata)] = 0.0
+            if raw_data:
+                sdata = wn.get_value().data.copy()
+                sdata[np.isnan(sdata)] = 0.0
+            else:
+                sdata = wn.unexplained_kalman()
+
             if use_ar:
                 lls = ar_advantage(sdata, c, wn.nm)
             else:
-                normed_sdata = sdata / np.std(sdata)
-                lls = iid_advantage(normed_sdata, c)
+                normed_sdata = sdata / wn.nm_env.c #np.std(sdata)
+                lls = np.sqrt(iid_advantage(normed_sdata, c)) # sqrt for laplacian noise, essentially
 
             tt_array, tt_mean = build_ttr_model_array(sg, x, sta, wn.srate, phase=phase)
-
             
             origin_ll, origin_stime = atime_likelihood_to_origin_likelihood(lls, wn.st, wn.srate, tt_mean, tt_array, global_srate)
 
-            sta_lls[(wn.label, phase)] = origin_ll, origin_stime
+            signal_scale = wn.nm_env.c
+            sta_lls[(wn.label, phase)] = origin_ll, origin_stime, signal_scale
 
             sg.logger.info("computed advantage for %s %s %s" % (x, wn.label, phase))
             i += 1
@@ -75,11 +78,14 @@ def build_ttr_model_array(sg, x, sta, srate, K=None, phase="P"):
     tt_mean += pred_ttr
 
     if K is None:
+        # also hardcoded in the wn_origin_posterior hack...
         K = int(15*srate)
 
     ttrs = np.linspace(-K/float(srate), K/float(srate), 2*K+1)
     ll_array = np.array([model.log_p(ttr + pred_ttr, cond=x, include_obs=True) for ttr in ttrs]).flatten()
-    return np.exp(ll_array), tt_mean
+    ttr_model = np.exp(ll_array)
+    ttr_model = np.where(ttr_model <= 0, 1e-300, ttr_model)
+    return ttr_model, tt_mean
 
 def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_model, out_srate):
     # given:
@@ -93,16 +99,35 @@ def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_mode
     # origin_stime: start of origin time distribution
     # origin_ll: log likelihood of signal given origin times
 
+
+
+    # we have to leave logspace to do the convolution,
+    # but this loses tons of precision. so we
+    # redo the calculation separately at 
+    # multiple "volume" levels and combine the results
+    # to attempt to retain the full dynamic range
+    # of log-probabilities.
+    # note this exploits the fact that these logodds are nonnegative. 
     llmax = np.max(ll)
-    ll_exp = np.exp(ll-llmax)
+    nlevels = int(np.ceil(llmax/500.))+1
+    origin_ll_prev = None
 
-    r = np.convolve(ll_exp, ttr_model, "full")
-    rr = integrate_downsample(r, srate, out_srate)
+    for level in np.linspace(0, llmax, nlevels):
+        ll_exp = np.exp(ll-level)
+        r = np.convolve(ll_exp, ttr_model, "full")
+        rr = integrate_downsample(r, srate, out_srate)
+        origin_ll = np.log(rr) + level
 
-    origin_ll = np.log(rr) + llmax
-    
-    # hack around underflow in the log->exp->log conversion
-    origin_ll = np.where(origin_ll < 0, 0.0, origin_ll )
+        if origin_ll_prev is None:
+            origin_ll = np.where(origin_ll < 0, 0.0, origin_ll )
+        else:
+            origin_ll = np.where(origin_ll < 0, origin_ll_prev, origin_ll )
+
+        origin_ll_prev = origin_ll
+
+    if not np.isfinite(np.max(origin_ll)):
+        import pdb; pdb.set_trace()
+
 
     K = (len(ttr_model)-1)/2
     origin_stime = ll_stime - mean_tt - float(K)/srate
@@ -116,7 +141,8 @@ def atime_likelihood_to_origin_likelihood(ll, ll_stime, srate, mean_tt, ttr_mode
 
 
 def wn_origin_posterior(sg, wn, cached_for_wn, 
-                        temper = 1, pre_s=3.0,
+                        temper = 1, corr_s=20.0,
+                        wn_env_cache=None,
                         global_srate=1.0):
 
     """
@@ -125,11 +151,31 @@ def wn_origin_posterior(sg, wn, cached_for_wn,
     generate the templates observed from those events.
     """
 
-    origin_ll, origin_stime = cached_for_wn
+    if wn_env_cache is None:
+        # the trivial cache
+        wn_env_cache = {}
+
+    # padding added by the traveltime convolution
+    # todo: don't hardcode this hack
+    tt_K = 15
+    tt_s = tt_K*global_srate
+
+    origin_ll, origin_stime, signal_scale = cached_for_wn
     new_lls = origin_ll.copy()
 
-    timeshift = wn.st - origin_stime
+    if wn.label not in wn_env_cache:
+        ev_arrivals = [(eid, phase) for (eid, phase) in wn.arrivals() if phase!="UA"]
+        wn_env_cache[wn.label] = (wn.assem_env(ev_arrivals, srate=global_srate) + signal_scale) / signal_scale
+    pred_env = wn_env_cache[wn.label]
 
+    margin = int(corr_s * global_srate)
+    i1 = margin/2
+    i2 = margin-i1
+    new_lls[tt_K:-tt_K] /= pred_env[i1:-i2]
+
+
+    # corresponds to a precomputed mean traveltime for this phase and ev location
+    timeshift = wn.st - (origin_stime + tt_s)
     for (eid, phase) in wn.arrivals():
         if phase=="UA": continue
         v, tg = wn.get_template_params_for_arrival(eid, phase)
@@ -137,17 +183,16 @@ def wn_origin_posterior(sg, wn, cached_for_wn,
         otime = atime - timeshift
         ot_idx = time_to_index(otime, origin_stime, global_srate)
         
-        tmpl_len_wnidx = int(10.0 * wn.srate)
-        tmpl_len_wnidx = max(tmpl_len_wnidx,  tg.abstract_logenv_length(v, min_logenv=np.log(wn.nm_env.c), srate=wn.srate))
-        tmpl_len_gidx = int(tmpl_len_wnidx * (global_srate / wn.srate))
+        corr_idx = int(corr_s * global_srate)
 
-        sidx = ot_idx - int(pre_s * global_srate)
-        eidx = ot_idx + tmpl_len_gidx
+        sidx = ot_idx - corr_idx - tt_K
+        eidx = ot_idx + corr_idx 
+
         sidx = max(sidx, 0)
         eidx = min(eidx, len(new_lls))
         if sidx > len(new_lls) or eidx < 0:
             continue
-        new_lls[sidx:eidx] = 0.0
+        new_lls[sidx:eidx] = 1.0 # todo figure out a correct default value
 
     new_lls /= temper
     return new_lls, origin_stime
@@ -174,6 +219,7 @@ def hack_ev_time_posterior_with_weight(sg, sta_lls, global_stime, N, global_srat
     """
 
     global_ll = np.zeros((N,))
+    wn_env_cache = {}
     for (wn_label, phase), cached_for_wn in sta_lls.items():
         wn = sg.all_nodes[wn_label]
 
@@ -183,8 +229,9 @@ def hack_ev_time_posterior_with_weight(sg, sta_lls, global_stime, N, global_srat
         t0 = time.time()
         origin_ll, origin_stime = wn_origin_posterior(sg, wn=wn, cached_for_wn=cached_for_wn, 
                                                       global_srate=global_srate, 
+                                                      wn_env_cache = wn_env_cache,
                                                       temper=temper)
-        if np.isinf(np.max(origin_ll)):
+        if not np.isfinite(np.max(origin_ll)):
             import pdb; pdb.set_trace()
 
         t1 = time.time()
@@ -204,6 +251,9 @@ def hack_ev_time_posterior_with_weight(sg, sta_lls, global_stime, N, global_srat
     Z = np.sum(posterior)
     posterior /= Z
     logZ = np.log(Z) + C
+
+    if not np.isfinite(logZ):
+        import pdb; pdb.set_trace()
 
 
     return posterior, logZ

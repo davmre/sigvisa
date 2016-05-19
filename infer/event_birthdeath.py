@@ -46,7 +46,8 @@ def set_hough_options(ho):
     hough_options = ho
 
 def unass_template_logprob(sg, wn, template_dict, return_debug=False, 
-                           atime_only=False, ignore_mb=False):
+                           atime_only=False, ignore_mb=False, 
+                           entropy_score=False):
     """
 
     return the log prob of a set of template parameters, under the
@@ -69,6 +70,10 @@ def unass_template_logprob(sg, wn, template_dict, return_debug=False,
 
         model = tg.unassociated_model(param, nm=wn.nm)
         lp_param = model.log_p(template_dict[param])
+
+        if entropy_score:
+            lp_param += model.entropy()
+
         if return_debug:
             lps[param] = lp_param
 
@@ -360,10 +365,7 @@ def unassociate_template(sg, wn, eid, phase, tmid=None, remove_event_phase=False
 def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-6):
 
     # return prob of deassociating (or of deleting, if deletion_prob=True).
-    arrivals = copy.copy(wn.arrivals())
-    try:
-        arrivals.remove((eid, phase))
-    except KeyError:
+    if (eid, phase) not in wn.arrivals():
         # if this arrival doesn't actually occur during the signal contained at the wn,
         # delete it with probability 1. 
         if deletion_prob:
@@ -372,17 +374,18 @@ def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-
             return -np.inf
 
     ev_tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-    unass_lp = unass_template_logprob(sg, wn, ev_tmvals)
+    unass_lp = unass_template_logprob(sg, wn, ev_tmvals, entropy_score=True)
+    unass_lp_raw = unass_template_logprob(sg, wn, ev_tmvals)
 
     n_u = len(sg.uatemplate_ids[(wn.sta,wn.chan,wn.band)])
     ntemplates_ratio_log = sg.ntemplates_sta_log_p(wn, n=n_u+1) - sg.ntemplates_sta_log_p(wn, n=n_u)
 
-    deassociation_ratio_log = unass_lp + ntemplates_ratio_log
+    deassociation_ratio_log = ntemplates_ratio_log + unass_lp
 
-    signal_lp_with_template = wn.log_p()
-
-    signal_lp_without_template = wn.log_p(arrivals=arrivals)
-    deletion_ratio_log = signal_lp_without_template - signal_lp_with_template
+    
+    #signal_lp_with_template = wn.log_p()
+    #signal_lp_without_template = wn.log_p(arrivals=arrivals)
+    deletion_ratio_log = wn.log_p_delta(eid, phase) #signal_lp_without_template - signal_lp_with_template
 
     log_normalizer = np.logaddexp(deassociation_ratio_log, deletion_ratio_log)
 
@@ -393,6 +396,8 @@ def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-
     deassociation_ratio_log = np.logaddexp(deassociation_ratio_log, adj)
     deletion_ratio_log = np.logaddexp(deletion_ratio_log, adj)
     log_normalizer = np.logaddexp(log_normalizer, np.log(2) + adj)
+
+    sg.logger.debug("deassociation logprob %.2f for %s %d %s, signal delta %.2f unass lp %.2f raw %.2f ntemplates %.2f" % (deassociation_ratio_log - log_normalizer, wn.label, eid, phase, deletion_ratio_log, unass_lp, unass_lp_raw,  ntemplates_ratio_log))
 
     if deletion_prob:
         return deletion_ratio_log - log_normalizer
@@ -926,13 +931,13 @@ def death_proposal_distribution(sg):
     c.normalize_from_logs()
 
 
-    # with probability ~.1, just sample an event uniformly.
+    # with probability ~.5, just sample an event uniformly.
     # this way all events have some possibility to die.
     for k in c.keys():
         if np.isfinite(c[k]):
-            c[k] += .1/len(c)
+            c[k] += .5/len(c)
         else:
-            c[k] = .1/len(c)
+            c[k] = .5/len(c)
     c.normalize()
 
     return c
@@ -985,6 +990,10 @@ def ev_death_executor(sg, location_proposal,
                                                                      repropose_uatemplates=repropose_uatemplates)
     log_qforward += lqf
 
+    debug_info["death"] = death_records
+    debug_info["death_template_lqf"] = lqf
+    debug_info["death_eid_lqf"] = lq_death
+
     # this is a little inelegant 
     replicate_death, ev = ev_bare_death_move(sg, eid)
     sg._topo_sort()
@@ -1006,6 +1015,11 @@ def ev_death_executor(sg, location_proposal,
                                      repropose_uatemplates=repropose_uatemplates,
                                      proposal_type=birth_type)
     log_qbackward += lqb
+
+    debug_info["rebirth"] = birth_records
+    debug_info["rebirth_loc_lqb"] = lq_loc
+    debug_info["rebirth_template_lqb"] = lqb
+
     sg._topo_sort()
                         
     #lp_old2 = sg.current_log_p()
@@ -1083,7 +1097,7 @@ def ev_death_move_hough(sg, hough_kwargs={}, log_to_run_dir=None,  **kwargs):
 
 def ev_death_move_hough_meta(sg, **kwargs):
     hough_kwargs = sample_hough_kwargs(sg)
-    proposal_type = np.random.choice(("mh", "smart", ))
+    proposal_type = np.random.choice(("mh", "mh", "dumb", ))
     
     repropose_uatemplates = np.random.rand() < 0.5
 
@@ -1102,6 +1116,8 @@ def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
 
 
+    repropose_uatemplates = np.random.rand() < 0.5
+
     def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         if log_to_run_dir is None:
             return
@@ -1111,6 +1127,7 @@ def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
 
         with open(log_file, 'a') as f:
             f.write("proposing to kill eid %d: %s\n" % (eid, proposed_ev))
+            f.write("kwargs %s repropose uatemplates %s\n" % (kwargs, repropose_uatemplates))
             f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
             #for (wn, phase), (assoc, tmvals) in associations.items():
             #    if assoc:
@@ -1118,15 +1135,17 @@ def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
             #f.write("\n")
 
 
+
+
     return ev_death_move_abstract(sg, clp, proposal_includes_mb=False, 
-                                  use_correlation=True, 
+                                  use_correlation=repropose_uatemplates, 
                                   accept_action=log_action, 
                                   revert_action=log_action,
-                                  repropose_uatemplates=True, **kwargs)
+                                  repropose_uatemplates=repropose_uatemplates, **kwargs)
 
 def ev_death_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
-    proposal_type = np.random.choice(("smart", "dumb", 'mh'))
+    proposal_type = np.random.choice(("mh", "mh", "dumb"))
     return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      birth_type=proposal_type, **kwargs)
 
@@ -1442,7 +1461,7 @@ def create_dummy_mh_world(sg, wn, eid):
 
         phase_sidx, phase_eidx = wn.template_idx_window(eid=eid, phase=phase, 
                                                         pre_arrival_slack_s=10.0)
-        phase_eidx = min(phase_eidx, phase_eidx, int(phase_sidx + 60.0*wn.srate))
+        #phase_eidx = min(phase_eidx, int(phase_sidx + 180.0*wn.srate))
 
         if sidx is None:
             sidx, eidx = phase_sidx, phase_eidx
@@ -1458,8 +1477,8 @@ def create_dummy_mh_world(sg, wn, eid):
     dummy_etime = index_to_time(eidx, wn.st, wn.srate)
     dummy_wave = Waveform(truncated_data, srate=wn.srate, stime=dummy_stime, sta=wn.sta, filter_str=wn.filter_str, chan=wn.chan, band=wn.band)
     dummy_wn = dummy_sg.add_wave(dummy_wave)
-    dummy_wn.nm = wn.nm
-    dummy_wn.nm_env = wn.nm_env
+    dummy_wn.nm_node.set_value(wn.nm)
+    #dummy_wn.nm_env = wn.nm_env
     dummy_wn.wavelet_param_models=wn.wavelet_param_models
 
     #print "dummy stime %.1f etime %.1f len %.1f" % (dummy_stime, dummy_etime, dummy_etime-dummy_stime)
@@ -1532,13 +1551,15 @@ def propose_new_phases_mh(sg, wn, eid,
         #mh_steps = 5 if use_correlation else 25
 
         # new hack: using iid wavelets we don't have to worry as much about the GPs...
-        mh_steps = 50
+        mh_steps = 25
 
     # run a few iterations of MH on the proposed templates
     #tmnodes = [(phase, sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)) for phase in new_phases]
     #single_template_MH(sg, wn, tmnodes, steps=mh_steps)
 
     dummy_sg, dummy_wn, dummy_tmnodes = create_dummy_mh_world(sg, wn, eid)
+    dummy_wn.hack_wavelets_as_iid = True
+    new_dummy_tmnodes = [(phase, tmnodes) for (phase, tmnodes) in dummy_tmnodes if phase in new_phases]
 
     dump_debug = False
     if sg.dump_proposal_debug_dir is not None:
@@ -1547,12 +1568,10 @@ def propose_new_phases_mh(sg, wn, eid,
         mkdir_p(proposal_dir)
         dump_debug = not os.path.exists(os.path.join(proposal_dir, "pre_mh.sg"))
         if dump_debug:
+            lp1 = dummy_sg.current_log_p()
             dummy_sg.debug_dump(proposal_dir, pickle_only=True, pickle_name="pre_mh.sg")
 
     dummy_wn.log_p = dummy_wn.log_p_nonincremental # don't bother with incremental logp calculations
-    dummy_wn.hack_wavelets_as_iid = True
-    new_dummy_tmnodes = [(phase, tmnodes) for (phase, tmnodes) in dummy_tmnodes if phase in new_phases]
-
     sorted_params, param_vals = single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=mh_steps)
 
     if dump_debug:
@@ -1562,6 +1581,10 @@ def propose_new_phases_mh(sg, wn, eid,
                 header += "%s_%s " % (phase, p)
 
         np.savetxt(os.path.join(proposal_dir, "tmvals.txt"), param_vals, fmt="%.3f", header=header)
+        lp2 = dummy_sg.current_log_p()
+        with open(os.path.join(proposal_dir, "lps.txt"), "w") as f:
+            f.write("pre %f\npost %f" % (lp1, lp2))
+
         del dummy_wn.log_p
         dummy_sg.debug_dump(proposal_dir, pickle_only=True, pickle_name="post_mh.sg")
 
@@ -1639,7 +1662,7 @@ def dumb_propose_phase_template(sg, wn, eid, phase,
 def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None, 
                              use_correlation=False,
                              prebirth_unexplained=None,
-                             debug_info=None, proposal_type="clean"):
+                             debug_info=None, proposal_type="smart"):
 
     log_qforward = 0
     replicate_fns = []
@@ -2287,7 +2310,7 @@ def sample_hough_kwargs(sg):
 
 def ev_birth_move_hough_meta(sg, **kwargs):
     hough_kwargs = sample_hough_kwargs(sg)
-    proposal_type = np.random.choice(("mh", "smart",))
+    proposal_type = np.random.choice(("mh", "mh", "dumb",))
     #repropose_uatemplates = np.random.rand() < 0.5
     repropose_uatemplates = False
 
@@ -2321,7 +2344,8 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
 
         with open(ev_log_file, 'w') as f:
             f.write(prettyprint_debug(debug_info))
-
+            f.write("\n\n")
+            f.write(debug_proposal_weights(proposal_weights, training_xs, proposal_idx))
 
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
         #hough_array, eid, associations = proposal_extra
@@ -2356,10 +2380,23 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
                                   use_correlation=True, 
                                   repropose_uatemplates=True, **kwargs)
 
+def debug_proposal_weights(proposal_weights, training_xs, proposal_idx):
+    n = len(proposal_weights)
+    p = sorted(np.arange(n), key = lambda i : -proposal_weights[i])
+    training_xs = np.asarray(training_xs).reshape((n, -1))
+
+    s = ""
+    for i in p:
+        lon, lat, depth = training_xs[i, :3]
+        weight = proposal_weights[i]
+        s += "%04d (%7.2f %7.2f %5.1f) %f\n" % (i, lon, lat, depth, weight)
+
+    return s
+
 def ev_birth_move_correlation_random_sta(sg, **kwargs):
     corr_kwargs = sample_corr_kwargs(sg)
     
-    proposal_type = np.random.choice(("mh", "mh", "mh", "smart", "dumb"))
+    proposal_type = np.random.choice(("mh", "mh", "dumb"))
     
     return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      proposal_type=proposal_type, **kwargs)
@@ -2452,7 +2489,7 @@ def prettyprint_debug(birth_debug):
     s += "total %.2f, delta %.2f\n" % (total_lp, delta)
     overall_score = delta
     
-    for sta in birth_debug.keys():
+    for sta in sorted(birth_debug.keys()):
         if sta=="ev": continue
 
         wn_old, wn_new = birth_debug[sta]["wn_old"], birth_debug[sta]["wn_new"]
@@ -2473,7 +2510,7 @@ def prettyprint_debug(birth_debug):
 
         phase_assocs = dict(phase_assocs)
         
-        for phase in birth_debug[sta].keys():
+        for phase in sorted(birth_debug[sta].keys()):
             if "wn" in phase or phase=="assoc" : continue
             phase_score = 0
             tmid = phase_assocs[phase]
