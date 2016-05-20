@@ -1,0 +1,70 @@
+{% load url from future %}
+<html>
+<head>
+<title>suspicious fits - sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+
+<table>
+ <tr>
+
+{% if fit_info %}
+
+
+    <table id="fits" border=1 cellpadding=3>
+      <tr>
+	<td><strong>fit</strong></td>
+	<td><strong>ttrs</strong></td>
+	<td><strong>neighbors</strong></td>
+      </tr>
+        {% for fitid, phases, neighbors in fit_info %}
+            <tr>
+                <td><a href="{% url 'fit_run_detail' fitid=fitid %}">{{ fitid }}<br>
+		    <!--<img src="{% url 'visual' fitid=fitid %}?smooth=0;logscale=false;saveprefs=false" width=150 height=100>--></a></td>
+                <td>
+		  <table>
+		    <tr>
+		      <td> <strong>phase</strong></td>
+		      <td> <strong>ttr</strong></td>
+		      <td> <strong>median</strong></td>
+		      <td> <strong>std</strong></td>
+		      <td> <strong>discr</strong></td>
+		      <td> <strong>z</strong></td>
+		    </tr>
+		  {% for phase, ttr, median, stddev, discrepancy, z in phases %}
+		  <tr>
+		    <td> {{ phase }} </td>
+		    <td> {{ ttr |stringformat:'.1f' }} </td>
+		    <td> {{ median|stringformat:'.1f' }} </td>
+		    <td> {{ stddev|stringformat:'.1f' }} </td>
+		    <td> {% if discrepancy > discr_threshold %}
+		      <strong>{{ discrepancy|stringformat:'.1f' }}</strong>
+		      {% else %}
+		      {{ discrepancy|stringformat:'.1f' }} 
+		      {% endif %}
+		    </td>
+		    <td> {{ z|stringformat:'.2f' }} </td>
+		  </tr>
+		  {% endfor %}
+		  </table>
+		</td>
+                <td>
+		  {% for neighbor_fitid in neighbors %}
+		  <a href="{% url 'fit_run_detail' fitid=neighbor_fitid %}">{{ neighbor_fitid }}</a>
+		  {% endfor %}
+		</td>
+            </tr>
+        {% endfor %}
+    </table>
+
+{% else %}
+    <h3>My Fits</h3>
+    <p>No fits found!!! :( Maybe you need to run the flag_suspect_fits preprocessing?</p>
+{% endif %}
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>

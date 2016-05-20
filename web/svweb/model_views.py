@@ -335,6 +335,110 @@ def plot_adhoc_gaussian(request, xy_by_phase, axes):
         axes.plot(x, pdf, 'k-')
 
 
+def plot_compare_phases(request, runid=None):
+    param = request.GET.get("plot_param", "coda_decay")
+    sta = request.GET.get("sta", None)
+    chan = request.GET.get("chan", None)
+    band = request.GET.get("band", None)
+    max_acost = float(request.GET.get("max_acost", "inf"))
+    phase1 = request.GET.get("phase1", "Pg")
+    phase2 = request.GET.get("phase2", "Lg")
+    min_amp = float(request.GET.get("min_amp", "-10"))
+    template_shape = request.GET.get("shape", "paired_exp")
+    require_human_approved = str(request.GET.get("human_approved", "0")) == "2"
+
+    x_distance = request.GET.get("x_distance", "f").lower().startswith("t")
+    x_mb = request.GET.get("x_mb", "f").lower().startswith("t")
+    x_depth = request.GET.get("x_depth", "f").lower().startswith("t")
+
+
+    X1, y1, yvars1, evids1 = get_training_data(runid=runid,
+                                               site=sta, chan=chan, band=band, phases=(phase1,),
+                                               target=param,require_human_approved=require_human_approved,
+                                               max_acost=max_acost, min_amp=min_amp)
+    evids1 = list(evids1)
+
+    if phase2 != "none":
+        X2, y2, yvars2, evids2 = get_training_data(runid=runid,
+                                                   site=sta, chan=chan, band=band, phases=(phase2,),
+                                                   target=param,require_human_approved=require_human_approved,
+                                                   max_acost=max_acost, min_amp=min_amp)
+        evids2 = list(evids2)
+
+    matched = []
+    Y_COL, YV_COL, YY_COL, YYV_COL, DIST_COL, MB_COL, DEPTH_COL = np.arange(7)
+    for x, y, yvar, evid in zip(X1, y1, yvars1, evids1):
+        if phase2 == "none":
+            yy, yyvar = 0, 0
+        else:
+            try:
+                idx = evids2.index(evid)
+            except:
+                continue
+
+            try:
+                yy, yyvar = y2[idx], yvars2[idx]
+            except:
+                import pdb; pdb.set_trace()
+
+        lon, lat, depth, distance, mb = x
+        match = (y, yvar, yy, yyvar, distance, mb, depth)
+        matched.append(match)
+
+    matched = np.array(matched)
+
+    fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    
+    if x_distance:
+        x = matched[:, DIST_COL]
+        y = matched[:, Y_COL] - matched[:, YY_COL]
+        axes.set_xlabel("distance")
+        axes.set_ylabel("%s %s-%s" % (param, phase1, phase2))
+    elif x_mb:
+        x = matched[:, MB_COL]
+        y = matched[:, Y_COL] - matched[:, YY_COL]
+        axes.set_xlabel("mb")
+        axes.set_ylabel("%s %s-%s" % (param, phase1, phase2))
+
+    elif x_depth:
+        x = matched[:, DEPTH_COL]
+        y = matched[:, Y_COL] - matched[:, YY_COL]
+        axes.set_xlabel("depth")
+        axes.set_ylabel("%s %s-%s" % (param, phase1, phase2))
+
+    else:
+        x = matched[:, Y_COL]
+        y = matched[:, YY_COL]
+
+
+        axes.set_xlabel("%s %s" % (param, phase1))
+        axes.set_ylabel("%s %s" % (param, phase2))
+
+    v = matched[:, YV_COL] + matched[:, YYV_COL]
+    alphas = 1.0/np.sqrt(v+1e-4)
+    alphas /= np.max(alphas)
+
+    #for (xx, yy, alpha) in zip(x, y, alphas):
+    #    axes.scatter(xx, yy, alpha=alpha)
+
+
+    rgba_colors = np.zeros((len(matched),4))
+    rgba_colors[:,2] = 1.0
+    rgba_colors[:, 3] = alphas
+    axes.scatter(x, y, color=rgba_colors)
+
+    axes.set_title("%s at %s (%d events)" % (param, sta, len(matched)))
+
+    process_plot_args(request, axes)
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
+    fig.tight_layout()
+    canvas.print_png(response)
+    return response
+
+
 def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')

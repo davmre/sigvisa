@@ -209,7 +209,7 @@ def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=Non
     evid_cond = "and (" + " or ".join(["fit.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(
         ["fit.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
-    approval_cond = "and human_approved=2" if require_human_approved else ""
+    approval_cond = "and human_approved=2" if require_human_approved else "and (human_approved=0 or human_approved=2)"
     cost_cond = "and fit.acost<%f" % max_acost if np.isfinite(max_acost) else ""
 
     wiggle_cond = "and fp.wiggle_family='%s'" % (wiggle_family) if wiggle_family is not None else ""

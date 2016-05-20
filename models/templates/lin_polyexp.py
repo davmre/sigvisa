@@ -26,11 +26,14 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
 
         self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
                          "peak_decay": Gaussian(-2.5, 1.),
-                         "coda_height": Gaussian(3.0, 3.),
+                         "coda_height": Gaussian(3.0, 1.),
                          "coda_decay": Gaussian(-2.5, 1.5),
                          "mult_wiggle_std": Beta(4.23342488227, 1.41958698073)}
 
         self.hack_force_mean = None
+
+    def entropy():
+        return np.sum([model.entropy() for model in self.uamodels.values()])
 
     @staticmethod
     def params(env=True):
@@ -81,12 +84,12 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
 
 
     @staticmethod
-    def abstract_logenv_length(vals, min_logenv=-7.0, srate=40.0):
+    def abstract_logenv_length(vals, min_logenv=-7.0, srate=40.0, max_decay_s=1200.0):
         peak_offset, peak_decay, coda_height, coda_decay = \
             float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
 
         if coda_decay > -0.001:
-            l = int(1200 * srate)
+            l = int(max_decay_s * srate)
         else:
                 # minimum length is 2, so that even very small arrivals
                 # can create a small bump (not doing this confuses the
@@ -95,11 +98,11 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
                 # to create a nonzero-length envelope).
 
             # also, these lengths are pessimistic since they don't account for peak_decay
-            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+            l = int(max(2.0, min(max_decay_s, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
         return l
 
     @staticmethod
-    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, return_jac_exp=False, fixedlen=None):
+    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, return_jac_exp=False, fixedlen=None, max_decay_s=1200.0):
         peak_offset, peak_decay, coda_height, coda_decay = \
             float(np.exp(vals['peak_offset'])), float(-np.exp(vals['peak_decay'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
         return_jac_exp = int(return_jac_exp)
@@ -115,14 +118,14 @@ class LinPolyExpTemplateGenerator(TemplateGenerator):
             # abstract_logenv_length above, but we don't call that
             # directly to avoid the overhead of unpacking the 'vals'
             # dict a second time.
-            l = int(1200 * srate)
+            l = int(max_decay_s * srate)
         else:
                 # minimum length is 2, so that even very small arrivals
                 # can create a small bump (not doing this confuses the
                 # approx-gradient routine; it tries making the bump
                 # slightly bigger but with no effect since it's too small
                 # to create a nonzero-length envelope).
-            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+            l = int(max(2.0, min(max_decay_s, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
 
         if return_jac_exp:
             jacobian = np.empty((l, 5))

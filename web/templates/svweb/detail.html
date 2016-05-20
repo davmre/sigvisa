@@ -156,6 +156,8 @@ document.getElementById('loading').style.visibility = 'hidden';
       {% csrf_token %}
       <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
       <label for="unknown">Unknown</label>
+      <input type="radio" name="approval" id="suspicious" value="3" {% if fit.human_approved == '3' or fit.human_approved = 3%}checked{% endif %}/>
+      <label for="good">Suspicious fit</label>
       <input type="radio" name="approval" id="bad" value="1" {% if fit.human_approved == '1' or fit.human_approved == 1 %}checked{% endif %}/>
       <label for="bad">Bad fit</label>
       <input type="radio" name="approval" id="good" value="2" {% if fit.human_approved == '2' or fit.human_approved = 2%}checked{% endif %}/>

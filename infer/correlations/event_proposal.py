@@ -27,18 +27,14 @@ def get_atime_posteriors(sg, ar_advantage=False):
 
     def build_sg_hash(sg, ar_advantage):
         # generate a hashcode representing the signals we've loaded as well as the GP wavelet models
-        try:
-            key = repr(sorted(sg.template_model_type.items()))
-        except:
-            key = repr(sg.template_model_type) 
-        key += repr(sg.wiggle_model_type)
-        for sta, wns in sorted(sg.station_waves.items()):
+        key = repr(sg.template_model_type) + repr(sg.wiggle_model_type)
+        for sta, wns in sg.station_waves.items():
             for wn in wns:
                 key += wn.label
                 if ar_advantage:
                     key += repr(wn.nm.params) + repr(wn.nm.c) + repr(wn.em.std)
 
-                for phase, models in sorted(wn.wavelet_param_models.items()):
+                for phase, models in wn.wavelet_param_models.items():
                     try:
                         modelid = models[0].modelid
                     except:

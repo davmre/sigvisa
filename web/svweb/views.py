@@ -641,3 +641,35 @@ def fit_cost_quality(request, runid):
     fig.tight_layout()
     canvas.print_png(response)
     return response
+
+def suspicious_fit_view(request, runid):
+    runid = int(runid)
+    s = Sigvisa()
+    suspicion_cutoff = 4.0
+
+    #suspicious_fitids = s.sql("select distinct f.fitid from sigvisa_coda_fit f, sigvisa_coda_fit_phase fp, sigvisa_ttr_consistency tc where f.fitid=fp.fitid and fp.fpid=tc.fpid and f.runid=%d and abs(tc.tt_residual - tc.ttr_neighbor_median) > %f" % (runid, suspicion_cutoff))
+
+    suspicious_fitids = s.sql("select distinct f.fitid from sigvisa_coda_fit f where f.human_approved='3'")
+
+    fit_info = []
+    for (fitid,) in suspicious_fitids:
+        r = s.sql("select fp.phase, tc.tt_residual, tc.ttr_neighbor_median, tc.ttr_neighbor_stddev, tc.neighbor_fitids from sigvisa_coda_fit_phase fp, sigvisa_ttr_consistency tc where fp.fitid=%d and fp.fpid=tc.fpid" % (fitid))
+
+
+        phases = []
+        zs = []
+        for (phase, ttr, median, stddev, neighbor_str) in r:
+            z = np.abs(ttr-median)/stddev
+            phases.append((phase, ttr, median, stddev, np.abs(ttr-median), z))
+            zs.append(z)
+
+        neighbors = eval(neighbor_str)
+
+        fit_info.append((fitid, phases, neighbors))
+
+
+    return render_to_response("svweb/suspicious_fits.html",
+                              {'fit_info': fit_info,
+                               'runid': runid,
+                               'discr_threshold': suspicion_cutoff
+                               }, context_instance=RequestContext(request))

@@ -271,6 +271,7 @@ public:
 						 int filter_start_idx, 
 						 int incr_start_idx, 
 						 int incr_end_idx, 
+						 int update_ells,
 						 double step_ell_tol) {
     int errcode = 0;
     int steps_processed = 0;
@@ -281,6 +282,7 @@ public:
 					  filter_start_idx, 
 					  incr_start_idx,
 					  incr_end_idx,
+					  update_ells,
 					  step_ell_tol,
 					  &steps_processed,
 					  &errcode);

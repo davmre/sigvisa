@@ -28,6 +28,7 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.heatmap import event_bounds, find_center
 from sigvisa.utils.array import time_to_index, index_to_time
 from sigvisa.signals.io import Waveform
+from sigvisa.source.event import Event
 from sigvisa import *
 
 from matplotlib.figure import Figure
@@ -1687,7 +1688,7 @@ def mcmc_arrivals(request, dirname, wn_label, step):
                 except:
                     pmean = np.nan
                 try:
-                    pstd = np.sqrt(model.variance(cond=pv))
+                    pstd = np.sqrt(model.variance(cond=pv, include_obs=True))
                 except:
                     pstd = 0.0
 
@@ -1830,6 +1831,72 @@ def mcmc_wave_gpvis(request, dirname, wn_label):
     canvas.print_png(response)
     return response
 
+def mcmc_wave_step_ells(request, dirname, wn_label):
+    zoom = float(request.GET.get("zoom", '1'))
+    step = request.GET.get("step", 'all')
+    stime = float(request.GET.get("stime", '-1'))
+    etime = float(request.GET.get("etime", '-1'))
+    sgfile = str(request.GET.get('sgfile', ''))    
+
+    s = Sigvisa()
+    mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
+    mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    sgfile = str(request.GET.get('sgfile', ''))
+    if sgfile:
+        sg = graph_from_file(mcmc_run_dir, sgfile)
+        sgs = {0: sg}
+    elif step=="all":
+        sgs = graphs_by_step(mcmc_run_dir)
+    else:
+        sgs = {int(step): graph_for_step(mcmc_run_dir, int(step))}
+
+    last_step = np.max(sgs.keys())
+    last_sg = sgs[last_step]
+
+    wn = last_sg.all_nodes[wn_label]
+    len_mins = (wn.et - wn.st) / 60.0
+
+    f = Figure((10*zoom, 5))
+    f.patch.set_facecolor('white')
+    axes = f.add_subplot(111)
+
+    wn.cached_lp = None
+    wn._parent_values()
+    try:
+        wn.tssm
+    except AttributeError:
+        wn.tssm = wn.transient_ssm()
+
+    lp = wn.log_p(force_full_refresh=True)
+    x = np.linspace(wn.st, wn.et, wn.npts)
+    axes.plot(x, wn._cached_stepwise_ells)
+
+    window_logp = None
+    if stime > 0 and etime > 0:
+        sidx = max(int((stime - wn.st) * wn.srate), 0)
+        eidx = max(sidx, min(int((etime - wn.st) * wn.srate), wn.npts))
+        d = wn._cached_stepwise_ells[sidx:eidx]
+        dmax, dmin = np.max(d), np.min(d)
+        drange = dmax - dmin
+        slack = drange / 20.0
+        axes.set_xlim((stime, etime))
+        axes.set_ylim((dmin-slack, dmax+slack))
+
+        window_logp = np.sum(d)
+
+    title = "signal logp %f" % lp
+    if window_logp is not None:
+        title += " window logp %f" % window_logp
+    axes.set_title(title)
+
+    canvas = FigureCanvas(f)
+    response = django.http.HttpResponse(content_type='image/png')
+    f.tight_layout()
+    canvas.print_png(response)
+    return response
+    
+
 def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
@@ -1847,13 +1914,13 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     step = request.GET.get("step", 'all')
     stime = float(request.GET.get("stime", '-1'))
     etime = float(request.GET.get("etime", '-1'))
-    
+    sgfile = str(request.GET.get('sgfile', ''))    
 
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    sgfile = str(request.GET.get('sgfile', ''))
+
     if sgfile:
         sg = graph_from_file(mcmc_run_dir, sgfile)
         sgs = {0: sg}
@@ -2058,6 +2125,8 @@ def mcmc_plot_atime_posterior_for_training_ev(request, dirname, idx):
     s = Sigvisa()
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    hack_unexplained = request.GET.get('hack_unexplained', 'f').lower().startswith("t")
     
     sgfile = str(request.GET.get('sgfile', ''))
     if sgfile:
@@ -2072,14 +2141,17 @@ def mcmc_plot_atime_posterior_for_training_ev(request, dirname, idx):
         stas = [str(s) for s in stas.split(",")]
 
     from sigvisa.infer.correlations.historical_signal_library import get_historical_signals
-    from sigvisa.infer.correlations.weighted_event_posterior import compute_atime_posteriors, align_sum
+    from sigvisa.infer.correlations.weighted_event_posterior import compute_atime_posteriors, align_sum, wn_origin_posterior
 
     proposals = get_historical_signals(sg, stas=stas)
     print "got proposals for", stas
     idx = int(idx)
+
     ((x, sta_lls),) = compute_atime_posteriors(sg, proposals, 
                                                use_ar=False,
+                                               raw_data=hack_unexplained,
                                                event_idx = idx)
+    lon, lat, depth = x[0, :3]
 
     signals = proposals[idx][1]
 
@@ -2097,14 +2169,27 @@ def mcmc_plot_atime_posterior_for_training_ev(request, dirname, idx):
     global_ll = np.zeros((N,))
 
     ax = None
-    for i, ((wnlabel, phase), (origin_ll, origin_stime)) in enumerate(sta_lls.items()):
+    for i, ((wnlabel, phase), cached_for_wn) in enumerate(sorted(sta_lls.items())):
+        (origin_ll, origin_stime, signal_scale) = cached_for_wn
 
-        ax = f.add_subplot(nplots+1, 1, i+1, sharex=ax)
+        ax = f.add_subplot(nplots+2, 1, i+1, sharex=ax)
+
+        if hack_unexplained:
+            wn = sg.all_nodes[wnlabel]
+            origin_ll, origin_stime = wn_origin_posterior(sg, wn=wn, cached_for_wn=cached_for_wn, 
+                                                          global_srate=1.0, 
+                                                          temper=1.0)
+
     
         x = np.linspace(origin_stime, origin_stime + len(origin_ll), len(origin_ll))
-        ax.plot(x, origin_ll)
 
-        ax.set_title("%s %s" % (wnlabel, phase))
+
+
+        C = np.max(origin_ll)
+        logZ = np.log(np.sum(np.exp(origin_ll-C))) + C
+
+        ax.plot(x, origin_ll)
+        ax.set_title("%s %s score %.1f" % (wnlabel, phase, logZ))
 
         global_offset = int((origin_stime - global_stime)*global_srate)
         align_sum(global_ll, 
@@ -2120,26 +2205,53 @@ def mcmc_plot_atime_posterior_for_training_ev(request, dirname, idx):
     
     maxtime = index_to_time(np.argmax(posterior), global_stime, global_srate)
 
-    ax = f.add_subplot(nplots+1, 1, nterms+1, sharex=ax)
+    ev = Event(lon=lon, lat=lat, depth=depth, time=maxtime, mb=4.0)
+
+    ax = f.add_subplot(nplots+2, 1, nterms+1, sharex=ax)
     x = np.linspace(global_stime, global_stime + N, N)
+    ax.plot(x, global_ll)
+    ax.set_title("global log likelihood")
+
+    ax = f.add_subplot(nplots+2, 1, nterms+2, sharex=ax)
     ax.plot(x, posterior)
     ax.set_title("global posterior, weight %.2f argmax %.1f" % (logZ, maxtime))
 
 
-    for i, (k, signal) in enumerate(signals.items()):
-        ax = f.add_subplot(nplots+1, 1, nterms+i+2)
+    for i, (k, signal) in enumerate(sorted(signals.items())):
+        ax = f.add_subplot(nplots+2, 1, nterms+i+3)
         
 
 
         (sta, chan, band, phase) = k
         wn = sg.station_waves[sta][0]
         d = wn.get_value().data
-        align = np.argmax(iid_advantage(d, signal))
-        excerpt = d[align:align+len(signal)]
-        align_t = index_to_time(align, wn.st, wn.srate)
+
+        pred_atime = ev.time + tt_predict(ev, wn.sta, phase)
+        window_stime = pred_atime - 20.0
+        window_etime = pred_atime + 20.0
+        window_sidx = time_to_index(window_stime, wn.st, wn.srate)
+        window_eidx = time_to_index(window_etime, wn.st, wn.srate)
+        try:
+            signal_window = d[window_sidx:window_eidx]
+        except:
+            continue
+        if len(signal_window) < 10:
+            continue
+
+        #align = np.argmax(iid_advantage(d, signal))
+        align = np.argmax(iid_advantage(signal_window, signal))
+        
+        
+
+        #excerpt = d[align:align+len(signal)]
+        #align_t = index_to_time(align, wn.st, wn.srate)
+        #tt = np.linspace(align_t, align_t+20.0, len(excerpt))
+        #ax.plot(tt, excerpt / np.max(excerpt))
+
+        excerpt = signal_window[align:align+len(signal)]
+        align_t = index_to_time(align, window_stime, wn.srate)
         tt = np.linspace(align_t, align_t+20.0, len(excerpt))
         ax.plot(tt, excerpt / np.max(excerpt))
-
 
         ax.plot(tt, signal/np.max(signal))
 

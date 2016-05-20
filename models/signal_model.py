@@ -175,7 +175,7 @@ class ObservedSignalNode(Node):
         self.cached_logp = None
         self._cached_incr_lp = None
         self._cached_incr_state = None
-        self._cached_ells_staleness = np.inf
+        self._cached_ells_staleness = 0
         self._cached_stepwise_ells = np.empty((self.npts,))
         self._coef_message_cache = None
         self._unexplained_cache = None

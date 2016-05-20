@@ -11,7 +11,7 @@ from sigvisa.graph.region import Region
 def get_bulletin(stime, etime, origin_type="isc"):
 
     region_cond = "and lon between -126 and -100 and lat between 33 and 49"
-    query = "select lon, lat, depth, time, mb from %s_origin where time between %f and %f and mb > 0 %s order by time" % (origin_type, stime, etime, region_cond)
+    query = "select lon, lat, depth, time, mb from %s_origin where time between %f and %f %s order by time" % (origin_type, stime, etime, region_cond)
     s = Sigvisa()
     isc_bulletin = np.array(s.sql(query))
     

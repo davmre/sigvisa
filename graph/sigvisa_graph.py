@@ -162,6 +162,7 @@ class SigvisaGraph(DirectedGraphModel):
                  hack_ttr_max=25.0,
                  phase_existence_model="ga_logistic",
                  min_mb = 2.5,
+                 max_template_len_s=300.0,
                  inference_region=None):
         """
 
@@ -318,6 +319,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.min_mb = min_mb
         self.ev_mag_prior = Exponential(rate=np.log(10), min_value=self.min_mb)
+
+        self.max_template_len_s = max_template_len_s
 
     def get_phase_existence_model(self, phase):
         if phase not in self.phase_existence_model_cache:

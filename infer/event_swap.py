@@ -36,30 +36,30 @@ def sample_events_to_swap(sg, n_events=2, fix_result=None):
     eids = sorted([eid for eid in sg.evnodes.keys() if eid not in sg.fixed_events])
     n = len(eids)
 
-    if len(eids) < n_events:
+    chosen_eids = None
+    lp = -np.inf
+    if len(eids) >= n_events:
+        combinations = scipy.misc.comb(n, n_events)
+
+        lp = -np.log(combinations)
         if fix_result is None:
-            return None, -np.inf
+            chosen_eids = []
+            for i in range(n_events):
+                eid = np.random.choice(eids)
+                eids.remove(eid)
+                chosen_eids.append(eid)
+
+            chosen_eids = sorted(chosen_eids)
         else:
-            return -np.inf
+            lp = lp if np.all([eid in eids for eid in fix_result]) else -np.inf
 
-    combinations = scipy.misc.comb(n, n_events)
-
-    lp = -np.log(combinations)
+    #if np.isinf(lp):
+    #    import pdb; pdb.set_trace()
 
     if fix_result is None:
-        chosen_eids = []
-        for i in range(n_events):
-            eid = np.random.choice(eids)
-            eids.remove(eid)
-            chosen_eids.append(eid)
-
-        chosen_eids = sorted(chosen_eids)
         return chosen_eids, lp
     else:
-        if np.all([eid in eids for eid in fix_result]):
-            return lp
-        else:
-            return -np.inf
+        return lp
 
 def repropose_event_move_hough(sg, **kwargs):
 
@@ -76,10 +76,26 @@ def repropose_event_move_lstsqr(sg, **kwargs):
 
 def repropose_event_move_corr(sg, **kwargs):
 
+    """
+TODO (copied from email)
+another issue: event mbs get reset to 3.0 in the proposal. this means the probs are technically incorrect since I can't ever reverse to recover a non-3.0 event. should either keep the current mb (which requires a notion of event identity when swapping multiple events), or propose new mb from some distribution?
+    """
+
     corr_kwargs = sample_corr_kwargs(sg)
     def clp(sg, fix_result=None, **kwargs):
         kwargs.update(corr_kwargs)
         return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
+
+    if "birth_args" not in kwargs:
+        dumb_birth = np.random.rand() < 0.5 
+        kwargs["birth_args"] = {"proposal_type": "dumb" if dumb_birth else "mh",
+                                "use_correlation": not dumb_birth,
+                                "repropose_uatemplates": not dumb_birth}
+
+        dumb_death = np.random.rand() < 0.5 
+        kwargs["death_args"] = {"birth_type": "dumb" if dumb_death else "mh",
+                                "use_correlation": not dumb_death,
+                                "repropose_uatemplates": not dumb_death}
 
     return swap_events_move(sg, n_events=1, location_proposal=clp, **kwargs)
 
@@ -91,12 +107,34 @@ def swap_threeway_hough(sg, **kwargs):
 
 
 def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, return_probs=False, **kwargs):
+
     eids, lp_swap = sample_events_to_swap(sg, n_events=n_events)
     if eids is None:
         return False
+
+    old_evs = dict([(eid, sg.get_event(eid)) for eid in eids])
+
     lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, location_proposal=location_proposal, **kwargs)
     log_qforward += lp_swap
-    log_qbackward += sample_events_to_swap(sg, fix_result=eids)
+
+    lp_swap_reverse = sample_events_to_swap(sg, fix_result=eids, n_events=n_events)
+    log_qbackward += lp_swap_reverse
+
+    new_evs = dict([(eid, sg.get_event(eid)) for eid in eids])
+
+    if log_to_run_dir is not None:
+        log_file = os.path.join(log_to_run_dir, "swap_proposals.txt")
+        with open(log_file, 'a') as f:
+            f.write("swap lp %.2f reverse %.2f\n" % (lp_swap, lp_swap_reverse))
+            f.write("kwargs %s\n" % kwargs)
+            for eid in eids:
+                f.write(" swapping eid %d\n" % eid)
+                old_ev = old_evs[eid]
+                f.write("  old %s\n" % str(old_ev))
+                new_ev = new_evs[eid]
+                f.write("  new %s\n" % str(new_ev))
+            f.write("lp_new %.1f lp_old %.1f log_qbackward %.1f log_qforward %.1f ratio %.1f\n\n" % (lp_new, lp_old, log_qbackward, log_qforward, lp_new+log_qbackward - (lp_old+log_qforward)))
+            
 
     if return_probs:
         return lp_old, lp_new, log_qforward, log_qbackward, revert_move
@@ -116,8 +154,8 @@ def rebirth_events_helper(sg, eids,
                           location_proposal=None,
                           forward_location_proposal=None, 
                           reverse_location_proposal=None, 
-                          forward_birth_type="dumb", 
-                          reverse_birth_type="dumb"):
+                          birth_args = None, 
+                          death_args = None):
     """
     Given a list of events, propose killing them all and rebirthing
     new events from the resulting uatemplates.
@@ -147,6 +185,12 @@ def rebirth_events_helper(sg, eids,
     if reverse_location_proposal is None:
         reverse_location_proposal = location_proposal
 
+    if birth_args is None:
+        birth_args = {"proposal_type": "dumb"}
+    if death_args is None:
+        death_args = {"birth_type": "dumb"}
+
+
     old_evs = [sg.get_event(eid) for eid in eids]
 
     lp_old = sg.current_log_p()
@@ -161,8 +205,7 @@ def rebirth_events_helper(sg, eids,
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : reverse_location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
 
-        r = ev_death_executor(sg, force_kill_eid=eid, location_proposal=lp, 
-                              birth_type=reverse_birth_type)
+        r = ev_death_executor(sg, force_kill_eid=eid, location_proposal=lp, **death_args)
         if r is None:
             revert_moves.reverse()
             for r in revert_moves:
@@ -176,15 +219,14 @@ def rebirth_events_helper(sg, eids,
         # leave the graph in the dead state, so the new death proposals are with respect to
         # this one already having happened...
 
-        print "death %d lqf %f lqb %f" % (eid, lqf_old, lqb_old)
+        print "repropose death %d lqf %f lqb %f" % (eid, lqf_old, lqb_old)
         log_qforward += lqf_old
         log_qbackward += lqb_old
         revert_moves.append(rebirth_old)
 
     for i, eid in enumerate(eids):
         lp = lambda *args, **kwargs : forward_location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
-        r = ev_birth_executor(sg, location_proposal=lp, force_eid=eid, 
-                              proposal_type=forward_birth_type)
+        r = ev_birth_executor(sg, location_proposal=lp, force_eid=eid, **birth_args)
         if r is None:
             revert_moves.reverse()
             for r in revert_moves:
@@ -192,9 +234,10 @@ def rebirth_events_helper(sg, eids,
             return False
 
         lp_new, lp_int, lqf_new, lqb_new, rebirth_new, redeath_new, proposal_extra = r
+        
         rebirth_new()
 
-        print "birth %d lqf %f lqb %f" % (eid, lqf_new, lqb_new)
+        print "repropose birth %d lqf %f lqb %f" % (eid, lqf_new, lqb_new)
         log_qforward += lqf_new
         log_qbackward += lqb_new
         revert_moves.append(redeath_new)

@@ -267,6 +267,17 @@ class SigvisaCodaFitPhase(models.Model):
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'
 
+class SigvisaTtrConsistency(models.Model):
+    fpid = models.ForeignKey(SigvisaCodaFitPhase, db_column='fpid')
+    ttr_residual = models.FloatField(null=True, blank=True)
+    ttr_neighbor_median = models.FloatField(null=True, blank=True)
+    ttr_neighbor_stddev = models.FloatField(null=True, blank=True)
+    neighbor_fitids = models.CharField(max_length=512, blank=True)
+
+    class Meta:
+        db_table = u'sigvisa_ttr_consistency'
+
+
 class SigvisaWiggleBasis(models.Model):
     basisid = models.IntegerField(primary_key=True)
     family_name = models.CharField(max_length=63)

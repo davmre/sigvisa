@@ -247,6 +247,7 @@ double filter_incremental(StateSpaceModel &ssm,
 			  int filter_start_idx,
 			  int incr_start_idx,
 			  int incr_end_idx,
+			  int update_ells,
 			  double step_ell_tol,
 			  int * steps_processed,
 			  int * errcode);

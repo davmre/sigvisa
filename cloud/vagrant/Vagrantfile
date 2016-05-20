@@ -27,7 +27,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       azure.tcp_endpoints = '8001'
   end
 
-  (1..60).each do |i|
+  (1..3).each do |i|
     config.vm.define "node-#{i}" do |node|
      node.vm.provider :azure do |azure, override|
         do_common_azure_stuff.call azure, override

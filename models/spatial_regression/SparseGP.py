@@ -17,11 +17,16 @@ from sigvisa.models.distributions import InvGamma, LogNormal, Beta
 
 
 
-default_other_params = (2.0, InvGamma(beta=1.0, alpha=3.0),
-        GPCov([3.4,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
-              wfn_priors=[InvGamma(beta=3.0, alpha=4.0),],
-              dfn_priors =[LogNormal(mu=4, sigma=1.0), LogNormal(mu=4, sigma=1.0)]))
+default_other_params = (0.1, LogNormal(mu=-2, sigma=0.5),
+        GPCov([9.0,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
+              wfn_priors=[LogNormal(mu=2, sigma=1.0),],
+              dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
+
+default_amp_params = (0.1, LogNormal(mu=-2, sigma=0.5),
+        GPCov([0.25,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
+              wfn_priors=[LogNormal(mu=-1, sigma=1.0),],
+              dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 default_ttr_params = (0.1, LogNormal(mu=-2, sigma=0.5),
         GPCov([9.0,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",

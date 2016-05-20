@@ -138,6 +138,9 @@ class Gaussian(Distribution):
     def deriv_log_p(self, x, **kwargs):
         return -(x - self.mean)/self.var
 
+    def entropy(self):
+        return .5 * np.log(2*np.pi*np.e*self.var)
+
     def predict(self, *args, **kwargs):
         return self.mean
 
@@ -355,6 +358,17 @@ class Beta(Distribution):
 
     def deriv_log_p(self, x, *args, **kwargs):
         return (self.alpha-1.) / x + (self.beta-1.) / (x-1.)
+
+    def entropy(self):
+        alpha, beta = self.alpha, self.beta
+
+        B = scipy.special.betaln(alpha, beta)
+        dga = scipy.special.digamma(alpha)
+        dgb = scipy.special.digamma(beta)
+        dgab = scipy.special.digamma(alpha+beta)
+
+        entropy = B - (alpha-1)*dga - (beta-1)*dgb - (alpha+beta-2)*dgab
+        return entropy
 
     def predict(self, *args, **kwargs):
         return self.alpha/(self.alpha+self.beta)

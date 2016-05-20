@@ -616,6 +616,7 @@ double filter_incremental(StateSpaceModel &ssm,
 			  int filter_start_idx,
 			  int incr_start_idx,
 			  int incr_end_idx,
+			  int update_ells,
 			  double step_ell_tol,
 			  int * steps_processed,
 			  int * errcode) {
@@ -638,6 +639,8 @@ double filter_incremental(StateSpaceModel &ssm,
   double step_ell_discrepancy;
   double step_ell;
 
+  //printf("update ells %d\n", update_ells);
+
   // do some initial filtering steps to "warm up" the hidden state
   for (unsigned k=filter_start_idx; k < incr_start_idx; ++k) {
     step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
@@ -659,7 +662,7 @@ double filter_incremental(StateSpaceModel &ssm,
       // check that our likelihood calculations are now in sync with the
       // previous calculation.
       if ( fabs(step_ell_discrepancy) > step_ell_tol ) {
-	// printf("warmup %d discrepancy %.10f\n", k, step_ell_discrepancy);
+	 printf("warmup %d discrepancy %.10f\n", k, step_ell_discrepancy);
          *errcode = ERR_INCR_INIT;
          return -INFINITY;
       }
@@ -673,7 +676,9 @@ double filter_incremental(StateSpaceModel &ssm,
     return step_ell;
   }
   step_ell_discrepancy = step_ell - ells[incr_start_idx];
-  ells[incr_start_idx] = step_ell;
+  if (update_ells) {
+    ells[incr_start_idx] = step_ell;
+  }
   total_discrepancy += step_ell_discrepancy;
 
   //printf("first obs %d discrepancy %.2f\n", incr_start_idx, step_ell_discrepancy);
@@ -694,7 +699,9 @@ double filter_incremental(StateSpaceModel &ssm,
       return -INFINITY;
     }
     step_ell_discrepancy = step_ell - ells[k];
-    ells[k] = step_ell;
+    if (update_ells) {
+      ells[k] = step_ell;
+    }
     total_discrepancy += step_ell_discrepancy;
     //printf("step %d discrepancy %.2f\n", k, step_ell_discrepancy);
 
