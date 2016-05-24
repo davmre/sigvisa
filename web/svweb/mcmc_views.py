@@ -433,7 +433,7 @@ def mcmc_run_detail(request, dirname):
 
 def rundir_eids(mcmc_run_dir):
     eids = []
-    ev_re = re.compile(r'ev_(\d+).txt')
+    ev_re = re.compile(r'ev_(\d+)')
     for fname in os.listdir(mcmc_run_dir):
         m = ev_re.match(fname)
         if m is not None:
@@ -540,7 +540,7 @@ def conditional_signal_posterior(request, dirname, sta, phase):
             ax.set_xlim([cstime, cetime])
             ax.set_ylim([ymin, ymax])
 
-            ax.set_title("lp %f conditional" % (lp2))
+            ax.set_title("eid %d lp %f conditional" % (eid, lp2))
             ax = f.add_subplot(gs[j, 1])
             #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
             #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
@@ -1554,6 +1554,7 @@ def mcmc_event_posterior(request, dirname):
     for eid_i, eid in enumerate(sorted(eids)):
         ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d' % eid, 'trajectory.txt')
         trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
+
 
         if len(trace.shape) != 2 or trace.shape[0] < 2:
             continue

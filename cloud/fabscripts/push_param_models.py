@@ -6,12 +6,13 @@ from sigvisa.database.db import connect
 import csv
 import tarfile
 import os
+import sys
 
 import logging ; logging.basicConfig(level=logging.DEBUG)
 
 
 #env.hosts = open('fabric_hosts', 'r').readlines()
-env.hosts = ['sigvisa%d.cloudapp.net' % i for i in range(1, 61)]
+env.hosts = ['sigvisa%d.cloudapp.net' % i for i in range(1, 2)]
 
 #env.use_ssh_config = True
 env.user = 'vagrant'
@@ -28,7 +29,8 @@ def dump_local_models(runid, dump_fname, shrinkage_iter=5):
     else:
         cond = ("shrinkage_iter=%d" % shrinkage_iter)
     sql_query = "select * from sigvisa_param_model where fitting_runid=%d and %s;" % (runid, cond)
-    
+
+    cursor = None
     try:
         dbconn = connect()
         cursor = dbconn.cursor()
@@ -54,8 +56,12 @@ def dump_local_models(runid, dump_fname, shrinkage_iter=5):
     except Exception as e:
         print e
     finally:
-        cursor.close()
-        dbconn.close()
+        if cursor is not None:
+            cursor.close()
+            dbconn.close()
+        else:
+            print "ERROR: couldn't connect to database. make sure you're in the sigvisa virtualenv?"
+            sys.exit(-1)
 
     tgz_fname = dump_fname+".tgz"
     if os.path.exists(tgz_fname):

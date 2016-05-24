@@ -15,7 +15,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       azure.subscription_id  = '5e6c7afb-c4b4-4f0f-923d-8170e88f4c4f'
 
       azure.vm_name     = 'azurevagrantsmall'
-      azure.vm_image    = 'sigvisa_feb16'
+      azure.vm_image    = 'sigvisa_may16'
       #azure.vm_size     = 'Basic_A3'
       #azure.vm_size     = 'Standard_D12'
       azure.vm_size      = 'Standard_D3_v2'
@@ -27,7 +27,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       azure.tcp_endpoints = '8001'
   end
 
-  (1..3).each do |i|
+  (1..2).each do |i|
     config.vm.define "node-#{i}" do |node|
      node.vm.provider :azure do |azure, override|
         do_common_azure_stuff.call azure, override

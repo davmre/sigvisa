@@ -66,9 +66,9 @@
     dest=/home/sigvisa/python/sigvisa/parameters/GA_dist_depth_ranges
     owner=sigvisa
     mode=0664
-- name: create local data cache dir
-  file: path=/home/sigvisa/local_data state=directory
-  become_user: sigvisa
+#- name: create local data cache dir
+#  file: path=/home/sigvisa/local_data state=directory
+#  become_user: sigvisa
 #- name: copy signal data
 #  unarchive:
 #    copy=yes
@@ -77,8 +77,8 @@
 #    creates=/home/sigvisa/local_data/ctbt_data
 #    owner=sigvisa
 #    mode=0400
-- name: update db for local data cache
-  shell: mysql -u root -p55rontob -e "update idcx_wfdisc set dir='/home/sigvisa/local_data/ctbt_data/seismic/2009/095/' where dir='/home/sigvisa/ctbt_data/seismic/2009/095/'" ctbt3mos
+#- name: update db for local data cache
+#  shell: mysql -u root -p55rontob -e "update idcx_wfdisc set dir='/home/sigvisa/local_data/ctbt_data/seismic/2009/095/' where dir='/home/sigvisa/ctbt_data/seismic/2009/095/'" ctbt3mos
 - name: setup web service
   copy:
     src=sigvisa_web.conf
