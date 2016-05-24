@@ -362,7 +362,10 @@ def unassociate_template(sg, wn, eid, phase, tmid=None, remove_event_phase=False
 
     return tmid
 
-def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-6):
+def deassociation_logprob(sg, wn, eid, phase, 
+                          deletion_prob=False, 
+                          min_logprob=-6,
+                          debug_info=None):
 
     # return prob of deassociating (or of deleting, if deletion_prob=True).
     if (eid, phase) not in wn.arrivals():
@@ -374,8 +377,10 @@ def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-
             return -np.inf
 
     ev_tmvals = sg.get_template_vals(eid, wn.sta, phase, wn.band, wn.chan)
-    unass_lp = unass_template_logprob(sg, wn, ev_tmvals, entropy_score=True)
-    unass_lp_raw = unass_template_logprob(sg, wn, ev_tmvals)
+    #unass_lp = unass_template_logprob(sg, wn, ev_tmvals, entropy_score=True)
+    #unass_lp_raw = unass_template_logprob(sg, wn, ev_tmvals)
+    unass_lp = 0.0
+    unass_lp_raw = 0.0
 
     n_u = len(sg.uatemplate_ids[(wn.sta,wn.chan,wn.band)])
     ntemplates_ratio_log = sg.ntemplates_sta_log_p(wn, n=n_u+1) - sg.ntemplates_sta_log_p(wn, n=n_u)
@@ -404,8 +409,9 @@ def deassociation_logprob(sg, wn, eid, phase, deletion_prob=False, min_logprob=-
     else:
         return deassociation_ratio_log - log_normalizer
 
-def sample_deassociation_proposal(sg, wn, eid, phase, fix_result=None):
-    lp = deassociation_logprob(sg, wn, eid, phase)
+def sample_deassociation_proposal(sg, wn, eid, phase, 
+                                  fix_result=None, debug_info=None):
+    lp = deassociation_logprob(sg, wn, eid, phase, debug_info=debug_info)
     if fix_result is not None:
         deassociate = fix_result
     else:
@@ -942,27 +948,32 @@ def death_proposal_distribution(sg):
 
     return c
 
-def sample_death_proposal(sg):
+def sample_death_proposal(sg, fix_result=None, debug_info=None):
     c = death_proposal_distribution(sg)
     if len(c) == 0:
-        return None, 1.0
-    eid = c.sample()
-    return eid, np.log(c[eid])
+        eid = None
+        lp = 0.0
+    else:
+        if fix_result is not None:
+            eid = fix_result
+        else:
+            eid = c.sample()
 
-def death_proposal_logprob(sg, eid):
-    c = death_proposal_distribution(sg)
-    if len(c) == 0:
-        return 1.0
-    lp = np.log(c[eid])
-    #assert(np.isfinite(lp))
-    return lp
+        lp = np.log(c[eid])
 
-    
+    debug_info["death_proposal_lp"] = lp
+
+    if fix_result:
+        return lp
+    else:
+        return eid, lp
+
 def ev_death_executor(sg, location_proposal, 
                       proposal_includes_mb=True,
                       use_correlation=False,
                       repropose_uatemplates=False,
                       birth_type="mh",
+                      inference_step=-1,
                       force_kill_eid=None):
     log_qforward = 0.0
     log_qbackward = 0.0
@@ -971,7 +982,7 @@ def ev_death_executor(sg, location_proposal,
     debug_info = {}
 
     if force_kill_eid is None:
-        eid, lq_death = sample_death_proposal(sg)
+        eid, lq_death = sample_death_proposal(sg, debug_info=debug_info)
     else:
         eid = force_kill_eid
         lq_death = 0
@@ -982,28 +993,37 @@ def ev_death_executor(sg, location_proposal,
     log_qforward += lq_death
 
     lp_old = sg.current_log_p()
+
+    """
     s1 = sg.current_log_p_breakdown(silent=True)
     evs1 = [sg.get_event(eid1) for eid1 in sg.evnodes.keys()]
     vals1 = [(n.label, n.get_value(), n.log_p()) for n in sg.extended_evnodes[eid] if n.single_key is not None and not n.deterministic()]
+    """
 
     lqf, replicate_untmpls, death_records = ev_template_death_helper(sg, eid, 
-                                                                     repropose_uatemplates=repropose_uatemplates)
+                                                                     repropose_uatemplates=repropose_uatemplates,
+                                                                     debug_info=debug_info)
     log_qforward += lqf
-
-    debug_info["death"] = death_records
-    debug_info["death_template_lqf"] = lqf
-    debug_info["death_eid_lqf"] = lq_death
 
     # this is a little inelegant 
     replicate_death, ev = ev_bare_death_move(sg, eid)
     sg._topo_sort()
-    
+
+
+    if sg.dump_proposal_debug_dir is not None:
+        dump_path = os.path.join(sg.dump_proposal_debug_dir, "ev_%05d" % eid, "death_proposal_%d" % inference_step)
+        mkdir_p(dump_path)
+        if not os.path.exists(os.path.join(dump_path, "pickle.sg")):
+            sg.debug_dump(dump_path = dump_path, pickle_only=True)
+
     lp_new = sg.current_log_p()
         
     if force_kill_eid is None:
         n_current_events = len(sg.evnodes) - len(sg.fixed_events)
         log_qbackward += -np.log(n_current_events + 1)
-    lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, fix_result=(ev, eid))
+    lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, 
+                                                             fix_result=(ev, eid),
+                                                             debug_info=debug_info)
 
     log_qbackward += lq_loc
 
@@ -1013,12 +1033,9 @@ def ev_death_executor(sg, location_proposal,
                                      fix_result=death_records, 
                                      use_correlation=use_correlation,
                                      repropose_uatemplates=repropose_uatemplates,
+                                     debug_info=debug_info,
                                      proposal_type=birth_type)
     log_qbackward += lqb
-
-    debug_info["rebirth"] = birth_records
-    debug_info["rebirth_loc_lqb"] = lq_loc
-    debug_info["rebirth_template_lqb"] = lqb
 
     sg._topo_sort()
                         
@@ -1079,20 +1096,32 @@ def ev_death_move_hough(sg, hough_kwargs={}, log_to_run_dir=None,  **kwargs):
         if log_to_run_dir is None:
             return
         
-        hough_array, eid, proposed_ev, associations = proposal_extra
+        hough_array, eid, proposed_ev, debug_info = proposal_extra
         log_file = os.path.join(log_to_run_dir, "hough_deaths.txt")
+
+        logdir = os.path.join(log_to_run_dir, "ev_%05d" % eid)
+        ev_log_file = os.path.join(logdir, "death_proposal_%d.txt" % inference_step)
+        mkdir_p(logdir)
+        with open(ev_log_file, 'w') as f:
+            f.write(prettyprint_debug(debug_info))
 
         with open(log_file, 'a') as f:
             f.write("proposing to kill eid %d: %s\n" % (eid, proposed_ev))
             f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            """
             for (wn, phase), (assoc, tmvals) in associations.items():
                 if assoc:
                     f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
+            """
+
             f.write("\n")
+
 
     return ev_death_move_abstract(sg, hlp, proposal_includes_mb=True, 
                                   accept_action=log_action, 
-                                  revert_action=log_action, **kwargs)
+                                  revert_action=log_action, 
+                                  inference_step=inference_step,
+                                  **kwargs)
 
 
 def ev_death_move_hough_meta(sg, **kwargs):
@@ -1109,7 +1138,7 @@ def ev_death_move_hough_dumb(sg, **kwargs):
     hough_kwargs = {"one_event_semantics": False}
     return ev_death_move_hough(sg, hough_kwargs=hough_kwargs, birth_type="dumb", **kwargs)
 
-def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs):
+def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, inference_step=-1, **kwargs):
 
     def clp(sg, fix_result=None, **kwargs):
         kwargs.update(corr_kwargs)
@@ -1125,6 +1154,10 @@ def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         _, eid, proposed_ev, debug_info = proposal_extra
         log_file = os.path.join(log_to_run_dir, "corr_deaths.txt")
 
+        # proposed event should be the most recently created
+        if eid is None:
+            eid = np.max(sg.evnodes.keys())
+        
         with open(log_file, 'a') as f:
             f.write("proposing to kill eid %d: %s\n" % (eid, proposed_ev))
             f.write("kwargs %s repropose uatemplates %s\n" % (kwargs, repropose_uatemplates))
@@ -1132,15 +1165,19 @@ def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
             #for (wn, phase), (assoc, tmvals) in associations.items():
             #    if assoc:
             #        f.write(" associated %s at %s, %s, %s\n" % (phase, wn.sta, wn.chan, wn.band))
-            #f.write("\n")
+            f.write("\n")
 
-
-
+        logdir = os.path.join(log_to_run_dir, "ev_%05d" % eid)
+        ev_log_file = os.path.join(logdir, "death_proposal_%d.txt" % inference_step)
+        mkdir_p(logdir)
+        with open(ev_log_file, 'w') as f:
+            f.write(prettyprint_debug(debug_info))
 
     return ev_death_move_abstract(sg, clp, proposal_includes_mb=False, 
                                   use_correlation=repropose_uatemplates, 
                                   accept_action=log_action, 
                                   revert_action=log_action,
+                                  inference_step=inference_step,
                                   repropose_uatemplates=repropose_uatemplates, **kwargs)
 
 def ev_death_move_correlation_random_sta(sg, **kwargs):
@@ -1230,7 +1267,13 @@ def ev_sta_template_death_helper(sg, wn, eid,
             tmid = None
             fixed_tmvals = None
         deassociate, deassociate_logprob = sample_deassociation_proposal(sg, wn, eid, phase, 
-                                                                         fix_result = deassociate)
+                                                                         fix_result = deassociate,
+                                                                         debug_info=debug_info)
+        if debug_info is not None:
+            if phase not in debug_info:
+                debug_info[phase] = {}
+            debug_info[phase]["deassociate"] = deassociate_logprob
+
         log_qforward += deassociate_logprob
 
 
@@ -1247,6 +1290,10 @@ def ev_sta_template_death_helper(sg, wn, eid,
             if repropose_uatemplates:
                 death_record[phase] = template_param_array
                 lqf, rfns = perturb_uatemplate(sg, wn, tmid, fix_result=fixed_tmvals)
+
+                if debug_info is not None:
+                    debug_info[phase]["repropose_lp"] = lqf
+                
                 replicate_fns.extend(rfns)
                 log_qforward += lqf
 
@@ -1264,7 +1311,10 @@ def ev_sta_template_death_helper(sg, wn, eid,
     
     return log_qforward, replicate_move, death_record
 
-def ev_template_death_helper(sg, eid, repropose_uatemplates=False, fix_result=None):
+def ev_template_death_helper(sg, eid, 
+                             repropose_uatemplates=False, 
+                             fix_result=None,
+                             debug_info=None):
     birth_records = {}
     replicate_fns = []
     log_qforward = 0.0
@@ -1272,15 +1322,25 @@ def ev_template_death_helper(sg, eid, repropose_uatemplates=False, fix_result=No
         phases = sg.ev_arriving_phases(eid, site=site)
         birth_records["%s_phases" % site] = phases
         for sta in elements:
+
+            debug_info_sta = None
+            if debug_info is not None:
+                if sta not in debug_info:
+                    debug_info[sta] = dict()
+                debug_info_sta = debug_info[sta]
+
             for wn in sg.station_waves[sta]:
                 fr_sta = None
                 if fix_result is not None:
                     fr_sta = fix_result[wn.label]                
-                lqf_sta, replicate_sta, birth_sta = ev_sta_template_death_helper(sg, wn, eid, fix_result=fr_sta, repropose_uatemplates=repropose_uatemplates)
+                lqf_sta, replicate_sta, birth_sta = ev_sta_template_death_helper(sg, wn, eid, 
+                                                                                 fix_result=fr_sta, 
+                                                                                 repropose_uatemplates=repropose_uatemplates,
+                                                                                 debug_info=debug_info_sta)
                 replicate_fns.append(replicate_sta)
                 log_qforward += lqf_sta
                 birth_records[wn.label] = birth_sta
-                
+
     def replicate_move():
         for fn in replicate_fns:
             fn()
@@ -1382,7 +1442,8 @@ def propose_associations(sg, wn, eid, site_phases, fix_result=None,
     for i_phase, phase in enumerate(site_phases):
         debug_phase = None
         if debug_info is not None:
-            debug_info[phase] = {}
+            if phase not in debug_info:
+                debug_info[phase] = {}
             debug_phase = debug_info[phase]
             
         assoc_tmid = assoc_tmids[i_phase]
@@ -1674,7 +1735,8 @@ def propose_new_phases_no_mh(sg, wn, eid, new_phases, fix_result=None,
 
         debug_phase = None
         if debug_info is not None:
-            debug_info[phase] = {}
+            if phase not in debug_info:
+                debug_info[phase] = {}
             debug_phase = debug_info[phase]            
 
         # cases:
@@ -1903,11 +1965,18 @@ def phase_death_proposal(sg, eid, site, fix_result=None):
         return None, 0.0
 
     phase_probs = Counter()
+    total_prob = 0.0
     for phase in current_phases:
         pm = sg.get_phase_existence_model(phase)
         lp = pm.log_p(False, ev=ev, site=site)
         phase_probs[phase] = np.exp(.5*lp)
-    
+        total_prob += phase_probs[phase]
+
+    # return without proposing if the prior won't let
+    # us remove any of the active phases..
+    if total_prob == 0.0:
+        return None, 0.0
+
     phase_probs.normalize()
     if fix_result is not None:
         phase = fix_result
@@ -2098,7 +2167,8 @@ def ev_birth_executor(sg, location_proposal,
                       use_correlation=False, 
                       repropose_uatemplates=False,
                       force_eid=None,
-                      force_outcome=None):
+                      force_outcome=None,
+                      inference_step=None):
     debug_info = {}
         
 
@@ -2136,11 +2206,11 @@ def ev_birth_executor(sg, location_proposal,
             sg.debug_dump(dump_path = dump_path, pickle_only=True)
 
     
-    lqb, replicate_untmpls, death_records = ev_template_death_helper(sg, eid, fix_result=birth_records, repropose_uatemplates=repropose_uatemplates)
+    lqb, replicate_untmpls, death_records = ev_template_death_helper(sg, eid, fix_result=birth_records, repropose_uatemplates=repropose_uatemplates, debug_info=debug_info)
     log_qbackward += lqb
 
     if force_eid is None:
-        lq_death = death_proposal_logprob(sg, eid)
+        lq_death = sample_death_proposal(sg, fix_result=eid, debug_info=debug_info)
         log_qbackward += lq_death
 
     replicate_death, ev = ev_bare_death_move(sg, eid)
@@ -2202,7 +2272,9 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
             return
 
         log_file = os.path.join(log_to_run_dir, "hough_proposals.txt")
-        ev_log_file = os.path.join(log_to_run_dir, "birth_proposal_%d.txt" % eid)
+        birth_dir = os.path.join(log_to_run_dir, "birth_proposals")
+        mkdir_p(birth_dir)
+        ev_log_file = os.path.join(birth_dir, "birth_proposal_%d.txt" % eid)
 
         # proposed event should be the most recently created
         if eid is None:
@@ -2330,7 +2402,10 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
         #hough_array, eid, associations = proposal_extra
 
         log_file = os.path.join(log_to_run_dir, "correlation_proposals.txt")
-        ev_log_file = os.path.join(log_to_run_dir, "birth_proposal_%d.txt" % eid)
+        birth_dir = os.path.join(log_to_run_dir, "birth_proposals")
+        mkdir_p(birth_dir)
+        ev_log_file = os.path.join(birth_dir, "birth_proposal_%d.txt" % eid)
+        corr_log_file = os.path.join(birth_dir, "birth_proposal_%d_correlations.txt" % eid)
 
         with open(log_file, 'a') as f:
             f.write("proposed ev: %s eid %d\n" % (proposed_ev, eid))
@@ -2344,7 +2419,7 @@ def ev_birth_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, **kwargs)
 
         with open(ev_log_file, 'w') as f:
             f.write(prettyprint_debug(debug_info))
-            f.write("\n\n")
+        with open(corr_log_file, 'w') as f:
             f.write(debug_proposal_weights(proposal_weights, training_xs, proposal_idx))
 
     def revert_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
@@ -2491,6 +2566,7 @@ def prettyprint_debug(birth_debug):
     
     for sta in sorted(birth_debug.keys()):
         if sta=="ev": continue
+        if sta=="death_proposal_lp": continue
 
         wn_old, wn_new = birth_debug[sta]["wn_old"], birth_debug[sta]["wn_new"]
         inferred_lpold += wn_old
@@ -2504,24 +2580,40 @@ def prettyprint_debug(birth_debug):
             continue
             
 
-        s += "sta %s wn_old %.2f wn_new %.2f wn_delta %.2f assoc %.2f overall STASCORE\n" % (sta, wn_old, wn_new, wn_delta, assoc_lp)
+        s += "sta %s wn_old %.2f wn_new %.2f wn_delta %.2f assoc %.2f deassoc DEASSOCSCORE overall STASCORE\n" % (sta, wn_old, wn_new, wn_delta, assoc_lp)
         sta_score = wn_delta - assoc_lp
         inferred_qforward += assoc_lp
 
         phase_assocs = dict(phase_assocs)
-        
+        deassoc_score = 0.0
+
         for phase in sorted(birth_debug[sta].keys()):
             if "wn" in phase or phase=="assoc" : continue
             phase_score = 0
+
+
+            deassoc_lp = birth_debug[sta][phase]["deassociate"]
+            deassoc_score += deassoc_lp
+            del birth_debug[sta][phase]["deassociate"]
+            phase_score += deassoc_lp
+
+            repropose_lp = 0.0
+            repropose_str = 0.0
+            if "repropose_lp" in birth_debug[sta][phase]:
+                repropose_lp = birth_debug[sta][phase]["repropose_lp"]
+                del birth_debug[sta][phase]["repropose_lp"]
+                repropose_str = "death/repropose lq %.2f, " % (repropose_lp)
+                phase_score += repropose_lp
+                
             tmid = phase_assocs[phase]
             if tmid is not None:
-                s += " phase %s: associating tmid %d, score PHASESCORE\n" % (phase, tmid)
+                s += " phase %s: associating tmid %d, death/deassoc lq %.2f, %sscore PHASESCORE\n" % (phase, tmid, deassoc_lp, repropose_str)
             else:
-                s += " phase %s: birthing new template, score PHASESCORE\n" % (phase)
+                s += " phase %s: birthing new template, death/deletion lq %.2f, score PHASESCORE\n" % (phase, deassoc_lp)
+
 
             d = birth_debug[sta][phase]
             for param, (v, lp1, lp2) in sorted(d.items()):
-                if param=="assoc": continue
                 delta = lp2-lp1
                 if tmid is not None:
                     s += "   %s %.2f ualp %.2f evlp %.2f delta %.2f\n" % (param, v, lp1, lp2, delta)
@@ -2534,10 +2626,16 @@ def prettyprint_debug(birth_debug):
 
                 phase_score += delta
             s = s.replace("PHASESCORE", "%.2f" % phase_score)
+
             sta_score += phase_score
 
         overall_score += sta_score
+        s = s.replace("DEASSOCSCORE", "%.2f" % deassoc_score)
         s = s.replace("STASCORE", "%.2f" % sta_score)
+
+    s += "death proposal lp %.3f\n" % birth_debug["death_proposal_lp"]
+    overall_score += birth_debug["death_proposal_lp"]
+
     s += "final proposal score %.2f\n" % overall_score
     s += "inferred lpold %.1f lpnew %.1f delta %.1f log_qforward %.1f alt_score %.1f\n" % (inferred_lpold, inferred_lpnew, inferred_lpnew-inferred_lpold, inferred_qforward, inferred_lpnew - inferred_lpold - inferred_qforward)
     s += "REMEMBER: the acceptance ratio also includes the reverse proposal probability from the death move.\n"

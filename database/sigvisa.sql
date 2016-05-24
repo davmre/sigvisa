@@ -71,6 +71,7 @@ create table sigvisa_coda_fit_phase (
  phase	  varchar(20) not null,
  template_model   varchar(20) default 'paired_exp',
  arrival_time	  double precision,
+ tt_residual	  double precision,
  peak_offset double precision,
  coda_height double precision,
  peak_decay double precision,

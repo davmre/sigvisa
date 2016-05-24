@@ -352,11 +352,19 @@ class Node(object):
     def log_p(self, parent_values=None, v=None):
         #  log probability of the values at this node, conditioned on all parent values
 
+        """
         if self._fixed:
             # allow fixing nodes to values that would otherwise give -inf probability
             # for example, when constraining events to a region, we still allow
             # fixed events outside of that region
             return 0.0
+
+            # WARNING: this is commented out because it screws with event observations.
+            If we treat an event's location as unknown, but fix a noisy observation of that
+            event, we very much *do* want to compute the logp of that noisy observation. 
+            So I need a different hack here. 
+
+        """
 
         if parent_values is None:
             parent_values = self._parent_values()

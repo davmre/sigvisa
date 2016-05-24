@@ -115,7 +115,11 @@ def setup_graph(event, sta, chan, band,
         raise Exception("wave contains regions of zeros")
 
     sg.add_wave(wave=wave, init_extra_noise=True)
-    sg.add_event(ev=event)
+    evnodes = sg.add_event(ev=event)
+    eid = evnodes["lon"].eid
+
+    stddevs = {"time": 2.0, "mb": 0.2}
+    sg.observe_event(eid=eid, ev=event, stddevs=stddevs)
 
     if init_templates:
         fitid = get_previous_fitid(input_runid, event.evid, sta)
@@ -255,8 +259,8 @@ def compute_wavelet_messages(sg, wn, target_eid=None):
 
     return gp_messages, gp_posteriors
 
-def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, 
-            steps, burnin, init_templates=False, enable_uatemplates=False):
+def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid, steps, burnin, 
+            infer_mb=False, infer_time=False, init_templates=False, enable_uatemplates=False):
 
     # initialize the MCMC by finding a good set of template params
     wn = sigvisa_graph.station_waves.values()[0][0]
@@ -274,7 +278,7 @@ def run_fit(sigvisa_graph, fit_hz, tmpl_optim_params, output_runid,
     st = time.time()
 
     logger = MCMCLogger(run_dir="scratch/mcmc_fit_%s/" % (str(uuid.uuid4())), write_template_vals=True, dump_interval_s=1000, transient=True, serialize_interval_s=1000, print_interval_s=5)
-    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_phase_openworld=False, enable_template_openworld=enable_uatemplates, logger=logger, disable_moves=['atime_xc', 'constpeak_atime_xc'], tmpl_birth_rate=0.1)
+    run_open_world_MH(sigvisa_graph, steps=steps, enable_event_moves=False, enable_event_openworld=False, enable_phase_openworld=False, enable_template_openworld=enable_uatemplates, logger=logger, disable_moves=['atime_xc', 'constpeak_atime_xc'], tmpl_birth_rate=0.1, special_mb_moves=infer_mb, special_time_moves=infer_time)
     et = time.time()
     logger.dump(sigvisa_graph)
 
@@ -386,8 +390,8 @@ def save_template_params(sg, eid, evid,
             mult_wiggle_std = fit_params['mult_wiggle_std'] if 'mult_wiggle_std' in fit_params else 0.0
 
             if eid > 0:
-                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer, peak_decay, mult_wiggle_std, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f, %f, '%s')" % (
-                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'], peak_decay, mult_wiggle_std, sg.wiggle_family)
+                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, tt_residual, peak_offset, coda_height, coda_decay, amp_transfer, peak_decay, mult_wiggle_std, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f, %f, %f, '%s')" % (
+                    fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['tt_residual'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], fit_params['amp_transfer'], peak_decay, mult_wiggle_std, sg.wiggle_family)
             else:
                 phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, peak_decay, mult_wiggle_std, wiggle_family) values (%d, '%s', '%s', %f, %f, %f, %f, %f, %f, '%s')" % (
                     fitid, phase, tg.model_name(), fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], peak_decay, mult_wiggle_std, sg.wiggle_family)
@@ -451,6 +455,8 @@ def main():
     parser.add_option("--seed", dest="seed", default=0, type="int",
                       help="ranom seed for MCMC (0)")
     parser.add_option("--nocheck", dest="nocheck", default=False, action="store_true", help="don't check to see if we've already fit this arrival in this run")
+    parser.add_option("--infer_mb", dest="infer_mb", default=False, action="store_true", help="")
+    parser.add_option("--infer_time", dest="infer_time", default=False, action="store_true", help="")
 
 
     (options, args) = parser.parse_args()
@@ -537,6 +543,7 @@ def main():
     fitid = run_fit(sigvisa_graph,  fit_hz = options.hz, enable_uatemplates=enable_uatemplates,
                     tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
                     init_templates=options.init_templates,
+                    infer_mb=options.infer_mb, infer_time=options.infer_time,
                     output_runid = runid, steps=options.steps, burnin=options.burnin)
 
     print "fit id %d completed successfully." % fitid

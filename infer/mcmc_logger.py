@@ -93,7 +93,10 @@ class MCMCLogger(object):
 
         for (eid, evnodes) in sg.evnodes.items():
 
-            handle = open(os.path.join(self.run_dir, 'ev_%05d.txt' % eid), 'a')
+            evdir = os.path.join(self.run_dir, 'ev_%05d' % eid)
+            mkdir_p(evdir)
+            handle = open(os.path.join(evdir, "trajectory.txt"), 'a')
+
             evlon = evnodes['loc'].get_local_value('lon')
             evlat = evnodes['loc'].get_local_value('lat')
             evdepth = evnodes['loc'].get_local_value('depth')
@@ -135,7 +138,9 @@ class MCMCLogger(object):
             for wn in wns:
                 lbl = '%s.txt' % wn.nm_node.label
                 if lbl not in self.log_handles:
-                    self.log_handles[lbl] = open(os.path.join(self.run_dir, lbl), 'a')
+                    noise_dir = os.path.join(self.run_dir, "noise_models")
+                    mkdir_p(noise_dir)
+                    self.log_handles[lbl] = open(os.path.join(noise_dir, lbl), 'a')
                 handle = self.log_handles[lbl]
                 nm = wn.nm_node.get_value()
                 nm_params = np.concatenate(((nm.c, nm.em.std), nm.params))
@@ -169,7 +174,9 @@ class MCMCLogger(object):
 
         for move_name in move_times.keys():
             if move_name not in self.log_handles:
-                self.log_handles[move_name] = open(os.path.join(self.run_dir, 'move_%s_times.txt' % move_name), 'a')
+                time_dir = os.path.join(self.run_dir, 'move_times')
+                mkdir_p(time_dir)
+                self.log_handles[move_name] = open(os.path.join(time_dir, '%s.txt' % move_name), 'a')
             for (step, t) in move_times[move_name]:
                 self.log_handles[move_name].write('%d %f\n' % (step, t));
             del move_times[move_name]
@@ -221,7 +228,9 @@ class MCMCLogger(object):
         else:
             s += "  move REJECTED with ratio %.2f\n" % ratio
 
-        handle = open(os.path.join(self.run_dir, 'ev_%05d_proposals.txt' % eid), 'a')
+        evdir = os.path.join(self.run_dir, 'ev_%05d' % eid)
+        mkdir_p(evdir)
+        handle = open(os.path.join(evdir, 'proposals.txt'), 'a')
         handle.write(s)
         handle.close()
 

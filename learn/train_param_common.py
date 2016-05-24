@@ -16,7 +16,7 @@ import cPickle as pickle
 
 from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
 from sigvisa.models.spatial_regression.local_gp_ensemble import LocalGPEnsemble, optimize_localgp_hyperparams, load_lgp_ensemble
-from sigvisa.models.distributions import LogNormal
+from sigvisa.models.distributions import LogNormal, Gaussian, Laplacian
 from sigvisa.treegp.gp import GP, optimize_gp_hyperparams
 
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
@@ -86,7 +86,7 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, optimize=True, cluster_centers_fname=None, **kwargs):
+def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, optimize=True, cluster_centers_fname=None, remove_outliers=False, **kwargs):
     if model_type.startswith("gpparam"):
         s = model_type.split('+')
         if "param_var" in kwargs:
@@ -123,18 +123,38 @@ def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=Non
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type == "constant_laplacian":
-        model = learn_constant_laplacian(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
+        noise_prior = LogNormal(0.5, 1.0)
+        if remove_outliers:
+            model = iterative_fit_laplace_outliers(X=X, ymeans=y, yvars=yvars, sta=sta,
+                                                   noise_prior=noise_prior, **kwargs)
+        else:
+            model = learn_constant_laplacian(sta=sta, X=X, y=y, yvars=yvars, 
+                                             noise_prior=noise_prior, **kwargs)
+
     elif model_type == "constant_beta":
         model = learn_constant_beta(sta=sta, X=X, y=y, yvars=yvars, **kwargs)
     elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
-        
-        generic_noise_prior = LogNormal(1.5, 0.5)
 
-        model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta,
-                                 optimize_marginal_ll=optimize,
-                                 noise_prior = generic_noise_prior,
-                                 basisfn_str=basisfn_str, **kwargs)
+        generic_noise_prior = LogNormal(0.5, 0.5)        
+        if target=="amp_transfer":
+            noise_prior = LogNormal(-1, 0.3)
+        elif "decay" in target:
+            noise_prior = LogNormal(-2, 0.3)
+        else:
+            noise_prior = generic_noise_prior
+
+
+        if remove_outliers:
+            model = iterative_fit_parametric_outliers(X=X, ymeans=y, yvars=yvars, sta=sta,
+                                                      optimize_marginal_ll=optimize,
+                                                      noise_prior = noise_prior,
+                                                      basisfn_str=basisfn_str, **kwargs)
+        else:
+            model = learn_parametric(X=X, y=y, yvars=yvars, sta=sta,
+                                     optimize_marginal_ll=optimize,
+                                     noise_prior = noise_prior,
+                                     basisfn_str=basisfn_str, **kwargs)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
@@ -183,6 +203,89 @@ def pre_featurizer(basisfn_str):
         extract_dim=3
     return basisfn_str, featurizer_recovery, extract_dim
 
+
+def iterative_fit_laplace_outliers(X, ymeans, yvars, **kwargs):
+
+    def score_laplace_points(cl, X, ymeans, yvars):
+        uniform_lp = -np.log(np.max(ymeans) - np.min(ymeans))
+
+        lp1s = []
+        for (x, ym, yv) in zip(X, ymeans, yvars):
+            x = x.reshape((1, -1))
+            lp1 = cl.log_p(ym)
+            lp1s.append(lp1)
+
+        lp1s = np.array(lp1s).flatten()
+        diffs = lp1s-uniform_lp
+        return diffs
+    
+    idx_good, = np.where(yvars < 9.0)
+        
+    cl = learn_constant_laplacian(X[idx_good], ymeans[idx_good], **kwargs)
+    
+    idx_good_old = idx_good
+    for i in range(10):  
+        diffs = score_laplace_points(cl, X, ymeans, yvars)
+
+        idx_good, = np.where( (diffs > -3) * (yvars < 9.0) )
+        idx_bad, = np.where(diffs <= -3)
+        if len(idx_good) == len(idx_good_old) and (idx_good==idx_good_old).all():
+            break
+
+        #plt.figure()
+        #sns.distplot(ymeans[idx_good])
+        #sns.distplot(ymeans[idx_bad])
+        
+        cl = learn_constant_laplacian(X[idx_good], ymeans[idx_good], **kwargs)
+        
+        #x = np.linspace(np.min(ymeans), np.max(ymeans))
+        #lps = [cl.log_p(xx) for xx in x]
+        #plt.plot(x, np.exp(lps))
+        
+        idx_good_old = idx_good
+    return cl
+
+def iterative_fit_parametric_outliers(X, ymeans, yvars, **kwargs):
+
+    def score_all_points(lbm, X, ymeans, yvars):
+        baseline = Gaussian(np.mean(ymeans), std=np.std(ymeans))
+        lp1s = []
+        lp2s = []
+        for (x, ym, yv) in zip(X, ymeans, yvars):
+            x = x.reshape((1, -1))
+            m = lbm.predict(x)
+            v = lbm.variance(x, include_obs=True)
+            residual = Gaussian(m, std=np.sqrt(v+yv))
+            lp1 = residual.log_p(ym)
+            lp2 = baseline.log_p(ym)
+            lp1s.append(lp1)
+            lp2s.append(lp2)
+
+        lp1s = np.array(lp1s).flatten()
+        lp2s = np.array(lp2s).flatten()
+        diffs = lp1s-lp2s
+        return diffs
+
+    lbm = learn_parametric(X=X, y=ymeans, yvars=yvars, **kwargs)
+    idx_bad_old = []
+    for i in range(10):  
+        diffs = score_all_points(lbm, X, ymeans, yvars)
+
+        idx_good, = np.where(diffs > -2.5)
+        idx_bad, = np.where(diffs <= -2.5)
+        if len(idx_bad) == len(idx_bad_old) and (idx_bad==idx_bad_old).all():
+            break
+
+        #plt.figure()
+        #plt.scatter(dists[idx_good], ymeans[idx_good], color="blue", alpha=0.4)
+        #plt.scatter(dists[idx_bad], ymeans[idx_bad], color="red", alpha=0.4)
+
+        yvar_delta = np.zeros(yvars.shape)
+        yvar_delta[idx_bad] = 100.0
+        lbm = learn_parametric(X=X, y=ymeans, yvars=yvars+yvar_delta, **kwargs)
+        idx_bad_old = idx_bad
+    return lbm
+
 def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal_ll=True, **kwargs):
 
     basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
@@ -190,6 +293,10 @@ def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal
     def nllgrad(log_std):
         std = np.exp(log_std)
         var = std**2
+
+        if var < 1e-100:
+            return (np.inf, np.array((-1.0,)))
+
         try:
             lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, noise_std=std, compute_ll=True, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, **kwargs)
         except scipy.linalg.LinAlgError:
@@ -209,7 +316,7 @@ def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal
 
 
     if optimize_marginal_ll:
-        x0 = np.log(10)
+        x0 = 0.0
         result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
                                          tol=.0001)
         logstd = result['x']

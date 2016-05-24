@@ -182,8 +182,9 @@ def set_event_proposing_decoupling(sg, eid, new_ev, invalid_phases,
                     sta_relevant_nodes.append(n)
 
             def sta_logp():
-                lp = np.sum([n.log_p() for n in sta_relevant_nodes])
-                lp += np.sum([wn.log_p() for wn in wns])
+                #lp = np.sum([n.log_p() for n in sta_relevant_nodes])
+                lp = sg.joint_logprob_keys(sta_relevant_nodes)
+                lp += sg.joint_logprob_keys(wns)
                 return lp
 
             # for some reason Python doesn't include the sta nodes inside the
@@ -375,7 +376,6 @@ def phasejump_reduced_logp(sg, eid, phasejump_record):
 
     rn = [n for n in sg.extended_evnodes[eid] if not n.deterministic()]
     lp += sg.joint_logprob_keys(rn)
-
 
     # always compute phase existence model at all stations because I'm lazy and this should be cheap
     lp += sg.phase_existence_lp()

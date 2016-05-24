@@ -124,7 +124,8 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr style="font-size: 10pt">
 	<td><strong>Phase</strong></td>
 	<td><strong>atime</strong></td>
-	<td><strong>log(onset_seconds)</strong></td>
+	<td><strong>ttr</strong></td>
+	<td><strong>log(onset_s)</strong></td>
 	<td><strong>log(coda_height)</strong></td>
 	<td><strong>log(peak_decay)</strong></td>
 	<td><strong>log(coda_decay)</strong></td>
@@ -135,13 +136,14 @@ document.getElementById('loading').style.visibility = 'hidden';
       {% for phase in fit.sigvisacodafitphase_set.all %}
       <tr>
 	<td>{{ phase.phase }}</td>
-	<td>{{ phase.arrival_time }}</td>
-	<td>{{ phase.peak_offset }}</td>
-	<td>{{ phase.coda_height }}</td>
-	<td>{{ phase.peak_decay }}</td>
-	<td>{{ phase.coda_decay }}</td>
-	<td>{{ phase.amp_transfer }}</td>
-	<td>{{ phase.mult_wiggle_std }}</td>
+	<td>{{ phase.arrival_time|stringformat:'.1f' }}</td>
+	<td>{{ phase.tt_residual|stringformat:'.2f' }}</td>
+	<td>{{ phase.peak_offset|stringformat:'.2f'}}</td>
+	<td>{{ phase.coda_height|stringformat:'.2f'}}</td>
+	<td>{{ phase.peak_decay|stringformat:'.2f'}}</td>
+	<td>{{ phase.coda_decay|stringformat:'.2f'}}</td>
+	<td>{{ phase.amp_transfer|stringformat:'.2f'}}</td>
+	<td>{{ phase.mult_wiggle_std|stringformat:'.2f'}}</td>
 	<td><a href="{% url 'fit_phase_wiggles' fpid=phase.fpid%}">wiggle</a></td>
       </tr>
       {% endfor %}

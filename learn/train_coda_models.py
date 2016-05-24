@@ -89,7 +89,7 @@ def get_training_data(runid, site, chan, band, phases, target,
 
     # remove outliers
     bounds = {'tt_residual': (-30, 30),
-              'amp_transfer': (-6, 15),
+              'amp_transfer': (-6, 17),
               'coda_decay': (-6, 4),
               'peak_decay': (-6, 4),
               'mult_wiggle_std': (0, 1),
@@ -204,6 +204,7 @@ def main():
                       help="use preset models types to build models for all targets in one command. options are 'param' to build parametric models (amp_transfer: param_sin1, tt_residual: constant_laplacian, coda_decay: param_linear_distmb, peak_offset: param_linear_mb) or 'gp' to build nonparametric GP models")
     parser.add_option("--centers", dest="cluster_centers_fname", default=None, type="str",
                       help="file (np.savetxt) with list of cluster centers for local GPs")
+    parser.add_option("--remove_outliers", dest="remove_outliers", default=False, action="store_true")
 
 
 
@@ -280,7 +281,7 @@ def main():
         del model_types['mult_wiggle_std']
         targets.remove("mult_wiggle_std")
 
-    modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.template_shape, options.subsample, param_var + slack_var, options.optimize, options.cluster_centers_fname)
+    modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.template_shape, options.subsample, param_var + slack_var, options.optimize, options.cluster_centers_fname, options.remove_outliers)
 
     for target in targets:
         model_type = model_types[target]
@@ -288,7 +289,7 @@ def main():
             print "training models for iteration %d..." % (i,)
             modelids[target] = retrain_models(modelids[target], model_type, global_var=param_var, station_slack_var=slack_var)
 
-def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, template_shape, subsample, prior_var, optimize, cluster_centers_fname):
+def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, template_shape, subsample, prior_var, optimize, cluster_centers_fname, remove_outliers):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
@@ -350,6 +351,7 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     model = learn_model(X, y,  model_type, yvars=yvars, target=target, sta=site, 
                                         optim_params=optim_params, gp_build_tree=False, k=subsample, 
                                         bounds=bounds, param_var=prior_var, optimize=optimize,
+                                        remove_outliers=remove_outliers,
                                         cluster_centers_fname=cluster_centers_fname)
                 except Exception as e:
                     raise

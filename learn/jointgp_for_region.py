@@ -7,6 +7,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph, MAX_TRAVEL_TIME
 from sigvisa.graph.region import Region
 from sigvisa.source.event import Event
 from sigvisa.treegp.gp import GPCov
+from sigvisa.utils.geog import dist_km
 
 import os, sys, traceback
 import cPickle as pickle
@@ -29,6 +30,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                         iterative_align_init=False,
                         coarse_file=None,
                         fine_file=None,
+                        infer_evs=True,
                         **kwargs):
 
     try:
@@ -36,9 +38,20 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
     except:
         jgp_runid = None
 
+    if len(stas) > 1:
+        print "warning, avoiding distance-based ttr variance hack because we have multiple stas"
+        jgp_priors = None
+    else:
+        jgp_priors = hack_gp_hparam_priors(stas[0], evs)
+
+    obs_stds = None
+    if infer_evs:
+        obs_stds = {"time": 2.0, "mb": 0.2}
+
     rs = EventRunSpec(evs=evs, stas=stas, pre_s=50.0, 
                       force_event_wn_matching=True,
                       disable_conflict_checking=True, 
+                      observe_ev_stds = obs_stds,
                       seed=0, sample_init_templates=True)
 
     ms1 = ModelSpec(template_model_type="gp_joint", wiggle_family="iid", 
@@ -47,11 +60,12 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     hack_param_constraint=True,
                     hack_ttr_max=8.0,
                     jointgp_param_run_init=jgp_runid,
+                    jointgp_hparam_prior=jgp_priors,
                     phases=phases,
                     skip_levels=0,
                     uatemplate_rate=1e-6,
                     raw_signals=False, max_hz=2.0,  **kwargs)
-    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, special_mb_moves=False, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500)
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500, special_mb_moves=infer_evs, special_time_moves=infer_evs)
 
     ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
                     min_mb=1.0,
@@ -60,6 +74,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     hack_param_constraint=True,
                     phases=phases,
                     jointgp_param_run_init=jgp_runid,
+                    jointgp_hparam_prior=jgp_priors,
                     hack_ttr_max=8.0,
                     uatemplate_rate=1e-8,
                     skip_levels=0,
@@ -71,7 +86,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                             special_mb_moves=False, 
                             enable_phase_openworld=False,
                             fix_atimes=True, steps=10)
-    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, special_mb_moves=False, enable_phase_openworld=False, steps=300)
+    ms4.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=False, enable_template_moves=True, enable_phase_openworld=False, special_mb_moves=infer_evs, special_time_moves=infer_evs, steps=300)
 
 
     rundir = None
@@ -122,6 +137,36 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                  print_interval_s=10, 
                  run_dir=rundir,
                  model_switch_lp_threshold=None)
+
+
+def hack_gp_hparam_priors(sta, evs):
+    from sigvisa.models.distributions import LogNormal
+    from sigvisa.models.spatial_regression.SparseGP import default_jgp_hparam_priors
+    hparam_priors = default_jgp_hparam_priors()
+
+    s = Sigvisa()
+    slon, slat = s.earthmodel.site_info(sta, 0)[:2]
+    dists = [dist_km((slon, slat), (ev.lon, ev.lat)) for ev in evs]
+    print "event-station distances min %.2fkm, mean %.2fkm, max %.2fkm" % (np.min(dists), np.mean(dists), np.max(dists))
+    mean_dist = np.mean(dists)
+
+    if mean_dist < 100:
+        ttr_signal_var = 1.0
+    elif mean_dist < 300:
+        ttr_signal_var = 3.0
+    elif mean_dist < 600:
+        ttr_signal_var = 10.0
+    elif mean_dist < 1000:
+        ttr_signal_var = 16.0
+    elif mean_dist < 1500:
+        ttr_signal_var = 24.0
+    else:
+        ttr_signal_var = 30.0
+    print "using traveltime residual variance prior centered at stddev=%.2fs" % (np.sqrt(ttr_signal_var))
+
+    hparam_priors["tt_residual"]["signal_var"] = LogNormal(np.log(ttr_signal_var), 0.5)
+
+    return hparam_priors
 
 def get_evs(min_lon, max_lon, min_lat, max_lat, min_time, max_time, evtype="isc", precision=None):
     if evtype=="isc" and precision is not None:

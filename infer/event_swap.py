@@ -82,9 +82,9 @@ another issue: event mbs get reset to 3.0 in the proposal. this means the probs 
     """
 
     corr_kwargs = sample_corr_kwargs(sg)
-    def clp(sg, fix_result=None, **kwargs):
-        kwargs.update(corr_kwargs)
-        return correlation_location_proposal(sg, fix_result=fix_result, **kwargs)
+    def clp(sg, fix_result=None, **clp_kwargs):
+        clp_kwargs.update(corr_kwargs)
+        return correlation_location_proposal(sg, fix_result=fix_result, **clp_kwargs)
 
     if "birth_args" not in kwargs:
         dumb_birth = np.random.rand() < 0.5 
@@ -155,7 +155,8 @@ def rebirth_events_helper(sg, eids,
                           forward_location_proposal=None, 
                           reverse_location_proposal=None, 
                           birth_args = None, 
-                          death_args = None):
+                          death_args = None,
+                          inference_step=-1):
     """
     Given a list of events, propose killing them all and rebirthing
     new events from the resulting uatemplates.

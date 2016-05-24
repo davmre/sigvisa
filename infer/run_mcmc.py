@@ -291,6 +291,7 @@ def run_open_world_MH(sg, steps=10000,
                       enable_template_moves=True,
                       enable_hparam_moves=True,
                       special_mb_moves=False,
+                      special_time_moves=False,
                       template_move_type="rw", # can be "hamiltonian", "rw" (i.e. random-walk MH), or "both"
                       tmpl_birth_rate=0.5,
                       logger=None,
@@ -349,6 +350,8 @@ def run_open_world_MH(sg, steps=10000,
                             'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
     if special_mb_moves:
         event_moves_gaussian['evmb'] = ('mb', ('mb',))
+    if special_time_moves:
+        event_moves_gaussian['evtime'] = ('time', ('time',))
 
     event_moves_special = {'ev_source_type': (ev_source_type_move, 1.0),
                            'ev_lsqr': (ev_lsqr_move, 1.0)} if enable_event_moves else {}
@@ -569,7 +572,9 @@ def run_open_world_MH(sg, steps=10000,
             run_move(move_name=move, fn=fn, step=step, n_attempted=n_attempted,
                      n_accepted=n_accepted, move_times=move_times,
                      move_prob=prob,
-                     sg=sg, log_to_run_dir=run_dir)
+                     sg=sg, 
+                     inference_step=step,
+                     log_to_run_dir=run_dir)
 
         if sg.jointgp and enable_hparam_moves:
             do_gp_hparam_moves(sg, stds, step=step, n_attempted=n_attempted,

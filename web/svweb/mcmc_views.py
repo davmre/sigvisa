@@ -120,16 +120,18 @@ def mcmc_move_times(request, dirname):
     average_time = request.GET.get('average', 'false').lower().startswith("t")
     logscale = request.GET.get('logscale', 'false').lower().startswith("t")
     
-    r = re.compile("move_(.+)_times.txt")
+    r = re.compile("(.+).txt")
     move_times = {}
-    for fname in os.listdir(mcmc_run_dir):
+    move_times_dir = os.path.join(mcmc_run_dir, "move_times")
+    for fname in os.listdir(move_times_dir):
         m = r.match(fname)
         if m is None:
             continue
 
         move_name = str(m.groups()[0])
+
         try:
-            times = np.loadtxt(os.path.join(mcmc_run_dir, fname))[:, 1]
+            times = np.loadtxt(os.path.join(move_times_dir, fname))[:, 1]
         except:
             continue
 
@@ -339,7 +341,7 @@ def mcmc_run_detail(request, dirname):
     phases_used = sg.phases
 
     for i, eid in enumerate(eids):
-        ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
+        ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d' % eid, 'trajectory.txt')
 
 
         ev = sg.get_event(eid)
@@ -1550,7 +1552,7 @@ def mcmc_event_posterior(request, dirname):
         true_evs = []
 
     for eid_i, eid in enumerate(sorted(eids)):
-        ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d.txt' % eid)
+        ev_trace_file = os.path.join(mcmc_run_dir, 'ev_%05d' % eid, 'trajectory.txt')
         trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
 
         if len(trace.shape) != 2 or trace.shape[0] < 2:
@@ -2093,7 +2095,7 @@ def mcmc_ev_trace_pairwise_plot(request, dirname, eid, param1, param2):
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
 
-    eidfile = os.path.join(mcmc_run_dir, "ev_%05d.txt" % eid)
+    eidfile = os.path.join(mcmc_run_dir, "ev_%05d"  % eid, "trajectory.txt")
     trace = np.loadtxt(eidfile)
 
     col1 = cols[param1]

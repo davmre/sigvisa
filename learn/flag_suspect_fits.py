@@ -56,11 +56,12 @@ def get_neighbor_fits(fitid):
 
 def get_fit_params_by_phase(fitid):
     s = Sigvisa()
-    query = s.sql("select f.evid, f.sta, fp.fpid, fp.phase, fp.arrival_time from sigvisa_coda_fit f, sigvisa_coda_fit_phase fp where f.fitid=%d and fp.fitid=f.fitid" % fitid)
+    query = s.sql("select f.evid, f.sta, fp.fpid, fp.phase, fp.tt_residual from sigvisa_coda_fit f, sigvisa_coda_fit_phase fp where f.fitid=%d and fp.fitid=f.fitid" % fitid)
 
-    ev = get_event(evid=query[0][0])
-    sta = query[0][1]
-    phase_params = {phase: {"tt_residual": atime - (ev.time + tt_predict(ev, sta, phase)), "fpid": fpid} for  (_, _, fpid, phase, atime) in query}
+    ttr = query[0, 4]
+    #ev = get_event(evid=query[0][0])
+    #sta = query[0][1]
+    phase_params = {phase: {"tt_residual": ttr), "fpid": fpid} for  (_, _, fpid, phase, ttr) in query}
 
     return phase_params
 

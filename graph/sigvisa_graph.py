@@ -19,7 +19,8 @@ import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential, TruncatedGaussian, LogNormal, InvGamma, Beta, Laplacian, Bernoulli
 from sigvisa.models.spatial_regression.baseline_models import ConstGaussianModel
-from sigvisa.models.conditional import ConditionalGaussian
+from sigvisa.models.spatial_regression.SparseGP import default_jgp_hparam_priors
+from sigvisa.models.conditional import ConditionalGaussian,ConditionalTruncatedGaussian
 from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, ArrivalTimeNode
 from sigvisa.models.joint_gp import JointGP, JointIndepGaussian
@@ -274,29 +275,7 @@ class SigvisaGraph(DirectedGraphModel):
         
 
         if self.jointgp_hparam_prior is None:
-            # todo: different priors for different params
-            self.jointgp_hparam_prior = {}
-            if raw_signals:
-                wiggle_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=1.0),
-                                'depth_lscale': LogNormal(mu=3.0, sigma=1.0),
-                                'noise_var': Beta(beta=1.0, alpha=2.0)}
-            else:
-                wiggle_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
-                                'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
-                                'signal_var': InvGamma(beta=3.0, alpha=4.0),
-                                'noise_var': InvGamma(beta=1.0, alpha=3.0),
-                                'level_var': InvGamma(beta=3.0, alpha=4.0),}
-
-            param_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
-                           'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
-                           'signal_var': InvGamma(beta=3.0, alpha=4.0),
-                           'noise_var': InvGamma(beta=1.0, alpha=3.0),}
-            
-            for i in range(9):
-                self.jointgp_hparam_prior["level%d" % i] = wiggle_prior
-
-            for param in ("tt_residual", "amp_transfer", "coda_decay", "peak_decay", "peak_offset", "mult_wiggle_std"):
-                self.jointgp_hparam_prior[param] = param_prior
+            self.jointgp_hparam_prior = default_jgp_hparam_priors()
 
         self._jointgp_hparam_nodes = {}
 
@@ -1017,7 +996,7 @@ class SigvisaGraph(DirectedGraphModel):
                 try:
                     tt = tt_predict(ev, site, phase=phase)
                 except Exception as e:
-                    print e
+                    print "exception askdfgasdkf: ", e
                     continue
 
                 self.add_event_site_phase(tg, site, phase, evnodes, 
@@ -1035,7 +1014,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def observe_event(self, eid, ev, stddevs=None):
         if stddevs is None:
-            stddevs = {"lon": 0.2, "lat": 0.2, "depth": 20.0, "time": 3.0, "mb": 0.3}
+            stddevs = {"lon": 0.2, "lat": 0.2, "depth": 10.0, "time": 2.0, "mb": 0.2}
 
         evnodes = self.evnodes[eid]
         obs_dict = ev.to_dict()
@@ -1044,10 +1023,27 @@ class SigvisaGraph(DirectedGraphModel):
                 k_local = k.split(";")[1]
                 if k_local not in stddevs: continue
 
-                n_obs = Node(label=k+"_obs", model=ConditionalGaussian(k, stddevs[k_local]), parents=(n,), fixed=True, initial_value=obs_dict[k_local])
+                std = stddevs[k_local]
+                n_obs = Node(label=k+"_obs", model=ConditionalTruncatedGaussian(k, std, a=-5*std, b=5*std), parents=(n,), fixed=True, initial_value=obs_dict[k_local])
                 self.extended_evnodes[eid].append(n_obs)
                 self.add_node(n_obs)
+        self._topo_sort()
 
+    def get_observed_values(self, eid):
+
+        evdict = self.get_event(eid).to_dict()
+        stddevs = {}
+        for n in self.extended_evnodes[eid]:
+            if "_obs" not in n.label: continue
+            k_local = n.label.split(";")[1].split("_")[0]
+            stddevs[k_local] = n.model.std
+            evdict[k_local] = n.get_value()
+
+        if len(stddevs) > 0:
+            obs_ev = Event(autoload=False, **evdict)
+            return obs_ev, stddevs
+        else:
+            return None, {}
 
     def destroy_unassociated_template(self, nodes=None, tmid=None, nosort=False):
         if tmid is not None:
@@ -1563,7 +1559,7 @@ class SigvisaGraph(DirectedGraphModel):
                                  runids=self.runids)
         self.add_node(nm_node)
 
-        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, wavelet_param_modelids=param_modelids, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), hack_coarse_signal=self.hack_coarse_signal, **kwargs)
+        wave_node = ObservedSignalNode(model_waveform=wave, graph=self, observed=fixed, label=self._get_wave_label(wave=wave), wavelet_basis=basis, wavelet_param_models=param_models, wavelet_param_modelids=param_modelids, has_jointgp = has_jointgp, mw_env=wave_env, parents=(nm_node,), hack_coarse_signal=self.hack_coarse_signal, max_template_len_s=self.max_template_len_s, **kwargs)
 
         for n in hparam_nodes:
             wave_node.addParent(n)
@@ -1717,6 +1713,8 @@ class SigvisaGraph(DirectedGraphModel):
             lp += natural_source_model.log_p(natural_source)
 
             ev = Event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+
+            print "prior sampled ev", ev
 
             if self.inference_region is not None:
                 region_constraint = self.inference_region.contains_event(ev)

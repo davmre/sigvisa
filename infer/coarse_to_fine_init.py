@@ -82,6 +82,7 @@ class EventRunSpec(RunSpec):
 
     def __init__(self, sites=None, stas=None, evids=None, evs=None,  initialize_events=True,
                  pre_s=10, post_s=120, force_event_wn_matching=True, 
+                 observe_ev_stds=None,
                  disable_conflict_checking=False, **kwargs):
 
         super(EventRunSpec, self).__init__(**kwargs)
@@ -95,6 +96,7 @@ class EventRunSpec(RunSpec):
         self.initialize_events=initialize_events
         self.force_event_wn_matching = force_event_wn_matching
         self.disable_conflict_checking = disable_conflict_checking
+        self.observe_ev_stds = observe_ev_stds
 
     def get_waves(self, modelspec):
         s = Sigvisa()
@@ -186,7 +188,7 @@ class EventRunSpec(RunSpec):
                     else:
                         waves.append((wave_env, None))
                 except MissingWaveform as e:
-                    print e
+                    print "missing waveform", e
                     continue
         return waves
 
@@ -405,7 +407,16 @@ def initialize_sg(sg, modelspec, runspec):
 
     evs = runspec.get_init_events()
     for ev in evs:
-        sg.add_event(ev, sample_templates=runspec.sample_init_templates)
+        evnodes = sg.add_event(ev, sample_templates=runspec.sample_init_templates)
+        eid = evnodes["lon"].eid
+
+        try:
+            runspec.observe_ev_stds
+        except:
+            continue
+        if runspec.observe_ev_stds is not None:
+            sg.observe_event(eid=eid, ev=ev, stddevs=runspec.observe_ev_stds)
+
 
 def initialize_from(sg_new, ms_new, sg_old, ms_old):
     """
@@ -418,6 +429,10 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
     for eid in eids_old:
         ev = sg_old.get_event(eid)
         sg_new.add_event(ev, eid=eid)
+
+        obs_ev, obs_stddevs = sg_old.get_observed_values(eid)
+        if obs_ev is not None:
+            sg_new.observe_event(eid=eid, ev=obs_ev, stddevs=obs_stddevs)
 
     for tmid in sg_old.uatemplates.keys():
         n_atime = sg_old.uatemplates[tmid]["arrival_time"]

@@ -46,7 +46,7 @@ class PhaseExistenceModel(object):
 
     def __init__(self, phase, boundaries=None, 
                  boundary_prob=0.01, half_lives=None,
-                 max_prob = 0.9999):
+                 max_prob = 1.0):
         if boundaries is None:
             boundaries = GA_boundaries[phase]
         if half_lives is None:
@@ -107,10 +107,8 @@ class PhaseExistenceModel(object):
     def log_p(self, exists=True, **kwargs):
         distance, depth = self._get_distance_depth(**kwargs)
 
-
         #if not self._in_bounds(distance, depth):
         #    return -np.inf
-
 
         logit_min_dist = 0.0
         if self.min_dist > 0:

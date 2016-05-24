@@ -372,6 +372,7 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
     global_data = np.empty((npts,))
     global_data.fill(np.nan)
 
+
     for (chan, wave_stime, wave_etime, wave_hz, wave_npts, subdir, fname) in sorted_waves:
         
         # at which offset into this waveform should we start collecting samples
@@ -416,6 +417,9 @@ def fetch_waveform_sac(station, chan, stime, etime, pad_seconds=20, cursor=None)
         pad_samples = int(pad_seconds * hz)
         masked_data[0:pad_samples] = ma.masked
         masked_data[-pad_samples:] = ma.masked
+
+    if selection=="YKR8":
+        masked_data[masked_data==0] = ma.masked
 
     masked_data[np.isnan(masked_data)] = ma.masked
 

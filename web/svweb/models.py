@@ -254,6 +254,7 @@ class SigvisaCodaFitPhase(models.Model):
     phase = models.CharField(max_length=60)
     template_model = models.CharField(max_length=60, blank=True)
     arrival_time = models.FloatField(null=True, blank=True)
+    tt_residual = models.FloatField(null=True, blank=True)
     peak_offset = models.FloatField(null=True, blank=True)
     coda_height = models.FloatField(null=True, blank=True)
     coda_decay = models.FloatField(null=True, blank=True)

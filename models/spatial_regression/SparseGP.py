@@ -17,31 +17,40 @@ from sigvisa.models.distributions import InvGamma, LogNormal, Beta
 
 
 
-default_other_params = (0.1, LogNormal(mu=-2, sigma=0.5),
-        GPCov([9.0,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
-              wfn_priors=[LogNormal(mu=2, sigma=1.0),],
+"""
+GP param priors here are set by hand-examining the learned noise variances of *parametric* models
+fit iteratively to data. These priors are based on regional fits in the western US. See
+sigvisa_scratch notes from May 23 2016 for (slightly) more discussion of the very arbitrary process
+for setting these. 
+
+Note these are for a GP *on top of* a parametric baseline model. Data modeled with a pure 
+nonparametric GP would involve higher variances. 
+"""
+
+default_amp_params = (0.1, LogNormal(mu=-1.75, sigma=0.5),
+        GPCov([0.5,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
+              wfn_priors=[LogNormal(mu=-.75, sigma=0.5),],
               dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
-
-default_amp_params = (0.1, LogNormal(mu=-2, sigma=0.5),
-        GPCov([0.25,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
-              wfn_priors=[LogNormal(mu=-1, sigma=1.0),],
+default_peak_decay_params = (0.01, LogNormal(mu=-4.0, sigma=1.0),
+        GPCov([0.03,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
+              wfn_priors=[LogNormal(mu=-3.0, sigma=1.0),],
               dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
-default_ttr_params = (0.1, LogNormal(mu=-2, sigma=0.5),
+default_coda_decay_params = (0.02, LogNormal(mu=-3.5, sigma=1.0),
+        GPCov([0.05,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
+              wfn_priors=[LogNormal(mu=-2.5, sigma=1.0),],
+              dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
+
+default_offset_params = (0.03, LogNormal(mu=-3, sigma=1.0),
+        GPCov([0.1,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
+              wfn_priors=[LogNormal(mu=-2, sigma=1.0),],
+              dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
+
+default_ttr_params = (1.0, LogNormal(mu=0.0, sigma=0.5),
         GPCov([9.0,], [ 100.0, 40.0], dfn_str="lld", wfn_str="matern32",
-              wfn_priors=[LogNormal(mu=2, sigma=1.0),],
+              wfn_priors=[LogNormal(mu=2.2, sigma=0.5),],
               dfn_priors =[LogNormal(mu=4, sigma=1.0), LogNormal(mu=4, sigma=1.0)]))
-
-
-# wavelets should have almost no obs noise because that's already implicit in the kalman
-# filter posterior uncertainty
-#default_wavelet_params = (.0001, InvGamma(beta=0.001, alpha=10.0),
-#        GPCov([0.265,], [ 11.0, 5.0], dfn_str="lld",
-#              wfn_priors=[InvGamma(beta=1.0, alpha=3.0),],
-#              wfn_str="matern32",
-#              dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
-
 
 default_wavelet_params = (.5, Beta(beta=5.0, alpha=2.0),
         GPCov([0.5,], [ 30.0, 30.0], dfn_str="lld",
@@ -50,49 +59,51 @@ default_wavelet_params = (.5, Beta(beta=5.0, alpha=2.0),
               dfn_priors =[LogNormal(mu=3, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
 
 
-start_params_lld = {"coda_decay": default_other_params,
-                    "peak_decay": default_other_params,
-                    "amp_transfer": default_other_params,
-                    "peak_offset": default_other_params,
+start_params_lld = {"coda_decay": default_coda_decay_params,
+                    "peak_decay": default_peak_decay_params,
+                    "amp_transfer": default_amp_params,
+                    "peak_offset": default_offset_params,
                     "tt_residual": default_ttr_params,
                     "db4_2.0_3_30": default_wavelet_params,
                     "db4_2.0_3_20.0": default_wavelet_params,
                     }
 
+start_params = {"lld": start_params_lld,}
 
 
-default_other_params_lldlld = (2.0, InvGamma(beta=5.0, alpha=.1),
-                               GPCov([3.4,], [ 100.0, 40.0, 100.0, 40.0], dfn_str="lldlld",
-              wfn_priors=[InvGamma(beta=5.0, alpha=.5),],
-              dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0),
-                           LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
+def default_jgp_hparam_priors():
+    # todo: different priors for different params
+    jointgp_hparam_prior = {}
 
-default_amp_params_lldlld = (.1, InvGamma(beta=.1, alpha=1),
-                             GPCov([.1,], [ 100.0, 40.0, 100.0, 40.0], dfn_str="lldlld",
-              wfn_priors=[InvGamma(beta=.1, alpha=1.0),],
-              dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0),
-                           LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
+    def defaults_to_prior(default):
+        nv, nv_prior, cov = default
+        lscale_prior, depth_prior = cov.dfn_priors
+        sv_prior = cov.wfn_priors[0]
+        prior = {'horiz_lscale': lscale_prior,
+                 'depth_lscale': depth_prior,
+                 'noise_var': nv_prior}
+        if sv_prior is not None:
+            prior['signal_var'] = sv_prior
 
-default_phase_params_lldlld = (1.0, InvGamma(beta=1.0, alpha=1),
-                               GPCov([1.0,], [ 100.0, 40.0, 100.0, 40.0], dfn_str="lldlld",
-              wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
-              dfn_priors =[LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0),
-                           LogNormal(mu=5, sigma=1.0), LogNormal(mu=3, sigma=1.0)]))
+        return prior
 
+    wiggle_prior = defaults_to_prior(default_wavelet_params)
+    for i in range(9):
+        jointgp_hparam_prior["level%d" % i] = wiggle_prior
+    
+    dummy_prior = {'horiz_lscale': LogNormal(mu=3.0, sigma=3.0),
+                   'depth_lscale': LogNormal(mu=3.0, sigma=3.0),
+                   'signal_var': LogNormal(-1, 1.0),
+                   'noise_var': LogNormal(-2, 1.0),}
 
-start_params_lldlld = {"coda_decay": default_other_params_lldlld,
-                    "amp_transfer": default_other_params_lldlld,
-                    "peak_offset": default_other_params_lldlld,
-                    "tt_residual": default_other_params_lldlld,
-                    "amp": default_amp_params_lldlld,
-                    "phase": default_phase_params_lldlld,
-                    }
+    for param in ("tt_residual", "amp_transfer", "coda_decay", "peak_decay", "peak_offset", "mult_wiggle_std"):
+        if param in start_params_lld:
+            jointgp_hparam_prior[param] = defaults_to_prior(start_params_lld[param])
+        else:
+            print "warning, no hparam prior specified for", param, ", using dummy"
+            jointgp_hparam_prior[param] = dummy_prior
 
-
-
-start_params = {"lld": start_params_lld,
-                "lldlld": start_params_lldlld,
-                }
+    return jointgp_hparam_prior
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 

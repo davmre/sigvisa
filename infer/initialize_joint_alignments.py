@@ -298,6 +298,17 @@ def detect_outlier_fits(sg):
                 #X.append((ev.lon, ev.lat, ev.depth))
 
             fingerprints = np.array(fingerprints)
+
+            d = fingerprints.shape[1]
+            n_features = 5
+            if d > n_features:
+                # take some random projections to avoid problems estimating 
+                # high-dimensional covariance matrices.
+                # TODO: is this justified?
+                ws = [np.random.randn(d) for i in range(5)]
+                ws = np.asarray([w / np.linalg.norm(w) for w in ws])
+                fingerprints = np.dot(fingerprints, ws.T)
+
             eids = np.array(eids)
             X = np.array(X)
             results[phases] = (fingerprints, eids)
@@ -308,13 +319,16 @@ def detect_outlier_fits(sg):
     outlier_eids = []
     for phase_set, (fingerprints, eids) in r.items():
 
-        if len(fingerprints) > 2:
-
-            clf = EllipticEnvelope(contamination=.20)
-            clf.fit(fingerprints)
-            y_pred = clf.decision_function(fingerprints).ravel()
-            outliers = eids[y_pred < 0]
-            outlier_eids += list(outliers)
+        if len(fingerprints) > 5:
+            try:
+                clf = EllipticEnvelope(contamination=.20)
+                clf.fit(fingerprints)
+                y_pred = clf.decision_function(fingerprints).ravel()
+                outliers = eids[y_pred < 0]
+                outlier_eids += list(outliers)
+            except Exception as e:
+                sg.logger.warning("skipping outlier detection for phase set %s with shape %s due to exception: %s" % (phase_set, fingerprints.shape, e))
+                continue
 
     return outlier_eids
 

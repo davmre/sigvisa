@@ -21,15 +21,14 @@ region_lat = (32, 49)
 region_stime = 1239040000.0
 region_etime = region_stime + 3600.0
 
-def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, hack_event_rate=True):
+def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, hack_event_rate=True, raw_signals=False, min_mb=2.5):
 
 
-
-    min_mb = 2.5
     uatemplate_rate=1e-4
-    hz = 2.0
-    runids=10
-    phases=["P", "S", "Lg", "PcP", "ScP", "pP", "Pg"]
+    hz = 10.0 if raw_signals else 2.0
+    runids=(15,)
+    #phases=["P", "S", "Lg", "PcP", "ScP", "pP", "Pg"]
+    phases=["P", "Pn", "Lg", "Pg", "Sn"]
 
     region = Region(lons=region_lon, lats=region_lat, 
                     times=(region_stime, region_etime),
@@ -38,21 +37,20 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, ha
                     rate_train_end=1199145600)
 
     sw = SampledWorld(seed=seed)
-    sw.sample_sg(runid=runid, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=min_mb, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=None, region=region)
+    sw.sample_sg(runids=runids, wiggle_model_type="dummy", wiggle_family="iid", sites=stas, phases=phases, tmtype="param", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=min_mb, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=None, region=region, raw_signals=raw_signals)
 
-    rs = SyntheticRunSpec(sw=sw)
-
-
+    rs = SyntheticRunSpec(sw=sw, raw_signals=raw_signals)
 
     ms1 = ModelSpec(template_model_type="param",
                     wiggle_family="iid",
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
                     phases=phases,
-                    runids=(runid,),
+                    runids=runids,
                     inference_region=region,
                     dummy_fallback=True,
                     hack_param_constraint=False,
+                    raw_signals=raw_signals,
                     min_mb=min_mb,
                     vert_only=True)
 
@@ -66,7 +64,7 @@ def main(seed=1, n_events=5, resume_from="", no_hough=False, init_true=False, ha
         ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=200)
     else:
         sg = rs.build_sg(ms1)
-        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=300)
+        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], steps=50)
 
 
     if hack_event_rate:
@@ -98,11 +96,13 @@ if __name__ == "__main__":
         parser.add_option("--resume_from", dest="resume_from", default="", type=str)
         parser.add_option("--no_hough", dest="no_hough", default=False, action="store_true")
         parser.add_option("--init_true", dest="init_true", default=False, action="store_true")
+        parser.add_option("--raw_signals", dest="raw_signals", default=False, action="store_true")
+        parser.add_option("--min_mb", dest="min_mb", default=2.5, type="float")
 
         (options, args) = parser.parse_args()
         main(seed=options.seed, n_events=options.n_events, 
              resume_from=options.resume_from, no_hough=options.no_hough,
-             init_true=options.init_true)
+             init_true=options.init_true, min_mb=options.min_mb, raw_signals=options.raw_signals)
     except KeyboardInterrupt:
         raise
     except Exception as e:
