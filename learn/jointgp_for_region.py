@@ -65,7 +65,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     skip_levels=0,
                     uatemplate_rate=1e-6,
                     raw_signals=False, max_hz=2.0,  **kwargs)
-    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, steps=500, special_mb_moves=infer_evs, special_time_moves=infer_evs)
+    ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, special_mb_moves=infer_evs, special_time_moves=infer_evs, steps=500)
 
     ms4 = ModelSpec(template_model_type="gp_joint", wiggle_family="db4_2.0_3_20.0", 
                     min_mb=1.0,

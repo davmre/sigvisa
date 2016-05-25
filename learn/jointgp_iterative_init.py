@@ -266,7 +266,7 @@ def fit_eids_from_prototype_model(sg_full, sg_prototype, sta, eids, eid_atimes, 
             wn.hack_wavelets_as_iid = True
 
     logger = MCMCLogger( write_template_vals=True, dump_interval_s=10.0, print_interval_s=10.0, write_gp_hparams=True, max_dumps=2, run_dir=old_run_dir+".align_indep")
-    run_open_world_MH(sg_indep, steps=200,
+    run_open_world_MH(sg_indep, steps=500,
                       enable_event_openworld=False,
                       enable_event_moves=False,
                       enable_phase_openworld=False,

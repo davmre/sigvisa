@@ -35,17 +35,9 @@ def load_noise_model_prior(sta, chan=None, band=None, hz=None, runids=None, env=
     var_query = "select model_fname, model_type from sigvisa_param_model where param='arvar' and %s" % conds
     params_query = "select model_fname, model_type from sigvisa_param_model where param='arparams' and %s" % conds
 
-
-    c = s.dbconn.cursor()
-    c.execute(mean_query)
-
-    fmean, tmean = c.fetchone()
-    c.execute(var_query)
-    fvar, tvar = c.fetchone()
-    c.execute(params_query)
-    fparams, tparams = c.fetchone()
-    c.close()
-
+    fmean, tmean = s.sql(mean_query)[0]
+    fvar, tvar = s.sql(var_query)[0]
+    fparams, tparams = s.sql(params_query)[0]
 
     mean_model = load_model(fmean, tmean)
     var_model = load_model(fvar, tvar)

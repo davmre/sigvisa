@@ -230,6 +230,12 @@ class Sigvisa(threading.local):
         return stas
 
     def sql(self, sql_query):
+        try:
+            self.dbconn.ping(True)
+        except:
+            self.dbconn.close()
+            self.dbconn = db.connect()
+
         cursor = self.dbconn.cursor()
         cursor.execute(sql_query)
         r = cursor.fetchall()

@@ -62,7 +62,6 @@ def get_param_model_id(runids, sta, phase, model_type, param,
                        template_shape, chan=None, band=None):
 
     s = Sigvisa()
-    cursor = s.dbconn.cursor()
 
 
 
@@ -80,16 +79,13 @@ def get_param_model_id(runids, sta, phase, model_type, param,
         # get a DB modelid for a previously-trained parameter model
         sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param)
         try:
-            cursor.execute(sql_query)
-            results = cursor.fetchall()
+            results = s.sql(sql_query)
             modelid = sorted(results, key = lambda x : -x[1])[0][0] # use the model with the most shrinkage iterations
         except:
             continue
 
-        cursor.close()
         return modelid
 
-    cursor.close()
     raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid in %s and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runids, template_shape, param))
 
 default_parametric_tmtypes = {'tt_residual': 'constant_laplacian',

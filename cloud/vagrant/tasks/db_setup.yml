@@ -1,4 +1,14 @@
 ---
+- name: set three-day connection timeout
+  blockinfile:
+    dest: /etc/mysql/my.cnf
+    marker: "### {mark} ANSIBLE MANAGED BLOCK"
+    insertafter: "skip-external-locking"
+    content: |
+      wait_timeout=259200
+      interactive_timeout=259200
+- name: restart mysql to update config
+  service: name=mysql state=restarted
 - name: upload csv files
   become_user: sigvisa
   unarchive:
