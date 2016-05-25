@@ -230,12 +230,12 @@ def construct_sg_for_eids(sg1, eids, eid_atimes, model_type="gp_joint", model_di
 
     return new_sg
 
-def optimize_prototypes(sg1, prototype_eids, eid_atimes):
+def optimize_prototypes(sg1, prototype_eids, eid_atimes, old_run_dir):
 
     new_sg = construct_sg_for_eids(sg1, prototype_eids, eid_atimes)
 
-    logger = MCMCLogger( write_template_vals=True, dump_interval_s=10.0, print_interval_s=10.0, write_gp_hparams=True, max_dumps=2, run_dir=None)
-    run_open_world_MH(new_sg, steps=1000,
+    logger = MCMCLogger( write_template_vals=True, dump_interval_s=10.0, print_interval_s=10.0, write_gp_hparams=True, max_dumps=2, run_dir=old_run_dir+".prototypes")
+    run_open_world_MH(new_sg, steps=400,
                       enable_event_openworld=False,
                       enable_event_moves=False,
                       enable_phase_openworld=False,
@@ -248,7 +248,7 @@ def optimize_prototypes(sg1, prototype_eids, eid_atimes):
 
     return new_sg
 
-def fit_eids_from_prototype_model(sg_full, sg_prototype, sta, eids, eid_atimes):
+def fit_eids_from_prototype_model(sg_full, sg_prototype, sta, eids, eid_atimes, old_run_dir):
 
     models = {}
     sg_prototype.current_log_p()
@@ -265,8 +265,8 @@ def fit_eids_from_prototype_model(sg_full, sg_prototype, sta, eids, eid_atimes):
         for wn in wns:
             wn.hack_wavelets_as_iid = True
 
-    logger = MCMCLogger( write_template_vals=True, dump_interval_s=10.0, print_interval_s=10.0, write_gp_hparams=True, max_dumps=2, run_dir=None)
-    run_open_world_MH(sg_indep, steps=300,
+    logger = MCMCLogger( write_template_vals=True, dump_interval_s=10.0, print_interval_s=10.0, write_gp_hparams=True, max_dumps=2, run_dir=old_run_dir+".align_indep")
+    run_open_world_MH(sg_indep, steps=200,
                       enable_event_openworld=False,
                       enable_event_moves=False,
                       enable_phase_openworld=False,
@@ -295,7 +295,7 @@ def repatriate_fits(sg_full, sg_single):
                 wn2 = list(tmnodes["coda_decay"][1].children)[0]
                 wn2.nm_node.set_value(wn.nm)
 
-def jointgp_iterative_align_init(sg):
+def jointgp_iterative_align_init(sg, base_run_dir):
     assert(len(sg.station_waves.keys())==1)
     sta = sg.station_waves.keys()[0]
 
@@ -304,11 +304,11 @@ def jointgp_iterative_align_init(sg):
     prototype_eids = select_prototype_events2(sg, evscores, xcs_by_eid)
     print "selected prototype eids", prototype_eids
     
-    new_sg = optimize_prototypes(sg, prototype_eids, eid_atimes)
+    new_sg = optimize_prototypes(sg, prototype_eids, eid_atimes, base_run_dir)
     repatriate_fits(sg, new_sg)
 
     indep_eids = [eid for eid in eid_atimes.keys() if eid not in prototype_eids]
-    sg_indep = fit_eids_from_prototype_model(sg, new_sg, sta, indep_eids, eid_atimes)
+    sg_indep = fit_eids_from_prototype_model(sg, new_sg, sta, indep_eids, eid_atimes, base_run_dir)
     repatriate_fits(sg, sg_indep)
 
     return sg

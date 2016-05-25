@@ -35,15 +35,22 @@ def sort_by_filesize(fnames, descending=True):
 
 def parallel_jointgp_alignment(label, clusters_evids, stas, infer_script, 
                                old_jobfile=None, 
-                               jobfile=None, nnodes=2, ncpus=4):
+                               jobfile=None, 
+                               nnodes=2, 
+                               node_file=None,
+                               ncpus=4):
 
     infer_script = "/bin/bash /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
 
 
     s_homedir =  os.getenv("SIGVISA_HOME")
 
-    hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
-    #hostnames = ["sigvisa2.cloudapp.net",]
+    if node_file is not None:
+        with open(node_file, "r") as f:
+            hostnames = [line.strip() for line in f.readlines() if len(line) > 2]
+    else:
+        hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
+
 
     remote_sigvisa_home = "/home/sigvisa/python/sigvisa"
     if old_jobfile is None:
@@ -107,6 +114,8 @@ def main():
 
     parser.add_option("--nnodes", dest="nnodes", default=0, type="int",
                       help="number of cloud nodes to execute on")
+    parser.add_option("--node_file", dest="node_file", default=None, type="str",
+                      help="file containing cloud node hostnames (optional, overrides nnodes)")
     parser.add_option("--ncpus", dest="ncpus", default=4, type="int",
                       help="number of cpus per node")
     parser.add_option("--label", dest="label", default="", type="str",
@@ -140,7 +149,9 @@ def main():
     parallel_jointgp_alignment(options.label, cevids, stas, infer_script, 
                                jobfile=options.jobfile,
                                old_jobfile=options.old_jobfile,
-                               nnodes=options.nnodes, ncpus=options.ncpus)
+                               nnodes=options.nnodes, 
+                               node_file=options.node_file,
+                               ncpus=options.ncpus)
 
 
 if __name__ == "__main__":

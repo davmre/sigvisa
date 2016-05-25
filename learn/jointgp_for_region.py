@@ -94,13 +94,14 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
     if coarse_file is not None:
         with open(coarse_file, 'rb') as f:
             sg1 = pickle.load(f)
+        rundir = os.path.dirname(os.path.dirname(coarse_file))
     elif fine_file is None:
         sg1 = rs.build_sg(ms1)
         initialize_sg(sg1, ms1, rs)
         rundir = do_inference(sg1, ms1, rs,
                               model_switch_lp_threshold=None,
                               run_dir=rundir)
-        rundir = rundir + ".1.1.1"
+    rundir = rundir + ".1.1.1"
 
     if fine_file is not None:
         with open(fine_file, 'rb') as f:
@@ -130,7 +131,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     continue
     
     if iterative_align_init:
-        sg4 = jointgp_iterative_align_init(sg4)
+        sg4 = jointgp_iterative_align_init(sg4, base_run_dir=rundir)
     
     sg4.current_log_p()
     do_inference(sg4, ms4, rs, dump_interval_s=10, 
