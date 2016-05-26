@@ -254,7 +254,6 @@ def preprocess_signal_for_sampling(wave_env):
 
     if s <= 0:
         Sigvisa().logger.warning("tried to sample from envelope with no positive part, using uniform distribution instead")
-        import pdb; pdb.set_trace()
         d = np.ones(wave_env.shape)
         d = np.sum(d)
 
