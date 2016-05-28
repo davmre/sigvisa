@@ -79,6 +79,17 @@ def main():
     print "err", err
     print
 
+
+    print "netvisa"
+    visa_bulletin = get_bulletin(options.stime, options.etime, origin_type="visa")
+    f, p, r, err = f1_and_error(isc_bulletin, visa_bulletin, max_delta_deg=options.max_delta_deg, max_delta_time=50.0)
+    print_bulletin(visa_bulletin)
+    print "f1", f
+    print "precision", p
+    print "recall", r
+    print "err", err
+    print
+
     if options.serialized is None:
         return
 
