@@ -9,7 +9,7 @@ from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.database.dataset import DET_TIME_COL
 from sigvisa.infer.correlations.weighted_event_posterior import hack_ev_time_posterior_with_weight, compute_atime_posteriors
 from sigvisa.infer.correlations.historical_signal_library import get_historical_signals
-from sigvisa.models.distributions import Gaussian,TruncatedGaussian
+from sigvisa.models.distributions import Gaussian, TruncatedGaussian, Uniform
 from sigvisa.source.event import Event
 from sigvisa.utils.array import index_to_time, time_to_index
 from sigvisa.utils.fileutils import mkdir_p
@@ -119,7 +119,9 @@ def logp_from_time_pdf(pdf, stime, x, srate):
 
 def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_posteriors, 
                                   global_stime, global_srate=1.0,
-                                  n_proposals=1, proposal_dist_seed=None, fix_result=None):
+                                  n_proposals=1, proposal_dist_seed=None, 
+                                  prior_component = 1e-6,
+                                  fix_result=None):
 
     if proposal_dist_seed is not None:
         np.random.seed(proposal_dist_seed)
@@ -127,27 +129,39 @@ def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_
     n = len(proposal_weights)
     proposal_width_deg = 0.03
     proposal_height_km = 2.0
+
+
+    npts = len(proposal_otime_posteriors[0])
+    s = Sigvisa()
+    global_etime = global_stime + npts / global_srate
+    uniform_time_dist = Uniform(global_stime, global_etime)
     if fix_result is None:
-
         all_proposals = []
-        for i in range(n_proposals):
-            kernel = np.random.choice(xrange(n), p=proposal_weights)
-            otime_dist = proposal_otime_posteriors[kernel]        
-            xx = training_xs[kernel]
-            lon, lat, depth = xx[0,0], xx[0,1], xx[0,2]
+        if np.random.rand() < prior_component:
+            s.sigmodel.srand(np.random.randint(sys.maxint))
+            plon, plat, pdepth = s.sigmodel.event_location_prior_sample()
+            ptime = uniform_time_dist.sample()
+            kernel = -1
+        else:
+            for i in range(n_proposals):
+                kernel = np.random.choice(xrange(n), p=proposal_weights)
+                otime_dist = proposal_otime_posteriors[kernel]        
+                xx = training_xs[kernel]
+                lon, lat, depth = xx[0,0], xx[0,1], xx[0,2]
 
-            londist = Gaussian(lon, proposal_width_deg)
-            latdist = Gaussian(lat, proposal_width_deg)
-            depthdist = TruncatedGaussian(depth, proposal_height_km, a=0)
+                londist = Gaussian(lon, proposal_width_deg)
+                latdist = Gaussian(lat, proposal_width_deg)
+                depthdist = TruncatedGaussian(depth, proposal_height_km, a=0)
 
-            plon, plat, pdepth = (londist.sample(), latdist.sample(), depthdist.sample())
-            ptime = sample_time_from_pdf(otime_dist, global_stime, srate=global_srate)
-            all_proposals.append((plon, plat, pdepth, ptime))
+                plon, plat, pdepth = (londist.sample(), latdist.sample(), depthdist.sample())
+                ptime = sample_time_from_pdf(otime_dist, global_stime, srate=global_srate)
+                all_proposals.append((plon, plat, pdepth, ptime))
     else:
         fev = fix_result
         plon, plat, pdepth, ptime = fev.lon, fev.lat, fev.depth, fev.time
 
-    log_qforward = -np.inf
+    # start with the prior component as a baseline logp
+    log_qforward = np.log(prior_component) + s.sigmodel.event_location_prior_logprob(plon, plat, pdepth) + uniform_time_dist.log_p(ptime)
 
     # compute proposal probability under the explicit mixture
     # distribution of Gaussians centered on historical event.  this

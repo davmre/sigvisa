@@ -1085,7 +1085,8 @@ def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None,
     accepted =  mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=accept, revert_move=revert, force_outcome=force_outcome)
     return accepted
 
-def ev_death_move_hough(sg, hough_kwargs={}, log_to_run_dir=None,  **kwargs):
+def ev_death_move_hough(sg, hough_kwargs={}, log_to_run_dir=None,  
+                        inference_step=-1, **kwargs):
 
     def hlp(sg, fix_result=None, **kwargs):
         kwargs.update(hough_kwargs)
@@ -1127,8 +1128,7 @@ def ev_death_move_hough(sg, hough_kwargs={}, log_to_run_dir=None,  **kwargs):
 def ev_death_move_hough_meta(sg, **kwargs):
     hough_kwargs = sample_hough_kwargs(sg)
     proposal_type = np.random.choice(("mh", "mh", "dumb", ))
-    
-    repropose_uatemplates = np.random.rand() < 0.5
+    repropose_uatemplates = False
 
     return ev_death_move_hough(sg, hough_kwargs=hough_kwargs, 
                                repropose_uatemplates=repropose_uatemplates,
@@ -1181,10 +1181,14 @@ def ev_death_move_correlation(sg, corr_kwargs={}, log_to_run_dir=None, inference
                                   repropose_uatemplates=repropose_uatemplates, **kwargs)
 
 def ev_death_move_correlation_random_sta(sg, **kwargs):
-    corr_kwargs = sample_corr_kwargs(sg)
-    proposal_type = np.random.choice(("mh", "mh", "dumb"))
-    return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, 
-                                     birth_type=proposal_type, **kwargs)
+    #corr_kwargs = sample_corr_kwargs(sg)
+    #proposal_type = np.random.choice(("mh", "mh", "dumb"))
+    #return ev_death_move_correlation(sg, corr_kwargs=corr_kwargs, 
+    #                                 birth_type=proposal_type, **kwargs)
+
+    # any death move that reproposes uatemplates is basically an auto-fail, so 
+    # don't bother actually running it
+    return False
 
 def ev_death_move_cheating(sg, **kwargs):
     return ev_death_move_abstract(sg, cheating_location_proposal, proposal_includes_mb=True, **kwargs)
@@ -1529,7 +1533,7 @@ def create_dummy_mh_world(sg, wn, eid):
         else:
             sidx, eidx = unify_windows((phase_sidx, phase_eidx), (sidx, eidx))
 
-    if sidx is None:
+    if sidx is None or (eidx - sidx) <= 0:
         return sg, wn, []
     
     # extract the signal data for this time period
@@ -1619,6 +1623,10 @@ def propose_new_phases_mh(sg, wn, eid,
     #single_template_MH(sg, wn, tmnodes, steps=mh_steps)
 
     dummy_sg, dummy_wn, dummy_tmnodes = create_dummy_mh_world(sg, wn, eid)
+    if len(dummy_tmnodes) == 0:
+        # nothing to be done with MCMC on nonexistent templates.
+        return log_qforward, replicate_fns
+
     dummy_wn.hack_wavelets_as_iid = True
     new_dummy_tmnodes = [(phase, tmnodes) for (phase, tmnodes) in dummy_tmnodes if phase in new_phases]
 
@@ -1632,6 +1640,7 @@ def propose_new_phases_mh(sg, wn, eid,
             lp1 = dummy_sg.current_log_p()
             dummy_sg.debug_dump(proposal_dir, pickle_only=True, pickle_name="pre_mh.sg")
 
+    assert(dummy_wn != wn) # make sure we never screw up log_p method of an actual wn
     dummy_wn.log_p = dummy_wn.log_p_nonincremental # don't bother with incremental logp calculations
     sorted_params, param_vals = single_template_MH(dummy_sg, dummy_wn, new_dummy_tmnodes, steps=mh_steps)
 
@@ -2322,7 +2331,10 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
     return ev_birth_move_abstract(sg, location_proposal=hlp, revert_action=revert_action, accept_action=accept_action, proposal_includes_mb=True, **kwargs)
 
 
-def prior_location_proposal(sg, fix_result=None):
+def prior_location_proposal(sg, fix_result=None, proposal_dist_seed=None):
+    if proposal_dist_seed is not None:
+        np.random.seed(proposal_dist_seed)
+
     ev, lp = sg.prior_sample_event(return_logp=True, fix_result=fix_result)
     if fix_result is not None:
         return lp
@@ -2334,15 +2346,11 @@ def ev_birth_move_prior(sg, log_to_run_dir=None, **kwargs):
                                   proposal_includes_mb=True, 
                                   proposal_type="dumb", **kwargs)
 
-def ev_death_move_prior(sg, log_to_run_dir=None, **kwargs):
+def ev_death_move_prior(sg, log_to_run_dir=None, inference_step=-1, **kwargs):
     return ev_death_move_abstract(sg, location_proposal=prior_location_proposal, 
                                   proposal_includes_mb=True, 
+                                  inference_step=inference_step,
                                   birth_type="dumb", **kwargs)
-
-def ev_birth_move_hough_dumb(sg, **kwargs):
-    hough_kwargs = {"one_event_semantics": False, "phases": ("Pn", "Pg", "Sn", "Lg")}
-    return ev_birth_move_hough(sg, hough_kwargs=hough_kwargs, 
-                               proposal_type="dumb", **kwargs)
 
 def sample_hough_kwargs(sg):
     #phase_choices = ( ("Pn",), ("Pg", "Lg"), ("Pn", "Sn", "Lg", "Pg"), )
@@ -2382,7 +2390,8 @@ def sample_hough_kwargs(sg):
 
 def ev_birth_move_hough_meta(sg, **kwargs):
     hough_kwargs = sample_hough_kwargs(sg)
-    proposal_type = np.random.choice(("mh", "mh", "dumb",))
+
+    proposal_type = np.random.choice(("mh", "mh", "dumb", ))
     #repropose_uatemplates = np.random.rand() < 0.5
     repropose_uatemplates = False
 
@@ -2469,9 +2478,8 @@ def debug_proposal_weights(proposal_weights, training_xs, proposal_idx):
     return s
 
 def ev_birth_move_correlation_random_sta(sg, **kwargs):
-    corr_kwargs = sample_corr_kwargs(sg)
-    
-    proposal_type = np.random.choice(("mh", "mh", "dumb"))
+    corr_kwargs = sample_corr_kwargs(sg)    
+    proposal_type = "mh"
     
     return ev_birth_move_correlation(sg, corr_kwargs=corr_kwargs, 
                                      proposal_type=proposal_type, **kwargs)

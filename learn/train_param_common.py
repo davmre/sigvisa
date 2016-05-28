@@ -527,10 +527,7 @@ def learn_constant_beta(X, y, sta, **kwargs):
 
 def load_modelid(modelid, memoize=False, **kwargs):
     s = Sigvisa()
-    cursor = s.dbconn.cursor()
-    cursor.execute("select model_fname, model_type from sigvisa_param_model where modelid=%d" % modelid)
-    fname, model_type = cursor.fetchone()
-    cursor.close()
+    fname, model_type = s.sql("select model_fname, model_type from sigvisa_param_model where modelid=%d" % modelid)[0]
     if memoize:
         model = load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
     else:
@@ -540,10 +537,7 @@ def load_modelid(modelid, memoize=False, **kwargs):
 
 def load_modelid_evids(modelid):
     s = Sigvisa()
-    cursor = s.dbconn.cursor()
-    cursor.execute("select training_set_fname from sigvisa_param_model where modelid=%d" % modelid)
-    fname, = cursor.fetchone()
-    cursor.close()
+    fname, = s.sql("select training_set_fname from sigvisa_param_model where modelid=%d" % modelid)[0]
     evids = np.loadtxt(os.path.join(s.homedir, fname), dtype=int)
     return evids
 

@@ -27,8 +27,10 @@ def main(stas, seed=1, n_events=5, resume_from="", use_hough=False, init_true=Fa
 
     uatemplate_rate=1e-4
     hz = 10.0
-    runid=18
+    runids=(24,18)
     phases=["P", "Pn", "Pg", "Sn", "Lg"]
+
+    tmtype = "param" # "gpparam"
 
     # correlation proposal caching assumes that data from the same
     # time windows are constant, which is not true as we vary
@@ -43,21 +45,21 @@ def main(stas, seed=1, n_events=5, resume_from="", use_hough=False, init_true=Fa
                     rate_train_end=1199145600 + offset)
 
     sw = SampledWorld(seed=seed)
-    sw.sample_sg(runids=(runid,), wiggle_model_type="gplocal+lld+none", wiggle_family="db4_2.0_3_20.0", sites=stas, phases=phases, tmtype="gpparam", uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=min_mb, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=None, region=region, raw_signals=True)
+    sw.sample_sg(runids=runids, wiggle_model_type="gplocal+lld+none", wiggle_family="db4_2.0_3_20.0", sites=stas, phases=phases, uatemplate_rate=uatemplate_rate, sample_uatemplates=True, n_events=n_events, min_mb=min_mb, force_mb=None, len_s=region_etime-region_stime, tt_buffer_s=1000, hz=hz, dumpsg=False, dummy_fallback=True, stime=region_stime, evs=None, region=region, raw_signals=True, tmtype=tmtype)
 
     rs = SyntheticRunSpec(sw=sw)
 
-    ms1 = ModelSpec(template_model_type="gpparam",
+    ms1 = ModelSpec(template_model_type=tmtype,
                     wiggle_model_type="gplocal+lld+none",
                     wiggle_family="db4_2.0_3_20.0",
                     uatemplate_rate=uatemplate_rate,
                     max_hz=hz,
                     phases=phases,
-                    runids=(runid,),
+                    runids=runids,
                     inference_region=region,
                     dummy_fallback=True,
                     hack_param_constraint=True,
-                    min_mb=min_mb,
+                    min_mb=min(min_mb, 3.0),
                     raw_signals=True,
                     vert_only=True)
 
@@ -79,6 +81,8 @@ def main(stas, seed=1, n_events=5, resume_from="", use_hough=False, init_true=Fa
     #sg.correlation_proposal_stas=stas
 
     ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc',], steps=1000, propose_correlation=True, propose_hough = use_hough)
+
+
     do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None)
 
 

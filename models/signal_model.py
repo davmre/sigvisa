@@ -1372,6 +1372,9 @@ class ObservedSignalNode(Node):
         logenv_len = tg.abstract_logenv_length(v, srate=self.srate, max_decay_s=self.max_template_len_s)
         window_end_idx = min(self.npts, int(start_idx + logenv_len + post_fade_slack_s*self.srate))
 
+        if window_end_idx < window_start_idx:
+            window_start_idx = window_end_idx
+
         return (window_start_idx, window_end_idx)
 
     def cache_latent_signal_for_fixed_window(self, eid, phase, force_bounds=True, **kwargs):

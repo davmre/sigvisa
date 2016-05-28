@@ -1213,8 +1213,7 @@ def normalize_global(global_array, global_noev_ll, hc, one_event_semantics=False
         # independent of other bins
         #noev_prior_log = np.log(1-ev_prior)
         global_noev_lik = np.exp(global_noev_ll-armax + noev_prior_log)
-        normalizer = global_lik.copy()
-        normalizer += global_noev_lik[:,:,:,:,np.newaxis]
+        normalizer = global_lik + global_noev_lik[:,:,:,:,np.newaxis]
         global_lik /= normalizer
         return global_lik
 
@@ -1425,7 +1424,10 @@ class CTFProposer(object):
         hc = self.global_hc
 
         global_array,debug, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
-        global_dist = normalize_global(global_array.copy(), nll, one_event_semantics=one_event_semantics, hc=hc)
+
+        # use 64-bit floats to avoid underflow in normalization
+        ga64 = np.array(global_array, dtype=np.float64)
+        global_dist = normalize_global(ga64, nll, one_event_semantics=one_event_semantics, hc=hc)
 
         if fix_result:
             ev = fix_result
@@ -1450,7 +1452,10 @@ class CTFProposer(object):
                              uatemplate_rate=hc.uatemplate_rate,
                              mbbins=mb_bins)
             array,debug, nll = global_hough(sg, hc, uatemplates_by_sta, save_debug=False)
-            dist = normalize_global(array, nll, one_event_semantics=one_event_semantics, hc=hc)
+            dist = normalize_global(np.asarray(array, dtype=np.float64), 
+                                    nll, 
+                                    one_event_semantics=one_event_semantics, 
+                                    hc=hc)
             if fix_result:
                 v = hc.coords_to_index(coord)
             else:
@@ -1468,8 +1473,6 @@ class CTFProposer(object):
             ev, evlp = event_from_bin(hc, v)
 
             log_qforward = np.log(prob) + evlp
-            if np.isnan(log_qforward):
-                import pdb; pdb.set_trace()
             
             return ev, log_qforward, global_dist
 
@@ -1502,7 +1505,7 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
         bin_widths = [10,5,2]        
         if sg.inference_region is not None:
             bin_area = sg.inference_region.area_deg() / 1500.
-            bw1 = np.sqrt(bin_area) * bin_width_multiplier
+            bw1 = np.round(np.sqrt(bin_area) * bin_width_multiplier, decimals=2)
             bin_widths = [bw1, bw1/2., bw1/4.]
 
         ctf = CTFProposer(sg, bin_widths, phases=phases,

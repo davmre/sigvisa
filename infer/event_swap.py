@@ -14,11 +14,12 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.models.ttime import tt_predict
 from sigvisa.infer.event_mcmc import *
+from sigvisa.infer.mcmc_basic import mh_accept_util
 from sigvisa.infer.propose_hough import hough_location_proposal
 from sigvisa.infer.propose_lstsqr import overpropose_new_locations
 from sigvisa.infer.correlations.event_proposal import correlation_location_proposal, sample_corr_kwargs
 
-from sigvisa.infer.event_birthdeath import ev_birth_executor,ev_death_executor, sample_hough_kwargs
+from sigvisa.infer.event_birthdeath import ev_birth_executor,ev_death_executor, sample_hough_kwargs, prior_location_proposal
 
 from sigvisa.infer.template_mcmc import *
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes, plot_pred_atimes
@@ -61,18 +62,61 @@ def sample_events_to_swap(sg, n_events=2, fix_result=None):
     else:
         return lp
 
-def repropose_event_move_hough(sg, **kwargs):
-
+def sample_repropose_args_hough(sg):
     hough_kwargs = sample_hough_kwargs(sg)
-
     def hlp(sg, **kwargs):
         kwargs.update(hough_kwargs)
         return hough_location_proposal(sg, **kwargs)
 
-    return swap_events_move(sg, n_events=1, location_proposal=hlp, **kwargs)
+    dumb_birth = np.random.rand() < 0.5 
+    birth_args = {"proposal_type": "dumb" if dumb_birth else "mh",
+                  "use_correlation": False,
+                  "repropose_uatemplates": False}
+    flp = prior_location_proposal if dumb_birth else hlp
+
+    dumb_death = np.random.rand() < 0.5 
+    death_args = {"birth_type": "dumb" if dumb_death else "mh",
+                  "use_correlation": False,
+                  "repropose_uatemplates": False}
+    rlp = prior_location_proposal if dumb_death else hlp
+
+    return flp, rlp, birth_args, death_args
+
+def repropose_event_move_hough(sg, **kwargs):
+
+    flp, rlp, birth_args, death_args = sample_repropose_args_hough(sg)
+    return swap_events_move(sg, n_events=1, 
+                            forward_location_proposal=flp, 
+                            reverse_location_proposal=rlp, 
+                            birth_args=birth_args,
+                            death_args=death_args,
+                            **kwargs)
+
 
 def repropose_event_move_lstsqr(sg, **kwargs):
     return swap_events_move(sg, n_events=1, location_proposal=overpropose_new_locations, **kwargs)
+
+
+def sample_repropose_args_corr(sg):
+    corr_kwargs = sample_corr_kwargs(sg)
+    def clp(sg, fix_result=None, **clp_kwargs):
+        clp_kwargs.update(corr_kwargs)
+        return correlation_location_proposal(sg, fix_result=fix_result, **clp_kwargs)
+
+    dumb_birth = np.random.rand() < 0.5 
+    birth_args = {"proposal_type": "dumb" if dumb_birth else "mh",
+                  "use_correlation": not dumb_birth,
+                  "repropose_uatemplates": not dumb_birth}
+    flp = prior_location_proposal if dumb_birth else clp
+            
+
+    dumb_death = np.random.rand() < 0.5 
+    death_args = {"birth_type": "dumb" if dumb_death else "mh",
+                  "use_correlation": not dumb_death,
+                  "repropose_uatemplates": not dumb_death}
+    rlp = prior_location_proposal if dumb_death else clp
+    return flp, rlp, birth_args, death_args
+    
 
 def repropose_event_move_corr(sg, **kwargs):
 
@@ -81,23 +125,13 @@ TODO (copied from email)
 another issue: event mbs get reset to 3.0 in the proposal. this means the probs are technically incorrect since I can't ever reverse to recover a non-3.0 event. should either keep the current mb (which requires a notion of event identity when swapping multiple events), or propose new mb from some distribution?
     """
 
-    corr_kwargs = sample_corr_kwargs(sg)
-    def clp(sg, fix_result=None, **clp_kwargs):
-        clp_kwargs.update(corr_kwargs)
-        return correlation_location_proposal(sg, fix_result=fix_result, **clp_kwargs)
-
-    if "birth_args" not in kwargs:
-        dumb_birth = np.random.rand() < 0.5 
-        kwargs["birth_args"] = {"proposal_type": "dumb" if dumb_birth else "mh",
-                                "use_correlation": not dumb_birth,
-                                "repropose_uatemplates": not dumb_birth}
-
-        dumb_death = np.random.rand() < 0.5 
-        kwargs["death_args"] = {"birth_type": "dumb" if dumb_death else "mh",
-                                "use_correlation": not dumb_death,
-                                "repropose_uatemplates": not dumb_death}
-
-    return swap_events_move(sg, n_events=1, location_proposal=clp, **kwargs)
+    flp, rlp, birth_args, death_args = sample_repropose_args_corr(sg)
+    return swap_events_move(sg, n_events=1, 
+                            forward_location_proposal=flp, 
+                            reverse_location_proposal=rlp, 
+                            birth_args=birth_args,
+                            death_args=death_args, 
+                            **kwargs)
 
 def swap_threeway_lstsqr(sg, **kwargs):
     return swap_events_move(sg, n_events=3, location_proposal=overpropose_new_locations, **kwargs)
@@ -106,7 +140,7 @@ def swap_threeway_hough(sg, **kwargs):
     return swap_events_move(sg, n_events=3, location_proposal=hough_location_proposal, **kwargs)
 
 
-def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, return_probs=False, **kwargs):
+def swap_events_move(sg, n_events=2, log_to_run_dir=None, return_probs=False, **kwargs):
 
     eids, lp_swap = sample_events_to_swap(sg, n_events=n_events)
     if eids is None:
@@ -114,7 +148,7 @@ def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, ret
 
     old_evs = dict([(eid, sg.get_event(eid)) for eid in eids])
 
-    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, location_proposal=location_proposal, **kwargs)
+    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, **kwargs)
     log_qforward += lp_swap
 
     lp_swap_reverse = sample_events_to_swap(sg, fix_result=eids, n_events=n_events)
@@ -143,7 +177,8 @@ def swap_events_move(sg, location_proposal, n_events=2, log_to_run_dir=None, ret
 
 
 def swap_events_move_hough(*args, **kwargs):
-    kwargs['location_proposal']=hough_location_proposal
+    kwargs['forward_location_proposal']=hough_location_proposal
+    kwargs['reverse_location_proposal']=hough_location_proposal
     return swap_events_move(*args, **kwargs)
 
 def swap_events_move_lstsqr(*args, **kwargs):
@@ -151,11 +186,11 @@ def swap_events_move_lstsqr(*args, **kwargs):
     return swap_events_move(*args, **kwargs)
 
 def rebirth_events_helper(sg, eids, 
-                          location_proposal=None,
                           forward_location_proposal=None, 
                           reverse_location_proposal=None, 
                           birth_args = None, 
                           death_args = None,
+                          birth_eids = None,
                           inference_step=-1):
     """
     Given a list of events, propose killing them all and rebirthing
@@ -181,11 +216,6 @@ def rebirth_events_helper(sg, eids,
 
     """
 
-    if forward_location_proposal is None:
-        forward_location_proposal = location_proposal
-    if reverse_location_proposal is None:
-        reverse_location_proposal = location_proposal
-
     if birth_args is None:
         birth_args = {"proposal_type": "dumb"}
     if death_args is None:
@@ -200,6 +230,8 @@ def rebirth_events_helper(sg, eids,
     revert_moves = []
 
     seeds = [np.random.choice(1000) for eid in eids]
+    if birth_eids is not None and len(birth_eids) > len(eids):
+        seeds = [np.random.choice(1000) for eid in birth_eids]
 
     lp_old = None
 
@@ -225,7 +257,10 @@ def rebirth_events_helper(sg, eids,
         log_qbackward += lqb_old
         revert_moves.append(rebirth_old)
 
-    for i, eid in enumerate(eids):
+    if birth_eids is None:
+        birth_eids = eids
+
+    for i, eid in enumerate(birth_eids):
         lp = lambda *args, **kwargs : forward_location_proposal(*args, proposal_dist_seed=seeds[i], **kwargs)
         r = ev_birth_executor(sg, location_proposal=lp, force_eid=eid, **birth_args)
         if r is None:

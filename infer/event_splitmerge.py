@@ -8,8 +8,8 @@ import itertools
 
 from sigvisa import Sigvisa
 
-
-from sigvisa.infer.event_birthdeath import ev_bare_birth_move, ev_bare_death_move, ev_template_birth_helper, ev_template_death_helper
+from sigvisa.infer.mcmc_basic import mh_accept_util
+from sigvisa.infer.event_swap import rebirth_events_helper, sample_repropose_args_hough, sample_repropose_args_corr
 from sigvisa.utils.counter import Counter
 from sigvisa.utils.geog import dist_km
 
@@ -35,7 +35,7 @@ def event_merge_dist(sg):
 def sample_events_to_merge(sg, fix_result=None):
     merge_probs = event_merge_dist(sg)
     if merge_probs is None:
-        return None, 0.0
+        return None, None, 0.0
 
     if fix_result is not None:
         merge_eid1, merge_eid2 = sorted(fix_result)
@@ -48,7 +48,7 @@ def sample_events_to_merge(sg, fix_result=None):
 def sample_event_to_split(sg, fix_result=None):
     eids = [eid for eid in sg.evnodes.keys() if eid not in sg.fixed_events]
 
-    if len(eids) is None:
+    if len(eids)  == 0:
         return None, 0.0
 
     if fix_result is not None:
@@ -59,226 +59,135 @@ def sample_event_to_split(sg, fix_result=None):
     
     return eid, lp
 
-def noop():
-    pass
+def ev_merge_move_hough(sg, **kwargs):
 
-def merge_events_helper(sg, location_proposal, 
-                        proposal_includes_mb=True,
-                        use_correlation=False,
-                        birth_proposal_type="mh",
-                        debug_info={},
-                        force_eids=None,
-                        force_new_ev=None,
-                        fix_result=None):
+    flp, rlp, birth_args, death_args = sample_repropose_args_hough(sg)
 
-    log_qforward = 0.0
-    merge_record = {}
+    return merge_helper_newstyle(sg, 
+                                 forward_location_proposal=flp, 
+                                 reverse_location_proposal=rlp, 
+                                 birth_args=birth_args,
+                                 death_args=death_args,
+                                 **kwargs)
 
-    fr_eids = fix_result["eids"] if fix_result is not None else None
-    if fr_eids is None:
-        fr_eids = force_eids
-    if fr_eids is not None and (fr_eids[0] < 0 or fr_eids[1] < 0):
-        # if the location proposal in the split move failed, then one
-        # or both events were not created and so don't now need to be
-        # killed.
-        log_qforward = -np.inf
+def ev_merge_move_corr(sg, **kwargs):
 
-        replicate_untmpls1 = noop
-        replicate_death1 = noop
+    flp, rlp, birth_args, death_args = sample_repropose_args_corr(sg)
 
-        replicate_untmpls2 = noop
-        replicate_death2 = noop
+    return merge_helper_newstyle(sg, 
+                                 forward_location_proposal=flp, 
+                                 reverse_location_proposal=rlp, 
+                                 birth_args=birth_args,
+                                 death_args=death_args,
+                                 **kwargs)
 
-    else:
-        eid1, eid2, merge_lp = sample_events_to_merge(sg, fix_result=fr_eids)
-        print "merging eids", eid1, eid2
-        if eid1 is None:
-            # not enough events for a merge move
-            return None, None, None
+def ev_split_move_hough(sg, **kwargs):
+
+    flp, rlp, birth_args, death_args = sample_repropose_args_hough(sg)
+
+    return split_helper_newstyle(sg, 
+                                 forward_location_proposal=flp, 
+                                 reverse_location_proposal=rlp, 
+                                 birth_args=birth_args,
+                                 death_args=death_args,
+                                 **kwargs)
+
+def ev_split_move_corr(sg, **kwargs):
+
+    flp, rlp, birth_args, death_args = sample_repropose_args_corr(sg)
+
+    return split_helper_newstyle(sg, 
+                                 forward_location_proposal=flp, 
+                                 reverse_location_proposal=rlp, 
+                                 birth_args=birth_args,
+                                 death_args=death_args,
+                                 **kwargs)
+
+
+def merge_helper_newstyle(sg, 
+                          log_to_run_dir=None,
+                          return_probs=False, 
+                          fix_merge_eids=None,
+                          **kwargs):
+
+    eid1, eid2, lp_merge = sample_events_to_merge(sg, fix_result=fix_merge_eids)
+
+    if eid1 is None:
+        return False
+
+    old_evs = [sg.get_event(eid1), sg.get_event(eid2)]
+    eids = (eid1, eid2)
+    merge_eid = sg.next_eid
+    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, 
+                                                                                     birth_eids=(merge_eid,), 
+                                                                                     **kwargs)
+    log_qforward += lp_merge
+
+    _, lp_split = sample_event_to_split(sg, fix_result=merge_eid)
+    log_qbackward += lp_split
+    new_ev = sg.get_event(merge_eid)
+
+    if log_to_run_dir is not None:
+        log_file = os.path.join(log_to_run_dir, "merge_proposals.txt")
         
-        merge_record["merged_ev1"] = (sg.get_event(eid1), eid1) 
-        merge_record["merged_ev2"]= (sg.get_event(eid2), eid2) 
-        log_qforward += merge_lp
+        with open(log_file, 'a') as f:
+            f.write("merging %d %d to %d, lp %.2f reverse %.2f\n" % (eid1, eid2, merge_eid, lp_merge, lp_split))
+            f.write("kwargs %s\n" % kwargs)
+            f.write("old eids %d %d\n" % (eid1, eid2))
+            for old_ev in old_evs:
+                f.write("  %s\n" % str(old_ev))
 
-        # remove both merged events
-        fr_eid1 = fix_result["split_tmpls1"] if fix_result is not None else None
-        lqf1, replicate_untmpls1, death_records1 = ev_template_death_helper(sg, eid1, fix_result=fr_eid1)
-        merge_record["merged_tmpls1"] = death_records1
-        log_qforward += lqf1
-        replicate_death1, ev1 = ev_bare_death_move(sg, eid1)
+            f.write("new eid %d\n" % (merge_eid))
+            f.write("  %s\n" % str(new_ev))
+            f.write("lp_new %.1f lp_old %.1f log_qbackward %.1f log_qforward %.1f ratio %.1f\n\n" % (lp_new, lp_old, log_qbackward, log_qforward, lp_new+log_qbackward - (lp_old+log_qforward)))
+            
+                    
 
-        fr_eid2 = fix_result["split_tmpls2"] if fix_result is not None else None
-        lqf2, replicate_untmpls2, death_records2 = ev_template_death_helper(sg, eid2, fix_result=fr_eid2)
-        merge_record["merged_tmpls2"] = death_records2
-        log_qforward += lqf2
-        replicate_death2, ev2 = ev_bare_death_move(sg, eid2)
-        sg._topo_sort()
-
-    lp_baseline = sg.current_log_p()
-    print "baseline lp", lp_baseline
-
-    fr_ev = fix_result["split_ev"] if fix_result is not None else None
-    if force_new_ev is not None:
-        fr_ev = (force_new_ev, None)
-    lq_loc, replicate_birth, eid, extra = ev_bare_birth_move(sg, location_proposal, debug_info=debug_info, fix_result=fr_ev)
-    if lq_loc is None:
-        # hack: if location proposal fails, just don't birth an
-        # event so that the "merge" becomes a double death move (which
-        # will presumably fail). This means we have to be careful to
-        # ensure that the split move effectively reverses the effects
-        # of the merge-so-far.
-        merge_record["merged_eid"] = -1
-        replicate_birth = noop
-        replicate_tmpls = noop
+    if return_probs:
+        return lp_old, lp_new, log_qforward, log_qbackward, revert_move
     else:
-        merge_record["merged_eid"] = eid
-        log_qforward += lq_loc
+        return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)
 
-        
-        fr_birth = fix_result["split_tmpls"] if fix_result is not None else None
-        lqf, replicate_tmpls, birth_records = \
-                    ev_template_birth_helper(sg, eid, 
-                                             associate_using_mb=proposal_includes_mb, 
-                                             use_correlation=use_correlation,
-                                             proposal_type=birth_proposal_type,
-                                             debug_info=debug_info,
-                                             fix_result=fr_birth)
-        log_qforward += lqf
-        sg._topo_sort()
-        merge_record["merged_tmpls"] = birth_records
+def split_helper_newstyle(sg, 
+                          log_to_run_dir=None, 
+                          return_probs=False, 
+                          fix_split_eid=None,
+                          **kwargs):
 
-    def replicate_merge():
-        replicate_untmpls1()
-        replicate_untmpls2()
-        replicate_death1()
-        replicate_death2()
-        sg._topo_sort()
-        replicate_birth()
-        replicate_tmpls()
-        sg._topo_sort()
+    eid, lp_split = sample_event_to_split(sg, fix_result=fix_split_eid)
+    if eid is None:
+        return False
 
-    print "merge lqf", "choice", merge_lp, "death1", lqf1, "death2", lqf2, "loc", lq_loc, "tmpls", lqf
-    print "merge lqf totals", merge_lp + lqf1 + lqf2 + lq_loc + lqf, log_qforward
 
-    return log_qforward, replicate_merge, merge_record
+    old_ev = sg.get_event(eid)
 
-def split_events_helper(sg, location_proposal,                         
-                        proposal_includes_mb=True,
-                        use_correlation=False,
-                        debug_info = {},
-                        birth_proposal_type="mh",
-                        flip_ordering=None,
-                        fix_result=None):
+    split_eids = (sg.next_eid, sg.next_eid+1)
+    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, (eid,), 
+                                                                                     birth_eids=split_eids, 
+                                                                                     **kwargs)
+    log_qforward += lp_split
+    new_evs = [sg.get_event(new_eid) for new_eid in split_eids]
 
-    log_qforward = 0.0
-    split_record = {}
+    _, _, lp_merge = sample_events_to_merge(sg, fix_result=split_eids)
+    log_qbackward += lp_merge
 
-    fr_eid = fix_result["merged_eid"] if fix_result is not None else None
-    if fr_eid is not None and fr_eid < 0:
-        # if we're reversing a merge whose location proposal failed,
-        # then there is no event to delete
-        log_qforward = -np.inf
+    if log_to_run_dir is not None:
+        log_file = os.path.join(log_to_run_dir, "split_proposals.txt")
+        with open(log_file, 'a') as f:
+            f.write("splitting %d to %d %d, lp %.2f reverse %.2f\n" % (eid, split_eids[0], split_eids[1], 
+                                                                       lp_split, lp_merge))
+            f.write("kwargs %s\n" % kwargs)
+
+            f.write("old eid %d\n" % (eid))
+            f.write("  %s\n" % str(old_ev))
+
+            f.write("new eids %d %d\n" % split_eids)
+            for new_ev in new_evs:
+                f.write("  %s\n" % str(new_ev))
+
+            f.write("lp_new %.1f lp_old %.1f log_qbackward %.1f log_qforward %.1f ratio %.1f\n\n" % (lp_new, lp_old, log_qbackward, log_qforward, lp_new+log_qbackward - (lp_old+log_qforward)))
+
+    if return_probs:
+        return lp_old, lp_new, log_qforward, log_qbackward, revert_move
     else:
-        eid, split_lp = sample_event_to_split(sg, fix_result=fr_eid)
-        if eid is None:
-            # no events to split
-            return None, None, None
-        log_qforward += split_lp
-
-        # remove the event to be split
-        fr_birth = fix_result["merged_tmpls"] if fix_result is not None else None
-        lqf, replicate_untmpls, death_records = ev_template_death_helper(sg, eid, fix_result=fr_birth)
-        split_record["split_tmpls"] = death_records
-        log_qforward += lqf
-
-        replicate_death, ev = ev_bare_death_move(sg, eid)
-        split_record["split_ev"] = (ev, eid)
-        sg._topo_sort()
-
-    lp_baseline = sg.current_log_p()
-    print "baseline lp", lp_baseline
-
-    # birth the first of the resulting events
-    debug_info["ev1"] = {}
-    debug_info["ev2"] = {}
-    fr_ev1 = fix_result["merged_ev1"] if fix_result is not None else None
-    fr_ev2 = fix_result["merged_ev2"] if fix_result is not None else None
-    lq_loc1, replicate_birth1, eid1, extra1 = ev_bare_birth_move(sg, location_proposal, debug_info=debug_info["ev1"], fix_result=fr_ev1)
-    lq_loc2, replicate_birth2, eid2, extra2 = ev_bare_birth_move(sg, location_proposal, debug_info=debug_info["ev2"], fix_result=fr_ev2)
-    if lq_loc1 is None or lq_loc2 is None:
-        # if the location proposal fails,
-        # don't birth anything
-        if eid1 is not None:
-            sg.remove_event(eid1)
-        if eid2 is not None:
-            sg.remove_event(eid2)
-        eid1, eid2 = -1, -1
-
-        replicate_birth1 = noop
-        replicate_tmpls1 = noop
-
-        replicate_birth2 = noop
-        replicate_tmpls2 = noop
-    else:
-        log_qforward += lq_loc1
-        log_qforward += lq_loc2
-
-        # warning: haven't thought through the correctness of this
-        # in the context of the overall move. the "right" thing is 
-        # to sum over both orderings
-        if flip_ordering is None:
-            flip_ordering = np.random.choice((True, False))
-        fr_tmpls1 = fix_result["merged_tmpls1"] if fix_result is not None else None
-        fr_tmpls2 = fix_result["merged_tmpls2"] if fix_result is not None else None
-        if flip_ordering:
-            birth_eid1, birth_eid2 = eid2, eid1
-            fr_tmpls1, fr_tmpls2 = fr_tmpls2, fr_tmpls1
-        else:
-            birth_eid1, birth_eid2 = eid1, eid2
-
-        log_qforward += np.log(0.5)
-
-        lqf1, replicate_tmpls1, birth_records1 = \
-                        ev_template_birth_helper(sg, birth_eid1, 
-                                                 associate_using_mb=proposal_includes_mb, 
-                                                 use_correlation=use_correlation,
-                                                 proposal_type=birth_proposal_type,
-                                                 debug_info=debug_info["ev1"],
-                                                 fix_result=fr_tmpls1)
-        log_qforward += lqf1
-
-        lqf2, replicate_tmpls2, birth_records2 = \
-                        ev_template_birth_helper(sg, birth_eid2,
-                                                 associate_using_mb=proposal_includes_mb, 
-                                                 use_correlation=use_correlation,
-                                                 proposal_type=birth_proposal_type,
-                                                 debug_info=debug_info["ev2"],
-                                                 fix_result=fr_tmpls2)
-        log_qforward += lqf2
-
-        if flip_ordering:
-            # "tmpls1" always refers to eid1, not birth_eid1
-            split_record["split_tmpls1"] = birth_records2
-            split_record["split_tmpls2"] = birth_records1
-        else:
-            split_record["split_tmpls1"] = birth_records1
-            split_record["split_tmpls2"] = birth_records2
-
-
-        print "split lps", split_lp, lqf, lq_loc1, lq_loc2, lqf1, lqf2, 
-        print "total", log_qforward, split_lp+ lqf+ lq_loc1+ lq_loc2+ lqf1+ lqf2
-    split_record["eids"] = (eid1, eid2)
-    sg._topo_sort()
-
-    def replicate_split():
-        replicate_untmpls()
-        replicate_death()
-        sg._topo_sort()
-        replicate_birth1()
-        replicate_tmpls1()
-        replicate_birth2()
-        replicate_tmpls2()
-        sg._topo_sort()
-
-    return log_qforward, replicate_split, split_record
-    
+        return mh_accept_util(lp_old, lp_new, log_qforward, log_qbackward, accept_move=None, revert_move=revert_move)

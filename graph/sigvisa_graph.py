@@ -46,13 +46,16 @@ class ModelNotFoundError(Exception):
 
 import cPickle as pickle
 #import pickle, logging, traceback
+
+
 #class SpyingPickler(pickle.Pickler, object):
 #    def save(self, obj):
 #        print "saving stuff"
-#        logging.critical("depth: %d, obj_type: %s, obj: %s",
+#        logging.critical("depth: %d, obj_type: %s",
 #                         len(traceback.extract_stack()),
-#                         type(obj), repr(obj))
+#                         type(obj)) # , repr(obj)
 #        super(SpyingPickler, self).save(obj)
+#
 
 # appropriate for regional data
 MAX_TRAVEL_TIME = 500.0

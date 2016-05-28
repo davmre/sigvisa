@@ -30,6 +30,12 @@ class EventLocationPrior(Distribution):
 
         return loc_lp
 
+    def sample(self):
+        s = Sigvisa()
+        s.sigmodel.srand(np.random.randint(sys.maxint))
+        lon, lat, depth = s.sigmodel.event_location_prior_sample()
+        return (lon, lat, depth)
+
 def event_from_evnodes(evnodes):
     # TEMP: evnodes will return a single node, until I get around to splitting it up.
     #return evnodes.get_event()

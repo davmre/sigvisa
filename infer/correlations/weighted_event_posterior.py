@@ -74,7 +74,11 @@ def build_ttr_model_array(sg, x, sta, srate, K=None, phase="P"):
     tt_mean = s.sigmodel.mean_travel_time(lon, lat, depth, sg.event_start_time, sta, phaseid - 1)
 
     model, modelid = sg.get_model("tt_residual", sta, phase)
-    pred_ttr  = float(model.predict(x))
+    try:
+        pred_ttr  = float(model.predict(x))
+    except:
+        pred_ttr = float(model.predict())
+
     tt_mean += pred_ttr
 
     if K is None:
@@ -82,7 +86,12 @@ def build_ttr_model_array(sg, x, sta, srate, K=None, phase="P"):
         K = int(15*srate)
 
     ttrs = np.linspace(-K/float(srate), K/float(srate), 2*K+1)
-    ll_array = np.array([model.log_p(ttr + pred_ttr, cond=x, include_obs=True) for ttr in ttrs]).flatten()
+
+    try:
+        ll_array = np.array([model.log_p(ttr + pred_ttr, cond=x, include_obs=True) for ttr in ttrs]).flatten()
+    except:
+        ll_array = np.array([model.log_p(ttr + pred_ttr) for ttr in ttrs]).flatten()
+
     ttr_model = np.exp(ll_array)
     ttr_model = np.where(ttr_model <= 0, 1e-300, ttr_model)
     return ttr_model, tt_mean
