@@ -31,7 +31,7 @@ training_stime =  1167634400
 #region_etime = region_stime + 7200
 
 
-def main(stas=None, hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True, seed=3):
+def main(stas=None, hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, ev_steps=1000, resume_from=None, deserialize=None, uatemplate_rate=4e-4, raw_signals=False, bands=["freq_0.8_4.5"], fix_outside=True, phases=("P"), target_evid=-1, stime=None, etime=None, hack_constraint=True, seed=3, use_hough=False):
 
     np.random.seed(seed)
 
@@ -76,7 +76,7 @@ def main(stas=None, hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, 
 
     if resume_from is None:
         sg = rs.build_sg(ms1)
-        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=30, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
+        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=30, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=use_hough)
     else:
         with open(resume_from, 'rb') as f:
             sg = pickle.load(f)
@@ -91,7 +91,7 @@ def main(stas=None, hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, 
             print "setting iid hack at", wn.sta
             wn.hack_wavelets_as_iid = True
 
-    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=False)
+    ms1.add_inference_round(enable_event_moves=True, enable_event_openworld=True, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=ev_steps, fix_outside_templates=fix_outside, propose_correlation=True, propose_hough=use_hough)
 
     do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None, dump_proposals=False)
 
@@ -139,6 +139,8 @@ if __name__ == "__main__":
                       help="runid for models to load")
     parser.add_option("--seed", dest="seed", default=1, type=int,
                       help="")
+    parser.add_option("--use_hough", dest="use_hough", default=False, action="store_true",
+                      help="enable hough transform proposals for de novo events")
 
     (options, args) = parser.parse_args()
 
@@ -152,4 +154,4 @@ if __name__ == "__main__":
         stas = stas.split(",")
         
 
-    main(stas=stas, hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid, stime=options.stime, etime=options.etime, hack_constraint=not options.no_hack_constraint, seed=options.seed)
+    main(stas=stas, hour=options.hour, len_hours=options.len_hours, resume_from=options.resume_from, runid=options.runid, tmpl_steps=options.tmpl_steps, ev_steps=options.ev_steps, deserialize=options.deserialize, uatemplate_rate=options.uatemplate_rate, raw_signals=options.raw, hz=options.hz, bands=bands, fix_outside=options.fix_outside_templates, phases=phases, target_evid=options.target_evid, stime=options.stime, etime=options.etime, hack_constraint=not options.no_hack_constraint, seed=options.seed, use_hough=options.use_hough)

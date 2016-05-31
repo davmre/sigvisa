@@ -967,6 +967,9 @@ class SigvisaGraph(DirectedGraphModel):
         if eid is None:
             eid = self.next_eid
             self.next_eid += 1
+        elif eid >= self.next_eid:
+            self.next_eid = eid+1
+
         ev.eid = eid
         evnodes = setup_event(ev, mag_prior_model = self.ev_mag_prior, 
                               inference_region=self.inference_region,

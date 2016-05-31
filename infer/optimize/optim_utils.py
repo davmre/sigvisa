@@ -185,7 +185,7 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
     x0 = np.asfarray(x0)
 
     if not normalize:
-        new_params = lambda  :  np.sign(x0) * np.exp(np.log(np.abs(x0)) + np.random.randn(len(x0)) * 1.5)
+        new_params = lambda  :  x0 + 1.5*np.random.randn(len(x0))
     else:
         new_params = lambda  :  np.random.rand(len(x0)) * 2 - 1
     starting_points = [x0,] + [new_params() for i in range(random_inits)]
