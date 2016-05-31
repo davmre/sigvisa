@@ -342,21 +342,26 @@ def plot_compare_phases(request, runid=None):
     band = request.GET.get("band", None)
     max_acost = float(request.GET.get("max_acost", "inf"))
     phase1 = request.GET.get("phase1", "Pg")
-    phase2 = request.GET.get("phase2", "Lg")
+    phase2 = request.GET.get("phase2", "none")
     min_amp = float(request.GET.get("min_amp", "-10"))
-    template_shape = request.GET.get("shape", "paired_exp")
     require_human_approved = str(request.GET.get("human_approved", "0")) == "2"
+    alpha_scale = float(request.GET.get("alpha_scale", "1.0"))
+    ms = int(request.GET.get("ms", "20"))
+
 
     x_distance = request.GET.get("x_distance", "f").lower().startswith("t")
     x_mb = request.GET.get("x_mb", "f").lower().startswith("t")
     x_depth = request.GET.get("x_depth", "f").lower().startswith("t")
 
 
-    X1, y1, yvars1, evids1 = get_training_data(runid=runid,
-                                               site=sta, chan=chan, band=band, phases=(phase1,),
-                                               target=param,require_human_approved=require_human_approved,
-                                               max_acost=max_acost, min_amp=min_amp)
-    evids1 = list(evids1)
+    try:
+        X1, y1, yvars1, evids1 = get_training_data(runid=runid,
+                                                   site=sta, chan=chan, band=band, phases=(phase1,),
+                                                   target=param,require_human_approved=require_human_approved,
+                                                   max_acost=max_acost, min_amp=min_amp)
+        evids1 = list(evids1)
+    except NoDataException:
+        X1, y1, yvars1, evids1 = [], [], [], []
 
     if phase2 != "none":
         X2, y2, yvars2, evids2 = get_training_data(runid=runid,
@@ -385,7 +390,9 @@ def plot_compare_phases(request, runid=None):
         match = (y, yvar, yy, yyvar, distance, mb, depth)
         matched.append(match)
 
-    matched = np.array(matched)
+    n = len(matched)
+    matched = np.array(matched).reshape((n, 7))
+
 
     fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')
@@ -417,17 +424,14 @@ def plot_compare_phases(request, runid=None):
         axes.set_ylabel("%s %s" % (param, phase2))
 
     v = matched[:, YV_COL] + matched[:, YYV_COL]
-    alphas = 1.0/np.sqrt(v+1e-4)
-    alphas /= np.max(alphas)
-
-    #for (xx, yy, alpha) in zip(x, y, alphas):
-    #    axes.scatter(xx, yy, alpha=alpha)
-
+    alphas = (v + 1e-4)**(-.25 * alpha_scale)
+    if len(alphas) > 0:
+        alphas /= np.max(alphas)
 
     rgba_colors = np.zeros((len(matched),4))
     rgba_colors[:,2] = 1.0
     rgba_colors[:, 3] = alphas
-    axes.scatter(x, y, color=rgba_colors)
+    axes.scatter(x, y, color=rgba_colors, s=ms, marker='.', edgecolors="none")
 
     axes.set_title("%s at %s (%d events)" % (param, sta, len(matched)))
 
@@ -614,7 +618,6 @@ def data_pairwise_plot(request, runid=None, **kwargs):
     param1 = request.GET.get("param1", None)
     param2 = request.GET.get("param2", None)
 
-    param = request.GET.get("plot_param", "coda_decay")
     sta = request.GET.get("sta", None)
     chan = request.GET.get("chan", None)
     band = request.GET.get("band", None)

@@ -415,12 +415,10 @@ def ClusterFits(request, runid, sta, cluster):
 
         ev = get_event(evid)
 
-        query = "select phase, fpid, arrival_time from sigvisa_coda_fit_phase where fitid=%d" % (fitid)
+        query = "select phase, fpid, tt_residual from sigvisa_coda_fit_phase where fitid=%d" % (fitid)
         r = s.sql(query)
         phases = {}
-        for phase, fpid, atime in r:
-            pred_atime = tt_predict(ev, sta, phase) + ev.time
-            ttr = atime - pred_atime
+        for phase, fpid, ttr in r:
             phases[phase] = (phase, fpid, ttr)
 
         column_list = []

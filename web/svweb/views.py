@@ -84,6 +84,8 @@ def fit_list_view(request, runid):
     filter_GET_params, filter_args = filterset_GET_string(fits_filter)
     filter_args['runid'] = runid
 
+    params = ("tt_residual", "peak_offset", "amp_transfer", "peak_decay", "coda_decay")
+
     return render_to_response("svweb/fits.html",
                               {'fit_list': fits_filter.qs,
                                'fits_filter': fits_filter,
@@ -94,6 +96,7 @@ def fit_list_view(request, runid):
                                'mean_time': mean_time,
                                'total_fits': total_fits,
                                'run': run,
+                               'params': params
                                }, context_instance=RequestContext(request))
 
 
@@ -673,3 +676,21 @@ def suspicious_fit_view(request, runid):
                                'runid': runid,
                                'discr_threshold': suspicion_cutoff
                                }, context_instance=RequestContext(request))
+
+def fit_grid_plots_view(request, runid, phase, param):
+
+    runid = int(runid)
+    s = Sigvisa()
+
+    r = s.sql("select distinct sta from sigvisa_coda_fit where runid=%d" % (runid))
+    stas = sorted([s[0] for s in r])
+
+    argstr = request.GET.urlencode()
+
+    return render_to_response("svweb/fit_grid_plots.html",
+                              {"stas": stas,
+                               'runid': runid,
+                               'phase': phase,
+                               'param': param,
+                               'argstr': argstr
+                           }, context_instance=RequestContext(request))
