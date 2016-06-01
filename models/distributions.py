@@ -433,6 +433,9 @@ class PiecewiseLinear(Distribution):
             areas[i] = gap * (self.ps[i+1]+self.ps[i])/2.0
         Z = np.sum(areas)
 
+        if Z == 0 or not np.isfinite(Z):
+            import pdb; pdb.set_trace()
+
         self.areas = areas / Z
         self.ps /= Z
 
