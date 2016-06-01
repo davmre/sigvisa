@@ -30,7 +30,7 @@ def get_atime_posteriors(sg, ar_advantage=False):
         key = repr(sg.template_model_type) + repr(sg.wiggle_model_type)
         for sta, wns in sg.station_waves.items():
             for wn in wns:
-                key += wn.label
+                key += wn.label + repr(wn)
                 if ar_advantage:
                     key += repr(wn.nm.params) + repr(wn.nm.c) + repr(wn.em.std)
 
