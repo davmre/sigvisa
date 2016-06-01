@@ -105,13 +105,13 @@ fastar_support =  """
                   for (int i=0; i < len_history; ++i) {
                       u(i) = d(t-1-i);
                   }
-                  t_since_mask = 0;
                }
 
                double old_v = K(0,0);
                updateK(K, tmp, p, n_p);
                K(0,0) += var;
                update_u(u, p, n_p);
+               t_since_mask = 0;
 
                if (old_v > var && (fabs(old_v - K(0,0)) < 0.00000000000001)) {
                   converged_to_stationary = 1;
@@ -247,7 +247,7 @@ class ARModel(NoiseModel):
         else:
             return_llarray = int(1)
 
-        code = "return_val = compute_ar(n_p, m, d, var, p, tmp, 0, n, K, u, llarray, return_llarray);"
+        code = "return_val = compute_ar(n_p, m, d, var, p, tmp, 0, n, K, u, llarray, return_llarray); "
 
         ll = weave.inline(code,
                           ['n', 'n_p', 'm', 'd', 'var', 'p', 'tmp', 'K', 'u', 'llarray', 'return_llarray'],
@@ -378,12 +378,13 @@ class ARModel(NoiseModel):
                     u = np.zeros((n_p,))
                     len_history = min(t, n_p)
                     u[:len_history] = d[t - 1:t - len_history - 1:-1]
-                    t_since_mask = 0
 
                 # for each masked timestep, do a Kalman update
                 K = np.dot(A, np.dot(K, A.T))
                 K[0, 0] += orig_var
                 u = np.dot(A, u)
+                t_since_mask = 0
+
                 continue
 
             # if we have just recently left a masked region, compute
@@ -409,6 +410,9 @@ class ARModel(NoiseModel):
             error = actual - expected
             t2 = 0.5 * np.square((error - self.em.mean))/var
             ell = -t2 - t1
+
+            if np.isnan(ell):
+                import pdb; pdb.set_trace()
 
             if return_debug:
                 lls.append(ell)
