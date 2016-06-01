@@ -4,19 +4,19 @@
      dest=/etc/waagent.conf
      line="ResourceDisk.Format=y"
      state=present
-     regexp="ResourceDisk.Format=n"
+     # regexp="ResourceDisk.Format=n"
 - name: swap file line 2
   lineinfile: 
      dest=/etc/waagent.conf
      line="ResourceDisk.EnableSwap=y"
      state=present
-     regexp="ResourceDisk.EnableSwap=n"
+     # regexp="ResourceDisk.EnableSwap=n"
 - name: swap file line 3
   lineinfile: 
      dest=/etc/waagent.conf
-     line="ResourceDisk.SwapSizeMB=8192"
+     line="ResourceDisk.SwapSizeMB=32768"
      state=present
-     regexp="ResourceDisk.SwapSizeMB=0"
+     # regexp="ResourceDisk.SwapSizeMB=0"
 - name: restart waagent to enable swap
   service: name=walinuxagent state=restarted
 

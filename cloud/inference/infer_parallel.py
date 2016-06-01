@@ -44,7 +44,9 @@ def parallel_inference(infer_script, label, nnodes,
                        block_s=3600, 
                        nseeds=None,
                        ncpus=4, 
-                       inference_s=3600.0, sync_s=60):
+                       inference_s=3600.0, 
+                       sync_s=60,
+                       node_file=None):
 
     infer_script = "/bin/bash /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
 
@@ -56,7 +58,11 @@ def parallel_inference(infer_script, label, nnodes,
             shutil.rmtree(jobdir)
     mkdir_p(jobdir)
 
-    hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
+    if node_file is not None:
+        with open(node_file, "r") as f:
+            hostnames = [line.strip() for line in f.readlines() if len(line) > 2]
+    else:
+        hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
 
     log_prefix = lambda jobid : "/home/sigvisa/python/sigvisa/logs/mcmc/%s" % jobid
     jm = JobManager(hostnames, ncpus, log_prefix)
@@ -125,6 +131,9 @@ def main():
 
     parser.add_option("--nnodes", dest="nnodes", default=0, type="int",
                       help="number of cloud nodes to execute on")
+    parser.add_option("--node_file", dest="node_file", default=None, type="str",
+                      help="file containing cloud node hostnames (optional, overrides nnodes)")
+
     parser.add_option("--ncpus", dest="ncpus", default=4, type="int",
                       help="number of cpus per node")
     parser.add_option("--nseeds", dest="nseeds", default=None, type="int",
@@ -152,6 +161,7 @@ def main():
     parallel_inference(infer_script=infer_script, 
                        label=options.label,
                        nnodes=options.nnodes, 
+                       node_file=options.node_file,
                        stime=options.stime, 
                        etime=options.etime,
                        block_s = options.block_s, 

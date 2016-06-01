@@ -97,6 +97,8 @@ def main():
     inferred_bulletin = np.array([(d["lon"], d["lat"], d["depth"], d["time"], d["mb"]) for d in evdicts])
     nevs = len(inferred_bulletin)
 
+    #print_bulletin(inferred_bulletin)
+
     """
     print "prior (10 simulations of %d events)" % nevs
     fs = []
