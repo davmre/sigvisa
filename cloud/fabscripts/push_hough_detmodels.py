@@ -20,15 +20,9 @@ env.key_filename = '/home/dmoore/.ssh/fabric_is_terrible.key'
 
 remote_sigvisa_home = "/home/sigvisa/python/sigvisa"
 
-def dump_local_models(runid, dump_fname, shrinkage_iter=5):
+def dump_local_models(runid, dump_fname):
     runid = int(runid)
-    shrinkage_iter = int(shrinkage_iter)
-    if shrinkage_iter < 0:
-        # noise models
-        cond = "(shrinkage_iter=0 and phase like 'noise%%')" 
-    else:
-        cond = ("shrinkage_iter=%d" % shrinkage_iter)
-    sql_query = "select * from sigvisa_param_model where fitting_runid=%d and %s;" % (runid, cond)
+    sql_query = "select * from sigvisa_hough_detection_model where fitting_runid=%d;" % (runid,)
 
     cursor = None
     try:
@@ -48,11 +42,11 @@ def dump_local_models(runid, dump_fname, shrinkage_iter=5):
             rows = cursor.fetchall()
             fnames = []
             for row in rows:
-                fnames.append(row[12])
+                fnames.append(row[5])
                 # explicitly represent None elements as NULL
                 rr = [x if x is not None else "\\N" for x in row ]
                 spamwriter.writerow(rr)
-        reverse_code += "load data local infile \'/home/sigvisa/python/sigvisa/%s.csv\' into table sigvisa_param_model fields terminated by ',' optionally enclosed by '|' lines terminated by '\r\n';" % dump_fname
+        reverse_code += "load data local infile \'/home/sigvisa/python/sigvisa/%s.csv\' into table sigvisa_hough_detection_model fields terminated by ',' optionally enclosed by '|' lines terminated by '\r\n';" % dump_fname
     except Exception as e:
         print e
     finally:

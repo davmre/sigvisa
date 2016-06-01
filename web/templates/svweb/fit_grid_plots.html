@@ -1,0 +1,34 @@
+{% load url from future %}
+{% load math_filters %}
+
+<html>
+<head>
+<title>{{ param }} fits, {{ phase }} phase, runid {{ runid }} -- sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+
+
+<table>
+<tr>
+<td>sta</td>
+<td>distance</td>
+<td>depth</td>
+<td>mb</td>
+</tr>
+
+
+{% for sta in stas %}
+<tr><td>{{ sta }}</td>
+<td><a href="{% url 'pairwise_phases' runid=runid %}?plot_param={{ param }};phase1={{ phase }};sta={{ sta }};x_distance=true;{{ argstr }}"><img src="{% url 'pairwise_phases' runid=runid %}?plot_param={{ param }};phase1={{ phase }};sta={{ sta }};x_distance=true;{{ argstr }}" width=400 height=250></a></td>
+<td><a href="{% url 'pairwise_phases' runid=runid %}?plot_param={{ param }};phase1={{ phase }};sta={{ sta }};x_depth=true;{{ argstr }}"><img src="{% url 'pairwise_phases' runid=runid %}?plot_param={{ param }};phase1={{ phase }};sta={{ sta }};x_depth=true;{{ argstr }}" width=400 height=250></a></td>
+<td><a href="{% url 'pairwise_phases' runid=runid %}?plot_param={{ param }};phase1={{ phase }};sta={{ sta }};x_mb=true;{{ argstr }}"><img src="{% url 'pairwise_phases' runid=runid %}?plot_param={{ param }};phase1={{ phase }};sta={{ sta }};x_mb=true;{{ argstr }}" width=400 height=250></a></td>
+</tr>
+{% endfor %}
+</table>
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>
