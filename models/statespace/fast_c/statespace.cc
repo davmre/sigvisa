@@ -662,7 +662,7 @@ double filter_incremental(StateSpaceModel &ssm,
       // check that our likelihood calculations are now in sync with the
       // previous calculation.
       if ( fabs(step_ell_discrepancy) > step_ell_tol ) {
-	 printf("warmup %d discrepancy %.10f\n", k, step_ell_discrepancy);
+	// printf("warmup %d discrepancy %.10f\n", k, step_ell_discrepancy);
          *errcode = ERR_INCR_INIT;
          return -INFINITY;
       }
