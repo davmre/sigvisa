@@ -201,7 +201,7 @@ def wn_origin_posterior(sg, wn, cached_for_wn,
         eidx = min(eidx, len(new_lls))
         if sidx > len(new_lls) or eidx < 0:
             continue
-        new_lls[sidx:eidx] = 1.0 # todo figure out a correct default value
+        new_lls[sidx:eidx] = 2.5 # todo figure out a correct default value
 
     new_lls /= temper
     return new_lls, origin_stime
