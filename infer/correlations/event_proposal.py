@@ -244,10 +244,13 @@ def sample_corr_kwargs(sg):
     sta_probs = [1.0,]
     if "PD31" in all_stations:
         sta_choices.append(("PD31",))
-        sta_probs.append(0.5)
-    if "NVAR" in all_stations:
-        sta_choices.append(("NVAR",))
-        sta_probs.append(0.5)
+        sta_probs.append(0.2)
+    if "ELK" in all_stations:
+        sta_choices.append(("ELK",))
+        sta_probs.append(0.2)
+    if "NV01" in all_stations:
+        sta_choices.append(("NV01",))
+        sta_probs.append(0.2)
     sta_probs = np.array(sta_probs) / np.sum(sta_probs)
     stas_idx = np.random.choice(np.arange(len(sta_choices)), p=sta_probs)
     stas = sta_choices[stas_idx]
