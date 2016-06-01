@@ -160,6 +160,7 @@ class SigvisaGraph(DirectedGraphModel):
                  hack_coarse_tts=None,
                  hack_coarse_signal=None,
                  hack_ttr_max=25.0,
+                 hack_ampt_z_max=4.0,
                  phase_existence_model="ga_logistic",
                  min_mb = 2.5,
                  max_template_len_s=300.0,
@@ -184,6 +185,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.hack_coarse_tts = hack_coarse_tts
         self.hack_coarse_signal = hack_coarse_signal
         self.hack_ttr_max = hack_ttr_max
+        self.hack_ampt_z_max = hack_ampt_z_max
 
         if template_model_type=="param":
             # sensible defaults
@@ -1255,7 +1257,7 @@ class SigvisaGraph(DirectedGraphModel):
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
 
-            node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint, hack_coarse_tts=self.hack_coarse_tts, hack_ttr_max=self.hack_ttr_max)
+            node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint, hack_coarse_tts=self.hack_coarse_tts, hack_ttr_max=self.hack_ttr_max, hack_ampt_z_max=self.hack_ampt_z_max)
             node.modelid = modelid
 
             if model_type=="gp_joint":

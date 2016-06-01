@@ -7,11 +7,12 @@ from sigvisa.models import DummyModel
 
 class Node(object):
 
-    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False, hack_coarse_tts=None, hack_ttr_max=25.0):
+    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False, hack_coarse_tts=None, hack_ttr_max=25.0, hack_ampt_z_max=4.0):
 
         self.hack_param_constraint = hack_param_constraint
         self.hack_coarse_tts = hack_coarse_tts
         self.hack_ttr_max = hack_ttr_max
+        self.hack_ampt_z_max = hack_ampt_z_max
 
         self.model = model
         self._fixed = fixed
@@ -381,6 +382,14 @@ class Node(object):
         # prevent physically unreasonable tail values of template params
         if self.hack_param_constraint:
             lp += self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None, ttr_max=self.hack_ttr_max)
+
+            if "amp_transfer" in self.label and self.hack_ampt_z_max is not None:
+                pred = self.model.predict(cond=parent_values)
+                std =  np.sqrt(self.model.variance(cond=parent_values, include_obs=True))
+                z = np.abs( (v - pred) / std)
+                if z > self.hack_ampt_z_max:
+                    penalty = -( 10 * -(z-self.hack_ampt_z_max))**4
+                    lp += penalty
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))
