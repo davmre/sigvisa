@@ -817,7 +817,7 @@ def iterative_mixture_hough(sg, hc):
     print fname
 
 @lru_cache(maxsize=64)
-def load_detprob_model(sta, phase, phase_context, runid, enable_dummy=False):
+def load_detprob_model(sta, phase, phase_context, runid, enable_dummy=True):
 
     s = Sigvisa()
     phase_context_str = ','.join(sorted(phase_context))
@@ -829,6 +829,7 @@ def load_detprob_model(sta, phase, phase_context, runid, enable_dummy=False):
             weights = np.zeros((6,),)
             intercept = -2
             model = LogisticRegressionModel(weights, intercept, sta=sta, phase=phase)
+            print "WARNING: using dummy detmodel for %s %s %s" % (sta, phase, phase_context)
         else:
             raise Exception("no detmodel for query %s" % sql_query)
     else:
