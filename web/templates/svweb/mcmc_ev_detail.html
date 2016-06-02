@@ -34,7 +34,7 @@
 <td valign=top>
 <a href="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};stime={{ stime }};etime={{ etime }}{{ extra_wave_args }};{{ sgfilestr }}"><img src="{% url 'mcmc_wave_posterior' dirname=dirname wn_label=wnlabel %}?step={{ step }};stime={{ stime }};etime={{ etime }}{{ extra_wave_args }};{{ sgfilestr }}" width=400></a>
 </td>
-<td>{{ tms }}</td>
+<td><div style="overflow:scroll; height: 200px; width: 500px; border: 1pt solid black"><pre style="font-size: 8pt">{{ tms }}</div></pre></td>
 </tr>
 {% endfor %}
 </table>
