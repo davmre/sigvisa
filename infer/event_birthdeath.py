@@ -2342,14 +2342,65 @@ def prior_location_proposal(sg, fix_result=None, proposal_dist_seed=None):
         return ev, lp, None
 
 def ev_birth_move_prior(sg, log_to_run_dir=None, **kwargs):
+
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        _, eid, proposed_ev, debug_info = proposal_extra
+
+        if log_to_run_dir is None:
+            sg.logger.warning("WARNING: not logging event because no rundir specified")
+            return
+
+        log_file = os.path.join(log_to_run_dir, "prior_proposals.txt")
+        birth_dir = os.path.join(log_to_run_dir, "birth_proposals")
+        mkdir_p(birth_dir)
+        ev_log_file = os.path.join(birth_dir, "birth_proposal_%d.txt" % eid)
+
+        # proposed event should be the most recently created
+        if eid is None:
+            eid = np.max(sg.evnodes.keys())
+
+        with open(log_file, 'a') as f:
+            f.write("proposed ev: %s eid %d\n" % (proposed_ev, eid))
+            f.write(" acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            f.write("\n")
+
+        with open(ev_log_file, 'w') as f:
+            f.write(prettyprint_debug(debug_info))
+
+
     return ev_birth_move_abstract(sg, location_proposal=prior_location_proposal, 
+                                  accept_action=log_action,
+                                  revert_action=log_action,
                                   proposal_includes_mb=True, 
                                   proposal_type="dumb", **kwargs)
 
 def ev_death_move_prior(sg, log_to_run_dir=None, inference_step=-1, **kwargs):
+
+
+    def log_action(proposal_extra, lp_old, lp_new, log_qforward, log_qbackward):
+        if log_to_run_dir is None:
+            return
+        
+        _ , eid, proposed_ev, debug_info = proposal_extra
+        log_file = os.path.join(log_to_run_dir, "prior_deaths.txt")
+
+        logdir = os.path.join(log_to_run_dir, "ev_%05d" % eid)
+        ev_log_file = os.path.join(logdir, "death_proposal_%d.txt" % inference_step)
+        mkdir_p(logdir)
+        with open(ev_log_file, 'w') as f:
+            f.write(prettyprint_debug(debug_info))
+
+        with open(log_file, 'a') as f:
+            f.write("proposing to kill eid %d: %s\n" % (eid, proposed_ev))
+            f.write("acceptance lp %.2f (lp_old %.2f lp_new %.2f log_qforward %.2f log_qbackward %.2f)\n" % (lp_new +log_qbackward - (lp_old + log_qforward), lp_old, lp_new, log_qforward, log_qbackward))
+            f.write("\n")
+
+
     return ev_death_move_abstract(sg, location_proposal=prior_location_proposal, 
                                   proposal_includes_mb=True, 
                                   inference_step=inference_step,
+                                  accept_action=log_action,
+                                  revert_action=log_action,
                                   birth_type="dumb", **kwargs)
 
 def sample_hough_kwargs(sg):

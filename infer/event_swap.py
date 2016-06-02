@@ -257,6 +257,14 @@ def rebirth_events_helper(sg, eids,
         log_qbackward += lqb_old
         revert_moves.append(rebirth_old)
 
+        if np.isinf(log_qbackward) and log_qbackward < 0:
+            # short-circuit if we get an auto-rejectable move
+            revert_moves.reverse()
+            def revert_move():
+                for r in revert_moves:
+                    r()
+            return lp_intermediate, lp_old, log_qforward, log_qbackward, revert_move
+
     if birth_eids is None:
         birth_eids = eids
 
