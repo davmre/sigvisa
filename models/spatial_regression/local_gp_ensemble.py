@@ -13,6 +13,8 @@ import marshal
 import pyublas
 import cPickle as pickle
 
+from collections import OrderedDict
+
 from sigvisa.treegp.gp import GP, GPCov
 from sigvisa.treegp.features import featurizer_from_string, recover_featurizer
 from sigvisa.treegp.cover_tree import VectorTree
@@ -85,6 +87,7 @@ class LocalGPEnsemble(ParamModel):
             yvars = np.zeros(y.shape)
         self.local_gps, self.X, self.y, self.yvars = self._build_local_gps(X, y, yvars,
                                                                            compute_ll=(basis is None))
+        self.local_gp_cache = None
         self.n = len(self.y)
 
         self.basis = basis
@@ -202,22 +205,41 @@ class LocalGPEnsemble(ParamModel):
         return - .5 * ((y-mean)**2 / variance + np.log(2*np.pi*variance) )
 
     def force_load_localgps(self):
+        self.cache_capacity = len(self.local_gps)
         for i in range(len(self.local_gps)):
             self.local_gps[i] = self.get_local_gp(i)
         
     def get_local_gp(self, idx):
+        # note there's no real reason for a separate self.local_gps
+        # and self.local_gp_cache, so self.local_gps could probably be
+        # eliminated.
+
+        idx = int(idx)
         if self.local_gps[idx] is None:
             fname = os.path.join(self.lazyload_localgp_dir, "local%03d.gp" % idx)
             lgp = GP(fname=fname)
-            #with open(fname, 'rb') as f:
-            #    lgp = pickle.load(f)
             self.local_gps[idx] = lgp
 
-        return self.local_gps[idx]                
+            if self.local_gp_cache is not None:
+
+                # if needed, evict oldest from cache, and delete from self.local_gps
+                if len(self.local_gp_cache) >= self.cache_capacity:
+                    k, v = self.local_gp_cache.popitem(last=False)
+                    self.local_gps[k] = None
+
+                nloaded = len(self.local_gp_cache)
+                print "loaded lgp %s, total loaded %d" % (fname, nloaded)
+
+        if self.local_gp_cache is not None:
+            if idx in self.local_gp_cache:
+                _ = self.local_gp_cache.pop(idx)
+            self.local_gp_cache[idx] = self.local_gps[idx]
+
+        return self.local_gps[idx]
 
     def predict(self, cond, **kwargs):
 
-        # TODO: cache features and R between predict and variance calls..
+        # TODO: cache features and R between predict and variance calls...
 
         X1 = self.standardize_input_array(cond).astype(np.float)
         cluster_idx = self._x_to_cluster(X1)
@@ -373,6 +395,10 @@ class LocalGPEnsemble(ParamModel):
 
     def __setstate__(self, d):
         self.__dict__ = d
+
+        self.local_gp_cache = OrderedDict()
+
+
         self.cluster_tree = VectorTree(self.cluster_centers, 1, *self.cluster_metric.tree_params())
         if self.basis is not None:
             self.featurizer, self.featurizer_recovery = recover_featurizer(self.basis, self.featurizer_recovery, transpose=True)
@@ -389,10 +415,18 @@ class LocalGPEnsemble(ParamModel):
         with open(os.path.join(fname, "main.pkl"), "wb") as f:
              pickle.dump(self, f)
 
-def load_lgp_ensemble(fname):
+def load_lgp_ensemble(fname, cache_capacity=10):
     with open(os.path.join(fname, "main.pkl"), "rb") as f:
         lgp = pickle.load(f)
     lgp.lazyload_localgp_dir = fname
+
+    #lgp.force_load_localgps()
+    lgp.cache_capacity = cache_capacity
+
+
+    #if "massive_jgp_fits_may/iter_00/lin_polyexp/peak_decay/ELK/Lg/BHZ/freq_0.8_4.5/55584c51.9134b006.gplocal+lld+linear_distmb.0" in fname:
+    #    import pdb; pdb.set_trace()
+
     return lgp
 
 def optimize_localgp_hyperparams(noise_prior=None,

@@ -525,15 +525,18 @@ def learn_constant_laplacian(X, y, sta, optimize_marginal_ll=True, optim_params=
 def learn_constant_beta(X, y, sta, **kwargs):
     return baseline_models.ConstBetaModel(X=X, y=y, sta=sta)
 
-def load_modelid(modelid, memoize=False, **kwargs):
+
+modelid_cache = {}
+def load_modelid(modelid, memoize=True, **kwargs):
     s = Sigvisa()
     fname, model_type = s.sql("select model_fname, model_type from sigvisa_param_model where modelid=%d" % modelid)[0]
-    if memoize:
-        model = load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
-    else:
+
+    if modelid not in modelid_cache:
         model = load_model_notmemoized(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
-    model.modelid = modelid
-    return model
+        model.modelid = modelid
+        modelid_cache[modelid] = model
+
+    return modelid_cache[modelid]
 
 def load_modelid_evids(modelid):
     s = Sigvisa()
@@ -541,7 +544,7 @@ def load_modelid_evids(modelid):
     evids = np.loadtxt(os.path.join(s.homedir, fname), dtype=int)
     return evids
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=2048)
 def load_model(*args, **kwargs):
     return load_model_notmemoized(*args, **kwargs)
 
@@ -551,8 +554,7 @@ def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
     
     if model_type.startswith("gplocal"):
         model = load_lgp_ensemble(fname)
-        #with open(fname, "rb") as f:
-        #    model = pickle.load(f)
+        
     elif model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):
