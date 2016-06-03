@@ -118,9 +118,14 @@ def merge_helper_newstyle(sg,
     old_evs = [sg.get_event(eid1), sg.get_event(eid2)]
     eids = (eid1, eid2)
     merge_eid = sg.next_eid
-    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, 
-                                                                                     birth_eids=(merge_eid,), 
-                                                                                     **kwargs)
+    r = rebirth_events_helper(sg, eids, 
+                              birth_eids=(merge_eid,), 
+                              **kwargs)
+    if r == False:
+        return False
+    lp_new, lp_old, log_qforward, log_qbackward, revert_move = r
+    
+
     log_qforward += lp_merge
 
     _, lp_split = sample_event_to_split(sg, fix_result=merge_eid)
@@ -162,9 +167,13 @@ def split_helper_newstyle(sg,
     old_ev = sg.get_event(eid)
 
     split_eids = (sg.next_eid, sg.next_eid+1)
-    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, (eid,), 
-                                                                                     birth_eids=split_eids, 
-                                                                                     **kwargs)
+    r = rebirth_events_helper(sg, (eid,), 
+                              birth_eids=split_eids, 
+                              **kwargs)
+    if r == False:
+        return False
+    lp_new, lp_old, log_qforward, log_qbackward, revert_move = r
+
     log_qforward += lp_split
     new_evs = [sg.get_event(new_eid) for new_eid in split_eids]
 

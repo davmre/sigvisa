@@ -148,7 +148,11 @@ def swap_events_move(sg, n_events=2, log_to_run_dir=None, return_probs=False, **
 
     old_evs = dict([(eid, sg.get_event(eid)) for eid in eids])
 
-    lp_new, lp_old, log_qforward, log_qbackward, revert_move = rebirth_events_helper(sg, eids, **kwargs)
+    r = rebirth_events_helper(sg, eids, **kwargs)
+    if r == False:
+        return False
+
+    lp_new, lp_old, log_qforward, log_qbackward, revert_move = r
     log_qforward += lp_swap
 
     lp_swap_reverse = sample_events_to_swap(sg, fix_result=eids, n_events=n_events)
@@ -244,9 +248,18 @@ def rebirth_events_helper(sg, eids,
             for r in revert_moves:
                 r()
             return False
+
         lp_intermediate, lpo, lqf_old, lqb_old, redeath_old, rebirth_old, proposal_extra = r
         if lp_old is None:
             lp_old = lpo
+
+
+        if np.isinf(lqb_old) and lqb_old < 0:
+            revert_moves.reverse()
+            for r in revert_modes:
+                r()
+            sg.logger.info("short-circuit rejection of event rebirth because killing eid %d returned probs %.1f %.1f %.1f %.1f" % (eid, lp_intermediate, lpo, lqf_old, lqb_old))
+            return False
 
         redeath_old()
         # leave the graph in the dead state, so the new death proposals are with respect to
@@ -270,6 +283,15 @@ def rebirth_events_helper(sg, eids,
             return False
 
         lp_new, lp_int, lqf_new, lqb_new, rebirth_new, redeath_new, proposal_extra = r
+
+
+        if np.isinf(lqb_new) and lqb_new < 0:
+            revert_moves.reverse()
+            for r in revert_modes:
+                r()
+            sg.logger.info("short-circuit rejection of event rebirth because birthing eid %d returned probs %.1f %.1f %.1f %.1f" % (eid, lp_new, lp_int, lqf_new, lqb_new))
+            return False
+
         
         rebirth_new()
 
