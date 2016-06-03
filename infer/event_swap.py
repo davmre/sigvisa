@@ -256,7 +256,7 @@ def rebirth_events_helper(sg, eids,
 
         if np.isinf(lqb_old) and lqb_old < 0:
             revert_moves.reverse()
-            for r in revert_modes:
+            for r in revert_moves:
                 r()
             sg.logger.info("short-circuit rejection of event rebirth because killing eid %d returned probs %.1f %.1f %.1f %.1f" % (eid, lp_intermediate, lpo, lqf_old, lqb_old))
             return False
@@ -287,7 +287,7 @@ def rebirth_events_helper(sg, eids,
 
         if np.isinf(lqb_new) and lqb_new < 0:
             revert_moves.reverse()
-            for r in revert_modes:
+            for r in revert_moves:
                 r()
             sg.logger.info("short-circuit rejection of event rebirth because birthing eid %d returned probs %.1f %.1f %.1f %.1f" % (eid, lp_new, lp_int, lqf_new, lqb_new))
             return False
