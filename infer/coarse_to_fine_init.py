@@ -459,7 +459,7 @@ def initialize_from(sg_new, ms_new, sg_old, ms_old):
 
 def do_inference(sg, modelspec, runspec, max_steps=None, 
                  model_switch_lp_threshold=500, dump_interval_s=10, 
-                 max_dumps=5,
+                 max_dumps=1,
                  print_interval_s=10, 
                  dump_proposals=False,
                  swapper=None, run_dir=None):
