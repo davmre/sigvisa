@@ -217,7 +217,7 @@ class LocalGPEnsemble(ParamModel):
         idx = int(idx)
         if self.local_gps[idx] is None:
             fname = os.path.join(self.lazyload_localgp_dir, "local%03d.gp" % idx)
-            lgp = GP(fname=fname)
+            lgp = GP(fname=fname, sparse_invert=True)
             self.local_gps[idx] = lgp
 
             if self.local_gp_cache is not None:
@@ -228,7 +228,7 @@ class LocalGPEnsemble(ParamModel):
                     self.local_gps[k] = None
 
                 nloaded = len(self.local_gp_cache)
-                print "loaded lgp %s, total loaded %d" % (fname, nloaded)
+                #print "loaded lgp %s, total loaded %d" % (fname, nloaded)
 
         if self.local_gp_cache is not None:
             if idx in self.local_gp_cache:
@@ -415,17 +415,13 @@ class LocalGPEnsemble(ParamModel):
         with open(os.path.join(fname, "main.pkl"), "wb") as f:
              pickle.dump(self, f)
 
-def load_lgp_ensemble(fname, cache_capacity=10):
+def load_lgp_ensemble(fname, cache_capacity=15):
     with open(os.path.join(fname, "main.pkl"), "rb") as f:
         lgp = pickle.load(f)
     lgp.lazyload_localgp_dir = fname
 
-    #lgp.force_load_localgps()
     lgp.cache_capacity = cache_capacity
-
-
-    #if "massive_jgp_fits_may/iter_00/lin_polyexp/peak_decay/ELK/Lg/BHZ/freq_0.8_4.5/55584c51.9134b006.gplocal+lld+linear_distmb.0" in fname:
-    #    import pdb; pdb.set_trace()
+    #lgp.force_load_localgps()
 
     return lgp
 
