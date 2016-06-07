@@ -266,7 +266,7 @@ def fetch_waveform_ims(station, chan, stime, etime, pad_seconds=20, cursor=None)
     # return samprate, np.array(data)
 
 
-def _read_waveform_from_file(waveform, skip_samples, read_samples):
+def _read_waveform_from_file(waveform, skip_samples, read_samples, calibrate=True):
     """
     waveform -- row queried from wfdisc table
     """
@@ -311,7 +311,11 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
                 data[dest] = struct.unpack(">i", "\x00" + bytes[src:src + 3])[0]
 
     # convert the raw values into nm (nanometers)
-    calib = float(waveform['calib'])
+    if calibrate:
+        calib = float(waveform['calib'])
+    else:
+        calib = 1.0
+
     return [float(x) * calib for x in data]
 
 
