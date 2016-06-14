@@ -58,10 +58,11 @@ def main():
         if "idcx_arrival.csv" not in files:
             print "no arrivals found, skipping"
             continue
-        load_table(cursor, 'idcx_arrival', os.path.join(stadir, 'idcx_arrival.csv'))
-        load_table(cursor, 'leb_arrival', os.path.join(stadir, 'leb_arrival.csv'))
-        load_table(cursor, 'leb_origin', os.path.join(stadir, 'leb_origin.csv'))
-        load_table(cursor, 'leb_assoc', os.path.join(stadir, 'leb_assoc.csv'))
+
+        #load_table(cursor, 'idcx_arrival', os.path.join(stadir, 'idcx_arrival.csv'))
+        #load_table(cursor, 'leb_arrival', os.path.join(stadir, 'leb_arrival.csv'))
+        #load_table(cursor, 'leb_origin', os.path.join(stadir, 'leb_origin.csv'))
+        #load_table(cursor, 'leb_assoc', os.path.join(stadir, 'leb_assoc.csv'))
 
     mkdir_p(wfdest)
     cmd = "cp -R %s/* %s" % (wfsrc , wfdest)

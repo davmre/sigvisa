@@ -191,7 +191,15 @@ def ev_phase_template_logprob(sg, wn, eid, phase, template_dict,
 def joint_association_distribution(sg, wn, eid, phases, 
                                    atime_only=False,
                                    associate_using_mb=True, 
-                                   max_ttr=25.0):
+                                   max_ttr="sg"):
+    if max_ttr == "sg":
+        # default max_ttr is slightly larger than the model's max, to account for the fact that 
+        # the truncation penalty in nodes.py is really a soft penalty, which occasionally is
+        # violated slightly, but we still want to give nonzero probability to those associations
+        # since otherwise we get unkillable events. 
+        max_ttr = sg.hack_ttr_max + 1.0
+
+
     ev = sg.get_event(eid)
     possible_associations = defaultdict(list)
     ignore_mb = not associate_using_mb
@@ -410,10 +418,14 @@ def deassociation_logprob(sg, wn, eid, phase,
         return deassociation_ratio_log - log_normalizer
 
 def sample_deassociation_proposal(sg, wn, eid, phase, 
-                                  fix_result=None, debug_info=None):
+                                  fix_result=None, 
+                                  propose_map=False,
+                                  debug_info=None):
     lp = deassociation_logprob(sg, wn, eid, phase, debug_info=debug_info)
     if fix_result is not None:
         deassociate = fix_result
+    elif propose_map:
+        deassociate = np.exp(lp) > 0.5
     else:
         u = np.random.rand()
         deassociate = u < np.exp(lp)
@@ -974,7 +986,9 @@ def ev_death_executor(sg, location_proposal,
                       repropose_uatemplates=False,
                       birth_type="mh",
                       inference_step=-1,
-                      force_kill_eid=None):
+                      force_kill_eid=None,
+                      propose_map=False):
+
     log_qforward = 0.0
     log_qbackward = 0.0
     
@@ -1002,6 +1016,7 @@ def ev_death_executor(sg, location_proposal,
 
     lqf, replicate_untmpls, death_records = ev_template_death_helper(sg, eid, 
                                                                      repropose_uatemplates=repropose_uatemplates,
+                                                                     propose_map=propose_map,
                                                                      debug_info=debug_info)
     log_qforward += lqf
 
@@ -1056,6 +1071,7 @@ def ev_death_executor(sg, location_proposal,
         sg._topo_sort()
 
     proposal_extra = (extra, eid, ev, debug_info)
+
     return lp_new, lp_old, log_qforward, log_qbackward, redeath, rebirth, proposal_extra
 
 def ev_death_move_abstract(sg, location_proposal, log_to_run_dir=None, 
@@ -1215,6 +1231,7 @@ def ev_sta_template_death_helper(sg, wn, eid,
                                  phases=None,
                                  repropose_uatemplates=False,
                                  fix_result=None,
+                                 propose_map=False,
                                  debug_info=None):
 
     def perturb_uatemplate(sg, wn, tmid, fix_result=None):
@@ -1272,6 +1289,7 @@ def ev_sta_template_death_helper(sg, wn, eid,
             fixed_tmvals = None
         deassociate, deassociate_logprob = sample_deassociation_proposal(sg, wn, eid, phase, 
                                                                          fix_result = deassociate,
+                                                                         propose_map = propose_map,
                                                                          debug_info=debug_info)
         if debug_info is not None:
             if phase not in debug_info:
@@ -1318,6 +1336,7 @@ def ev_sta_template_death_helper(sg, wn, eid,
 def ev_template_death_helper(sg, eid, 
                              repropose_uatemplates=False, 
                              fix_result=None,
+                             propose_map=False,
                              debug_info=None):
     birth_records = {}
     replicate_fns = []
@@ -1340,6 +1359,7 @@ def ev_template_death_helper(sg, eid,
                 lqf_sta, replicate_sta, birth_sta = ev_sta_template_death_helper(sg, wn, eid, 
                                                                                  fix_result=fr_sta, 
                                                                                  repropose_uatemplates=repropose_uatemplates,
+                                                                                 propose_map=propose_map,
                                                                                  debug_info=debug_info_sta)
                 replicate_fns.append(replicate_sta)
                 log_qforward += lqf_sta
@@ -1434,7 +1454,9 @@ def propose_associations(sg, wn, eid, site_phases, fix_result=None,
         assoc_lp = np.log(jd[assoc_tmids])
     else:
         assoc_tmids = fix_result["assoc_tmids"]
-        assoc_lp = np.log(jd[assoc_tmids]) if assoc_tmids in jd else -np.inf
+
+        impossible_lp = max( -30, np.log(np.min(jd.values())) - 5 ) #-np.inf
+        assoc_lp = np.log(jd[assoc_tmids]) if assoc_tmids in jd else impossible_lp
     sg.logger.debug( "using assoc %s with lp %f (dist %s)" % ( zip(site_phases, assoc_tmids), assoc_lp, jd) )
     log_qforward += assoc_lp
     

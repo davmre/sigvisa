@@ -18,16 +18,25 @@ env.key_filename = '/home/dmoore/.ssh/fabric_is_terrible.key'
 
 
 def sync_serializations(hostname, jobid, local_dir):
+    """
     serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
     subprocess.call(["rsync", "-avz", "-e", "ssh", "vagrant@%s:%s" % (hostname, serial_dir), local_dir])
+    """
+    serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid)
+    subprocess.call(["rsync", "-avz", "--delete", "-e", "ssh", "vagrant@%s:%s/" % (hostname, serial_dir), local_dir])
+
 
 def write_syncscript(jobdir, jobs, jm, fname):
     with open(os.path.join(jobdir, fname), "w") as f:
         for (jobid, cmd, desc) in jobs:
             local_dir = os.path.join(jobdir, "%s" % jobid)
             hostname, _ = jm.hosts_by_job[jobid]
-            serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
-            sync_cmd = "rsync -avz -e ssh vagrant@%s:%s %s" % (hostname, serial_dir, local_dir)
+
+            serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid)
+            sync_cmd = "rsync -avz  --delete -e ssh vagrant@%s:%s/ %s" % (hostname, serial_dir, local_dir)
+
+            #serial_dir = os.path.join("/home/sigvisa/python/sigvisa/logs/mcmc/", "%s" % jobid, "serialized")
+            #sync_cmd = "rsync -avz -e ssh vagrant@%s:%s %s" % (hostname, serial_dir, local_dir)
             f.write(sync_cmd + "\n")
 
 def write_killscript(jobdir, jobs, jm, fname):
@@ -39,13 +48,15 @@ def write_killscript(jobdir, jobs, jm, fname):
             f.write(cmd1 + "\n")
             f.write(cmd2 + "\n")
 
-def parallel_inference(infer_script, label, nnodes, 
+def parallel_inference(infer_script, 
+                       label, nnodes, 
                        stime, etime, 
                        block_s=3600, 
                        nseeds=None,
                        ncpus=4, 
                        inference_s=3600.0, 
                        sync_s=60,
+                       random_hosts=True,
                        node_file=None):
 
     infer_script = "/bin/bash /home/sigvisa/python/sigvisa/cloud/infer.sh " + infer_script
@@ -71,7 +82,7 @@ def parallel_inference(infer_script, label, nnodes,
         jobs = []
         if stime is not None:
             total_len = etime-stime
-            nblocks = int(np.floor(total_len / float(block_s)))
+            nblocks = max(1, int(np.floor(total_len / float(block_s))))
 
             stimes = np.array([stime + k * block_s for k in range(nblocks)], dtype=np.float)
             etimes = stimes + block_s

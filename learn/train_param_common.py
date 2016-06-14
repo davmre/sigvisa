@@ -548,13 +548,14 @@ def load_modelid_evids(modelid):
 def load_model(*args, **kwargs):
     return load_model_notmemoized(*args, **kwargs)
 
-def load_model_notmemoized(fname, model_type, gpmodel_build_trees=False):
+def load_model_notmemoized(fname, model_type, 
+                           gpmodel_build_trees=False):
     if fname.startswith("parameters"):
         fname = os.path.join(Sigvisa().homedir, fname)
     
     if model_type.startswith("gplocal"):
-        model = load_lgp_ensemble(fname)
-        
+        n_cached_regions = os.getenv("SIGVISA_LGP_CACHE_CAPACITY", 15)
+        model = load_lgp_ensemble(fname, cache_capacity=n_cached_regions)        
     elif model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):

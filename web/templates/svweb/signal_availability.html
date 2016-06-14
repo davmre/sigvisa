@@ -1,0 +1,33 @@
+{% load url from future %}
+<html>
+<head>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
+<title>sigvisa waveform viewer</title>
+
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+<center>
+<form action="{% url 'signal_availability' %}" method="GET">
+Station:  <input type="textbox" name="sta" value="{{ sta }}"  size="4"/>
+Start time: <input type="textbox" name="stime" value="{{ stime }}" size="15"/>
+End time: <input type="textbox" name="etime" value="{{ etime }}" size="15"/>
+<input type="submit" name="submit">
+</form>
+</center>
+
+<table>
+<tr><td>time</td><td>wave files</td></tr>
+{% for tstr, fnames in files %}
+<tr>
+  <td>{{ tstr }}</td>
+  <td>{{ fnames }}</td>
+</tr>
+{% endfor %}
+</table>
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>

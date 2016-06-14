@@ -21,7 +21,7 @@ def sort_phases(phases):
     canonical_order=["P", "pP", "Pn", "Pg", "S", "Sn", "Lg"]
     return sorted(phases, key = lambda phase : - canonical_order.index(phase))
 
-def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases, 
+def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases, band,
                         max_hz=None, resume_from=None, 
                         init_buffer_len=2.0,
                         n_random_inits=200,
@@ -63,6 +63,7 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     jointgp_hparam_prior=jgp_priors,
                     phases=phases,
                     skip_levels=0,
+                    bands=[band,],
                     uatemplate_rate=1e-6,
                     raw_signals=False, max_hz=2.0,  **kwargs)
     ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc'], enable_phase_openworld=False, special_mb_moves=infer_evs, special_time_moves=infer_evs, steps=500)
@@ -76,9 +77,11 @@ def sigvisa_fit_jointgp(stas, evs, runids,  runids_raw, phases,
                     jointgp_param_run_init=jgp_runid,
                     jointgp_hparam_prior=jgp_priors,
                     hack_ttr_max=8.0,
+                    bands=[band,],
                     uatemplate_rate=1e-8,
                     skip_levels=0,
                     **kwargs)
+
     ms4.add_inference_round(enable_event_moves=False, 
                             enable_event_openworld=False, 
                             enable_template_openworld=False, 
@@ -209,6 +212,7 @@ def main():
     parser = OptionParser()
 
     parser.add_option("--sta", dest="sta", default=None, type=str)
+    parser.add_option("--band", dest="band", default="freq_0.8_4.5", type=str)
     parser.add_option("--runid", dest="runid", default=None, type=int)
     parser.add_option("--runid_raw", dest="runid_raw", default=None, type=int)
     parser.add_option("--phases", dest="phases", default=None, type=str)
@@ -276,12 +280,10 @@ def main():
 
     # HACK
     #evs = evs[:30]
-
-
-
     sigvisa_fit_jointgp([options.sta], evs, 
                         runids=runids, 
                         runids_raw=runids_raw, 
+                        band=options.band,
                         max_hz=options.max_hz,
                         phases=phases,
                         dummy_prior=dummyPrior,

@@ -384,12 +384,13 @@ class Node(object):
             lp += self.param_truncation_penalty(self.label, v, coarse_tts=self.hack_coarse_tts is not None, ttr_max=self.hack_ttr_max)
 
             if "amp_transfer" in self.label and self.hack_ampt_z_max is not None:
-                pred = self.model.predict(cond=parent_values)
-                std =  np.sqrt(self.model.variance(cond=parent_values, include_obs=True))
-                z = np.abs( (v - pred) / std)
-                if z > self.hack_ampt_z_max:
-                    penalty = -( 10 * -(z-self.hack_ampt_z_max))**4
-                    lp += penalty
+                if not isinstance(self.model, DummyModel):
+                    pred = self.model.predict(cond=parent_values)
+                    std =  np.sqrt(self.model.variance(cond=parent_values, include_obs=True))
+                    z = np.abs( (v - pred) / std)
+                    if z > self.hack_ampt_z_max:
+                        penalty = -( 10 * -(z-self.hack_ampt_z_max))**4
+                        lp += penalty
 
         if np.isnan(lp):
             raise Exception('invalid log prob %f for value %s at node %s' % (lp, self.get_value(), self.label))
@@ -518,7 +519,7 @@ class Node(object):
             if self.modelid is None:
                 model = DummyModel()
             else:
-                print "loading model", self.modelid
+                #print "loading model", self.modelid
                 model = load_modelid(modelid=self.modelid, gpmodel_build_trees=False)
             self.model = model
             return self.model

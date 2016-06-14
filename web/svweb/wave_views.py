@@ -62,3 +62,35 @@ def WaveImageView(request):
 
 
     return view_wave(request, wave, ratio=ratio, dpi=dpi, color='black', linewidth=1.5, logscale=logscale)
+
+def signal_availability_view(request):
+
+    s = Sigvisa()
+    def get_signal_file(sta, t):
+        query = "select fname from llnl_wfdisc where sta = '%s' and stime < %f and etime > %f and hz > 9.0 " % (sta, t, t)
+        r = s.sql(query)
+        return [f[0] for f in r]
+
+
+    from datetime import datetime
+    from pytz import timezone
+    time_format = "%b %d %Y, %H:%M:%S"
+    def timestr(unix_timestamp):
+        return datetime.fromtimestamp(unix_timestamp, timezone('UTC')).strftime(time_format)
+
+    sta = request.GET.get("sta", "")
+    stime = float(request.GET.get("stime", "1203646562"))
+    etime = float(request.GET.get("etime", "1204416000"))
+    interval = float(request.GET.get("interval", "3600"))
+
+    query_times = np.linspace(stime, etime, (etime-stime)/float(interval)+1)
+
+    files = [(timestr(t), get_signal_file(sta, t)) for t in query_times]
+
+    return render_to_response('svweb/signal_availability.html', \
+                              {'sta': sta, \
+                               'stime': stime, \
+                               'etime': etime, \
+                               'interval': interval, \
+                               'files': files}, \
+                              context_instance=RequestContext(request))
