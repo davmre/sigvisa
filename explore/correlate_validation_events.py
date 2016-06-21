@@ -97,9 +97,7 @@ def batch_save_training():
     runid = 14
     stas = "ANMO,ELK,IL31,KDAK,NEW,NV01,PD31,PFO,TX01,ULM,YBH,YKR8".split(",")
 
-    phases = "P,Pg,S,Lg".split(",")
-    #stas=["ANMO"]
-    #phases=["P",]
+    phases = "P,Pn,Pg,Sn,Lg".split(",")
 
     for sta in stas:
         for phase in phases:
@@ -114,7 +112,7 @@ def batch_save_validation():
     runid = 14
     stas = "ANMO,ELK,IL31,KDAK,NEW,NV01,PD31,PFO,TX01,ULM,YBH,YKR8".split(",")
 
-    phases = "P,Pg,S,Lg".split(",")
+    phases = "P,Pn,Pg,Sn,Lg".split(",")
 
     #stas=["ANMO"]
     #phases=["P",]
