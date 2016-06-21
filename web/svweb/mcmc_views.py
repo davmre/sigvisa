@@ -1953,7 +1953,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     wn = last_sg.all_nodes[wn_label]
     len_mins = (wn.et - wn.st) / 60.0
 
-    f = Figure((10*zoom, 5*vzoom))
+    f = Figure((14*zoom, 7*vzoom))
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
     subplot_waveform(wn.get_wave(), axes, color='black', linewidth=signal_lw, plot_dets=None)
@@ -1991,6 +1991,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
                 subplot_waveform(w1, axes, color='green', linewidth=1.0, fill_y2=top, alpha=0.1)
                 #w2 = Waveform(pred_signal-2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
                 #subplot_waveform(w2, axes, color='red', linewidth=1.0)
+            axes.set_title(wn_label)
         elif plot_posterior:
             shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha, model_lw=model_lw, zorder=5)
 
