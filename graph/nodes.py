@@ -456,8 +456,9 @@ class Node(object):
 
         if self.model is not None:
             
-            # reject samples until we meet the hacked hard constraints
-            while True:
+            # reject samples to attempt to meet the hacked hard constraints
+            i = 0
+            while i < 10:
                 nv = self.model.sample(cond=parent_values)
                 if self.hack_param_constraint:
                     penalty = self.param_truncation_penalty(self.label, nv, coarse_tts=self.hack_coarse_tts is not None, ttr_max=self.hack_ttr_max)
@@ -465,7 +466,7 @@ class Node(object):
                         break
                 else:
                     break
-
+                i += 1
         else:
             if self.modeled_as_joint():
                 joint_model = list(self.params_modeled_jointly)[0]

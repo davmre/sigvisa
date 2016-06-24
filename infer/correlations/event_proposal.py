@@ -127,7 +127,7 @@ def propose_from_otime_posteriors(training_xs, proposal_weights, proposal_otime_
         np.random.seed(proposal_dist_seed)
 
     n = len(proposal_weights)
-    proposal_width_deg = 0.015
+    proposal_width_deg = 0.03
     proposal_height_km = 2.0
 
 

@@ -1457,7 +1457,7 @@ def propose_associations(sg, wn, eid, site_phases, fix_result=None,
 
         impossible_lp = max( -30, np.log(np.min(jd.values())) - 5 ) #-np.inf
         assoc_lp = np.log(jd[assoc_tmids]) if assoc_tmids in jd else impossible_lp
-    sg.logger.debug( "using assoc %s with lp %f (dist %s)" % ( zip(site_phases, assoc_tmids), assoc_lp, jd) )
+    sg.logger.debug( "%s: using assoc %s with lp %f (dist %s)" % ( wn.label, zip(site_phases, assoc_tmids), assoc_lp, jd) )
     log_qforward += assoc_lp
     
     if debug_info is not None:
