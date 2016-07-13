@@ -1,0 +1,109 @@
+{% load url from future %}
+
+<html>
+<head>
+<title>inferred orid {{ orid }} - sigvisa</title>
+
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
+{% if prev %}
+<link rel='prev'  href="{% url 'bulletin_ev_signal_page' orid=prev_orid %}?{{filter_GET_params}}" />
+{% endif %}
+{% if next %}
+<link rel='next'  href="{% url 'bulletin_ev_signal_page' orid=next_orid %}?{{filter_GET_params}}" />
+<link rel='prerender'  href="{% url 'bulletin_ev_signal_page' orid=next_orid %}?{{filter_GET_params}}" />
+<link rel='prefetch'  href="{% url 'bulletin_ev_signal_page' orid=next_orid %}?{{filter_GET_params}}" />
+{% endif %}
+
+
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+
+<table><tr>
+<td colspan=4>{{ ev_str }}<br>
+nearby gold events:
+<ul>
+{% for ndist, norid, nevstr in nearby_ev_info %}
+<li><a href="{% url 'bulletin_ev_signal_page' orid=norid %}?{{filter_GET_params}}">{{ ndist | stringformat:'.1f' }}km:</a> {{ nevstr }}</li>
+{% endfor %}
+</ul>
+<a href="{% url 'bulletin_ev_signal_page' orid=prev_orid %}?{{filter_GET_params}}">prev</a> <a href="{% url 'bulletin_ev_signal_page' orid=next_orid %}?{{filter_GET_params}}">next</a>
+</td>
+<td align=right rowspan=2 valign=top>
+<img src="{% url 'bulletin_ev_loc' orid=orid %}" width=400 height=250></a></td></tr>
+</table>
+    <form action="{% url 'bulletin_ev_rate' orid=orid %}?next_orid={{next_orid}}{{filter_GET_params}}" method="post" id='approval_form'>
+      {% csrf_token %}
+      <input type="radio" name="approval" id="unknown" value="0" {% if rated == '0' %}checked{% endif %}/>
+      <label for="unknown">Unrated</label>
+      <input type="radio" name="approval" id="suspicious" value="3" {% if rated == '3' or rated = 3%}checked{% endif %}/>
+      <label for="unclear">Unclear</label>
+      <input type="radio" name="approval" id="bad" value="1" {% if rated == '1' or rated == 1 %}checked{% endif %}/>
+      <label for="bad">False event</label>
+      <input type="radio" name="approval" id="good" value="2" {% if rated == '2' or rated = 2%}checked{% endif %}/>
+      <label for="good">True event</label>
+      <input type="submit" value="Submit" />
+    </form>
+
+
+<table>
+{% for sta, dist in sta_info %}
+<tr>
+<td>{{ sta }}<br>{{ dist|stringformat:'.1f' }}km</td><td valign=top><img src="{% url 'bulletin_ev_signal_vis' orid=orid sta=sta %}" width=1200 height=300></a></td>
+<td><a href="{% url 'bulletin_ev_signal_corr' orid=orid sta=sta %}">correlations</a>
+<br><a href="">SAC waveform</a></td>
+</tr>
+{% endfor %}
+</table>
+
+
+<script>
+document.onkeydown = KeyCheck;
+
+function KeyCheck(e)
+{
+var KeyID = (window.event) ? event.keyCode : e.keyCode;
+var rbuttons = document.getElementsByName('approval');
+
+switch(KeyID)
+{
+{% if prev %}
+case 37:
+window.location = "{% url 'bulletin_ev_signal_page' orid=prev_orid %}?{{filter_GET_params}}";
+break;
+{% endif %}
+
+{% if next %}
+case 39:
+window.location = "{% url 'bulletin_ev_signal_page' orid=next_orid %}?{{filter_GET_params}}";
+break;
+{% endif %}
+
+case 49:
+rbuttons[0].checked = true;
+document.forms["approval_form"].submit();
+break;
+case 50:
+rbuttons[1].checked = true;
+document.forms["approval_form"].submit();
+break;
+case 51:
+rbuttons[2].checked = true;
+document.forms["approval_form"].submit();
+break;
+
+
+default:
+break;
+}
+}
+
+
+
+</script>
+
+{% include "svweb/footer.html"  %}
+</body>
+</html>
