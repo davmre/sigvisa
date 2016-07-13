@@ -98,6 +98,9 @@ def plot_empirical_mb(request, xy_by_phase, axes):
 
 def plot_linear_model_distance(request, model_record, axes, mb=3.5):
 
+
+    nsamples = int(request.GET.get("nsamples", "30"))
+
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
 
@@ -117,7 +120,7 @@ def plot_linear_model_distance(request, model_record, axes, mb=3.5):
 
 
     try:
-        for i in range(30):
+        for i in range(nsamples):
             ys = model.sample(Xs)
             axes.plot(distances, ys, alpha=0.2)
     except Exception as e:
@@ -230,7 +233,7 @@ def plot_localgp_hparams(request, modelid=None, param=None ):
 def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
 
     ngrid = int(request.GET.get('ngrid', "25"))
-
+    title= request.GET.get('title', model_record.param)
 
     vmin = request.GET.get('vmin', None)
     vmin = float(vmin) if vmin is not None else None
@@ -268,7 +271,7 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
         print item
         item.set_fontsize(2)
 
-    axes.set_title(model_record.param)
+    axes.set_title(title)
 
 def plot_data_heatmap(request, sta, param, xy_by_phase, axes):
 
@@ -564,6 +567,8 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     elif plot_type == "mb":
         axes.set_xlabel("mb", fontsize=8)
         axes.set_ylabel(param, fontsize=8)
+    elif plot_type == "heatmap":
+        pass
     else:
         axes.set_xlabel(plot_type, fontsize=8)
         axes.set_ylabel(param, fontsize=8)

@@ -95,7 +95,7 @@ class JobManager(object):
     def run_job(self, cmd, job_cpus=1, sudo=False, **kwargs):
         
         def get_free_host(job_cpus):
-            for host in self.jobs_by_host.keys():
+            for host in sorted(self.jobs_by_host.keys()):
                 if self._host_cpus_free(host) >= job_cpus:
                     return host
             raise NoFreeCPUs("job requires %d cpus but no host has spare capacity" % (job_cpus))

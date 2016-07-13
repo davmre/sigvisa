@@ -1399,7 +1399,7 @@ class ObservedSignalNode(Node):
         proxy_lps = {self.label: (lpw, deriv_lp_w)}
         return proxy_lps
 
-    def plot(self, ax=None, plot_atimes=True, xlim=None, **kwargs):
+    def plot(self, ax=None, plot_atimes=True, xlim=None, atime_args=None, **kwargs):
         from sigvisa.plotting.plot import plot_with_fit_shapes, plot_pred_atimes
         if ax is None:
             f = plt.figure(figsize=(15,5))
@@ -1418,7 +1418,15 @@ class ObservedSignalNode(Node):
                 atimes = dict([(k, atime) for (k, atime) in atimes.items() if xmin < atime < xmax ])
 
             colors = dict([("%d_%s" % (eid, phase), shape_colors[eid]) for (eid, phase) in self.arrivals()])
-            plot_pred_atimes(dict(atimes), self.get_wave(), axes=ax, color=colors, alpha=1.0, bottom_rel=-0.1, top_rel=0.0)
+            atime_kwargs = {
+                'color': colors, 
+                'alpha': 1.0, 
+                'bottom_rel': -0.1, 
+                'top_rel': 0.0
+                }
+            if atime_args is not None:
+                atime_kwargs.update(atime_args)
+            plot_pred_atimes(dict(atimes), self.get_wave(), axes=ax, **atime_kwargs)
         return ax
 
     def __getstate__(self):

@@ -43,7 +43,8 @@ class EventHeatmap(Heatmap):
             locations = np.array([(ev.lon, ev.lat) for ev in evs])
 
         self.ref_events.extend(locations)
-        self.ref_covs.extend(covs)
+        if covs is not None:
+            self.ref_covs.extend(covs)
 
 
     def add_stations(self, names):
@@ -67,7 +68,8 @@ class EventHeatmap(Heatmap):
 
     def plot(self, event_alpha=0.6, cov_alpha=0.1, axes=None, offmap_station_arrows=True, label_stations=True, nofillcontinents=True, meridians=True, projection="cyl", drawlines=True, colorseed=0, **density_args):
 
-        self.init_bmap(axes=axes, nofillcontinents=nofillcontinents, projection=projection)
+        if self.bmap is None:
+            self.init_bmap(axes=axes, nofillcontinents=nofillcontinents, projection=projection)
 
         if meridians:
             self.plot_earth()

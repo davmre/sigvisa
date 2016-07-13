@@ -565,8 +565,6 @@ def run_open_world_MH(sg, steps=10000,
                                               proxy_lps=proxy_lps)
 
 
-
-
         for (move, (fn, prob)) in global_moves.items():
 
             swap_move_checkin(swapper=swapper, step=step, 

@@ -12,8 +12,8 @@ class Region(object):
         self.stime = times[0] if times is not None else None
         self.etime = times[1] if times is not None else None
 
-        self.rate_train_start = 1238889600
-        self.rate_train_end = 1245456000
+        self.rate_train_start = rate_train_start
+        self.rate_train_end = rate_train_end
         self.event_rate = self._estimate_event_rate(rate_train_start, rate_train_end, 
                                                     min_mb=min_mb,
                                                     bulletin=rate_bulletin)

@@ -8,6 +8,7 @@ from sigvisa.infer.event_birthdeath import prior_location_proposal, ev_death_exe
 def final_mcmc_state(ev_dir):
     sorted_steps = sorted([int(d[5:]) for d in os.listdir(ev_dir) if d.startswith('step')])
 
+
     idx = -1
     max_step = sorted_steps[idx]
 
@@ -84,11 +85,11 @@ def main():
 
         if not os.path.isdir(folderpath): continue
 
-        #try:
-        score_sgfolder(folderpath)
-        #except Exception as e:
-        #    print "error on folder %s: %s" % (folderpath, e)
-        #    continue
+        try:
+            score_sgfolder(folderpath)
+        except Exception as e:
+            print "error on folder %s: %s" % (folderpath, e)
+            continue
 
 if __name__ == "__main__":
     main()

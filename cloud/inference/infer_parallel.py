@@ -52,6 +52,7 @@ def parallel_inference(infer_script,
                        label, nnodes, 
                        stime, etime, 
                        block_s=3600, 
+                       block_file=None,
                        nseeds=None,
                        ncpus=4, 
                        inference_s=3600.0, 
@@ -73,7 +74,7 @@ def parallel_inference(infer_script,
         with open(node_file, "r") as f:
             hostnames = [line.strip() for line in f.readlines() if len(line) > 2]
     else:
-        hostnames = ["sigvisa%d.cloudapp.net" % (k+1) for k in range(nnodes)]
+        hostnames = ["sigvisainfer%d.cloudapp.net" % (k+1) for k in range(nnodes)]
 
     log_prefix = lambda jobid : "/home/sigvisa/python/sigvisa/logs/mcmc/%s" % jobid
     jm = JobManager(hostnames, ncpus, log_prefix)
@@ -92,6 +93,15 @@ def parallel_inference(infer_script,
                 cmd = "%s --stime=%f --etime=%f" % (infer_script, block_stime, block_etime)
                 jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
                 jobs.append((jobid, cmd, (block_stime, block_etime)))
+        elif block_file is not None:
+            blocks = np.loadtxt(block_file)
+            stimes = [block[0] for block in blocks]
+            etimes = [block[1] for block in blocks]
+            for (block_stime, block_etime) in zip(stimes, etimes):
+                cmd = "%s --stime=%f --etime=%f" % (infer_script, block_stime, block_etime)
+                jobid = jm.run_job(cmd, sudo=True, user="sigvisa")
+                jobs.append((jobid, cmd, (block_stime, block_etime)))
+            
         else:
             for seed in np.arange(nseeds):
                 cmd = "%s --seed=%d" % (infer_script, seed)
@@ -155,6 +165,8 @@ def main():
                       help="time to run the remote inference processes")
     parser.add_option("--label", dest="label", default="", type="str",
                       help="arbitrary label given to this inference run")
+    parser.add_option("--block_file", dest="block_file", default=None, type="str",
+                      help="file with each line containing an stime and etime ")
     parser.add_option("--stime", dest="stime", default=None, type="float",
                       help="start time")
     parser.add_option("--etime", dest="etime", default=None, type="float",
@@ -175,6 +187,7 @@ def main():
                        node_file=options.node_file,
                        stime=options.stime, 
                        etime=options.etime,
+                       block_file=options.block_file,
                        block_s = options.block_s, 
                        ncpus = options.ncpus,
                        nseeds=  options.nseeds,

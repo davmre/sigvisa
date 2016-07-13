@@ -2607,11 +2607,6 @@ def amp_decay_proposal_laplace_reparam(wn, tg, env, true_srate, downsample_by=1,
     hbounds_violation = sample > hbounds
     sample[hbounds_violation] = hbounds[hbounds_violation]
 
-    #if logp < -50:
-    #    import pdb; pdb.set_trace()
-
-
-
     if return_debug:
         return sample, logp, x, prec, lik_grad
     else:
@@ -2637,7 +2632,12 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False, lapla
 
     # arrival time proposal
     env_diff_pos = get_env_diff_positive_part(wn, arrival_set=wn.arrivals(), remove_noise=False)
-    cdf2 = sta_lta_cdf2(env_diff_pos, short_idx = int(2*wn.srate), long_idx=int(30*wn.srate), smooth_idx=int(7*wn.srate), distsmooth_idx=int(3*wn.srate), shift_idx=int(3*wn.srate))
+    cdf2 = sta_lta_cdf2(env_diff_pos, 
+                        short_idx = int(2*wn.srate), 
+                        long_idx=int(30*wn.srate), 
+                        smooth_idx=int(7*wn.srate), 
+                        distsmooth_idx=int(3*wn.srate), 
+                        shift_idx=int(3*wn.srate))
     if fix_result is not None:
         atime  = fix_result['arrival_time']
         atime_proposal_lp = peak_log_p(cdf2, wn.st + 1/wn.srate, wn.srate, atime)
@@ -2670,7 +2670,6 @@ def optimizing_birth_proposal(sg, wn, fix_result=None, return_debug=False, lapla
         x = None
 
     if mixture_proposal:
-
         (coda_height, peak_decay, coda_decay), proposal_lp = amp_decay_mixture_proposal(wn, peak_time, env_diff_pos, fix_result=x)
         fitting_window = None
     else:

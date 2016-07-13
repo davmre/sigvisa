@@ -117,6 +117,8 @@ class Heatmap(object):
         self.n = n
         self.fname = fname
 
+        self.bmap = None
+
         # for backwards compatibility, accept "width" as a shortcut for both width_deg and height_deg
         if width is not None:
             if width_deg is None and height_deg is None:
@@ -250,18 +252,18 @@ class Heatmap(object):
 
         self.bmap = bmap
 
-    def plot_earth(self, y_fontsize=8, x_fontsize=5, zorder=4):
+    def plot_earth(self, y_fontsize=8, x_fontsize=5, zorder=4, interval=1):
         try:
             bmap = self.bmap
         except:
             self.init_bmap()
 
-        parallels = np.arange(int(self.bottom_lat) - 1, int(self.top_lat + 1))
+        parallels = np.arange(int(self.bottom_lat) - 1, int(self.top_lat + 1), interval)
         if len(parallels) > 10:
             parallels = [int(k) for k in np.linspace(int(self.bottom_lat) - 1, int(self.top_lat + 1), 10)]
 
         self.bmap.drawparallels(parallels, labels=[False, True, True, False], fontsize=y_fontsize, zorder=zorder)
-        meridians = np.arange(int(self.left_lon) - 1, int(self.right_lon) + 1)
+        meridians = np.arange(int(self.left_lon) - 1, int(self.right_lon) + 1, interval)
         if len(meridians) > 10:
             meridians = [int(k) for k in np.linspace(int(self.left_lon) - 1, int(self.right_lon + 1), 10)]
 
@@ -288,13 +290,28 @@ class Heatmap(object):
             e.set_alpha(alpha)
             e.set_facecolor(color)
 
-    def drawline(self, loc1, loc2, color, **kwargs):
+    def drawline(self, loc1, loc2, color, curve_map=False, n_segments=50, **kwargs):
         bmap = self.bmap
-        x1, y1 = bmap(loc1[0], loc1[1])
-        x2, y2 = bmap(loc2[0], loc2[1])
-        bmap.plot([x1, x2], [y1, y2], c=color, **kwargs)
 
-    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, alpha=1.0, colors=None, **plotargs):
+        def one_line(lon1, lon2, lat1, lat2):
+            x1, y1 = bmap(lon1, lat1)
+            x2, y2 = bmap(lon2, lat2)
+            bmap.plot([x1, x2], [y1, y2], c=color, **kwargs)
+
+        if curve_map:
+            # draw a line in lonlat space which is a curve in map space
+            lon1, lat1 = loc1
+            lon2, lat2 = loc2
+
+            lats = np.linspace(lat1, lat2, n_segments)
+            lons = np.linspace(lon1, lon2, n_segments)
+            
+            for i in range(n_segments-1):
+                one_line(lons[i], lons[i+1], lats[i], lats[i+1])
+        else:
+            one_line(loc1[0], loc2[0], loc1[1], loc2[1])
+
+    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, alpha=1.0, colors=None, arrow_color="black", label_x_off=6, label_y_off=6, edge_x_off=-20, edge_y_off=-20, label_pts=8, **plotargs):
         try:
             bmap = self.bmap
         except:
@@ -334,19 +351,21 @@ class Heatmap(object):
             bmap.plot([x1], [x2], zorder=zorder, alpha=my_alpha, **plotargs)
 
 
+            lc, tc = bmap(self.left_lon, self.top_lat)
+            rc, bc = bmap(self.right_lon, self.bottom_lat)
+            base_scale = (rc-lc) / 200.0
+
             if offmap_arrows:
                 edge_pt, edge_arrow = self.project_to_bounds(ev[0], ev[1])
                 x, y = edge_pt
                 #arrow_color = plotargs['mec']
                 if edge_arrow is not None:
-                    base_scale = (self.right_lon - self.left_lon) / 200.0
                     edge_arrow *= base_scale * 10
                     bmap.ax.arrow( edge_pt[0] - edge_arrow[0], edge_pt[1] - edge_arrow[1],
-                                   edge_arrow[0], edge_arrow[1], fc="black", ec="black",
+                                   edge_arrow[0], edge_arrow[1], fc=arrow_color, ec=arrow_color,
                                    length_includes_head=True, overhang = .6,
                                    head_starts_at_zero=False, width=0.005,
                                    head_width= 3 * base_scale, head_length = 3 * base_scale, zorder=zorder)
-
 
             if labels is not None and labels[enum] is not None:
                 if offmap_arrows:
@@ -356,8 +375,8 @@ class Heatmap(object):
 
                 axes = bmap.ax
                 xbounds = bmap(self.right_lon, self.top_lat)
-                x_off = 6 if lx < self.right_lon else -20
-                y_off = 6 if ly < self.top_lat else -20
+                x_off = label_x_off if lx < rc else edge_x_off
+                y_off = label_y_off if ly < tc else edge_y_off
                 print labels[enum], x_off, y_off, lx, ly
                 #label_color = plotargs['mec']
                 axes.annotate(
@@ -365,7 +384,7 @@ class Heatmap(object):
                     xy=(lx, ly),
                     xytext=(x_off, y_off),
                     textcoords='offset points',
-                    size=8,
+                    size=label_pts,
                     color = 'black',
                     zorder=zorder,
                     arrowprops = None)
@@ -373,7 +392,7 @@ class Heatmap(object):
 
     def plot_density(self, f_preprocess=None, colorbar=True, nolines=False,
                      colorbar_orientation="vertical", colorbar_shrink=0.9, colorbar_format='%.1f',
-                     smooth=False, vmin=None, vmax=None, cm=None):
+                     smooth=False, vmin=None, vmax=None, cm=None, zorder=5):
         try:
             bmap = self.bmap
         except:
@@ -405,14 +424,14 @@ class Heatmap(object):
             cm = matplotlib.cm.get_cmap('jet')
         if not smooth:
             cs1 = bmap.contour(x_arr, y_arr, fv, levels, linewidths=.5, colors="k",
-                               zorder=6 - int(nolines))
+                               zorder=zorder + 1 - int(nolines))
             norm = matplotlib.colors.BoundaryNorm(cs1.levels, cm.N)
-            cs2 = bmap.contourf(x_arr, y_arr, fv, levels, cmap=cm, zorder=5,
+            cs2 = bmap.contourf(x_arr, y_arr, fv, levels, cmap=cm, zorder=zorder,
                                 extend="both",
                                 norm=norm)
         else:
             norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
-            cs2 = bmap.pcolormesh(x_arr, y_arr, fv, cmap=cm, zorder=5, norm=norm, shading='gouraud')
+            cs2 = bmap.pcolormesh(x_arr, y_arr, fv, cmap=cm, zorder=zorder, norm=norm, shading='gouraud')
 
         if colorbar:
             from mpl_toolkits.axes_grid import make_axes_locatable

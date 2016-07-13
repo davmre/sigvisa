@@ -217,10 +217,13 @@ class EventRunSpec(RunSpec):
             kwargs["raw_signals"] = True
 
         sg = SigvisaGraph(**kwargs)
+        print "sg"
         waves = self.get_waves(modelspec)
+        print "waves"
         for (wave, wave_env) in waves + extra_waves:
             sg.add_wave(wave, disable_conflict_checking=self.disable_conflict_checking, 
                         wave_env=wave_env)
+        print "added waves"
 
         evs = self._get_events()
         evtimes = [ev.time for ev in evs]

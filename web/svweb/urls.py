@@ -9,6 +9,7 @@ from svweb.site_views import *
 from svweb.wave_views import *
 from svweb.nm_views import *
 from svweb.predictive_views import *
+from svweb.bulletins import *
 
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
@@ -83,6 +84,12 @@ urlpatterns = patterns('',
                        url(r'^mcmc/(?P<dirname>.*?)/(?P<sta>.*?)/condwiggle_(?P<phase>.*?).png$', conditional_wiggle_posterior, name='conditional_wiggle_posterior'),
                        url(r'^mcmc/(?P<dirname>.*?)/(?P<sta>.*?)/condsignal_(?P<phase>.*?).png$', conditional_signal_posterior, name='conditional_signal_posterior'),
                        url(r'^mcmc/(?P<dirname>.*?)/gp_hparams/(?P<sta>.*?)/(?P<target>.*?).png$', mcmc_hparam_posterior, name='mcmc_hparam_posterior'),
+                       url(r'^bulletin/(?P<orid>\d+)/signals.html$', bulletin_ev_signal_page, name='bulletin_ev_signal_page'),
+                       url(r'^bulletin/(?P<orid>\d+)/rate$', bulletin_ev_rate, name='bulletin_ev_rate'),
+                       url(r'^bulletin/(?P<orid>\d+)/(?P<sta>.*?)_vis.png$', bulletin_ev_signal_vis, name='bulletin_ev_signal_vis'),
+                       url(r'^bulletin/(?P<orid>\d+)/(?P<sta>.*?)_corr.png$', bulletin_ev_signal_corr, name='bulletin_ev_signal_corr'),
+                       url(r'^bulletin/(?P<orid>\d+)_(?P<sta>.*?).sac$', bulletin_ev_signal_sac, name='bulletin_ev_signal_sac'),
+                       url(r'^bulletin/(?P<orid>\d+)/loc.png$', bulletin_ev_loc, name='bulletin_ev_loc'),
                        url(r'^event/(?P<evid>\d+)/$', event_view, name='event'),
                        url(r'^event/(?P<evid>\d+)/context.png$', event_context_img_view, name='event_context_img'),
                        url(r'^event/(?P<evid>\d+)/wave_view$', event_wave_view, name='event_wave'),

@@ -1918,6 +1918,12 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_posterior = request.GET.get("plot_posterior", 'true').lower().startswith('t')
 
+
+    # for papers or presentations:
+    # clears the title
+    # labels X ticks from the start of the frame
+    clean_present = request.GET.get("clean", 'false').lower().startswith('t')
+
     plot_dets = request.GET.get("plot_dets", 'leb')
     plot_template_arrivals = request.GET.get("plot_templates", 'true').lower().startswith('t')
     model_lw = float(request.GET.get("model_lw", '2'))
@@ -1951,6 +1957,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     nevents = last_sg.next_eid-1
 
     wn = last_sg.all_nodes[wn_label]
+    title = wn_label if not clean_present else ""
     len_mins = (wn.et - wn.st) / 60.0
 
     f = Figure((14*zoom, 7*vzoom))
@@ -1991,9 +1998,9 @@ def mcmc_wave_posterior(request, dirname, wn_label):
                 subplot_waveform(w1, axes, color='green', linewidth=1.0, fill_y2=top, alpha=0.1)
                 #w2 = Waveform(pred_signal-2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
                 #subplot_waveform(w2, axes, color='red', linewidth=1.0)
-            axes.set_title(wn_label)
+            axes.set_title(title)
         elif plot_posterior:
-            shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=wn_label, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha, model_lw=model_lw, zorder=5)
+            shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=title, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha, model_lw=model_lw, zorder=5)
 
         if plot_predictions:
             predictions = []
@@ -2031,6 +2038,15 @@ def mcmc_wave_posterior(request, dirname, wn_label):
         slack = drange / 20.0
         axes.set_xlim((stime, etime))
         axes.set_ylim((dmin-slack, dmax+slack))
+
+
+    if clean_present:
+        ticks = axes.get_xticks()
+        labels = [str(tick-stime) for tick in ticks]
+
+        axes.set_xticklabels(labels)
+        axes.set_xlabel("seconds")
+        axes.set_yticks([])
 
     canvas = FigureCanvas(f)
     response = django.http.HttpResponse(content_type='image/png')

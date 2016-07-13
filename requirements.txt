@@ -22,6 +22,8 @@ pywavelets
 seaborn
 numdifftools
 pyzmq
+sortedcontainers
+frozendict
 
 # not strictly necessary, but useful:
 

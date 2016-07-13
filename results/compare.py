@@ -105,6 +105,7 @@ def f1_and_error(gold_events, guess_events, max_delta_deg=1.0, max_delta_time=50
         err = (np.average(errs), np.std(errs))
     else:
         err = (0., 0.)
+        errs = []
 
-    return f, p, r, err
+    return f, p, r, err, errs
 
