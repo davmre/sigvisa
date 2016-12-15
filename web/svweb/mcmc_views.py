@@ -450,8 +450,16 @@ def rundir_eids(mcmc_run_dir):
 def conditional_signal_posterior(request, dirname, sta, phase):
     s = Sigvisa()
 
+
+
     mcmc_log_dir = os.path.join(s.homedir, "logs", "mcmc")
     mcmc_run_dir = os.path.join(mcmc_log_dir, dirname)
+
+    noprior = request.GET.get('noprior', 'false').lower().startswith("t")
+
+    fix_eids = str(request.GET.get('fix_eids', ''))
+    fix_eids = [int(eeid) for eeid in fix_eids.split(",")]
+
 
     sgfile = str(request.GET.get('sgfile', ''))
     if sgfile:
@@ -483,10 +491,10 @@ def conditional_signal_posterior(request, dirname, sta, phase):
         except KeyError:
             continue
 
-    n = len(eids)
+    n = len(eids) if len(fix_eids)==0 else len(fix_eids)
     f = Figure((16, 4*n))
     f.patch.set_facecolor('white')
-    gs = gridspec.GridSpec(n, 2)
+    gs = gridspec.GridSpec(n, 1 if noprior else 2)
 
     j = 0
     for wn in sg.station_waves[sta]:
@@ -505,11 +513,15 @@ def conditional_signal_posterior(request, dirname, sta, phase):
 
         posterior_means, posterior_vars = zip(*marginals)
         posterior_means, posterior_vars = np.concatenate(posterior_means), np.concatenate(posterior_vars)
-        
+
+        i=0
         for i, (eid, pphase, _, sidx, cnpts, ctype) in enumerate(wn.tssm_components):
             if ctype != "wavelet": continue
             if pphase != phase: continue
-    
+
+            if len(fix_eids) > 0 and eid not in fix_eids: 
+                continue
+
             cond_means, cond_vars = zip(*[jgp.posterior(eid) for jgp in wn.wavelet_param_models[phase]])
             cond_means, cond_vars = np.asarray(cond_means, dtype=np.float64), np.asarray(cond_vars, dtype=np.float64)
             cssm = wn.arrival_ssms[(eid, phase)]
@@ -546,32 +558,34 @@ def conditional_signal_posterior(request, dirname, sta, phase):
             ax.set_xlim([cstime, cetime])
             ax.set_ylim([ymin, ymax])
 
-            ax.set_title("eid %d lp %f conditional" % (eid, lp2))
-            ax = f.add_subplot(gs[j, 1])
-            #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
-            #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
-            ax.plot(timevals, w)
-            ax.plot(timevals, base_mean, lw=2)
-            ax.fill_between(timevals, base_mean+2*np.sqrt(base_var), 
-                            base_mean-2*np.sqrt(base_var), facecolor="green", alpha=0.2)
+            ax.set_title("eid %d correlation logodds %.1f nats" % (eid, lp2-lp1))
 
-            ax.set_xlim([cstime, cetime])
-            ax.set_ylim([ymin, ymax])            
-            ax.set_title("lp %f prior" % (lp1))
+            if not noprior: 
+                ax = f.add_subplot(gs[j, 1])
+                #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
+                #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
+                ax.plot(timevals, w)
+                ax.plot(timevals, base_mean, lw=2)
+                ax.fill_between(timevals, base_mean+2*np.sqrt(base_var), 
+                                base_mean-2*np.sqrt(base_var), facecolor="green", alpha=0.2)
 
-            """
-            ax = f.add_subplot(gs[j, 2])
-            #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
-            #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
-            ax.plot(timevals, w)
-            ax.plot(timevals, post_mean, lw=2)
-            ax.fill_between(timevals, post_mean+2*np.sqrt(post_var), 
-                            post_mean-2*np.sqrt(post_var), facecolor="green", alpha=0.2)
+                ax.set_xlim([cstime, cetime])
+                ax.set_ylim([ymin, ymax])            
+                ax.set_title("lp %f prior" % (lp1))
 
-            ax.set_xlim([cstime, cetime])            
-            ax.set_title("lp %f filtered" % (lp3))
-            ax.set_ylim([ymin, ymax])
-            """
+                """
+                ax = f.add_subplot(gs[j, 2])
+                #plot_wavelet_dist_samples(ax, wn.srate, basis, posterior_means, posterior_vars, c="blue")
+                #plot_wavelet_dist_samples(ax, wn.srate, basis, cond_means, cond_vars, c="green")
+                ax.plot(timevals, w)
+                ax.plot(timevals, post_mean, lw=2)
+                ax.fill_between(timevals, post_mean+2*np.sqrt(post_var), 
+                                post_mean-2*np.sqrt(post_var), facecolor="green", alpha=0.2)
+
+                ax.set_xlim([cstime, cetime])            
+                ax.set_title("lp %f filtered" % (lp3))
+                ax.set_ylim([ymin, ymax])
+                """
 
             j += 1
 
@@ -1775,6 +1789,7 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
 
     wn = sg.all_nodes[wn_label]
 
+    wn.log_p()
     arrival_info = wn.signal_component_means()
 
     if key1=="signal" or key1=="noise":
@@ -1784,6 +1799,8 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
         eid = int(eid)
         key2 = request.GET.get("component", 'combined')
         d = arrival_info[(eid, phase)][key2]
+
+
 
     len_s = float(len(d))/wn.srate
     f = Figure((10.0 * zoom, 5*vzoom))
@@ -1797,6 +1814,8 @@ def mcmc_signal_posterior_wave(request, dirname, wn_label, key1):
     f.tight_layout()
     canvas.print_png(response)
     return response
+
+
 
 def mcmc_wave_gpvis(request, dirname, wn_label):
     zoom = float(request.GET.get("zoom", '1'))
@@ -1912,12 +1931,16 @@ def mcmc_wave_posterior(request, dirname, wn_label):
 
     zoom = float(request.GET.get("zoom", '1'))
     vzoom = float(request.GET.get("vzoom", '1'))
+
+    wave_alpha = float(request.GET.get("wave_alpha", '1.0'))
     plot_pred_env = request.GET.get("pred_env", 'true').lower().startswith('t')
     plot_pred_signal = request.GET.get("pred_signal", 'false').lower().startswith('t')
     pred_signal_var = request.GET.get("pred_signal_var", 'false').lower().startswith('t')
     plot_predictions = request.GET.get("plot_predictions", 'true').lower().startswith('t')
     plot_posterior = request.GET.get("plot_posterior", 'true').lower().startswith('t')
-
+    highlight_component = request.GET.get("highlight_component", "none")
+    highlight_var = request.GET.get("highlight_var", 'true').lower().startswith('t')
+    highlight_color = request.GET.get("highlight_color", 'green')
 
     # for papers or presentations:
     # clears the title
@@ -1963,7 +1986,8 @@ def mcmc_wave_posterior(request, dirname, wn_label):
     f = Figure((14*zoom, 7*vzoom))
     f.patch.set_facecolor('white')
     axes = f.add_subplot(111)
-    subplot_waveform(wn.get_wave(), axes, color='black', linewidth=signal_lw, plot_dets=None)
+
+    subplot_waveform(wn.get_wave(), axes, color='black', linewidth=signal_lw, plot_dets=None, alpha=wave_alpha)
 
     import matplotlib.cm as cm
     shape_colors = dict([(eid, cm.get_cmap('jet')(np.random.rand()*.5)) for (eid, phase) in wn.arrivals()])
@@ -2001,6 +2025,51 @@ def mcmc_wave_posterior(request, dirname, wn_label):
             axes.set_title(title)
         elif plot_posterior:
             shape_colors = plot_with_fit_shapes(fname=None, wn=wn,title=title, axes=axes, plot_dets=plot_dets, shape_colors=shape_colors, plot_wave=False, alpha=alpha, model_lw=model_lw, zorder=5)
+
+        #import pdb; pdb.set_trace()
+        if highlight_component != "none":
+
+            if highlight_component == "noise":
+                pv = wn._parent_values()
+
+                means = wn.signal_component_means()
+                stds = wn.signal_component_means(return_stds_instead=True)
+
+                component_mean = means["noise"]
+                component_std = stds["noise"]
+                st = wn.st
+            elif highlight_component == "signal":
+                pv = wn._parent_values()
+
+                means = wn.signal_component_means()
+                stds = wn.signal_component_means(return_stds_instead=True)
+
+                component_mean = means["signal"]
+                component_std = stds["signal"]
+                st = wn.st
+            else:
+                # get posterior coefs for this arrival
+                highlight_eid, highlight_phase = highlight_component.split("_")
+                hkey = (int(highlight_eid), highlight_phase)
+
+                wn.log_p()
+                means = wn.signal_component_means()
+                component_mean = means[hkey]["combined"].copy()
+                #component_mean = means["signal"]
+                stds = wn.signal_component_means(return_stds_instead=True)
+                component_std = stds[hkey]["combined"].copy()
+                #component_std = stds["signal"]
+            
+                st = stds[hkey]["stime"]
+
+            w = Waveform(component_mean, srate=wn.srate, stime=st, sta=wn.sta, band=wn.band, chan=wn.chan)
+            subplot_waveform(w, axes, color=highlight_color, linewidth=2.5, alpha=0.8)
+            
+            if highlight_var:
+                bottom = component_mean-2*component_std
+                top = component_mean+2*component_std
+                w1 = Waveform(bottom, srate=wn.srate, stime=st, sta=wn.sta, band=wn.band, chan=wn.chan)
+                subplot_waveform(w1, axes, color=highlight_color, linewidth=1.0, fill_y2=top, alpha=0.2)
 
         if plot_predictions:
             predictions = []
@@ -2042,7 +2111,7 @@ def mcmc_wave_posterior(request, dirname, wn_label):
 
     if clean_present:
         ticks = axes.get_xticks()
-        labels = [str(tick-stime) for tick in ticks]
+        labels = ["%.0f" % (tick-stime)  for tick in ticks]
 
         axes.set_xticklabels(labels)
         axes.set_xlabel("seconds")

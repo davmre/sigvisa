@@ -1,0 +1,36 @@
+* **********************************
+* NETWORK   (KNETWK): IU
+* STATION    (KSTNM): YSS
+* LOCATION   (KHOLE): 00
+* CHANNEL   (KCMPNM): BHZ
+* CREATED           : 2016-11-21T23:29:37
+* START             : 2009-03-08T00:00:00
+* END               : 2013-10-22T00:00:00
+* DESCRIPTION       : Yuzhno Sakhalinsk, Russia
+* LATITUDE          : 46.958700
+* LONGITUDE         : 142.760400
+* ELEVATION         : 148.0
+* DEPTH             : 2.0
+* DIP               : 0.0
+* AZIMUTH           : 0.0
+* SAMPLE RATE       : 20.0
+* INPUT UNIT        : M
+* OUTPUT UNIT       : COUNTS
+* INSTTYPE          : Streckeisen STS-1V/VBB Seismometer
+* INSTGAIN          : 2.376000e+03 (M/S)
+* COMMENT           : 
+* SENSITIVITY       : 9.965670e+08 (M/S)
+* A0                : 3.948580e+03
+* **********************************
+ZEROS	3
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+POLES	4
+	-1.234000e-02	+1.234000e-02	
+	-1.234000e-02	-1.234000e-02	
+	-3.918000e+01	+4.912000e+01	
+	-3.918000e+01	-4.912000e+01	
+CONSTANT	3.935025e+12
+
+

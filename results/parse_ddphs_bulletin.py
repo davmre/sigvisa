@@ -29,6 +29,40 @@ def merge_bulletins(bulletin1, bulletin2, max_delta_deg=2.0, max_delta_time=50.0
     merged = sorted(merged, key = lambda ev: ev[3]) # sort by event time
     return np.asarray(merged)
 
+def adjust_magnitude_hack(bulletin1, bulletin2, max_delta_deg=2.0, max_delta_time=50.0):
+
+    # given bulletins 1 and 2, find the events present in both, and learn a linear mapping from magnitudes in 1 to magnitudes in 2. 
+    # then pass *all* magnitudes in bulletin1 through this mapping to generate a new bulletin1 with magnitudes on a consistent scale to bulletin2
+    # this is a hack and really we should be doing smart analysis of body-wave, surface-wave, moment, etc magnitudes, but those are all hacks too so maybe it's okay. 
+
+    bulletin1, bulletin2 = np.asarray(bulletin1), np.asarray(bulletin2)
+    indices = find_matching(bulletin1, bulletin2, 
+                            max_delta_deg=max_delta_deg, max_delta_time=max_delta_time)
+    mbs1 = []
+    mbs2 = []
+
+    for (i,j) in indices:
+        mb1, mb2 = bulletin1[i, 4], bulletin2[j,4]
+        if mb1 <= -1 or mb2 <= -1: continue
+        mbs1.append(mb1)
+        mbs2.append(mb2)
+    mbs1 = np.asarray(mbs1).reshape(-1, 1)
+    mbs2 = np.asarray(mbs2)
+
+    from sklearn.linear_model import LinearRegression
+    regr = LinearRegression()
+
+    # Train the model using the training sets
+    regr.fit(mbs1, mbs2)
+
+    print regr.coef_, regr.intercept_
+    all_mbs1 = bulletin1[:, 4].reshape(-1, 1)
+    y = regr.predict(all_mbs1)
+
+    new_bulletin1 = bulletin1.copy()
+    new_bulletin1[:, 4] = y
+    return new_bulletin1
+
 def sigvisa_knowngood_bulletin():
     s = Sigvisa()
     q = "select sb.lon, sb.lat, sb.depth, sb.time, sb.mb, sb.score, -1 from sigvisa_origin sb, sigvisa_origin_rating sbr where sb.orid=sbr.orid and sbr.rating='2'"
@@ -39,7 +73,7 @@ def read_ddphs_origins(fname):
     # Origin Time           LAT        LON        Z      Mag      EH     EZ      RMS    EVID
     # 2008 05  05 19 36 20.206   41.1534   -114.8430  10.76    1.28   2.32    1.68   0.084   244163  Phases:  12
 
-    # ['2008', '05', '05', '19', '36', '20.206', '41.1534', '-114.8430', '10.76', '1.28', '2.32', '1.68', '0.084', '244163', 'Phases:', '12']
+    # ['2008', '05', '05', '19', '36', '20.206', '41.1534', '-114.8430', '10.76', '1.28', '2.32', 'read_ddphs_origins1.68', '0.084', '244163', 'Phases:', '12']
 
     def parse_origin_line(line):
         parts = line.split()
@@ -77,6 +111,8 @@ def main():
 
     origins = read_ddphs_origins(ddphs_fname)
     isc_bulletin = np.loadtxt(isc_fname)
+
+    origins = adjust_magnitude_hack(origins, isc_bulletin)
 
     large_origins = [ev for ev in origins if ev[4] > 2.0]
     merged = merge_bulletins(origins, isc_bulletin)

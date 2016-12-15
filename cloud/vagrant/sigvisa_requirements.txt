@@ -13,7 +13,7 @@ MySQL-python
 python-dateutil
 functools32
 django-pagination
--e git+git@github.com:ionelmc/django-easyfilters.git#egg=django-easyfilters
+django-easyfilters-ex
 django-extensions
 django-debug-toolbar
 pytz

@@ -1,8 +1,8 @@
 ---
 - name: configure ssh forwarding
   copy:
-    src=autossh.conf
-    dest=/etc/init/autossh.conf
+    src=autossh.service
+    dest=/etc/systemd/system/autossh.service
     owner=root
 - name: ensure .ssh dir exists
   file: path=/home/sigvisa/.ssh state=directory
@@ -22,8 +22,13 @@
     dest=/home/sigvisa/.ssh/config
     owner=sigvisa
     mode=0400
-- name: start ssh forwarding
-  service: name=autossh state=started 
+#- name: start ssh forwarding
+#  service: name=autossh state=started 
+- name: start ssh forwarding (ubuntu 16.04)
+  systemd:
+    state: started
+    daemon_reload: yes
+    name: autossh
 - name: add smb authentication info
   copy: 
     src=smbauth 

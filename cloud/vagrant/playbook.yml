@@ -29,15 +29,15 @@
         - pkg-config 
         - libboost-python-dev
         - gfortran
-        - libgeos-3.4.2
-        - libgeos-c1
+        - libgeos-3.5.0
+        - libgeos-c1v5
         - libgeos-dev
         - libsuitesparse-dev
         - smbclient
         - cifs-utils
         - autossh
         - emacs24
-    - include: tasks/swap_setup.yml
+    #- include: tasks/swap_setup.yml
     - include: tasks/config_smb.yml
     - include: tasks/python_package_setup.yml
     - include: tasks/sigvisa_setup.yml

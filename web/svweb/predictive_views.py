@@ -97,21 +97,35 @@ def local_hparams(request, runid, sta):
 
 def PredictedSignalMap(request, runid, sta):
 
+    untrained_only = request.GET.get("untrained_only", "f").startswith("t")
+
     s = Sigvisa()
-    
-    evids = np.loadtxt(os.path.join(s.homedir, "notebooks", "thesis", "train_evids.txt"), dtype=int)
+    all_train_evids = np.loadtxt(os.path.join(s.homedir, "notebooks", "thesis", "train_evids.txt"), dtype=int)
+
+    evid_query = "select distinct evid from sigvisa_coda_fit where runid=%d" % int(runid)
+    evids = s.sql(evid_query)
+    evids = [evid[0] for evid in evids]
+
+
+    s1 = set(all_train_evids)
+    s2 = set(evids)
+    untrained = list(s1-s2)
+
+    iter_set = all_train_evids if not untrained_only else untrained
 
     markerCode = ""
-    for i, evid in enumerate(evids):
+    for i, evid in enumerate(iter_set):
         ev = get_event(evid=evid)
         #lon, lat, depth, dist, mb = x
-        evid = evids[i]
+
         popuptxt = "loc %.2f %.2f<br>depth %.1fkm mb %.1f"% (ev.lon, ev.lat, ev.depth, ev.mb)
         evid_url = reverse('evid_fits', args=(runid, sta, evid))
         aligned_url = reverse('aligned_signal', args=(runid,)) + "?evid=%d;sta=%s" % (evid, sta)
         popuptxt += "<br>evid <a href=\"%s\">%d</a>" % (evid_url, ev.evid)
         popuptxt += "<br><a href=\"%s\">aligned signal</a>" % (aligned_url)
         popuptxt += "<br><a href=\"\#\" onclick=\"snapToEvent(marker_{id}, {depth})\">snap to location</a>".format(id=i, depth=ev.depth)
+
+
 
         evstr =  """
         var marker_{id} = L.circleMarker([{lat}, {lon}]);
@@ -338,11 +352,11 @@ def AlignedSignalView(request, runid):
     subplot_waveform(wn.get_wave(), axes, color='black', linewidth=1.0, plot_dets=None)
     pred_signal = wn.tssm.mean_obs(wn.npts)
     w = Waveform(pred_signal, srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
-    subplot_waveform(w, axes, color='green', linewidth=1.2, alpha=0.7)
+    subplot_waveform(w, axes, color='green', linewidth=1, alpha=0.7)
 
     signal_var = wn.tssm.obs_var(wn.npts)
     w2 = Waveform(pred_signal-2*np.sqrt(signal_var), srate=wn.srate, stime=wn.st, sta=wn.sta, band=wn.band, chan=wn.chan)
-    subplot_waveform(w2, axes, color='green', linewidth=1.0, fill_y2=pred_signal+2*np.sqrt(signal_var), alpha=0.2)
+    subplot_waveform(w2, axes, color='green', linewidth=1.0, fill_y2=pred_signal+2*np.sqrt(signal_var), alpha=0.1)
 
 
     atimes = dict([("%d_%s" % (eid, phase), wn.get_template_params_for_arrival(eid=eid, phase=phase)[0]['arrival_time']) for (eid, phase) in wn.arrivals()])

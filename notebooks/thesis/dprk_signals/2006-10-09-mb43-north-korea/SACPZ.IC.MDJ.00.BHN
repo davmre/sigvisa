@@ -1,0 +1,36 @@
+* **********************************
+* NETWORK   (KNETWK): IC
+* STATION    (KSTNM): MDJ
+* LOCATION   (KHOLE): 00
+* CHANNEL   (KCMPNM): BHN
+* CREATED           : 2016-11-21T23:29:36
+* START             : 1999-05-18T08:35:00
+* END               : 2010-10-19T00:00:00
+* DESCRIPTION       : Mudanjiang, Heilongjiang Province, China
+* LATITUDE          : 44.617000
+* LONGITUDE         : 129.590800
+* ELEVATION         : 220.0
+* DEPTH             : 50.0
+* DIP               : 90.0
+* AZIMUTH           : 0.0
+* SAMPLE RATE       : 20.0
+* INPUT UNIT        : M
+* OUTPUT UNIT       : COUNTS
+* INSTTYPE          : Streckeisen STS-1H/VBB Seismometer
+* INSTGAIN          : 2.047000e+03 (M/S)
+* COMMENT           : 
+* SENSITIVITY       : 8.585730e+08 (M/S)
+* A0                : 3.948580e+03
+* **********************************
+ZEROS	3
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+POLES	4
+	-1.234000e-02	+1.234000e-02	
+	-1.234000e-02	-1.234000e-02	
+	-3.918000e+01	+4.912000e+01	
+	-3.918000e+01	-4.912000e+01	
+CONSTANT	3.390144e+12
+
+

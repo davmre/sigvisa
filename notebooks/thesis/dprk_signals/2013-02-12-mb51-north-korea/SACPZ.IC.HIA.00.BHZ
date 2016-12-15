@@ -1,0 +1,36 @@
+* **********************************
+* NETWORK   (KNETWK): IC
+* STATION    (KSTNM): HIA
+* LOCATION   (KHOLE): 00
+* CHANNEL   (KCMPNM): BHZ
+* CREATED           : 2016-11-21T23:29:16
+* START             : 2010-10-19T00:00:00
+* END               : 2013-05-10T10:00:00
+* DESCRIPTION       : Hailar, Neimenggu Autonomous Region, China
+* LATITUDE          : 49.270400
+* LONGITUDE         : 119.741400
+* ELEVATION         : 620.0
+* DEPTH             : 0.0
+* DIP               : 0.0
+* AZIMUTH           : 0.0
+* SAMPLE RATE       : 20.0
+* INPUT UNIT        : M
+* OUTPUT UNIT       : COUNTS
+* INSTTYPE          : Streckeisen STS-1V/VBB Seismometer
+* INSTGAIN          : 2.556000e+03 (M/S)
+* COMMENT           : 
+* SENSITIVITY       : 1.072060e+09 (M/S)
+* A0                : 3.948580e+03
+* **********************************
+ZEROS	3
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+POLES	4
+	-1.234000e-02	+1.234000e-02	
+	-1.234000e-02	-1.234000e-02	
+	-3.918000e+01	+4.912000e+01	
+	-3.918000e+01	-4.912000e+01	
+CONSTANT	4.233115e+12
+
+

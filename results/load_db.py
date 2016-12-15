@@ -35,6 +35,24 @@ def populate_db(serialized_file, run_name, dbtable="sigvisa_origin", isc_bulleti
     s.dbconn.commit()
 
 
+def add_isc_bulletin(bulletin):
+    s = Sigvisa()
+    dbtable="sigvisa_origin"
+
+    basedir = "/home/dmoore/python/sigvisa/notebooks/thesis/results/"
+    bulletin = np.loadtxt(os.path.join(basedir, "merged_origins.txt"))
+
+    for j, row in enumerate(bulletin):
+        lon, lat, depth, time, mb, score, orid = row[:7]
+        try:
+            q = "insert into %s (orid, lon, lat, depth, time, mb, score, matched_isc_orid, run_name) values (%d, %f, %f, %f, %f, %f, %f, %d, '%s')" % (dbtable, orid, lon, lat, depth, time, mb, score, orid, "iscwells")
+            s.sql(q)
+        except:
+            continue
+ 
+    s.dbconn.commit()
+    
+
 def main():
 
     serialized = sys.argv[1]
@@ -46,6 +64,7 @@ def main():
     isc_bulletin = get_bulletin(time_blocks, origin_type="isc")
 
     populate_db(serialized, run_name, isc_bulletin=isc_bulletin)
+    #add_isc_bulletin(isc_bulletin)
 
 if __name__ == "__main__":
     main()

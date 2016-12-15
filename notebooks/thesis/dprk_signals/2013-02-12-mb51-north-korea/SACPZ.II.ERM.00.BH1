@@ -1,0 +1,41 @@
+* **********************************
+* NETWORK   (KNETWK): II
+* STATION    (KSTNM): ERM
+* LOCATION   (KHOLE): 00
+* CHANNEL   (KCMPNM): BH1
+* CREATED           : 2016-11-21T23:29:16
+* START             : 2012-11-05T00:00:00
+* END               : 2013-12-04T22:29:59
+* DESCRIPTION       : Erimo, Hokkaido Island, Japan
+* LATITUDE          : 42.015000
+* LONGITUDE         : 143.157200
+* ELEVATION         : 40.0
+* DEPTH             : 0.0
+* DIP               : 90.0
+* AZIMUTH           : 5.8
+* SAMPLE RATE       : 20.0
+* INPUT UNIT        : M
+* OUTPUT UNIT       : COUNTS
+* INSTTYPE          : Streckeisen STS-1 Seismometer with Metrozet E300
+* INSTGAIN          : 2.090400e+03 (M/S)
+* COMMENT           : 
+* SENSITIVITY       : 3.310020e+09 (M/S)
+* A0                : 2.148711e+01
+* **********************************
+ZEROS	6
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	-7.853982e+01	+0.000000e+00	
+	-1.525042e-01	+0.000000e+00	
+	-1.525042e-01	+0.000000e+00	
+POLES	6
+	-2.109033e-02	+1.892056e-03	
+	-2.109033e-02	-1.892056e-03	
+	-2.405298e-01	+1.523534e-02	
+	-2.405298e-01	-1.523534e-02	
+	-2.058918e+01	+2.975616e+01	
+	-2.058918e+01	-2.975616e+01	
+CONSTANT	7.112277e+10
+
+

@@ -1,0 +1,36 @@
+* **********************************
+* NETWORK   (KNETWK): IU
+* STATION    (KSTNM): INCN
+* LOCATION   (KHOLE): 00
+* CHANNEL   (KCMPNM): BHE
+* CREATED           : 2016-11-21T23:29:36
+* START             : 2002-03-21T03:26:00
+* END               : 2009-07-30T00:00:00
+* DESCRIPTION       : Inchon, Republic of Korea
+* LATITUDE          : 37.477600
+* LONGITUDE         : 126.623900
+* ELEVATION         : 79.0
+* DEPTH             : 1.0
+* DIP               : 90.0
+* AZIMUTH           : 89.0
+* SAMPLE RATE       : 20.0
+* INPUT UNIT        : M
+* OUTPUT UNIT       : COUNTS
+* INSTTYPE          : Streckeisen STS-1H/VBB Seismometer
+* INSTGAIN          : 2.280000e+03 (M/S)
+* COMMENT           : 
+* SENSITIVITY       : 9.563010e+08 (M/S)
+* A0                : 3.948580e+03
+* **********************************
+ZEROS	3
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+POLES	4
+	-1.234000e-02	+1.234000e-02	
+	-1.234000e-02	-1.234000e-02	
+	-3.918000e+01	+4.912000e+01	
+	-3.918000e+01	-4.912000e+01	
+CONSTANT	3.776031e+12
+
+

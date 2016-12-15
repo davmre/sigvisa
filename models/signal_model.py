@@ -1158,13 +1158,14 @@ class ObservedSignalNode(Node):
         arrival_info = collections.defaultdict(dict)
 
         for mean, (eid, phase, scale, sidx, npts, component_type) in zip(means[1:], self.tssm_components[1:]):
-            if component_type=="multnoise": continue
+            #if component_type=="multnoise": continue
 
             if scale is not None:
                 arrival_info[(eid, phase)][component_type] = mean*scale[:len(mean)]
             else:
                 arrival_info[(eid, phase)][component_type] = mean
             arrival_info[(eid, phase)]["stime"] = sidx/self.srate + self.st
+
 
             start_idx = max(sidx, 0)
             end_idx = max(start_idx, min(sidx+npts, self.npts))

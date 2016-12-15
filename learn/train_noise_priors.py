@@ -166,7 +166,7 @@ def train_noise_mean_priors(runid, sta, band, hz, env,
     var_model, var_model_type, var_hparams = fit_var_model(censored_vars, sta=sta)
     if plot:
         plt.figure()
-        sns.distplot(censored_vars)
+        sns.distplot(censored_vars, kde=False, norm_hist=True)
         xs = np.linspace(0, np.max(censored_vars), 100)
         varlps = np.array([np.exp(var_model.log_p(x)) for x in xs])
         plt.plot(xs, varlps)

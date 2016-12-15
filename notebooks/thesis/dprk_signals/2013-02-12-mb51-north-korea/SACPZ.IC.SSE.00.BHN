@@ -1,0 +1,36 @@
+* **********************************
+* NETWORK   (KNETWK): IC
+* STATION    (KSTNM): SSE
+* LOCATION   (KHOLE): 00
+* CHANNEL   (KCMPNM): BHN
+* CREATED           : 2016-11-21T23:29:16
+* START             : 2010-10-19T00:00:00
+* END               : 2013-04-27T02:00:00
+* DESCRIPTION       : Shanghai, China
+* LATITUDE          : 31.094800
+* LONGITUDE         : 121.190800
+* ELEVATION         : 40.0
+* DEPTH             : 0.0
+* DIP               : 90.0
+* AZIMUTH           : 353.0
+* SAMPLE RATE       : 20.0
+* INPUT UNIT        : M
+* OUTPUT UNIT       : COUNTS
+* INSTTYPE          : Streckeisen STS-1H/VBB Seismometer
+* INSTGAIN          : 1.978000e+03 (M/S)
+* COMMENT           : 
+* SENSITIVITY       : 8.296330e+08 (M/S)
+* A0                : 3.948580e+03
+* **********************************
+ZEROS	3
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+POLES	4
+	-1.234000e-02	+1.234000e-02	
+	-1.234000e-02	-1.234000e-02	
+	-3.918000e+01	+4.912000e+01	
+	-3.918000e+01	-4.912000e+01	
+CONSTANT	3.275872e+12
+
+

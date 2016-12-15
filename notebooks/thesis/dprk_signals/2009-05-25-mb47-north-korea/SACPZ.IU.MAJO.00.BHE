@@ -1,0 +1,36 @@
+* **********************************
+* NETWORK   (KNETWK): IU
+* STATION    (KSTNM): MAJO
+* LOCATION   (KHOLE): 00
+* CHANNEL   (KCMPNM): BHE
+* CREATED           : 2016-11-21T23:29:37
+* START             : 1999-04-20T04:59:00
+* END               : 2009-07-30T00:00:00
+* DESCRIPTION       : Matsushiro, Japan
+* LATITUDE          : 36.545670
+* LONGITUDE         : 138.204060
+* ELEVATION         : 405.0
+* DEPTH             : 0.0
+* DIP               : 90.0
+* AZIMUTH           : 90.0
+* SAMPLE RATE       : 20.0
+* INPUT UNIT        : M
+* OUTPUT UNIT       : COUNTS
+* INSTTYPE          : Streckeisen STS-1H/VBB Seismometer
+* INSTGAIN          : 2.378000e+03 (M/S)
+* COMMENT           : 
+* SENSITIVITY       : 9.974100e+08 (M/S)
+* A0                : 3.948580e+03
+* **********************************
+ZEROS	3
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+	+0.000000e+00	+0.000000e+00	
+POLES	4
+	-1.234000e-02	+1.234000e-02	
+	-1.234000e-02	-1.234000e-02	
+	-3.918000e+01	+4.912000e+01	
+	-3.918000e+01	-4.912000e+01	
+CONSTANT	3.938353e+12
+
+

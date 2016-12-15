@@ -311,7 +311,7 @@ class Heatmap(object):
         else:
             one_line(loc1[0], loc2[0], loc1[1], loc2[1])
 
-    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, alpha=1.0, colors=None, arrow_color="black", label_x_off=6, label_y_off=6, edge_x_off=-20, edge_y_off=-20, label_pts=8, **plotargs):
+    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, alpha=1.0, colors=None, arrow_color="black", label_x_off=6, label_y_off=6, edge_x_off=-20, edge_y_off=-20, label_pts=8, label_color="black", **plotargs):
         try:
             bmap = self.bmap
         except:
@@ -385,7 +385,7 @@ class Heatmap(object):
                     xytext=(x_off, y_off),
                     textcoords='offset points',
                     size=label_pts,
-                    color = 'black',
+                    color = label_color,
                     zorder=zorder,
                     arrowprops = None)
 
