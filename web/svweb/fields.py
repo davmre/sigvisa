@@ -11,12 +11,18 @@ class UnixTimestampField(models.DateTimeField):
     database as a TIMESTAMP field rather than the usual DATETIME field.
     """
 
-    __metaclass__ = models.SubfieldBase
+    #__metaclass__ = models.SubfieldBase
 #    def __init__(self, null=False, blank=False, **kwargs):
 #        super(UnixTimestampField, self).__init__(**kwargs)
 
     def db_type(self, connection):
         return "FLOAT"
+
+    def from_db_value(self, value, expression, connection, context):
+        if value is None:
+            return value
+        else:
+            return self.to_python(value)
 
     def to_python(self, value):
         if isinstance(value, unicode):
