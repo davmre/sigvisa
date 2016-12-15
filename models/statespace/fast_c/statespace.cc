@@ -299,7 +299,7 @@ void FilterState::init_incremental_state(StateSpaceModel &ssm, int k) {
 double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, double zk) {
 
   // if needed, use this for isnan: #include <boost/math/special_functions/fpclassify.hpp>
-  if (isnan(zk)) {
+  if (std::isnan(zk)) {
     // printf("declaring nan at timestep %d, val %f\n", k, zk);
     if (!cache.wasnan && cache.at_fixed_point) {
        cache.at_fixed_point = false;
@@ -403,7 +403,7 @@ double kalman_observe_sqrt(StateSpaceModel &ssm, FilterState &cache, int k, doub
 
   //printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
 
-  if (isnan(step_ell)) {
+  if (std::isnan(step_ell)) {
     printf("step %d (C) pred %.4f alpha %.4f z %.4f y %.4f ell %.4f\n", k, pred_z, alpha, zk, yk, step_ell);
     //print_vec(cache.obs_d);
     //printf("\n");
