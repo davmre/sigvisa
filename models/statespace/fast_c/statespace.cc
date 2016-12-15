@@ -571,7 +571,7 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
     }
 
   double step_ell = kalman_observe_sqrt(ssm, cache, 0, z(0));
-  if (isinf(step_ell)) {
+  if (std::isinf(step_ell)) {
     return step_ell;
   }
   ell += step_ell;
@@ -594,7 +594,7 @@ double filter_likelihood(StateSpaceModel &ssm, const vector<double> &z) {
     D(write_stuff("xk_post_predict", k, cache.xk);)
 
     double step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
-    if (isinf(step_ell)) {
+    if (std::isinf(step_ell)) {
       return step_ell;
     }
     ell += step_ell;
@@ -644,7 +644,7 @@ double filter_incremental(StateSpaceModel &ssm,
   // do some initial filtering steps to "warm up" the hidden state
   for (unsigned k=filter_start_idx; k < incr_start_idx; ++k) {
     step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
-    if (isinf(step_ell)) {
+    if (std::isinf(step_ell)) {
       *errcode = ERR_INCR_NUMERIC;
       return -INFINITY;
     }
@@ -671,7 +671,7 @@ double filter_incremental(StateSpaceModel &ssm,
 
   // now start the "normal" filtering process with an observation step
   step_ell = kalman_observe_sqrt(ssm, cache, incr_start_idx, z(incr_start_idx));
-  if (isinf(step_ell)) {
+  if (std::isinf(step_ell)) {
     *errcode = ERR_INCR_NUMERIC;
     return step_ell;
   }
@@ -694,7 +694,7 @@ double filter_incremental(StateSpaceModel &ssm,
     }
 
     step_ell = kalman_observe_sqrt(ssm, cache, k, z(k));
-    if (isinf(step_ell)) {
+    if (std::isinf(step_ell)) {
       *errcode = ERR_INCR_NUMERIC;
       return -INFINITY;
     }
