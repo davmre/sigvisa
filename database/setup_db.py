@@ -70,15 +70,21 @@ with open('setup_db_custom.sql', 'w') as f:
 
 with open('setup_db_custom.sql', 'r') as f:
     cmd = ["mysql", "-u", "root", "-p%s" % mysql_root, "--local-infile", ]
-    print "running %s" % " ".join(cmd) +  " < setup_db_custom.sql"
-    call(cmd, stdin=f)
+    cmdstr = " ".join(cmd) +  " < setup_db_custom.sql"
+    print "running %s" % cmdstr
+    returncode = call(cmd, stdin=f)
+    if returncode != 0:
+        raise Exception("Mysql cmd %s failed with error code %d" % (cmdstr, returncode)
 print "removing setup_db_custom.sql..."
 #os.remove('setup_db_custom.sql')
 
 with open('sigvisa.sql', 'r') as f:
     cmd = ["mysql", "-u", "root", "-p%s" % mysql_root, db_name]
-    print "running %s" % " ".join(cmd) +  " < sigvisa.sql"
-    call(cmd, stdin=f)
+    cmdstr = " ".join(cmd) +  " < sigvisa.sql"
+    print "running %s" % cmdstr
+    returncode = call(cmd, stdin=f)
+    if returncode != 0:
+        raise Exception("Mysql cmd %s failed with error code %d" % (cmdstr, returncode)
 
 evars = "export VISA_MYSQL_USER=%s\n" % db_user
 evars += "export VISA_MYSQL_DB=%s\n" % db_name
