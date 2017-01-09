@@ -5,6 +5,7 @@
 parameters/*.txt
 parameters/noise_models/
 parameters/runs/
+parameters/iasp91/TauP-2.0/
 eval/*
 bgjob*
 utils/bgjob
