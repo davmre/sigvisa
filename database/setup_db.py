@@ -74,7 +74,7 @@ with open('setup_db_custom.sql', 'r') as f:
     print "running %s" % cmdstr
     returncode = call(cmd, stdin=f)
     if returncode != 0:
-        raise Exception("Mysql cmd %s failed with error code %d" % (cmdstr, returncode)
+        raise Exception("Mysql cmd %s failed with error code %d" % (cmdstr, returncode))
 print "removing setup_db_custom.sql..."
 #os.remove('setup_db_custom.sql')
 
@@ -84,7 +84,7 @@ with open('sigvisa.sql', 'r') as f:
     print "running %s" % cmdstr
     returncode = call(cmd, stdin=f)
     if returncode != 0:
-        raise Exception("Mysql cmd %s failed with error code %d" % (cmdstr, returncode)
+        raise Exception("Mysql cmd %s failed with error code %d" % (cmdstr, returncode))
 
 evars = "export VISA_MYSQL_USER=%s\n" % db_user
 evars += "export VISA_MYSQL_DB=%s\n" % db_name
