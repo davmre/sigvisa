@@ -16,9 +16,9 @@ from sigvisa.signals.io import fetch_waveform
 class view_options(models.Model):
     id = models.IntegerField(primary_key=True)
     smoothing = models.IntegerField()
-    logscale = models.BooleanField()
-    wiggle = models.BooleanField()
-    noise = models.BooleanField()
+    logscale = models.BooleanField(default=False)
+    wiggle = models.BooleanField(default=False)
+    noise = models.BooleanField(default=False)
 
     class Meta:
         db_table = u'coda_fits_view_options'

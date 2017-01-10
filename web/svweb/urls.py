@@ -1,4 +1,4 @@
-from django.conf.urls import patterns, url
+from django.conf.urls import url
 from svweb.views import *
 from svweb.wiggle_views import *
 from svweb.model_views import *
@@ -16,8 +16,7 @@ from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
 from svweb.models import SigvisaCodaFit, SigvisaCodaFittingRun
 
-urlpatterns = patterns('',
-                       url(r'^$', main_view, name='main'),
+urlpatterns =        [ url(r'^$', main_view, name='main'),
                        url(r'^runs/$', ListView.as_view(queryset=SigvisaCodaFittingRun.objects.order_by('run_name'),
                                                         context_object_name='run_list',
                                                         template_name='svweb/runs.html'), name="all_runs"),
@@ -108,4 +107,4 @@ urlpatterns = patterns('',
                        url(r'^nm/(?P<nmid>\d+)/sample.png$', nm_sample, name='nm_sample'),
                        url(r'^nm/(?P<nmid>\d+)/spectrum.png$', nm_spectrum, name='nm_spectrum'),
                        url(r'^nm/(?P<nmid>\d+)/crossval.png$', nm_crossval, name='nm_crossval'),
-                       )
+                       ]
