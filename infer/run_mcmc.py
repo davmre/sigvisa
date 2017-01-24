@@ -25,7 +25,8 @@ from sigvisa.infer.template_mcmc import split_move, merge_move, optimizing_birth
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
-global_stds = {'coda_height': 0.7,
+global_stds = {'coda_height_big': 3.0,
+               'coda_height': 0.7,
                'coda_height_small': .1,
                'coda_decay': 1.2,
                'peak_decay': 1.8,
@@ -169,6 +170,13 @@ def do_template_moves(sg, wn, tmnodes, tg, stds,
                      sg=sg, keys=(k,), node_list=(n,),
                      relevant_nodes=relevant_nodes, 
                      std=stds["coda_height_small"], proxy_lps=proxy_lps, **kwargs)
+
+            run_move(move_name="coda_height_big", fn=gaussian_MH_move,
+                     step=step, n_accepted=n_accepted,
+                     n_attempted=n_attempted, move_times=move_times,
+                     sg=sg, keys=(k,), node_list=(n,),
+                     relevant_nodes=relevant_nodes, 
+                     std=stds["coda_height_big"], proxy_lps=proxy_lps, **kwargs)
 
 
 def run_move(move_name, fn, step=None, n_accepted=None, n_attempted=None, move_times=None, move_prob=None, cyclic=False, **kwargs):

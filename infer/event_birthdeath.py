@@ -2427,7 +2427,8 @@ def ev_death_move_prior(sg, log_to_run_dir=None, inference_step=-1, **kwargs):
 
 def sample_hough_kwargs(sg):
     #phase_choices = ( ("Pn",), ("Pg", "Lg"), ("Pn", "Sn", "Lg", "Pg"), )
-    phase_choices = ( ("Pg", "Lg"), ("Pg", "Lg"), )
+    #phase_choices = ( ("Pg", "Lg"), ("Pg", "Lg"), )
+    phase_choices = ( ("P",), ("P", "S") )
     mbbins_choices = ( (12, 2, 2), (1, 1, 12))
     multipliers = (1.0, 1.5)
     offsets = (False, True)

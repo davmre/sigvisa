@@ -57,6 +57,9 @@ def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None,
             arrphases = s.arriving_phases(ev, sta)
             arrival_times = np.array([ev.time + tt_predict(ev, sta, phase) for phase in phases if phase in arrphases])
 
+        if len(arrival_times) == 0:
+            raise Exception("no arriving phases predicted for %d at %s, can't load signal!" % (evid, sta))
+
         st = np.min(arrival_times) - pre_s
         et = np.max(arrival_times) + post_s
 

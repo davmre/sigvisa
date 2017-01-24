@@ -144,6 +144,11 @@ def learn_model(X, y, model_type, sta, yvars=None, target=None, optim_params=Non
         else:
             noise_prior = generic_noise_prior
 
+        if "noise_prior" in kwargs:
+            # hack to allow passing in an external noise prior, used for hierarchical modeling
+            noise_prior = kwargs["noise_prior"]
+            del kwargs["noise_prior"]
+
 
         if remove_outliers:
             model = iterative_fit_parametric_outliers(X=X, ymeans=y, yvars=yvars, sta=sta,

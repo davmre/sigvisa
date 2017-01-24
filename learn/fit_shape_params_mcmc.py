@@ -27,7 +27,7 @@ from sigvisa import Sigvisa
 from sigvisa.signals.io import *
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
-
+from sigvisa.learn.train_param_common import load_modelid as tpc_load_modelid
 
 def set_templates_from_fitid(sg, eid, fitid, wave):
     s = Sigvisa()
@@ -500,15 +500,28 @@ def main():
     uatemplate_rate = options.uatemplate_rate
     enable_uatemplates = uatemplate_rate is not None
 
+
+    # hack: load dummy priors from DB
+    """
+    dummyPriorModel = {
+        "tt_residual": tpc_load_modelid(147904),
+        "amp_transfer": tpc_load_modelid(147895),
+        "peak_offset": tpc_load_modelid(147931),
+        "mult_wiggle_std": tpc_load_modelid(147940),
+        "coda_decay": tpc_load_modelid(147913),
+        "peak_decay": tpc_load_modelid(147922),
+    }
+    """
+
+
     fittingDummyPrior = {
         "tt_residual": Laplacian(center=0.0, scale=0.5),
-        "amp_transfer": Gaussian(mean=10.0, std=10.0),
-        "peak_offset": TruncatedGaussian(mean=-1.5, std=1.0, b=4.0),
-        "mult_wiggle_std": Beta(4.0, 1.0),
+        "amp_transfer": Gaussian(mean=3.0, std=2.0),
+        "peak_offset": TruncatedGaussian(mean=-1.0, std=1.0, b=4.0),
+        "mult_wiggle_std": Beta(1.0, 6.0),
         "coda_decay": Gaussian(mean=-2.0, std=1.0),
         "peak_decay": Gaussian(mean=-2.0, std=1.0)
     }
-
 
 
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,

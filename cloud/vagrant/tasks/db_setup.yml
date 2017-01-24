@@ -1,7 +1,7 @@
 ---
 - name: set three-day connection timeout
   blockinfile:
-    dest: /etc/mysql/my.cnf
+    dest: /etc/mysql/mysql.conf.d/mysqld.cnf
     marker: "### {mark} ANSIBLE MANAGED BLOCK"
     insertafter: "skip-external-locking"
     content: |
@@ -33,6 +33,12 @@
     dest=/home/sigvisa/llnl_wfdisc.dump
 - name: set DB password
   mysql_user: login_user=root login_password=55rontob name=root password=55rontob check_implicit_admin=yes
+
+# todo: on AWS ubuntu 16.04 it is still necessary to set the plugin mysql_native_password by running 
+#   ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '55rontob';
+# not adding this right now since it only needs to be done once, and it looks possible that future ansible versions
+# will allow changing the plugin directly: https://github.com/ansible/ansible-modules-core/issues/3003
+
 - name: add leb data to db
   become_user: sigvisa
   shell: /home/sigvisa/.virtualenvs/sigvisa/bin/python database/setup_db.py /home/sigvisa/db_setup_config >> /home/sigvisa/db_log 2> /home/sigvisa/db_log_errs
@@ -45,3 +51,9 @@
   mysql_db: name=ctbt3mos state=import target=/home/sigvisa/isc_origin.dump login_user=root login_password=55rontob
 - name: import llnl_wfdisc table
   mysql_db: name=ctbt3mos state=import target=/home/sigvisa/llnl_wfdisc.dump login_user=root login_password=55rontob
+
+- name: migrate django db
+  become_user: sigvisa
+  shell: /home/sigvisa/python/sigvisa/web/migrate.sh 
+- name: start web interface
+  service: name=sigvisa_web state=started

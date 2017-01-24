@@ -74,7 +74,8 @@ class NoiseModelNode(Node):
     # it adds in the event source amplitude, deterministically
 
     def __init__(self, waveform, force_dummy=False, is_env=False, 
-                 runids=None, nmid=None, init_extra_noise=True, **kwargs):
+                 runids=None, nmid=None, init_extra_noise=True, 
+                 dummy_fallback=False, **kwargs):
 
         self.is_env = is_env
         
@@ -89,15 +90,20 @@ class NoiseModelNode(Node):
             n_params = None if nm is None else len(nm.params)
             self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = waveform_dummy_prior(waveform, is_env, n_p = n_params)
         else:
-            self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = \
-               load_noise_model_prior(sta=waveform["sta"], chan=waveform["chan"],
-                                      band=waveform["band"], hz=waveform["srate"],
+            try:
+                self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = \
+                 load_noise_model_prior(sta=waveform["sta"], chan=waveform["chan"],
+                                        band=waveform["band"], hz=waveform["srate"],
                                       runids=runids,
                                       env = is_env)
-        #except Exception as e:
-        #    force_dummy = True
-        #    print e
-        #    logging.warning("falling back to dummy noise prior for %s" % str(waveform))
+            except Exception as e:
+                if dummy_fallback:
+                    n_params = None if nm is None else len(nm.params)
+                    self.prior_mean_dist, self.prior_var_dist, self.prior_param_dist = waveform_dummy_prior(waveform, is_env, n_p = n_params)
+                    print e
+                    logging.warning("falling back to dummy noise prior for %s" % str(waveform))
+                else:
+                    raise e
 
 
 

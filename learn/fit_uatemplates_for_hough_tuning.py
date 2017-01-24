@@ -103,15 +103,6 @@ def main():
     print "fit id %d completed successfully." % options.fitid
 
 
-if __name__ == "__main__":
 
-    try:
-        main()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print e
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        import pdb
-        pdb.post_mortem(tb)
+if __name__ == "__main__":
+    main()

@@ -106,14 +106,17 @@ default_gp_parametric_tmtypes = {'amp_transfer': 'gplocal+lld+sin1',
                                  'peak_offset': 'gplocal+lld+linear_mb', 
                                  'mult_wiggle_std': 'constant_beta'}
 
+
 dummyPriorModel = {
 "tt_residual": Laplacian(center=0.0, scale=3.0),
-"amp_transfer": Gaussian(mean=0.0, std=10.0),
+"amp_transfer": Gaussian(mean=3.0, std=3.0),
 "peak_offset": TruncatedGaussian(mean=-0.5, std=1.0, b=4.0),
 "mult_wiggle_std": Beta(4.0, 1.0),
 "coda_decay": Gaussian(mean=-2.0, std=1.0),
 "peak_decay": Gaussian(mean=-2.0, std=1.0)
 }
+
+
 
                 
 
@@ -1559,6 +1562,7 @@ class SigvisaGraph(DirectedGraphModel):
                                  is_env="env" in wave['filter_str'], 
                                  nmid=nmid,
                                  force_dummy=dummy_noise_prior,
+                                 dummy_fallback = self.dummy_fallback,
                                  init_extra_noise=init_extra_noise,
                                  runids=self.runids)
         self.add_node(nm_node)

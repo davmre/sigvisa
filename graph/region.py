@@ -38,7 +38,9 @@ class Region(object):
         return True
 
     def area_deg(self):
-        width = (self.right_lon - self.left_lon) % 360
+        width = (self.right_lon - self.left_lon) 
+        if width < 0:
+            width = width % 360 # untested but should allow regions to cross the date line? 
         height = self.top_lat - self.bottom_lat
         return width*height
 

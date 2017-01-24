@@ -130,7 +130,7 @@ def fit_detail(request, fitid):
 
     time_format = "%b %d %Y, %H:%M:%S"
 
-    fit_time_str = fit.timestamp.strftime(time_format)
+    fit_time_str = datetime.fromtimestamp(fit.timestamp, timezone('UTC')).strftime(time_format)
 
     # get the current display options; initialize to defaults if there are none
     try:

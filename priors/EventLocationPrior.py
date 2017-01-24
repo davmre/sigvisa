@@ -294,7 +294,6 @@ def main():
         print "reading events...",
         leb_events = read_events(cursor, start_time, end_time, "leb")[0]
 
-
         region_left=-180.
         region_right=180
         region_bottom=-90.
@@ -317,14 +316,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except SystemExit:
-        raise
-    except:
-        import pdb
-        import traceback
-        import sys
-        traceback.print_exc(file=sys.stdout)
-        pdb.post_mortem(sys.exc_traceback)
-        raise
+    main()

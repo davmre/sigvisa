@@ -33,6 +33,8 @@
        recursive=true
        force=yes
   become_user: sigvisa
+  register: git_deploy
+  until: git_deploy|succeeded
 #- name: delete db_cache subdir
 #  shell: 'rm -r /home/sigvisa/python/sigvisa/db_cache'
 #  become_user: sigvisa
@@ -81,11 +83,8 @@
 #  shell: mysql -u root -p55rontob -e "update idcx_wfdisc set dir='/home/sigvisa/local_data/ctbt_data/seismic/2009/095/' where dir='/home/sigvisa/ctbt_data/seismic/2009/095/'" ctbt3mos
 - name: setup web service
   copy:
-    src=sigvisa_web.conf
-    dest=/etc/init/sigvisa_web.conf
+    src=sigvisa_web.service
+    dest=/etc/systemd/system/sigvisa_web.service
     owner=root
-- name: migrate django db
-  become_user: sigvisa
-  shell: /home/sigvisa/python/sigvisa/web/migrate.sh 
-- name: start web interface
-  service: name=sigvisa_web state=started
+
+# remaining django setup depends on DB so is in db_setup.yml

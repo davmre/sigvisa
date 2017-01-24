@@ -286,6 +286,7 @@ def main():
     parser.add_option("--runid", dest="runid", default=None, type="int", help="")
     parser.add_option("--insert_runid", dest="insert_runid", default=None, type="int", help="HACK to record the models under a different runid than the one they were trained on.")
     parser.add_option("--sites", dest="sites", default=None, type="str", help="")
+    parser.add_option("--hz", dest="hz", default=10.0, type="float", help="")
     parser.add_option("--raw", dest="raw", default=False, action="store_true", help="")
 
     (options, args) = parser.parse_args()
@@ -296,9 +297,9 @@ def main():
     sites = sites.split(",")
 
     if options.raw:
-        train_raw_models(options.runid, sites, options.band)
+        train_raw_models(options.runid, sites, options.band, options.hz)
     else:
-        train_envelope_models(options.runid, sites, options.band)
+        train_envelope_models(options.runid, sites, options.band, options.hz)
 
 if __name__ == "__main__":
     main()
