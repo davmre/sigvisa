@@ -576,7 +576,7 @@ def load_model_notmemoized(fname, model_type,
             with open(fname, "rb") as f:
                 model = pickle.load(f)
         except Exception as e:
-            raise Exception("unrecognized model type %s" % (model_type))
+            raise Exception("error (%s) loading model from %s, perhaps due to unrecognized model type %s" % (e, fname, model_type))
     return model
 
 
