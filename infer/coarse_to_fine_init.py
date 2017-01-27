@@ -495,7 +495,10 @@ def do_inference(sg, modelspec, runspec, max_steps=None,
             pickle.dump(sw, f)
 
     try:
-        evs = runspec._get_events_bulletin("isc")
+        bulletin = runspec.initialize_events
+        bulletin = "isc" if bulletin is None else bulletin
+        
+        evs = runspec._get_events_bulletin(bulletin)
         with open(os.path.join(logger.run_dir, "events.pkl"), "wb") as f:
             pickle.dump(evs, f)
     except:
