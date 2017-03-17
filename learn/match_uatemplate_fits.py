@@ -118,7 +118,7 @@ def train_model(Xs, ys, sta, phase):
     Xs_centered = Xs -x_mean
 
     x_scale = np.std(Xs_centered, axis=0)
-    Xs_scaled = Xs_centered / x_scale
+    Xs_scaled = Xs_centered / (x_scale + 1e-6)
 
     if np.sum(ys) == 0:
         # if phase is never detected, no way to fit a
