@@ -86,7 +86,7 @@ PyObject * py_EarthModel_SiteInfo(EarthModel_t * p_earth,
 }
 
 
-Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time) {
+Site_t * get_site(const EarthModel_t * p_earth, const char * sta, double time) {
 
   Site_t * site = NULL;
   HASH_FIND_STR(p_earth->p_sites, sta, site);
@@ -720,7 +720,7 @@ int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
 
   /* non-time-defining phases are never in-range */
   if (!p_earth->p_phase_time_def[phaseid]
-      || (EarthModel_ArrivalTime(p_earth, lon, lat, depth, time, phaseid, sitename) - time
+      || (EarthModel_ArrivalTime(p_earth, lon, lat, depth, time, phaseid, sitename, 0) - time
           < 0))
     return 0;
 
@@ -1011,7 +1011,7 @@ void bilinear_interpolate_grad(double val11, double val12, double val21, double 
 }
 
 static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, double depth, double
-                        distance, double * p_trvtime, double * p_slow,
+                        distance, int force_nobounds, double * p_trvtime, double * p_slow,
 			double * p_iangle)
 {
   int depthi, disti, depthi2, disti2;
@@ -1030,8 +1030,8 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
       || (distance < p_phase->p_dists[0])
       || (distance > p_phase->p_dists[p_phase->numdist-1]))
   {
-    *p_trvtime = *p_slow = -1;
-    return;
+      *p_trvtime = *p_slow = -1;
+      return;
   }
 
   /* check that it is within one of the ranges */
@@ -1045,7 +1045,7 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
       in_range = 1;
   }
 
-  if (!in_range && p_earth->enforce_ddrange)
+  if (!in_range && (p_earth->enforce_ddrange && !force_nobounds))
   {
     *p_trvtime = *p_slow = *p_iangle = -1;
     return;
@@ -1699,7 +1699,7 @@ PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
 
   p_phase = p_earth->p_phases + phaseid;
 
-  travel_time(p_earth, p_phase, depth, dist, &ttime, &slow, &iangle);
+  travel_time(p_earth, p_phase, depth, dist, 0, &ttime, &slow, &iangle);
 
   if (ttime < 0)
   {
@@ -1734,7 +1734,7 @@ PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args)
   }
 
   return Py_BuildValue("d", EarthModel_ArrivalTime(p_earth, lon, lat, depth,
-                                                   evtime, phaseid, sitename));
+                                                   evtime, phaseid, sitename, 0));
 }
 
 PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
@@ -1763,7 +1763,7 @@ PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
   return Py_BuildValue("d",
                        EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
                                                     evtime, phaseid, sitelon,
-                                                    sitelat, siteelev));
+                                                    sitelat, siteelev, 0));
 }
 
 double EarthModel_ArrivalTime_Deriv(EarthModel_t * p_earth, double lon,
@@ -1789,7 +1789,7 @@ double EarthModel_ArrivalTime_Deriv(EarthModel_t * p_earth, double lon,
 
 double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
                               double lat, double depth, double evtime,
-                              int phaseid, const char *sitename)
+                              int phaseid, const char *sitename, int force_nobounds)
 {
   Site_t * p_site;
 
@@ -1801,7 +1801,8 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
 
   return EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
                                       evtime, phaseid, p_site->sitelon,
-                                      p_site->sitelat, p_site->siteelev);
+                                      p_site->sitelat, p_site->siteelev,
+				      force_nobounds);
 }
 
 double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
@@ -1861,7 +1862,8 @@ double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
 double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon,
                                     double lat, double depth, double evtime,
                                     int phaseid, double sitelon,
-                                    double sitelat, double siteelev)
+                                    double sitelat, double siteelev,
+				    int force_nobounds)
 {
 
   double trvtime, slow, iangle;
@@ -1874,7 +1876,7 @@ double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon,
 
   dist_azimuth(lon, lat, sitelon, sitelat, &delta, &esaz, &seaz);
 
-  travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
+  travel_time(p_earth, p_phase, depth, delta, force_nobounds, &trvtime, &slow, &iangle);
 
   if (trvtime < 0)
     return -1;
@@ -1939,7 +1941,7 @@ double EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth, double lon,
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
                &seaz);
 
-  travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
+  travel_time(p_earth, p_phase, depth, delta, 0, &trvtime, &slow, &iangle);
 
   return iangle;
 }
@@ -1993,7 +1995,7 @@ double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
                &seaz);
 
-  travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
+  travel_time(p_earth, p_phase, depth, delta, 0, &trvtime, &slow, &iangle);
 
   return slow;
 }
@@ -2222,15 +2224,15 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
 /* if possible to invert, returns 0 and stores the lon, lat, depth, time
  * fields, else it returns -1 */
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
-                     Event_t * p_event, int perturb)
+		     const Site_t * p_site, Event_t * p_event, int perturb)
 {
-  printf("warning, invert_detection is BROKEN, do not use until fixed (detections still depend on siteids which don't exist anymore...)\n");
-  exit(1);
+  // printf("warning, invert_detection is BROKEN, do not use until fixed (detections still depend on siteids which don't exist anymore...)\n");
+  // exit(1);
 
   double dist;
   int phaseid;
   const EarthPhaseModel_t * p_phase;
-  const Site_t * p_site;
+  // const Site_t * p_site;
   double arrtime;
 
   /* inverting the P phase leads to the most number of events */
@@ -2243,18 +2245,20 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
   p_event->evdepth = 0;
 
   dist = invert_slowness(p_phase, p_event->evdepth, p_det->slo_det);
-
+  
   /* we don't want to propose an event smack on top of a station! */
   if (dist < 1e-3) {
     printf("invert failed, too close to station\n");
     return -1;
   }
-  p_site = p_earth->p_sites + p_det->site_det;
+  // p_site = p_earth->p_sites + p_det->site_det;
 
   invert_dist_azimuth(p_site->sitelon, p_site->sitelat, dist,
                       p_det->azi_det,
                       &p_event->evlon, &p_event->evlat);
 
+
+  
   /* now, perturb the event location */
   if (perturb)
   {
@@ -2273,11 +2277,13 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
       p_event->evlat = 180 - p_event->evlat;
   }
 
-  arrtime = EarthModel_ArrivalTime((EarthModel_t *)p_earth,
-                                   p_event->evlon, p_event->evlat,
-                                   p_event->evdepth, 0 /* evtime */,
-                                   phaseid, p_det->site_det);
-
+  arrtime = EarthModel_ArrivalTime_Coord(p_earth,
+					 p_event->evlon, p_event->evlat,
+					 p_event->evdepth, 0 /* evtime */,
+					 phaseid,
+					 p_site->sitelon,
+					 p_site->sitelat,
+					 p_site->siteelev, 1);
 
   if (arrtime < 0) {
     printf("invert failed, couldn't compute arrtime from lon %lf lat %lf dep %lf\n", p_event->evlon, p_event->evlat, p_event->evdepth);
@@ -2300,20 +2306,23 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
 
 PyObject * py_EarthModel_InvertDetection(const EarthModel_t * p_earth, PyObject * args) {
   double azi, slo, time;
-  const char *sitename;
+  int siteid;
+  const char * sitename;
 
-  if (!PyArg_ParseTuple(args, "ddds", &azi, &slo, &time, &sitename))
+  if (!PyArg_ParseTuple(args, "sddd", &sitename, &azi, &slo, &time))
     return NULL;
+  Site_t * p_site = get_site(p_earth, sitename, time);
 
   Detection_t d;
-  d.site_det = -1; // FIX THIS
+  
+  d.site_det = siteid; 
   d.time_det = time;
   d.azi_det = azi;
   d.slo_det = slo;
 
   Event_t ev;
 
-  invert_detection(p_earth, &d, &ev, 0);
+  invert_detection(p_earth, &d, p_site, &ev, 0);
 
   return Py_BuildValue("dddd", ev.evlon, ev.evlat, ev.evdepth, ev.evtime);
 }

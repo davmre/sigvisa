@@ -137,7 +137,7 @@ typedef struct EarthModel_t
 
 #define EarthModel_NumSites(p_earth) ((p_earth)->numsites)
 
-Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time);
+Site_t * get_site(const EarthModel_t * p_earth, const char * sta, double time);
 
 PyObject * py_EarthModel_SiteInfo(EarthModel_t * p_earth,
 				  PyObject * args);
@@ -173,7 +173,7 @@ double EarthModel_ArrivalTime_Deriv(EarthModel_t * p_earth, double lon,
 				    double *d_atime_depth);
 double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
                               double depth, double evtime,
-                              int phaseid, const char *sitename);
+                              int phaseid, const char *sitename, int force_nobounds);
 
 double EarthModel_ArrivalTime_Coord_Deriv(EarthModel_t * p_earth, double lon,
 					  double lat, double depth, double evtime,
@@ -190,7 +190,8 @@ PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
 double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon,
                                     double lat, double depth, double evtime,
                                     int phaseid, double sitelon,
-                                    double sitelat, double siteelev);
+                                    double sitelat, double siteelev,
+				    int force_nobounds);
 
 PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth,
                                         PyObject * args);
@@ -232,7 +233,7 @@ PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth,
                                        PyObject * args);
 
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
-                     Event_t * p_event, int perturb);
+                     const Site_t * p_site, Event_t * p_event, int perturb);
 
 PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args);
 

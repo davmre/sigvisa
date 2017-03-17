@@ -20,7 +20,7 @@ static PyObject * py_event_location_prior_sample(SigModel_t * p_sigmodel,PyObjec
 
 static PyMethodDef SigModel_methods[] = {
   {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
-   "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1)"
+   "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1, force_nobounds)"
    " -> travel time in seconds"},
   {"mean_travel_time_grad", (PyCFunction)py_mean_travel_time_grad, METH_VARARGS,
    "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1)"
@@ -131,7 +131,7 @@ static PyMethodDef EarthModel_methods[] = {
     {"InvertDetection", (PyCFunction)py_EarthModel_InvertDetection,
      METH_VARARGS,
      "Invert a detection\n"
-     "InvertDetection(siteid, azi, slo, time) -> (lon, lat, depth, time)",
+     "InvertDetection(sitename, azi, slo, time) -> (lon, lat, depth, time)",
     },
     {"IsTimeDefPhase", (PyCFunction)py_EarthModel_IsTimeDefPhase,
      METH_VARARGS,
@@ -301,17 +301,17 @@ static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,
   double sitelon, sitelat, siteelev;
   int phaseid;
   double trvtime;
-
+  int force_nobounds = 0;
   EarthModel_t * p_earth;
 
-  if (!PyArg_ParseTuple(args, "ddddddi", &evlon, &evlat, &evdepth,
-                        &sitelon, &sitelat, &siteelev, &phaseid))
+  if (!PyArg_ParseTuple(args, "ddddddi|i", &evlon, &evlat, &evdepth,
+                        &sitelon, &sitelat, &siteelev, &phaseid, &force_nobounds))
     return NULL;
 
   p_earth = p_sigmodel->p_earth;
 
   trvtime = EarthModel_ArrivalTime_Coord(p_earth, evlon, evlat, evdepth, 0, phaseid,
-                                   sitelon, sitelat, siteelev);
+					 sitelon, sitelat, siteelev, force_nobounds);
 
   return Py_BuildValue("d", trvtime);
 }
@@ -359,18 +359,19 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
   double evlon, evlat, evdepth, evtime;
   int phaseid;
   double trvtime;
+  int force_nobounds = 0;
   const char *sitename;
 
   EarthModel_t * p_earth;
 
-  if (!PyArg_ParseTuple(args, "ddddsi", &evlon, &evlat, &evdepth, &evtime,
-                        &sitename, &phaseid))
+  if (!PyArg_ParseTuple(args, "ddddsi|i", &evlon, &evlat, &evdepth, &evtime,
+                        &sitename, &phaseid, &force_nobounds))
     return NULL;
 
   p_earth = p_sigmodel->p_earth;
 
   trvtime = EarthModel_ArrivalTime(p_earth, evlon, evlat, evdepth, 0, phaseid,
-                                   sitename);
+                                   sitename, force_nobounds);
   Site_t * p_site = get_site(p_sigmodel->p_earth, sitename, evtime);
 
   if (trvtime == -2 || p_site == NULL) {
