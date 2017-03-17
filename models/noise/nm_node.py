@@ -53,7 +53,7 @@ def waveform_dummy_prior(waveform, is_env=True, n_p=None):
     prior_params[0] = 0.3
 
     wave_mean = np.mean(waveform.data)
-    wave_std = np.std(waveform.data)
+    wave_std = np.std(waveform.data) + 1e-6
 
     if is_env:
         if waveform["sta"] =="PD31":

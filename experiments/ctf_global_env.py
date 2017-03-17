@@ -13,8 +13,13 @@ from optparse import OptionParser
 
 
 
-default_stas = "AAK,AFI,AKASG,AKTO,ANMO,ARCES,ASAR,ASF,ATAH,ATD,ATTU,BBB,BBTS,BORG,BOSA,BRTR,BVAR,CFAA,CMAR,CMIG,CPUP,CTA,DAV,DBIC,DLBC,DZM,EIL,ELK,ESDC,FINES,FITZ,FRB,GERES,GNI,GUMO,HFS,HNR,ILAR,INK,JCJ,JHJ,JKA,JNU,JOW,JTS,KAPI,KBZ,KDAK,KEST,KMBO,KSRS,KURK,LBTB,LPAZ,LPIG,LSZ,MAW,MBAR,MDT,MJAR,MKAR,MLR,MMAI,NEW,NNA,NOA,NVAR,NWAO,OPO,PDAR,PETK,PFO,PLCA,PMG,PMSA,PPT,PSI,QSPA,RAO,RAR,RCBR,RES,ROSC,RPN,RPZ,SADO,SCHQ,SFJD,SIV,SJG,SNAA,SONM,SPITS,STKA,SUR,TEIG,TGY,TKL,TORD,TSUM,TXAR,ULM,URZ,USHA,USRK,VNDA,VRAC,WRA,YBH,YKA,ZALV".split(",")
+#default_stas = "AAK,AFI,AKASG,AKTO,ANMO,ARCES,ASAR,ASF,ATAH,ATD,ATTU,BBB,BBTS,BORG,BOSA,BRTR,BVAR,CFAA,CMAR,CMIG,CPUP,CTA,DAV,DBIC,DLBC,DZM,EIL,ELK,ESDC,FINES,FITZ,FRB,GERES,GNI,GUMO,HFS,HNR,ILAR,INK,JCJ,JHJ,JKA,JNU,JOW,JTS,KAPI,KBZ,KDAK,KEST,KMBO,KSRS,KURK,LBTB,LPAZ,LPIG,LSZ,MAW,MBAR,MDT,MJAR,MKAR,MLR,MMAI,NEW,NNA,NOA,NVAR,NWAO,OPO,PDAR,PETK,PFO,PLCA,PMG,PMSA,PPT,PSI,QSPA,RAO,RAR,RCBR,RES,ROSC,RPN,RPZ,SADO,SCHQ,SFJD,SIV,SJG,SNAA,SONM,SPITS,STKA,SUR,TEIG,TGY,TKL,TORD,TSUM,TXAR,ULM,URZ,USHA,USRK,VNDA,VRAC,WRA,YBH,YKA,ZALV".split(",")
 
+# stas to maximize coverage up to 3 detections
+# default_stas = ['ASAR', 'WRA', 'MKAR', 'YKA', 'TORD', 'ILAR', 'FITZ', 'ZALV', 'KURK', 'TXAR', 'FINES', 'STKA', 'LPAZ', 'ARCES', 'PDAR', 'URZ', 'GERES', 'SONM', 'NOA', 'NVAR', 'CTA', 'MJAR', 'AFI', 'PMG', 'KDAK', 'DZM', 'BRTR', 'SIV', 'BOSA', 'TEIG']
+
+# stas to maximize coverage up to 4 detections
+default_stas = ['ASAR', 'WRA', 'MKAR', 'YKA', 'FITZ', 'TORD', 'ZALV', 'ILAR', 'STKA', 'KURK', 'TXAR', 'FINES', 'SONM', 'LPAZ', 'NVAR', 'URZ', 'GERES', 'PDAR', 'ARCES', 'PMG', 'BRTR', 'CTA', 'BVAR', 'SIV', 'MJAR', 'HFS', 'NOA', 'DZM', 'AFI', 'CMAR']
 
 region_lon = (-180, 180)
 region_lat = (-90, 90)
@@ -65,7 +70,7 @@ def main(stas=None, hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, 
 
     if resume_from is None:
         sg = rs.build_sg(ms1)
-        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=30, fix_outside_templates=fix_outside, propose_correlation=False, propose_hough=use_hough)
+        ms1.add_inference_round(enable_event_moves=False, enable_event_openworld=False, enable_template_openworld=True, enable_template_moves=True, disable_moves=['atime_xc', 'ev_lsqr'], steps=200, fix_outside_templates=fix_outside, propose_correlation=False, propose_hough=use_hough)
     else:
         with open(resume_from, 'rb') as f:
             sg = pickle.load(f)
@@ -83,7 +88,7 @@ def main(stas=None, hour=0.0, len_hours=2.0, runid=37, hz=10.0, tmpl_steps=500, 
                             fix_outside_templates=fix_outside, propose_correlation=False, 
                             propose_hough=use_hough)
 
-    do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None, dump_proposals=False, max_dumps=1)
+    do_inference(sg, ms1, rs, dump_interval_s=10, print_interval_s=10, model_switch_lp_threshold=None, dump_proposals=False, max_dumps=3)
 
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps, tmids,
     #nodetection_lps =np.log(1-detection_probs)
 
     null_ll = float(ua_poisson_lp_full + np.sum(ua_amp_lps))
-
+    
     cdfs = """
     // cdf of Laplace(0.0, 5.0) computed for half-integer x values [-40, 40] inclusive
     double laplace_table[] ={0.00017, 0.00020, 0.00025, 0.00031, 0.00037, 0.00046, 0.00056, 0.00068, 0.00083, 0.00101, 0.00124, 0.00151, 0.00185, 0.00226, 0.00276, 0.00337, 0.00411, 0.00503, 0.00614, 0.00750, 0.009\
@@ -110,7 +110,7 @@ def generate_sta_hough(sta, sta_hough_array, atimes, amps, tmids,
 
     double gaussian_cdf(double x) {
         x *= 10; // convert from [-4, 4] to index range of [-40, 40]
-        if (isinf(x)) { if (x > 0) return 1.0; else return 0.0; }
+        if (std::isinf(x)) { if (x > 0) return 1.0; else return 0.0; }
         int ix = (int) floor(x);
         int ix2 = ix+1;
         if (ix2 <= -40) return 0.0;
@@ -1138,7 +1138,7 @@ class HoughConfig(object):
 
 
 
-def station_hough(sg, hc, wn, uatemplates, fill_assoc=False):
+def station_hough(sg, hc, wn, uatemplates, max_negative_nats = None, fill_assoc=False):
 
     sta, chan, band = wn.sta, wn.chan, wn.band
     atimes, amps, tmids = uatemplates
@@ -1191,6 +1191,11 @@ def station_hough(sg, hc, wn, uatemplates, fill_assoc=False):
     t3 = time.time()
     #print sta, "hough", t1-t0, t2-t1, t3-t2
 
+    if max_negative_nats is not None:
+        # HACK THIS IS SUPER SLOW AND NOT JUSTIFIED
+        # IF IT WORKS, I SHOULD THINK HARDER, AND THEN WRITE A WEAVE VERSION
+        array = np.where(array > null_ll - max_negative_nats, array, null_ll - max_negative_nats)
+    
     return array, full_assoc, phase_scores, null_ll
 
 
@@ -1218,7 +1223,8 @@ def normalize_global(global_array, global_noev_ll, hc, one_event_semantics=False
         global_lik /= normalizer
         return global_lik
 
-def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=False):
+def global_hough(sg, hc, uatemplates_by_sta, station_max_negative_nats=5.0,
+                 save_debug=False, save_debug_stas=False):
     t0 = time.time()
     global_array = hc.create_array(dtype=np.float32, fill_val=0.0)
     global_debug = {}
@@ -1234,11 +1240,16 @@ def global_hough(sg, hc, uatemplates_by_sta, save_debug=False, save_debug_stas=F
     for wn, uatemplates in uatemplates_by_sta.items():
         sta = wn.sta
         t2 = time.time()
-        sta_array, assocs, phase_scores, null_ll = station_hough(sg, hc, wn, uatemplates, fill_assoc=save_debug)
+        sta_array, assocs, phase_scores, null_ll = station_hough(sg, hc, wn, uatemplates, fill_assoc=save_debug, max_negative_nats = station_max_negative_nats)
         t3 = time.time()
         sta_hough_time += t3-t2
 
         global_debug[wn.label]=(assocs, phase_scores, null_ll)
+
+        #if station_max_range_nats is not None:
+        #    # 
+        #    sta_array = np.where(sta_array > null_ll + station_max_range_nats, null_ll + station_max_range_nats, sta_array)
+        
         global_array += sta_array
         global_noev_ll += null_ll
         t4 = time.time()
@@ -1503,11 +1514,11 @@ def hough_location_proposal(sg, fix_result=None, proposal_dist_seed=None,
     try:
         ctf = s.hough_proposer[settings]
     except KeyError:
-        bin_widths = [10,5,2]        
+        bin_widths = [10,5,2, 1]        
         if sg.inference_region is not None:
-            bin_area = sg.inference_region.area_deg() / 1500.
+            bin_area = sg.inference_region.area_deg() / 6000.
             bw1 = np.round(np.sqrt(bin_area) * bin_width_multiplier, decimals=2)
-            bin_widths = [bw1, bw1/2., bw1/4.]
+            bin_widths = [bw1, bw1/2., bw1/4., bw1/8.]
 
         ctf = CTFProposer(sg, bin_widths, phases=phases,
                           depthbin_bounds=[0,10,50,150,400,700], 

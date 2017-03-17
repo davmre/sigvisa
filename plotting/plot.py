@@ -280,7 +280,11 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, colo
         return
 
     all_det_times = arrivals[:, DET_TIME_COL]
-    all_det_labels = [Sigvisa().phasenames[arrivals[i, DET_PHASE_COL]] for i in range(arrivals.shape[0])]
+    all_det_labels = []
+    pn = Sigvisa().phasenames
+    for i in range(arrivals.shape[0]):
+        phase_idx = int(arrivals[i, DET_PHASE_COL])
+        all_det_labels.append(pn[phase_idx])
 
     if etime is not None:
         adt = [all_det_times[i] for i in range(len(all_det_times)) if stime <= all_det_times[i] <= etime]

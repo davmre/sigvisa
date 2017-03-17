@@ -241,7 +241,8 @@ class Waveform(object):
             def f(x):
                 # don't allow envelopes to be affected by crazy things under the mask
                 d = x.data.copy()
-                d[x.mask] = 0.0
+                if not isinstance(x.mask, np.bool_):
+                    d[x.mask] = 0.0
                 return ma.masked_array(data=obspy.signal.filter.envelope(d), mask=x.mask)
             #f = lambda x: 
         elif name == "smooth":

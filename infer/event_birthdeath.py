@@ -2330,7 +2330,7 @@ def ev_birth_move_hough(sg, log_to_run_dir=None, hough_kwargs = {}, **kwargs):
         if np.random.rand() < 1.0: #0.1:
             sites = sg.site_elements.keys()
             sg.logger.info("saving hough array picture...")
-            fname = 'last_hough%s.png' % ("_".join(["",] + hough_kwargs.keys()))
+            fname = 'last_hough_%d_%s.png' % (eid, "_".join(["",] + hough_kwargs.keys()))
             visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, fname), region=sg.inference_region)
 
 
@@ -2428,8 +2428,8 @@ def ev_death_move_prior(sg, log_to_run_dir=None, inference_step=-1, **kwargs):
 def sample_hough_kwargs(sg):
     #phase_choices = ( ("Pn",), ("Pg", "Lg"), ("Pn", "Sn", "Lg", "Pg"), )
     #phase_choices = ( ("Pg", "Lg"), ("Pg", "Lg"), )
-    phase_choices = ( ("P",), ("P", "S") )
-    mbbins_choices = ( (12, 2, 2), (1, 1, 12))
+    phase_choices = ( ("P",), ("P", "S") , ("P","Pn","Pg","S","Sn"))
+    mbbins_choices = ( (12, 2, 2, 2), (1, 1, 1, 12))
     multipliers = (1.0, 1.5)
     offsets = (False, True)
     one_event_semantics = (False, True, True, True)

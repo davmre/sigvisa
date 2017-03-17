@@ -93,7 +93,7 @@ class ArrivalTimeNode(DeterministicNode):
         else:
             raise AttributeError("don't know how to compute arrival time derivative with respect to parent %s" % parent_key)
 
-def tt_predict(event, sta, phase=None, phaseid=None):
+def tt_predict(event, sta, phase=None, phaseid=None, force=False):
     s = Sigvisa()
 
     if phaseid is None:
@@ -106,7 +106,7 @@ def tt_predict(event, sta, phase=None, phaseid=None):
     if event.time < 1:
         raise Exception("called tt_predict with time <1 (%f)" % event.time)
 
-    meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1)
+    meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1, int(force))
     return meantt
 
 def tt_predict_grad(lon, lat, depth, origin_time, sta, phase=None, phaseid=None):

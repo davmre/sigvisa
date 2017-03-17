@@ -252,20 +252,22 @@ class Heatmap(object):
 
         self.bmap = bmap
 
-    def plot_earth(self, y_fontsize=8, x_fontsize=5, zorder=4, interval=1):
+    def plot_earth(self, y_fontsize=8, x_fontsize=5, zorder=4, interval=1, parallels=None, meridians=None):
         try:
             bmap = self.bmap
         except:
             self.init_bmap()
 
-        parallels = np.arange(int(self.bottom_lat) - 1, int(self.top_lat + 1), interval)
-        if len(parallels) > 10:
-            parallels = [int(k) for k in np.linspace(int(self.bottom_lat) - 1, int(self.top_lat + 1), 10)]
-
+        if parallels is None:
+            parallels = np.arange(int(self.bottom_lat) - 1, int(self.top_lat + 1), interval)
+            if len(parallels) > 10:
+                parallels = [int(k) for k in np.linspace(int(self.bottom_lat) - 1, int(self.top_lat + 1), 10)]
         self.bmap.drawparallels(parallels, labels=[False, True, True, False], fontsize=y_fontsize, zorder=zorder)
-        meridians = np.arange(int(self.left_lon) - 1, int(self.right_lon) + 1, interval)
-        if len(meridians) > 10:
-            meridians = [int(k) for k in np.linspace(int(self.left_lon) - 1, int(self.right_lon + 1), 10)]
+
+        if meridians is None:
+            meridians = np.arange(int(self.left_lon) - 1, int(self.right_lon) + 1, interval)
+            if len(meridians) > 10:
+                meridians = [int(k) for k in np.linspace(int(self.left_lon) - 1, int(self.right_lon + 1), 10)]
 
         self.bmap.drawmeridians(meridians, labels=[True, False, False, True], fontsize=x_fontsize, zorder=zorder)
 
