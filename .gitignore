@@ -101,3 +101,4 @@ notebooks/*.txt
 notebooks/thesis/.ipynb_checkpoints
 *.pem
 *.key
+.ipynb_checkpoints
