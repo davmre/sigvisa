@@ -1,3 +1,8 @@
+
+NOTE (1/5/2018): this file may be out of date. The most comprehensive guide to setting up Sigvisa is the Vagrant playbook in 
+cloud/vagrant/playbook.yml (originally created to configure Azure cloud machines for distributed inference/training).
+
+--------------------------------
 First install git, python2.7, and virtualenvwrapper.
 
  cd ~
